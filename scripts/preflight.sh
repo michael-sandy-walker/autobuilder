@@ -412,6 +412,14 @@ run_live() {
         # sed rather than `grep -o '[0-9]*'` — the marker "T2-EY" contains a digit.
         echo "repeat_proposals=$(sed -n 's/.*repeat proposals — [0-9]* distinct rejected, \([0-9]*\) re-proposed.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         echo "repeats_refused=$(sed -n 's/.*repeat proposals — .* \([0-9]*\) refused before evaluation.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        # T2-EZ: how much deterministic compile-fix work the injector produced on a red build and
+        # how much of it the tree kept, alongside how many fixes it still had to re-derive across
+        # cycles. The third number is the one that says whether preservation is working: kept
+        # rising while re-derived holds steady would mean the preserved files are not the ones
+        # being re-derived. sed rather than a bare number pattern — "T2-EZ" contains a digit.
+        echo "injector_files_created=$(sed -n 's/.*injector files — \([0-9]*\) created on a red build.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        echo "injector_files_kept=$(sed -n 's/.*injector files — [0-9]* created on a red build, \([0-9]*\) kept.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        echo "injector_fixes_rederived=$(sed -n 's/.*injector files — .* \([0-9]*\) fix(es) re-derived across cycles.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         # T4-DA: how many of the specification clauses that NO run of the df2a907 frozen series
         # ever articulated this run's plan does articulate. Baseline is 0 per run, verified across
         # all three controls. Scored here so the watch's three-run question accumulates by itself;

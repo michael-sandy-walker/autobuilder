@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -61,6 +62,20 @@ public class PackageFragmentationCheck {
             log.warn("T4-BH: could not scan output tree for fragmentation check: {}", e.getMessage());
             return List.of();
         }
+        return findAllAgainst(proposedFiles, existing);
+    }
+
+    /**
+     * T2-EZ: same invariant against an explicitly supplied tree listing rather than the tree as it
+     * is on disk right now. The caller that needs this is
+     * {@link CompileProbeService}'s decision about which injector-created files to keep through a
+     * failed probe: the files are all still written at that moment, so a disk scan would compare
+     * the candidates against the very state that is about to be undone. Passing the listing the
+     * tree will have <i>after</i> the rollback is the only way to ask the question truthfully, and
+     * it keeps the rule itself in this one home.
+     */
+    public List<Conflict> findAllAgainst(Map<String, String> proposedFiles, Collection<String> existing) {
+        if (proposedFiles == null || proposedFiles.isEmpty()) return List.of();
         if (existing == null || existing.isEmpty()) return List.of();
 
         List<Conflict> conflicts = new ArrayList<>();

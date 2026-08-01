@@ -69,7 +69,16 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            # the T4-DA pair does — a mechanism that records only what it saved reads as a free win,
            # and the exposure is the finding. Absent on runs predating the ledger, so read with
            # .get; a missing value means unknown, never zero.
-           "repeat_proposals", "repeats_refused")
+           "repeat_proposals", "repeats_refused",
+           # T2-EZ: what the compile-fix injector built on a red build, what survived the
+           # rollback, and how many fixes it still re-derived across cycles anyway. Measured
+           # over 26 field runs before preservation shipped: 175 of 185 injector-created files
+           # were discarded here, 169 of them after provably clearing the diagnostic they
+           # targeted, and 43.6% of (rule, token) fixes were re-derived in a later cycle. All
+           # three carried, because "kept" alone cannot distinguish a mechanism that removed
+           # the waste from one that merely relabelled it. Absent on runs predating the
+           # readout, so read with .get; a missing value means unknown, never zero.
+           "injector_files_created", "injector_files_kept", "injector_fixes_rederived")
 
 
 def read_summary(run_dir):

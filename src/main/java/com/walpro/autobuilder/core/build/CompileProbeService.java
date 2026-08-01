@@ -90,6 +90,17 @@ public class CompileProbeService {
     @Value("${autobuilder.build.test-scope-command:mvn test-compile}")
     private String testScopeCommand = "mvn test-compile";
 
+    /**
+     * T2-EZ: keep an injector-created file through the chain-stopped rollback when its own compile
+     * diagnostic cleared. Off restores the pre-2026-08-01 behaviour where a red build discarded
+     * every injector file while a green one preserved them (the T4-AQ carve-out) — backwards with
+     * respect to where the partial progress is needed, and the arm to compare against if the
+     * preserved types ever turn out to cost more than the re-derivation they save.
+     */
+    @Setter
+    @Value("${autobuilder.build.preserve-cleared-injector-files.enabled:true}")
+    private boolean preserveClearedInjectorFiles = true;
+
     /** T4-BH: optional behaviour trace logger — emits {@code package_fragmentation_detected} on probe-time gate. */
     @Setter
     @Autowired(required = false)
@@ -274,7 +285,7 @@ public class CompileProbeService {
         if (outcome.result() == BuildResult.COMPILE_ERROR) {
             ProbeResult injected = allowInjection
                     ? tryInjectAndReProbe(context, outcome, outputPath, cycleId, originalContents, newlyAddedPaths,
-                            probeCommand)
+                            probeCommand, proposedFiles.keySet())
                     : null;
             if (injected != null) {
                 // T2-EF: feed the run-level recurring-defect tracker with the POST-inner-loop
@@ -354,7 +365,8 @@ public class CompileProbeService {
                                             String cycleId,
                                             Map<String, String> originalContents,
                                             Set<String> newlyAddedPaths,
-                                            String probeCommand) {
+                                            String probeCommand,
+                                            Set<String> llmStagedPaths) {
         // T1-EO: directory holding the LLM mutations this injector fix augments. When evolution
         // ran this cycle the mutations live in mutations/<cycleId>/; otherwise they were carried
         // over from a prior cycle and live at context.mutationPath(). This mirrors
@@ -446,7 +458,17 @@ public class CompileProbeService {
         // Chain stopped (no proposal or no progress), build still failing — restore working tree and
         // return the last (most informative) outcome with applied-fix provenance so the
         // evaluator/planner can see what was tried.
-        mergeRollbackService.rollback(extendedRollback, outputPath, fileService);
+        //
+        // T2-EZ: the LLM's own files go, but an injector-created type whose own compile diagnostic
+        // cleared is partial progress the tree should keep. Measured over 26 field runs: of 185
+        // skeletons the injector created, 175 were discarded here and 169 of those had provably
+        // removed the diagnostic they targeted — so the "they did not green the build, therefore
+        // they did not help" reading is wrong, and 43.6% of (run, token) pairs were then re-derived
+        // in a later cycle to be discarded again, up to the T2-EN cap of 6.
+        Set<String> preserved = selectPreservableInjectorFiles(
+                applied, llmStagedPaths, newlyAddedPaths, currentOutcome, outputPath);
+        mergeRollbackService.rollback(extendedRollback, outputPath, fileService, preserved);
+        notePreservation(applied, llmStagedPaths, newlyAddedPaths, preserved);
         // T2-DY: record AFTER the rollback so the ledger snapshots the stable post-rollback content
         // (the original bytes the proposals reacted to) rather than the failed applied content. The
         // ledger keys blacklist invalidation off this digest, so it must match what the next cycle's
@@ -455,6 +477,97 @@ public class CompileProbeService {
             recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context);
         }
         return new ProbeResult(currentOutcome, null, applied);
+    }
+
+    /**
+     * T2-EZ: of the files this probe's injector chain wrote, which should survive a rollback that
+     * happens while the build is still red?
+     *
+     * <p>Four conditions, each earning its place:
+     * <ul>
+     *   <li><b>The injector created it, not the LLM.</b> A path the staged mutation also writes is
+     *       the work being rejected; keeping it would merge by the back door.</li>
+     *   <li><b>It did not exist before this probe.</b> An edit to a pre-existing file (a
+     *       {@code symbol-import} adding a line to the LLM's controller) is a modification of
+     *       rejected content, not a new type, and must be restored.</li>
+     *   <li><b>Its own targeted diagnostic is gone from the FINAL stderr</b>, not merely from the
+     *       re-probe right after it. The final output is the strictest available evidence that the
+     *       type is genuinely resolved at the end of the chain, and it is the same test
+     *       ({@link #fixTargetCleared}) the chain-progress rule and the T2-DY ledger already use —
+     *       so a wrong-package or hallucinated skeleton, whose diagnostic persists, still goes.</li>
+     *   <li><b>Keeping it would not fragment the tree.</b> Checked against the listing the tree
+     *       will have after the rollback, because every candidate is still on disk at this moment.
+     *       Candidates are checked against each other too: one chain has been observed creating the
+     *       same exception type under two packages, and dropping both is the safe answer.</li>
+     * </ul>
+     *
+     * <p>The T2-DY ledger is unaffected by construction: {@code recordReProbeSafely} already runs
+     * after the rollback, so the digest it stores is whatever the next cycle will actually read —
+     * preserved content included. And a preserved type stops appearing in the next build's errors
+     * at all, so the resolver is never asked to re-derive it.
+     */
+    private Set<String> selectPreservableInjectorFiles(List<FixProposal> applied,
+                                                       Set<String> llmStagedPaths,
+                                                       Set<String> newlyAddedPaths,
+                                                       BuildOutcome finalOutcome,
+                                                       String outputPath) {
+        if (!preserveClearedInjectorFiles || applied == null || applied.isEmpty()) return Set.of();
+
+        Map<String, String> candidates = new LinkedHashMap<>();
+        for (FixProposal proposal : applied) {
+            if (!fixTargetCleared(proposal, finalOutcome == null ? "" : finalOutcome.stderrTail())) continue;
+            for (FileMutation m : proposal.mutations()) {
+                if (m == null || m.path() == null) continue;
+                if (llmStagedPaths != null && llmStagedPaths.contains(m.path())) continue;
+                if (!newlyAddedPaths.contains(m.path())) continue;
+                candidates.put(m.path(), m.content() == null ? "" : m.content());
+            }
+        }
+        if (candidates.isEmpty()) return Set.of();
+
+        List<String> surviving;
+        try {
+            surviving = new ArrayList<>(fileService.listAllRelativeFilePathsUnder(outputPath));
+        } catch (IOException e) {
+            log.warn("T2-EZ: could not scan output tree — preserving nothing this probe: {}", e.getMessage());
+            return Set.of();
+        }
+        // The tree as it will be once the rollback has run: everything created by this probe and
+        // NOT preserved is about to be deleted, so it must not count as an existing declaration.
+        surviving.removeIf(p -> newlyAddedPaths.contains(p) && !candidates.containsKey(p));
+        for (PackageFragmentationCheck.Conflict c : packageFragmentationCheck.findAllAgainst(candidates, surviving)) {
+            log.info("T2-EZ: not preserving {} — {} already exists at {}",
+                    c.candidatePath(), c.simpleName(), c.existingPath());
+            candidates.remove(c.candidatePath());
+        }
+        return new LinkedHashSet<>(candidates.keySet());
+    }
+
+    /**
+     * T2-EZ: records both sides of the trade on the run-level ledger — how many injector-created
+     * files this probe produced and how many survived. Recording only the second would let the
+     * mechanism read as a free win while hiding whether the loop still re-derives what it discards.
+     */
+    private void notePreservation(List<FixProposal> applied, Set<String> llmStagedPaths,
+                                  Set<String> newlyAddedPaths, Set<String> preserved) {
+        Set<String> created = new LinkedHashSet<>();
+        for (FixProposal proposal : applied) {
+            for (FileMutation m : proposal.mutations()) {
+                if (m == null || m.path() == null) continue;
+                if (llmStagedPaths != null && llmStagedPaths.contains(m.path())) continue;
+                if (!newlyAddedPaths.contains(m.path())) continue;
+                created.add(m.path());
+            }
+        }
+        if (created.isEmpty()) return;
+        compileFixInjector.noteInjectorFileOutcome(created.size(), preserved.size());
+        if (preserved.isEmpty()) {
+            log.info("T2-EZ: build still red — discarded all {} injector-created file(s); none cleared its "
+                    + "own diagnostic or all would fragment the tree", created.size());
+        } else {
+            log.info("T2-EZ: build still red — preserving {} of {} injector-created file(s) whose own "
+                    + "diagnostic cleared: {}", preserved.size(), created.size(), preserved);
+        }
     }
 
     /**

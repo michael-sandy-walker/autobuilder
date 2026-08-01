@@ -47,6 +47,15 @@ public class CompileFixInjector {
     private final SymbolImportLookupService symbolImportLookupService;
     private final WellKnownPackageRegistry wellKnownPackageRegistry;
 
+    /**
+     * T2-EZ: relays the outcome of a chain-stopped rollback to the run-level ledger. Same
+     * separation of concerns as {@link #recordReProbeOutcome}: the probe knows what happened to the
+     * files, this class owns the ledger.
+     */
+    public void noteInjectorFileOutcome(int created, int preserved) {
+        ledger.noteInjectorFileOutcome(created, preserved);
+    }
+
     public Optional<FixProposal> inject(String stderr, CycleContextData context) {
         if (stderr == null || stderr.isBlank()) return Optional.empty();
 

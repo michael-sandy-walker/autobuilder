@@ -168,6 +168,14 @@ autobuilder:
     # keeps known-failed proposals out of the chain.
     inner-fix-loop:
       enabled: true
+    # T2-EZ: when the inner fix chain stops with the build still red, keep the files the injector
+    # CREATED whose own compile diagnostic cleared, instead of discarding them with the rejected
+    # mutation. Measured over 26 field runs: 175 of 185 skeletons were discarded here and 169 of
+    # those had removed the diagnostic they targeted, so 43.6% of (rule, token) fixes were re-derived
+    # in a later cycle to be discarded again. Off is the comparison arm — it restores the behaviour
+    # where a GREEN build preserved injector files (T4-AQ) and a red one did not.
+    preserve-cleared-injector-files:
+      enabled: true
     # T4-AN-8: runnable-artifact gate. Compile-only probes never check that the artifact is a
     # startable application (an entry point is not needed to compile). One package-level build
     # at the root-closure edge; a failure blocks completion and is injected as a work item.

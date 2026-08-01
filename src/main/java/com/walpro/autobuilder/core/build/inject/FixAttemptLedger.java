@@ -205,6 +205,44 @@ public class FixAttemptLedger {
         }
     }
 
+    /**
+     * T2-EZ: what the injector produced this run and how much of it the tree got to keep.
+     *
+     * @param created     injector-created files written during a probe whose build stayed red
+     * @param preserved   how many of those survived the chain-stopped rollback
+     * @param rederived   distinct (rule, token) fixes derived in more than one cycle — the
+     *                    exposure the preservation is meant to shrink, kept separate from
+     *                    {@code preserved} so the benefit is never inferred from the effort
+     * @param worstFires  the highest per-(rule, token) cycle count reached, against the T2-EN cap
+     */
+    public record Readout(int created, int preserved, int rederived, int worstFires) {
+        public boolean isEmpty() {
+            return created == 0 && preserved == 0 && rederived == 0;
+        }
+    }
+
+    private final AtomicInteger injectorFilesCreated = new AtomicInteger(0);
+    private final AtomicInteger injectorFilesPreserved = new AtomicInteger(0);
+
+    /** T2-EZ: called once per chain-stopped rollback with both sides of the trade. */
+    public void noteInjectorFileOutcome(int created, int preserved) {
+        if (created > 0) injectorFilesCreated.addAndGet(created);
+        if (preserved > 0) injectorFilesPreserved.addAndGet(preserved);
+    }
+
+    /** T2-EZ: run-level readout — the ticket's measurement half. */
+    public Readout readout() {
+        int rederived = 0;
+        int worst = 0;
+        for (RunLevelEntry e : runLevelFires.values()) {
+            synchronized (e) {
+                if (e.fires > 1) rederived++;
+                if (e.fires > worst) worst = e.fires;
+            }
+        }
+        return new Readout(injectorFilesCreated.get(), injectorFilesPreserved.get(), rederived, worst);
+    }
+
     /** Test/diagnostic accessor — run-level fire count for the proposal's (rule, token), 0 if unseen. */
     public int runLevelFires(FixProposal proposal) {
         String key = runLevelKey(proposal);

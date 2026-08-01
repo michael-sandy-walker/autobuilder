@@ -321,6 +321,37 @@ class FixAttemptLedgerTest {
         assertThat(ledger.shouldSkip(regeneratedSkeleton("MemberRepository", 1), "output", "cycle-x")).isFalse();
     }
 
+    /**
+     * T2-EZ: the run-level readout carries the effort and the saving side by side. A fix derived in
+     * one cycle only is not a re-derivation; the count exists so that a run where preservation
+     * rises while re-derivation does not fall is visible rather than inferred.
+     */
+    @Test
+    void readout_reportsEffortAndSavingSeparately() {
+        FixProposal reDerived = proposal("skeleton-class", "Loan", List.of("src/main/java/Loan.java"));
+        FixProposal once = proposal("skeleton-service", "LoanService", List.of("src/main/java/LoanService.java"));
+
+        ledger.recordRunLevelFire(reDerived, BuildResult.COMPILE_ERROR, "cycle-1");
+        ledger.recordRunLevelFire(reDerived, BuildResult.COMPILE_ERROR, "cycle-2");
+        ledger.recordRunLevelFire(reDerived, BuildResult.COMPILE_ERROR, "cycle-3");
+        ledger.recordRunLevelFire(once, BuildResult.COMPILE_ERROR, "cycle-3");
+        ledger.noteInjectorFileOutcome(4, 1);
+        ledger.noteInjectorFileOutcome(2, 2);
+
+        FixAttemptLedger.Readout readout = ledger.readout();
+        assertThat(readout.created()).isEqualTo(6);
+        assertThat(readout.preserved()).isEqualTo(3);
+        assertThat(readout.rederived()).isEqualTo(1);
+        assertThat(readout.worstFires()).isEqualTo(3);
+        assertThat(readout.isEmpty()).isFalse();
+    }
+
+    /** A run whose injector never fired must say nothing rather than report a row of zeros. */
+    @Test
+    void readout_isEmptyBeforeTheInjectorHasDoneAnything() {
+        assertThat(ledger.readout().isEmpty()).isTrue();
+    }
+
     private static FixProposal proposal(String rule, String token, List<String> paths) {
         java.util.List<FileMutation> mutations = new java.util.ArrayList<>(paths.size());
         for (String p : paths) mutations.add(new FileMutation(p, "stable-content for " + p));

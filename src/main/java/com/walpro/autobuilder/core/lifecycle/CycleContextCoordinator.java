@@ -149,6 +149,7 @@ public class CycleContextCoordinator {
             // cycle, and a field on the context is the surface that sterilised run 17-37-09.
             reportCriteriaExecutability();
             reportRepeatProposals();
+            reportInjectorFiles();
 
             // T2-CE: fetch per-subgoal score baseline from the graph each cycle.
             // This is the score of the most recent ACCEPTED evaluation for the current subgoal —
@@ -355,5 +356,30 @@ public class CycleContextCoordinator {
                         + " worst repeated {}x",
                 readout.distinctRejected(), readout.repeatedProposals(), readout.refusals(),
                 readout.worstRepeatCount());
+    }
+
+    /** T2-EZ: optional run-level injector ledger — wired in production, null in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.inject.FixAttemptLedger fixAttemptLedger;
+
+    /** T2-EZ: last reported readout, so a run whose injector is idle says nothing. */
+    private com.walpro.autobuilder.core.build.inject.FixAttemptLedger.Readout lastInjectorReadout;
+
+    /**
+     * T2-EZ: reports what the compile-fix injector built and how much of it the tree kept.
+     * {@code created} is the effort, {@code kept} is what the preservation rule saved, and
+     * {@code re-derived} is the exposure that remains — a run where kept rises and re-derived
+     * does not fall would mean the preserved files are not the ones being re-derived, which is
+     * exactly the reading a single number would hide.
+     */
+    private void reportInjectorFiles() {
+        if (fixAttemptLedger == null) return;
+        var readout = fixAttemptLedger.readout();
+        if (readout.isEmpty() || readout.equals(lastInjectorReadout)) return;
+        lastInjectorReadout = readout;
+        log.info("T2-EZ: injector files — {} created on a red build, {} kept, {} fix(es) re-derived across"
+                        + " cycles, worst {}x",
+                readout.created(), readout.preserved(), readout.rederived(), readout.worstFires());
     }
 }

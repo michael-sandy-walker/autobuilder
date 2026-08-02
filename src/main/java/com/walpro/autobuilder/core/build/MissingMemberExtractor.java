@@ -110,7 +110,15 @@ public final class MissingMemberExtractor {
 
     private static String normaliseArgs(String raw) {
         if (raw == null) return "";
-        return raw.replaceAll("\\s+", "").trim();
+        // Collapse runs of whitespace, then drop the spaces AROUND separators — but never the
+        // space between two tokens. Stripping all whitespace glued an annotation to the type it
+        // annotates: run 2026-08-02_12-43-31 rendered
+        // `createLoan(@jakarta.validation.Validcom.example.demo.model.Loan)` into the evolution
+        // prompt, naming a type that does not exist. Latent until T1-FQ let the variable-shaped
+        // diagnostic reach the renderer for the first time.
+        return raw.replaceAll("\\s+", " ")
+                  .replaceAll("\\s*,\\s*", ",")
+                  .trim();
     }
 
     private static String key(Entry e) {

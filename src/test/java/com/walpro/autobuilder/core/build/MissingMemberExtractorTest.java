@@ -66,6 +66,35 @@ class MissingMemberExtractorTest {
     }
 
     @Test
+    void extract_annotatedParameterKeepsTheSpaceThatSeparatesItFromItsType() {
+        // Verbatim from run 2026-08-02_12-43-31, the first field firing of the variable shape.
+        // Stripping all whitespace rendered `@jakarta.validation.Validcom.example.demo.model.Loan`
+        // into the evolution prompt — a type that does not exist.
+        String stderr = String.join("\n",
+                "[ERROR] LoanController.java:[22,39] cannot find symbol",
+                "[ERROR]   symbol:   method createLoan(@jakarta.validation.Valid "
+                        + "com.example.demo.model.Loan)",
+                "[ERROR]   location: variable loanService of type "
+                        + "com.example.demo.service.LoanService");
+
+        assertThat(MissingMemberExtractor.extract(stderr))
+                .containsExactly(new MissingMemberExtractor.Entry(
+                        MissingMemberExtractor.Kind.METHOD, "LoanService", "createLoan",
+                        "@jakarta.validation.Valid com.example.demo.model.Loan"));
+    }
+
+    @Test
+    void extract_separatorSpacesAreStillRemovedSoArgListsStayComparable() {
+        String stderr = String.join("\n",
+                "[ERROR] A.java:[1,1] cannot find symbol",
+                "[ERROR]   symbol:   method link(java.lang.Long ,  java.lang.Long)",
+                "[ERROR]   location: class com.example.LoanService");
+
+        assertThat(MissingMemberExtractor.extract(stderr).get(0).argTypes())
+                .isEqualTo("java.lang.Long,java.lang.Long");
+    }
+
+    @Test
     void extract_methodOnAValueOfType_isAlsoRecognised() {
         String stderr = String.join("\n",
                 "[ERROR] /src/main/java/LoanController.java:[9,20] cannot find symbol",

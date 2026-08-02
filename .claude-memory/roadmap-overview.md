@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (444 tickets, 2026-08-02):** 30 open `[ ]` · 5 in-progress `[~]` · 31 deferred `[>]` · 382 closed, of which **356 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (448 header lines, 444 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (445 tickets, 2026-08-02):** 30 open `[ ]` · 6 in-progress `[~]` · 31 deferred `[>]` · 382 closed, of which **356 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (449 header lines, 445 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -16,6 +16,7 @@
 
 ## Tier 1 — Correctness (131)
 
+- [~] `T1-FR` — The model is told which MEMBERS to add but never which TYPES to create; missing types go to the injector and are stubbed silently (2346 diagnostics vs 905 member ones)
 - [x] `T1-D` — Reset no longer wipes the graph — lineages survive as history (SHIPPED 2026-07-26; `purgeAll()` kept as a deliberate wipe)
 - [>] `T1-BL` — T2-BM veto must use criteria progress gate
 - [>] `T1-BM` — `SubGoalFulfillmentHeuristic`

@@ -1,8 +1,11 @@
 {
   "dependencyContext" : "org.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
   "entries" : {
+    "save" : null,
     "setLoanDate" : null,
     "MemberHasTooManyLoansException" : null,
+    "isLoaned" : null,
+    "setMessage" : null,
     "MemberNotFoundException" : null,
     "BookAlreadyLoanedException" : null,
     "orElseThrow" : {

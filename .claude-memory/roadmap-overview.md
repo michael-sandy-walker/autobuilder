@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (433 tickets, 2026-07-30):** 26 open `[ ]` · 3 in-progress `[~]` · 32 deferred `[>]` · 376 closed, of which **351 built `[x]` · 12 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (437 header lines, 433 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (443 tickets, 2026-08-02):** 29 open `[ ]` · 5 in-progress `[~]` · 31 deferred `[>]` · 382 closed, of which **356 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (447 header lines, 443 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -21,6 +21,7 @@
 - [>] `T1-BM` — `SubGoalFulfillmentHeuristic`
 - [>] `T1-CK` — SUBGOAL_EXHAUSTED with partial criteria met should trigger graduation rather than GIVEN_UP
 - [>] `T1-CO` — Split and demoted
+- [x] `T1-FQ` — The T4-BB missing-member steering block never matched `location: variable v of type T` — 89% of the real diagnostic shape (806/905) silently skipped
 - [x] `T1-FP` — `LLMClient` read timeout fixed per attempt — escalate it across retries so slow generations complete instead of breaker-pausing
 - [x] `T1-FO` — `Neo4jDeferredMutationGraphService.ensureSchema()` mixes schema DDL + data DML in one tra…
 - [x] `T1-A` — Stagnation/exhaustion recovery

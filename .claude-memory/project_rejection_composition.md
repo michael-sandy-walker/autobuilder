@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: f54dc5b0-d9fb-4267-bae8-a3bce5956657
+  modified: 2026-08-02T10:35:34.304Z
 ---
 
 Measured 2026-08-01 over the 33 run corpora under `/tmp/preflight_runs` (all runs with a behaviour log): **1530 cycles, 952 proposals, 438 rejections, 502 merges.**
@@ -28,4 +29,8 @@ So roughly **a third of all rejections are the model writing code that does not 
 
 The information arrives and the code still does not type-check. That makes this bucket another instance of the shape [[feedback-instrument-needs-an-actuator]] names, not an information gap — with the difference that here the actuator would have to constrain generation against a compiler, which is what the compile probe already does after the fact.
 
-**How to use this:** before filing anything about compile failures, note that the prompt-side answer has been measured and refused. The live options are a pre-generation constraint (checking a proposal against known signatures before it costs a probe), better use of the 22.1% the injector already classifies as deferrable, or accepting it as a model-capability limit and spending the cycles elsewhere. Related: [[project-completion-binding-constraint]], [[feedback-activity-not-progress]].
+**REFINED 2026-08-02 — the compile failures are not spread evenly; they are concentrated in ONE resource, and the missing symbols are mostly types nobody has written yet.** Measured with `scripts/attention_report.py` over 25 runs, paired within each run so run length and difficulty cancel: the model's own output fails the pre-merge probe **61% of the time on loan work against 24% on book/member work**, and after the injector's repair it is **still red 54% vs 14%**. Of 2574 attributed missing symbols, book/member misses are importable library annotations (`NotBlank` 54, `Pattern` 41, `Valid` 35, `Size` 33) — precisely what `symbol-import`, the dominant injector rule at 349 fires, exists for. Loan misses are project-internal types that do not exist yet (`Loan` 236, `BookRepository` 128, `LoanAlreadyReturnedException` 106, `LoanService` 96) plus **31% missing METHODS on those invented types**. No import can fix a type nobody wrote.
+
+So the third of all rejections above splits in two: the part landing on already-existing symbols is the refuted information-gap story, and the larger part, on the hardest resource, is a **missing-type-closure** story — the model writes the caller before the callee, across several files at once. That is why this bucket resists prompt-side fixes. See T6-L for the full chain from attention to smoke outcome, and `T2-EZ` (2026-08-01) for the actuator that stopped discarding the skeletons.
+
+**How to use this:** before filing anything about compile failures, note that the prompt-side answer has been measured and refused, and that the bucket is resource-concentrated — a fix aimed at the average proposal is aimed at the wrong one. The live options are a pre-generation constraint (checking a proposal against known signatures before it costs a probe), better use of the 22.1% the injector already classifies as deferrable, or accepting it as a model-capability limit and spending the cycles elsewhere. Related: [[project-completion-binding-constraint]], [[feedback-activity-not-progress]].

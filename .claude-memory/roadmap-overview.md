@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (443 tickets, 2026-08-02):** 29 open `[ ]` · 5 in-progress `[~]` · 31 deferred `[>]` · 382 closed, of which **356 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (447 header lines, 443 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (444 tickets, 2026-08-02):** 30 open `[ ]` · 5 in-progress `[~]` · 31 deferred `[>]` · 382 closed, of which **356 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 1 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (448 header lines, 444 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -155,6 +155,7 @@
 
 ## Tier 2 — Steering quality (120)
 
+- [ ] `T2-FC` — The plan decomposes its FIRST subject in full and later subjects as endpoints only, so the types those endpoints call are never planned (98%/98% vs 38%/36% over 42 runs)
 - [~] `T2-FA` — The injector's most-fired resolver path fails 77% of the time and burns the recurrence budget; the symbol path now defers to a package migration that can clear the build (field firing outstanding)
 - [x] `T2-FB` — A banked-criteria early exit and a contradicted-criteria closure refusal livelocked; the refusal now clears the banked pass-map so the loop re-checks instead of re-declaring
 - [x] `T2-EZ` — injector skeletons are discarded exactly when the build is still red; `Loan` skeleton created 138x, present 0x; 8 of 9 smoke failures were the one file this blocked

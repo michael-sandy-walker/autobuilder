@@ -422,6 +422,17 @@ public class EvolutionProtocolContract {
             prompt.append(missingMembers).append("\n\n");
         }
 
+        // T1-FR: the class-side counterpart, and the larger half — a missing MEMBER is relayed as
+        // an author error, while a missing TYPE is classified deferrable and handed to the
+        // injector, which stubs it silently. So the model was never told it had referenced a type
+        // nothing defines: it re-proposed the caller, the injector re-stubbed the callee, and the
+        // pair never converged. The block that once covered this ("missingSymbolsBlock", named in
+        // the comment above) was retired with T4-BD and nothing replaced it.
+        String missingTypes = MissingTypePromptBlock.render(input);
+        if (missingTypes != null) {
+            prompt.append(missingTypes).append("\n\n");
+        }
+
         boolean repeated  = input.hasOpenRequest(BasicSignals.REPETITION_DETECTED);
 
         if (!divergent && repeated) {

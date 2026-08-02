@@ -1,0 +1,66 @@
+package com.walpro.autobuilder.core.build;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * T1-FR: parses compile stderr into the set of whole TYPES the code references but no file
+ * defines. Sister to {@link MissingMemberExtractor}, which handles a missing member on a type that
+ * already exists.
+ *
+ * <p>Recognised shape — {@code cannot find symbol} followed by {@code symbol: class T}, with the
+ * referencing file taken from the diagnostic's own path prefix:
+ *
+ * <pre>
+ * [ERROR] /…/LoanController.java:[20,9] cannot find symbol
+ * [ERROR]   symbol:   class Loan
+ * </pre>
+ *
+ * <p>This extractor reports what the compiler said and nothing more. Deciding which of those
+ * tokens are the project's own to write — as against a library type that wants an import, or an
+ * annotation — is the prompt block's job, because only it can see the tree.
+ */
+public final class MissingTypeExtractor {
+
+    /** A type the compiler could not resolve, and one file that referenced it. */
+    public record Entry(String typeName, String referencedBy) {}
+
+    private static final Pattern ERROR_FILE_LINE = Pattern.compile(
+            "(\\S+\\.java):\\[?\\d+");
+
+    private static final Pattern CLASS_SYMBOL_LINE = Pattern.compile(
+            "symbol:\\s*class\\s+([A-Za-z_$][\\w$]*)",
+            Pattern.CASE_INSENSITIVE);
+
+    private MissingTypeExtractor() {}
+
+    /**
+     * Every distinct missing type named in the stderr, in order of first appearance, each paired
+     * with the first file seen referencing it. Empty when stderr is blank or names none.
+     */
+    public static List<Entry> extract(String stderr) {
+        if (stderr == null || stderr.isBlank()) return List.of();
+        String plain = BuildErrorClassifier.ANSI_ESCAPE.matcher(stderr).replaceAll("");
+
+        Map<String, Entry> dedup = new LinkedHashMap<>();
+        String currentFile = null;
+        for (String line : plain.split("\\R")) {
+            Matcher fm = ERROR_FILE_LINE.matcher(line);
+            if (fm.find()) {
+                currentFile = fm.group(1);
+                // fall through — javac puts the path and `cannot find symbol` on one line, and the
+                // symbol line follows; a path line never also carries the symbol.
+            }
+            Matcher sm = CLASS_SYMBOL_LINE.matcher(line);
+            if (sm.find()) {
+                String type = sm.group(1);
+                dedup.putIfAbsent(type, new Entry(type, currentFile));
+            }
+        }
+        return new ArrayList<>(dedup.values());
+    }
+}

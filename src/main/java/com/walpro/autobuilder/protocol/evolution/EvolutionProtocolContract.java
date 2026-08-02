@@ -433,6 +433,14 @@ public class EvolutionProtocolContract {
             prompt.append(missingTypes).append("\n\n");
         }
 
+        // T2-FD: the same diagnostic shape the member block deliberately stays silent on. It reads
+        // as a missing method and is not one — the caller chained a container method onto a plain
+        // value — so the advice is the opposite of the block above and lives apart from it.
+        String unwrapped = UnwrappedContainerPromptBlock.render(input);
+        if (unwrapped != null) {
+            prompt.append(unwrapped).append("\n\n");
+        }
+
         boolean repeated  = input.hasOpenRequest(BasicSignals.REPETITION_DETECTED);
 
         if (!divergent && repeated) {

@@ -41,9 +41,20 @@ public final class MissingMemberExtractor {
 
     public record Entry(Kind kind, String targetType, String memberName, String argTypes) {}
 
+    /**
+     * T2-FD: a call that chained a container method onto a bare project type — the caller treated
+     * an unwrapped value as if it were the container a method had returned. {@link #extract} drops
+     * these deliberately (T1-FQ: adding the member to the project type is always the wrong repair,
+     * and doing so merged a {@code Book.isPresent()} into an artifact), so they are surfaced here
+     * instead. One recogniser, two consumers — the suppression and the steering block.
+     */
+    public record ContainerCall(String targetType, String memberName, String referencedBy) {}
+
     private static final Pattern CONSTRUCTOR_LINE = Pattern.compile(
             "no suitable constructor found for\\s+([\\w.]+)\\s*\\(([^)]*)\\)",
             Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern ERROR_FILE_LINE = Pattern.compile("(\\S+\\.java):\\[?\\d+");
 
     private static final Pattern METHOD_SYMBOL_LINE = Pattern.compile(
             "symbol:\\s*method\\s+(\\w+)\\s*\\(([^)]*)\\)",
@@ -95,6 +106,37 @@ public final class MissingMemberExtractor {
     }
 
     private MissingMemberExtractor() {}
+
+    /**
+     * T2-FD: the calls {@link #extract} suppresses, in order of first appearance. The repair for
+     * each is at the CALL SITE or in the callee's return type — never a new member on
+     * {@link ContainerCall#targetType()}.
+     */
+    public static List<ContainerCall> unwrappedContainerCalls(String stderr) {
+        if (stderr == null || stderr.isBlank()) return List.of();
+        String plain = BuildErrorClassifier.ANSI_ESCAPE.matcher(stderr).replaceAll("");
+        Map<String, ContainerCall> dedup = new LinkedHashMap<>();
+        String[] lines = plain.split("\\R");
+        String currentFile = null;
+        for (int i = 0; i < lines.length; i++) {
+            Matcher fm = ERROR_FILE_LINE.matcher(lines[i]);
+            if (fm.find()) currentFile = fm.group(1);
+            Matcher sm = METHOD_SYMBOL_LINE.matcher(lines[i]);
+            if (!sm.find()) continue;
+            String methodName = sm.group(1);
+            if (!containerMembers().contains(methodName)) continue;
+            for (int j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+                Matcher lm = METHOD_LOCATION_LINE.matcher(lines[j]);
+                if (!lm.find()) continue;
+                if (LOCATION_NAMED_RECEIVER.matcher(lines[j]).find()) break;   // a real receiver
+                String target = lastSegment(lm.group(1));
+                dedup.putIfAbsent(target + "|" + methodName,
+                        new ContainerCall(target, methodName, currentFile));
+                break;
+            }
+        }
+        return new ArrayList<>(dedup.values());
+    }
 
     /**
      * Extract every distinct missing-member entry named in the stderr, in order of first

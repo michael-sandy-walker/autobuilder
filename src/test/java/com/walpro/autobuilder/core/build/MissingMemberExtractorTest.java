@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 /** T4-BB: unit tests for {@link MissingMemberExtractor}. */
 class MissingMemberExtractorTest {
@@ -92,6 +93,46 @@ class MissingMemberExtractorTest {
 
         assertThat(MissingMemberExtractor.extract(stderr).get(0).argTypes())
                 .isEqualTo("java.lang.Long,java.lang.Long");
+    }
+
+    @Test
+    void extract_containerMethodOnABareType_isSuppressedBecauseAddingItIsAlwaysWrong() {
+        // Verbatim shape from run 2026-07-31_03-50-01. The caller chained onto an unwrapped value;
+        // the repair belongs at the call site. Run 2026-07-30_18-39-00 shipped a Book carrying
+        // `public boolean isPresent()` because this block asked for it.
+        String stderr = String.join("\n",
+                "[ERROR] LoanService.java:[91,17] cannot find symbol",
+                "[ERROR]   symbol:   method orElseThrow()",
+                "[ERROR]   location: class com.example.library.model.Loan");
+
+        assertThat(MissingMemberExtractor.extract(stderr)).isEmpty();
+    }
+
+    @Test
+    void extract_containerMethodOnANamedReceiver_isStillReported() {
+        // The suppression is scoped: with a named receiver the diagnostic means the object really
+        // is of that type, so the member genuinely is missing. 810 of 810 corpus cases were real.
+        String stderr = String.join("\n",
+                "[ERROR] LoanController.java:[9,20] cannot find symbol",
+                "[ERROR]   symbol:   method isEmpty()",
+                "[ERROR]   location: variable cart of type com.example.demo.model.Cart");
+
+        assertThat(MissingMemberExtractor.extract(stderr))
+                .extracting(MissingMemberExtractor.Entry::targetType,
+                            MissingMemberExtractor.Entry::memberName)
+                .containsExactly(tuple("Cart", "isEmpty"));
+    }
+
+    @Test
+    void extract_projectMethodOnABareType_survivesTheSuppression() {
+        String stderr = String.join("\n",
+                "[ERROR] BookService.java:[3,3] cannot find symbol",
+                "[ERROR]   symbol:   method findByIsbn(java.lang.String)",
+                "[ERROR]   location: interface com.example.library.repository.BookRepository");
+
+        assertThat(MissingMemberExtractor.extract(stderr))
+                .extracting(MissingMemberExtractor.Entry::memberName)
+                .containsExactly("findByIsbn");
     }
 
     @Test

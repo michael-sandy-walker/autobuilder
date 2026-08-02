@@ -1,9 +1,12 @@
 package com.walpro.autobuilder.core.build;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -55,6 +58,42 @@ public final class MissingMemberExtractor {
             "location:\\s*(?:class|interface|(?:variable|value)\\s+\\w+\\s+of\\s+type)\\s+([\\w.]+)",
             Pattern.CASE_INSENSITIVE);
 
+    // Whether the owning type was named through a NAMED RECEIVER or as a bare type. The two are
+    // different populations, measured over the run corpora on 2026-08-02: of 810 named-receiver
+    // diagnostics, 810 name a real member of the project's own type; of 99 bare-type ones, 70
+    // (71%) name a method of a JDK container, because `repo.findById(id).orElseThrow()` reports
+    // the element type with no receiver to point at.
+    private static final Pattern LOCATION_NAMED_RECEIVER = Pattern.compile(
+            "location:\\s*(?:variable|value)\\s+\\w+\\s+of\\s+type\\s+([\\w.]+)",
+            Pattern.CASE_INSENSITIVE);
+
+    // Language-core container types. Their MEMBER names are read from the running JDK rather than
+    // listed here — the point is that no edit to a project type can make `orElseThrow` resolve on
+    // it, so proposing one is always the wrong repair.
+    private static final List<String> CONTAINER_TYPES = List.of(
+            "java.util.Optional", "java.util.stream.Stream", "java.util.Collection",
+            "java.util.Map", "java.util.Iterator");
+
+    private static volatile Set<String> containerMembers;
+
+    private static Set<String> containerMembers() {
+        Set<String> local = containerMembers;
+        if (local != null) return local;
+        Set<String> names = new HashSet<>();
+        for (String type : CONTAINER_TYPES) {
+            try {
+                for (Method m : Class.forName(type).getMethods()) {
+                    names.add(m.getName());
+                }
+            } catch (Throwable ignored) {
+                // A platform type that will not load simply contributes nothing; abstaining from
+                // the suppression is the safe direction (it restores today's behaviour).
+            }
+        }
+        containerMembers = names;
+        return names;
+    }
+
     private MissingMemberExtractor() {}
 
     /**
@@ -88,14 +127,23 @@ public final class MissingMemberExtractor {
             String methodName = sm.group(1);
             String args = normaliseArgs(sm.group(2));
             String target = null;
+            boolean namedReceiver = false;
             for (int j = i + 1; j < Math.min(i + 4, lines.length); j++) {
                 Matcher lm = METHOD_LOCATION_LINE.matcher(lines[j]);
                 if (lm.find()) {
                     target = lastSegment(lm.group(1));
+                    namedReceiver = LOCATION_NAMED_RECEIVER.matcher(lines[j]).find();
                     break;
                 }
             }
             if (target == null) continue;
+            // A container method reported against a bare type is a receiver mistake, not a gap in
+            // the project's type: the caller chained onto an unwrapped value. Steering the model to
+            // ADD the member is actively wrong, and it has merged — run 2026-07-30_18-39-00 shipped
+            // a `Book` carrying `public boolean isPresent()` because this block asked for it and
+            // told the model not to touch the caller. A named receiver never showed this shape, so
+            // the suppression is scoped to the bare-type case and leaves the common path alone.
+            if (!namedReceiver && containerMembers().contains(methodName)) continue;
             Entry entry = new Entry(Kind.METHOD, target, methodName, args);
             dedup.putIfAbsent(key(entry), entry);
         }

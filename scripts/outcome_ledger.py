@@ -196,6 +196,39 @@ def seed(paths):
     return payload
 
 
+def attempt_score(row):
+    """T6-L: a run's score as a share of the suite, counting a non-scorable artifact as 0.
+
+    Deliberately reads `smoke` (the final files) and not `smoke_preserved`. Mean-of-scored-runs
+    is survivorship bias — the older half of this ledger shows a BETTER median purely because
+    only 31% of its runs were scorable, against 92% recently. Counting an artifact that does not
+    build as 0 is the only form that cannot be gamed by failures dropping out of the denominator.
+    """
+    total = row.get("smoke_total")
+    passed = row.get("smoke_pass")
+    if passed is None or not total:
+        return 0.0
+    return passed / total
+
+
+def per_attempt(runs, out, recent=12):
+    """The T6-L headline, computed here so nobody has to compute it by hand again."""
+    names = sorted(runs)
+    scored = sum(1 for n in names if runs[n].get("smoke_pass") is not None)
+    windows = [("all time", names)]
+    if len(names) >= 4:
+        windows.append(("newer half", names[len(names) // 2:]))
+    if len(names) > recent:
+        windows.append(("last %d" % recent, names[-recent:]))
+    out.write("  per-attempt share of the smoke suite (a non-scorable artifact counts 0"
+              " — T6-L target 75%):\n")
+    for label, window in windows:
+        share = sum(attempt_score(runs[n]) for n in window) / len(window)
+        out.write("    %-12s n=%-3d %3.0f%%\n" % (label, len(window), 100 * share))
+    out.write("    scorability  %d of %d runs (%.0f%%) produced an artifact the suite could"
+              " score\n" % (scored, len(names), 100 * scored / len(names)))
+
+
 def report(payload, out):
     runs = payload.get("runs", {})
     out.write("T6-E run-outcome ledger — %d run(s) recorded\n" % len(runs))
@@ -214,6 +247,7 @@ def report(payload, out):
         else:
             bad += 1                    # a build/boot failure is a conclusive bad outcome
     out.write("  outcome mix: %d good · %d bad\n" % (good, bad))
+    per_attempt(runs, out)
     out.write("  terminals: ")
     terms = {}
     for row in runs.values():

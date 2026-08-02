@@ -213,5 +213,46 @@ class OutcomeLedgerTest(unittest.TestCase):
             self.assertEqual(ol.main(["--append", "/nonexistent/run-dir"]), 0)
 
 
+class PerAttemptTest(unittest.TestCase):
+    """T6-L: the headline metric, so it is never computed by hand again."""
+
+    def test_a_non_scorable_run_counts_as_zero_not_as_missing(self):
+        self.assertEqual(ol.attempt_score({"terminal": "deadline"}), 0.0)
+        self.assertEqual(ol.attempt_score({"smoke_pass": None, "smoke_total": 23}), 0.0)
+
+    def test_a_scored_run_is_its_share_of_the_suite(self):
+        self.assertAlmostEqual(ol.attempt_score({"smoke_pass": 17, "smoke_total": 23}), 17 / 23)
+
+    def test_the_mean_is_dragged_down_by_failures_rather_than_ignoring_them(self):
+        """The whole point: mean-of-SCORED would read 100% here, per-attempt reads 50%."""
+        runs = {"a": {"smoke_pass": 23, "smoke_total": 23}, "b": {"terminal": "jvm-died"}}
+        out = io.StringIO()
+        ol.per_attempt(runs, out)
+        self.assertIn("50%", out.getvalue())
+        self.assertIn("1 of 2 runs", out.getvalue())
+
+    def test_windows_are_omitted_rather_than_faked_when_there_is_too_little_history(self):
+        out = io.StringIO()
+        ol.per_attempt({"a": {"smoke_pass": 12, "smoke_total": 23}}, out)
+        text = out.getvalue()
+        self.assertIn("all time", text)
+        self.assertNotIn("newer half", text)
+        self.assertNotIn("last 12", text)
+
+    def test_the_recent_window_appears_once_history_outgrows_it(self):
+        runs = {"r%02d" % i: {"smoke_pass": 23, "smoke_total": 23} for i in range(13)}
+        out = io.StringIO()
+        ol.per_attempt(runs, out)
+        self.assertIn("last 12", out.getvalue())
+
+    def test_reads_final_files_not_the_preserved_copy(self):
+        """Reading smoke_preserved would quietly change what the target means."""
+        runs = {"a": {"smoke_pass": 0, "smoke_total": 23,
+                      "smoke_preserved": "SMOKE: 23/23"}}
+        out = io.StringIO()
+        ol.per_attempt(runs, out)
+        self.assertIn("  0%", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

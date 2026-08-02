@@ -61,6 +61,18 @@ public final class MissingTypePromptBlock {
     private MissingTypePromptBlock() {}
 
     /**
+     * javac reports absolute host paths. The prompt should carry the path the model uses when it
+     * writes a file, and nothing about where this machine keeps its working tree — field-observed
+     * 2026-08-02, where the first firing rendered
+     * {@code /home/…/firestarter/output/src/main/java/…/LoanService.java}.
+     */
+    private static String projectRelative(String path) {
+        int src = path.indexOf("src/main/java/");
+        if (src < 0) src = path.indexOf("src/test/java/");
+        return src < 0 ? path : path.substring(src);
+    }
+
+    /**
      * The tree's own namespace root, as the first two segments shared by every package it declares.
      * Two is not a tuning knob: a Java package root is a reversed domain name, so the organisation
      * lives in segments one and two ({@code com.example}, {@code org.acme}). Taking the whole
@@ -170,7 +182,7 @@ public final class MissingTypePromptBlock {
         for (MissingTypeExtractor.Entry e : ours) {
             sb.append("  - ").append(e.typeName());
             if (e.referencedBy() != null) {
-                sb.append(" — referenced by ").append(e.referencedBy());
+                sb.append(" — referenced by ").append(projectRelative(e.referencedBy()));
             }
             sb.append("\n");
         }

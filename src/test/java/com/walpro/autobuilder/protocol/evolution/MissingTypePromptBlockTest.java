@@ -140,6 +140,24 @@ class MissingTypePromptBlockTest {
     }
 
     @Test
+    void render_pathIsProjectRelative_notTheHostsAbsolutePath() {
+        // javac reports absolute paths; the first field firing put
+        // /home/…/firestarter/output/src/main/java/… into the prompt.
+        Map<String, String> prev = new LinkedHashMap<>();
+        prev.put("src/main/java/com/example/demo/service/LoanService.java", "class LoanService {}");
+        CycleContextData ctx = CycleContextData.builder().cycleName("c")
+                .lastProbeOutcome(probeFailure(missingType(
+                        "/home/u/proj/firestarter/output/src/main/java/com/example/demo/service/"
+                                + "LoanService.java", "BookAlreadyLoanedException")))
+                .previousOutput(prev).build();
+
+        String block = MissingTypePromptBlock.render(ctx);
+
+        assertThat(block).contains("src/main/java/com/example/demo/service/LoanService.java");
+        assertThat(block).doesNotContain("/home/");
+    }
+
+    @Test
     void render_severalTypes_areListedTogetherInOneBlock() {
         String stderr = missingType("/out/src/main/java/com/example/LoanController.java", "Loan")
                 + "\n" + missingType("/out/src/main/java/com/example/LoanController.java",

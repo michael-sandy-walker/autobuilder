@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Full Ticket Index
 
-**Snapshot:** 2026-07-26 · Complete one-line-per-ticket index over `roadmap.md`, grouped by tier. Rebuilt from an append-only narrative log back to a thin index (M-A).
+**Snapshot:** 2026-08-02 · Complete one-line-per-ticket index over `roadmap.md`, grouped by tier. Rebuilt from an append-only narrative log back to a thin index (M-A); reconciled line-by-line against `roadmap.md` on 2026-08-02 (5 stale markers, 6 absent tickets — the drift accrued over a week of ticket work, so re-run the diff whenever this file is touched).
 
 **Contract:** this file is a THIN INDEX — one status line per ticket (id + short title), pointing to the full body in `roadmap.md`. It is NOT a narrative log and holds no run history, plan, or reasoning.
 - **Recent-state narrative** (run history, current state, what's next / the active plan) lives in [[project-resume-state]], NOT here.
@@ -155,7 +155,9 @@
 
 ## Tier 2 — Steering quality (120)
 
-- [ ] `T2-EZ` — injector skeletons are discarded exactly when the build is still red; `Loan` skeleton created 138x, present 0x; 8 of 9 smoke failures were the one file this blocked
+- [~] `T2-FA` — The injector's most-fired resolver path fails 77% of the time and burns the recurrence budget; the symbol path now defers to a package migration that can clear the build (field firing outstanding)
+- [x] `T2-FB` — A banked-criteria early exit and a contradicted-criteria closure refusal livelocked; the refusal now clears the banked pass-map so the loop re-checks instead of re-declaring
+- [x] `T2-EZ` — injector skeletons are discarded exactly when the build is still red; `Loan` skeleton created 138x, present 0x; 8 of 9 smoke failures were the one file this blocked
 - [x] `T2-EY` — A correct rejection with a stated reason does not produce a different next proposal — BUILT 2026-07-31: a proposal already rejected this run, with nothing merged since, is refused before the probe and the evaluator (39 duplicates in 33 corpora, 38 safely blockable); field DoD MET 2026-08-01 — refused a repeat with no evaluator call, and the next proposal differed (n=1, uncontrolled)
 - [ ] `T2-EX` — How much of a run is verifiable is decided at criterion-authoring time (77%/32%/79% executable across three frozen runs) and nothing measures it
 - [ ] `T2-ET` — A gate-raised work item is closed by an LLM score; the gate never votes on its own closure (completes T4-CC's authority)
@@ -174,7 +176,7 @@
 - [>] `T2-BP` — Signal saturation
 - [>] `T2-BV` — PLANNING_THROTTLED similarity check rejects re-proposals of GIVEN_UP subgoals, blocking e…
 - [>] `T2-BZ` — Evaluation heuristic and prompt guidance for isolated in-memory state across controllers
-- [s] `T2-CI` — Merge-regression guard
+- [x] `T2-CI` — Merge-regression guard
 - [>] `T2-CM` — Orphan-aware acceptance bias
 - [>] `T2-CN` — Registration-collision heuristic
 - [>] `T2-CP` — Per-cycle structural audit driver
@@ -281,7 +283,7 @@
 
 ## Tier 3 — Feature completion (37)
 
-- [ ] `T3-BX` — Validation layer is decorative (`@Valid` everywhere, zero constraints) → bad input 500s instead of 400
+- [~] `T3-BX` — Validation layer is decorative (`@Valid` everywhere, zero constraints) → bad input 500s instead of 400
 - [x] `T3-BW` — Peer-consistency odd-one-out rule in `WiringFactsAnalyzer` — SHIPPED 2026-07-27; vocabulary-free, verified on the real run output, reaches the evolution prompt
 - [>] `T3-B` — Activate `GoalEntity.expectedArtifacts`
 - [>] `T3-BM` — Stateless LLM criteria verification on repeated no-diff cycles
@@ -321,6 +323,7 @@
 
 ## Tier 4 — New systems (88)
 
+- [x] `T4-CZ` — The self-check computes WHY the artifact cannot package seven times a run and throws the answer away
 - [ ] `T4-DD` — Target-domain knowledge behind a seam (deferred by user until stable); the seam has never been exercised — both targets ever run are REST
 - [ ] `T4-DC` — A controller catches exception types its service never throws, so the catches are dead and every domain error falls to the last resort (23/23 run had 8 matched types; 14/23 run zero overlap)
 - [ ] `T4-DB` — The loop repairs what it can probe and fails exactly what it cannot: the 3 always-failing checks are the 3 shapes the probe synthesizer abstains on (the measured 18→23 gap)
@@ -335,7 +338,7 @@
 - [ ] `T4-AS` — Multi-provider LLM fallback
 - [ ] `T4-CT` — The loop CONSULTS accumulated cross-run knowledge before acting (the payoff layer; previously homeless across three tickets' slices)
 - [s] `T4-CU` — The loop EXECUTES its own acceptance criteria against the booted artifact instead of asking the model whether they hold (shipped 2026-07-27) — PLACEMENT GAP CLOSED 2026-07-31: criteria are now checked when the SUBGOAL closes, not only at the run's closure edge, via the `ClosureClaimVerifier` port (T4-DD's first exercise); field DoD needs a refused closure
-- [x] `T4-CV` — Forward-looking requirement for a runnable entry point (shipped + FIELD-VERIFIED 2026-07-27: gate fired at min 5, loop wrote the entry point in ~60s)
+- [s] `T4-CV` — Forward-looking requirement for a runnable entry point (shipped + FIELD-VERIFIED 2026-07-27: gate fired at min 5, loop wrote the entry point in ~60s)
 - [ ] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals (latent; free at 558 goals, hot path per proposal)
 - [x] `T4-CX` — Startup-wiring forecast no longer precedes the gate that measures it (shipped 2026-07-28)
 - [~] `T4-CY` — Loop observes its own running behaviour mid-run: PROVEN, disabled on cost until probe synthesis is deterministic
@@ -463,9 +466,11 @@
 
 ## Tier 6 — Harness & yardsticks (9)
 
+- [~] `T6-K` — Five of the 23 smoke checks can be passed by the endpoint being ABSENT; failing-check SETS now preserved, gating rule still open
+- [ ] `T6-L` — A stated outcome baseline (75% per RUN ATTEMPTED) and the check families that own the gap — 2026-08-02: the loans gap is measured as a COMPILE gap, not an attention gap
 - [x] `T6-F` — Dual smoke score could report a PREVIOUS run's preserved artifact — SHIPPED 2026-07-26 (`preserved_freshness.py` + 19 tests · `select_preserved.py --run-log` run-scoping + 5 tests); reconstruction half awaits a field firing (`t6f-stale-loop-copy-ignored`)
 - [x] `T6-J` — SHIPPED 2026-07-31: the missing time was GraphWriter.Batch.commit() at ~94s/cycle; moved off the critical path, 153s→40s per cycle
-- [ ] `T6-G` — Cross-lineage overlap: is there enough shared ground for a merge to gain anything? (shared gate for T4-CN/CM/CS)
+- [x] `T6-G` — Cross-lineage overlap: is there enough shared ground for a merge to gain anything? (shared gate for T4-CN/CM/CS)
 - [ ] `T6-H` — Outcome attribution at SUBTREE granularity (blocks T4-CS)
 - [ ] `T6-I` — Does accumulated knowledge actually improve outcomes? (falsifiability yardstick for the whole wave)
 - [x] `T6-A` — The smoke test scores a run's final files, never the best compiling version it saved along the way — SHIPPED 2026-07-24 (scripts: `select_preserved.py` + preflight dual `smoke`/`smoke_preserved` + `drift_report.py` drift fields); both branches field-validated; watch: first genuine rescue (`smoke_preserved` > `smoke`)

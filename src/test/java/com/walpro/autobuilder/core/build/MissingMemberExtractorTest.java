@@ -49,6 +49,48 @@ class MissingMemberExtractorTest {
     }
 
     @Test
+    void extract_methodOnAVariable_isTheShapeTheFieldActuallyProduces() {
+        // Verbatim from run 2026-07-30_00-48-16: a controller calling an injected service. This
+        // `location: variable <name> of type <T>` shape is 89% of the corpus (806 of 905 over 27
+        // runs) and was silently skipped, so the block existed and almost never fired.
+        String stderr = String.join("\n",
+                "[ERROR] /src/main/java/BookController.java:[24,42] cannot find symbol",
+                "[ERROR]   symbol:   method save(com.example.library.model.Book)",
+                "[ERROR]   location: variable bookService of type "
+                        + "com.example.library.model.BookService");
+
+        assertThat(MissingMemberExtractor.extract(stderr))
+                .containsExactly(new MissingMemberExtractor.Entry(
+                        MissingMemberExtractor.Kind.METHOD, "BookService", "save",
+                        "com.example.library.model.Book"));
+    }
+
+    @Test
+    void extract_methodOnAValueOfType_isAlsoRecognised() {
+        String stderr = String.join("\n",
+                "[ERROR] /src/main/java/LoanController.java:[9,20] cannot find symbol",
+                "[ERROR]   symbol:   method isReturned()",
+                "[ERROR]   location: value loan of type com.example.library.model.Loan");
+
+        assertThat(MissingMemberExtractor.extract(stderr))
+                .containsExactly(new MissingMemberExtractor.Entry(
+                        MissingMemberExtractor.Kind.METHOD, "Loan", "isReturned", ""));
+    }
+
+    @Test
+    void extract_variableAndClassShapesForOneTypeDeduplicateTogether() {
+        String stderr = String.join("\n",
+                "[ERROR] A.java:[1,1] cannot find symbol",
+                "[ERROR]   symbol:   method createLoan(java.lang.Long,java.lang.Long)",
+                "[ERROR]   location: variable loanService of type com.example.LoanService",
+                "[ERROR] B.java:[2,2] cannot find symbol",
+                "[ERROR]   symbol:   method createLoan(java.lang.Long,java.lang.Long)",
+                "[ERROR]   location: class com.example.LoanService");
+
+        assertThat(MissingMemberExtractor.extract(stderr)).hasSize(1);
+    }
+
+    @Test
     void extract_methodWithoutLocation_isSkipped() {
         // Without `location: class T`, the entry would have no target — defer to T4-AZ (the
         // bare missing-symbol resolver handles missing free identifiers).

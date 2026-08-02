@@ -83,6 +83,62 @@ class UnwrappedContainerPromptBlockTest {
     }
 
     @Test
+    void render_theMirrorShape_aPlainValueWhereTheContainerIsExpected() {
+        // Verbatim from run 2026-08-02_20-33-26, live while this was written — eight consecutive
+        // rejections on one subgoal, and this is what the probe kept saying.
+        String stderr = "[ERROR] /p/src/main/java/com/example/library/service/LoanService.java:"
+                + "[41,68] incompatible types: com.example.library.model.Member cannot be "
+                + "converted to java.util.Optional<com.example.library.model.Member>";
+
+        String block = UnwrappedContainerPromptBlock.render(ctxFor(stderr));
+
+        assertThat(block).contains("--- UNWRAPPED VALUE — FIX THE CALL, NOT THE TYPE ---");
+        assertThat(block).contains("a plain Member supplied where Optional<Member> is expected");
+        assertThat(block).contains("src/main/java/com/example/library/service/LoanService.java");
+    }
+
+    @Test
+    void render_saysTheLocationIsTheConsumerAndTheProducerMayBeElsewhere() {
+        // Run 2026-08-02_20-33-26 traced the whole loop: the block asked, the model corrected the
+        // CALL SITE (Optional<Book> bookOpt = bookRepository.findById(...)), and the build still
+        // failed because findById itself returns a plain Book. Naming only the error site sends
+        // the model back to the file it has already fixed.
+        String stderr = "[ERROR] /p/src/main/java/S.java:[30,57] incompatible types: "
+                + "com.example.Book cannot be converted to java.util.Optional<com.example.Book>";
+
+        String block = UnwrappedContainerPromptBlock.render(ctxFor(stderr));
+
+        assertThat(block).contains("producer's return type");
+        assertThat(block).contains("declared in another file");
+    }
+
+    @Test
+    void render_anOrdinaryTypeErrorIsNotAWrappingDisagreement() {
+        // Different element type on each side — that is a plain type error and belongs to the
+        // compile-error relay, not here.
+        String stderr = "[ERROR] /p/src/main/java/A.java:[1,1] incompatible types: "
+                + "com.example.Book cannot be converted to java.util.List<java.lang.String>";
+
+        assertThat(UnwrappedContainerPromptBlock.render(ctxFor(stderr))).isNull();
+    }
+
+    @Test
+    void render_bothShapesTogether_shareOneBlock() {
+        String stderr = String.join("\n",
+                "[ERROR] /p/src/main/java/A.java:[1,1] cannot find symbol",
+                "[ERROR]   symbol:   method orElseThrow()",
+                "[ERROR]   location: class com.example.Loan",
+                "[ERROR] /p/src/main/java/B.java:[2,2] incompatible types: com.example.Member "
+                        + "cannot be converted to java.util.Optional<com.example.Member>");
+
+        String block = UnwrappedContainerPromptBlock.render(ctxFor(stderr));
+
+        assertThat(block.split("--- UNWRAPPED VALUE")).hasSize(2);   // one heading, not two
+        assertThat(block).contains("orElseThrow() chained onto a plain Loan");
+        assertThat(block).contains("a plain Member supplied where Optional<Member> is expected");
+    }
+
+    @Test
     void render_severalCalls_areDedupedByTypeAndMethod() {
         String one = String.join("\n",
                 "[ERROR] /p/src/main/java/A.java:[1,1] cannot find symbol",

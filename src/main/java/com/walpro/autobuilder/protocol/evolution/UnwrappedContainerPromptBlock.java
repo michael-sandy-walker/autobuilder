@@ -2,6 +2,7 @@ package com.walpro.autobuilder.protocol.evolution;
 
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
+import com.walpro.autobuilder.core.build.ContainerMismatchExtractor;
 import com.walpro.autobuilder.core.build.MissingMemberExtractor;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
@@ -18,6 +19,15 @@ import java.util.List;
  * instructions for one diagnostic inside one block is the shape this project files as a missing
  * capability, so the recogniser is shared (
  * {@link MissingMemberExtractor#unwrappedContainerCalls}) and the advice is not.
+ *
+ * <p><b>Two shapes, one invariant.</b> The tree can disagree about wrapping from either end, and
+ * javac reports the two completely differently: a container method chained onto a plain value
+ * surfaces as a MISSING METHOD ({@link MissingMemberExtractor#unwrappedContainerCalls}), while a
+ * plain value handed where the container is expected surfaces as INCOMPATIBLE TYPES
+ * ({@link com.walpro.autobuilder.core.build.ContainerMismatchExtractor}). Measured 2026-08-02, they
+ * barely overlap — 6 of 70 — so each is mostly its own occurrence, and the second is the larger:
+ * 169 cycles across 15 runs against 70 diagnostics across 9. The advice is identical for both, so
+ * they share this block rather than getting one each; that is the invariant having one home.
  *
  * <p>History, because the sequencing is the point. T4-BB's block used to answer this shape with
  * "add {@code orElseThrow} to Book.java — do NOT change the caller(s)", which is backwards; run
@@ -43,24 +53,36 @@ public final class UnwrappedContainerPromptBlock {
 
         List<MissingMemberExtractor.ContainerCall> calls =
                 MissingMemberExtractor.unwrappedContainerCalls(probe.stderrTail());
-        if (calls.isEmpty()) return null;
+        List<ContainerMismatchExtractor.Entry> mismatches =
+                ContainerMismatchExtractor.extract(probe.stderrTail());
+        if (calls.isEmpty() && mismatches.isEmpty()) return null;
 
         StringBuilder sb = new StringBuilder();
         sb.append("--- UNWRAPPED VALUE — FIX THE CALL, NOT THE TYPE ---\n");
-        sb.append("The previous compile probe reported the following as a missing method, but ")
-          .append(calls.size() == 1 ? "it is not one" : "they are not")
-          .append(". Each call chains a method that belongs to a container onto a plain value of ")
-          .append("your own type, so the value was never wrapped in the first place. ")
-          .append("Do NOT add ")
-          .append(calls.size() == 1 ? "this method" : "these methods")
-          .append(" to your own class — that cannot compile and it corrupts the type. ")
-          .append("Fix ONE of: the method that produced the value should return the container ")
-          .append("type, or the call site should stop chaining the container method.\n");
+        sb.append("The code disagrees with itself about whether a value is wrapped in a container. ")
+          .append("Each line below is one such disagreement. ")
+          .append("Do NOT add container methods to your own classes and do NOT change a domain ")
+          .append("type to satisfy the compiler — that cannot work and it corrupts the type. ")
+          .append("Fix ONE of: the method that produces the value returns the container type, or ")
+          .append("the code that consumes it stops treating it as one. Make the producer and the ")
+          .append("consumer agree. The location below is where the compiler noticed the ")
+          .append("disagreement, which is the CONSUMER — if you have already corrected the ")
+          .append("consumer and the error persists, the producer's return type is what is wrong, ")
+          .append("and it is declared in another file.\n");
         for (MissingMemberExtractor.ContainerCall c : calls) {
             sb.append("  - ").append(c.memberName()).append("() chained onto a plain ")
               .append(c.targetType());
             if (c.referencedBy() != null) {
                 sb.append(" at ").append(projectRelative(c.referencedBy()));
+            }
+            sb.append("\n");
+        }
+        for (ContainerMismatchExtractor.Entry m : mismatches) {
+            sb.append("  - a plain ").append(m.plainType()).append(" supplied where ")
+              .append(m.containerType()).append("<").append(m.plainType())
+              .append("> is expected");
+            if (m.referencedBy() != null) {
+                sb.append(" at ").append(projectRelative(m.referencedBy()));
             }
             sb.append("\n");
         }

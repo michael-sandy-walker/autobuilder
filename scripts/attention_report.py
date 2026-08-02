@@ -327,15 +327,19 @@ def pearson(xs, ys):
     return num / (dx * dy)
 
 
-def collect(patterns):
+def collect(patterns, since=None, until=None):
     runs = {}
     for pattern in patterns:
         for d in sorted(glob.glob(pattern)):
             if not os.path.isdir(d):
                 continue
+            name = os.path.basename(d.rstrip("/"))
+            # Run dirs are named by start timestamp, so a lexical compare is a time compare.
+            if (since and name < since) or (until and name >= until):
+                continue
             got = measure_run(d)
             if got:
-                runs[os.path.basename(d.rstrip("/"))] = got
+                runs[name] = got
     return runs
 
 
@@ -385,9 +389,12 @@ def main():
     ap.add_argument("patterns", nargs="*", default=["/tmp/preflight_runs/*"])
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--per-run", action="store_true")
+    ap.add_argument("--since", metavar="RUN_PREFIX",
+                    help="only runs at or after this run-dir name, e.g. 2026-08-01_20-38")
+    ap.add_argument("--until", metavar="RUN_PREFIX", help="only runs before this run-dir name")
     args = ap.parse_args()
 
-    runs = collect(args.patterns or ["/tmp/preflight_runs/*"])
+    runs = collect(args.patterns or ["/tmp/preflight_runs/*"], args.since, args.until)
     if not runs:
         print("no run carries a cycle log + goal stack + smoke sheet")
         return 1

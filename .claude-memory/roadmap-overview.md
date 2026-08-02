@@ -155,7 +155,7 @@
 
 ## Tier 2 — Steering quality (120)
 
-- [ ] `T2-FC` — The plan decomposes its FIRST subject in full and later subjects as endpoints only, so the types those endpoints call are never planned (98%/98% vs 38%/36% over 42 runs)
+- [ ] `T2-FC` — Later subjects reach evolution without their types planned; the raw 98%-vs-38% ladder gap is mostly RUN LENGTH (corrected same day) and the residual is 56%/67% vs 100% on n=9
 - [~] `T2-FA` — The injector's most-fired resolver path fails 77% of the time and burns the recurrence budget; the symbol path now defers to a package migration that can clear the build (field firing outstanding)
 - [x] `T2-FB` — A banked-criteria early exit and a contradicted-criteria closure refusal livelocked; the refusal now clears the banked pass-map so the loop re-checks instead of re-declaring
 - [x] `T2-EZ` — injector skeletons are discarded exactly when the build is still red; `Loan` skeleton created 138x, present 0x; 8 of 9 smoke failures were the one file this blocked

@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (447 tickets, 2026-08-03):** 30 open `[ ]` · 6 in-progress `[~]` · 31 deferred `[>]` · 384 closed, of which **357 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 2 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (450 header lines, 446 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (447 tickets, 2026-08-04):** 30 open `[ ]` · 5 in-progress `[~]` · 31 deferred `[>]` · 385 closed, of which **358 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 2 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (450 header lines, 446 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -470,7 +470,7 @@
 
 ## Tier 6 — Harness & yardsticks (9)
 
-- [~] `T6-K` — Five of the 23 smoke checks can be passed by the endpoint being ABSENT; failing-check SETS now preserved, gating rule still open
+- [x] `T6-K` — Five of the 23 smoke checks can be passed by the endpoint being ABSENT; failing-check SETS now preserved, gating rule still open
 - [ ] `T6-L` — A stated outcome baseline (75% per RUN ATTEMPTED) and the check families that own the gap — 2026-08-02: the loans gap is measured as a COMPILE gap, not an attention gap
 - [x] `T6-F` — Dual smoke score could report a PREVIOUS run's preserved artifact — SHIPPED 2026-07-26 (`preserved_freshness.py` + 19 tests · `select_preserved.py --run-log` run-scoping + 5 tests); reconstruction half awaits a field firing (`t6f-stale-loop-copy-ignored`)
 - [x] `T6-J` — SHIPPED 2026-07-31: the missing time was GraphWriter.Batch.commit() at ~94s/cycle; moved off the critical path, 153s→40s per cycle

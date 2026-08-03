@@ -85,7 +85,13 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            # set is what any honest comparison needs. Absent (not empty) on runs predating the
            # capture and on runs where nothing was scored, so "no failures" and "not measured"
            # stay distinguishable; read with .get and never defaulted to "".
-           "smoke_failed_checks")
+           "smoke_failed_checks",
+           # T6-K: the strict companion score, as "<n>/23 discounted=<checks>". `smoke` above is
+           # deliberately NOT changed — it keeps its meaning so every earlier row stays readable
+           # (the T6-A precedent) — and this is the second number beside it. The two are meant to
+           # be read together: quoting only the strict one would re-base the ledger while claiming
+           # not to. Absent on runs predating it, never zero.
+           "smoke_strict")
 
 
 def read_summary(run_dir):

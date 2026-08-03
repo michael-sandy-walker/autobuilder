@@ -393,6 +393,22 @@ run_live() {
             echo "smoke_failed_checks=$(sed -n 's/^FAIL \[\([0-9]*\)\].*/\1/p' \
                 "$run_dir/preserved-smoke.txt" | paste -sd, -)"
         fi
+        # T6-K: the STRICT companion score. Five checks assert a 404, and an endpoint that does
+        # not exist 404s everything — so those points can be collected for absent code. `smoke`
+        # above keeps its meaning so the ledger stays readable (the T6-A precedent); this is the
+        # second number, and the two belong together. Emitted only when a per-check sheet exists,
+        # absent rather than zero otherwise.
+        if [ -s "$run_dir/preserved-smoke.txt" ] || [ -s "$run_dir/artifact-smoke.txt" ]; then
+            strict=$(python3 "$REPO/scripts/smoke_strict.py" --json "$run_dir" 2>/dev/null \
+                | python3 -c 'import json,sys
+try:
+    d=json.load(sys.stdin)
+    r=next(iter(d.values()))
+    print("%d/23 discounted=%s" % (r["smoke_strict"], ",".join(map(str, r["discounted"])) or "none"))
+except Exception:
+    pass' 2>/dev/null)
+            [ -n "$strict" ] && echo "smoke_strict=$strict"
+        fi
         echo "merges=$(grep -c 'mutation_merged' "$run_dir/behaviour.ndjson" 2>/dev/null)"
         echo "grounding_stamps=$(grep -c 'criteria-grounding: goal' "$run_dir/autobuilder.log" 2>/dev/null)"
         echo "noDiff_refusals=$(grep -c 'verified-criteria-unmet' "$run_dir/autobuilder.log" 2>/dev/null)"

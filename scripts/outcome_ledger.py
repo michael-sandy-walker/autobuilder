@@ -91,7 +91,12 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            # (the T6-A precedent) — and this is the second number beside it. The two are meant to
            # be read together: quoting only the strict one would re-base the ledger while claiming
            # not to. Absent on runs predating it, never zero.
-           "smoke_strict")
+           "smoke_strict",
+           # T2-EX: `criteria_executable` held a PERCENT under a name matching a count-valued
+           # sibling, so a row read as a ratio and gave 500%. Both are now carried under names
+           # that say which they are; the old field is left on historical rows rather than
+           # redefined, so no earlier row changes meaning.
+           "criteria_executable_pct", "criteria_executable_count")
 
 
 def read_summary(run_dir):

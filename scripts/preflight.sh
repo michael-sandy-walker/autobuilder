@@ -443,7 +443,13 @@ except Exception:
         # quality is a cause or a symptom; nothing steers on it before then.
         # sed, not `grep -o '[0-9]*'` — the marker "T2-EX" contains a digit, so a bare number
         # pattern picks the 2 out of the label before it ever reaches the count.
-        echo "criteria_executable=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, [0-9]* executable (\([0-9]*\)%).*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        # T2-EX. `criteria_executable` captured the PERCENT while `criteria_authored` captured a
+        # COUNT, under names that read as a matching pair — so "55/11" looked like a ratio of 500%
+        # rather than "55%, of 11 authored". It misled its own author on 2026-08-04 within a minute
+        # of being read. Both are emitted under unambiguous names now; the old field keeps its
+        # historical meaning on existing rows rather than being silently redefined.
+        echo "criteria_executable_pct=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, [0-9]* executable (\([0-9]*\)%).*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        echo "criteria_executable_count=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, \([0-9]*\) executable.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         echo "criteria_authored=$(sed -n 's/.*criteria executability — \([0-9]*\) authored.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         # T2-EY: how much of the run was the loop re-proposing what it had already been refused,
         # and how much of that the gate stopped before an evaluator call. Both, never just the

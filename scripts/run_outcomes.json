@@ -1009,6 +1009,28 @@
    "smoke_total": 23,
    "terminal": "deadline",
    "total_cycles": "92"
+  },
+  "2026-08-04_10-04-44": {
+   "clauses_closed_vs_control": "0",
+   "cost_readout": "sms-commit=723245ms/3 build=135453ms/33 boot-gate=44985ms/9 package-gate=40160ms/9 sms-batch-build=861ms/4 sms-lineage-stamp=46ms/3 sms-cycle-merge=20ms/3 sms-cycle-link=13ms/2",
+   "criteria_authored": "11",
+   "criteria_executable": "55",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "50",
+   "merges": "11",
+   "peaked_at_cycle": "cycle-1785831469584 (16/16)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-08-04",
+   "run_duration_min": "12.2",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 17/23",
+   "smoke_failed_checks": "9,14,15,16,19,20",
+   "smoke_pass": 17,
+   "smoke_preserved": "SMOKE: 17/23",
+   "smoke_strict": "17/23 discounted=none",
+   "smoke_total": 23,
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "16"
   }
  },
  "updated": "2026-08-04"

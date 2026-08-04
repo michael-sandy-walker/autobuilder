@@ -98,6 +98,24 @@ def score(results):
     return lenient, lenient - len(discounted), sorted(discounted)
 
 
+# Which summary field each sheet is the companion of. The two sheets score DIFFERENT TREES —
+# `smoke` is the final files, `smoke_preserved` the best saved copy — so a strict number must say
+# which one it belongs to. Emitting one strict score beside both was the first wiring of this and
+# it read as "4 points withheld" on a run where nothing was withheld at all: the gap was entirely
+# that the two numbers described different artifacts.
+SHEETS = {"artifact-smoke.txt": "artifact", "preserved-smoke.txt": "preserved"}
+
+
+def score_dir(run_dir):
+    """{'artifact': (lenient, strict, discounted), 'preserved': (...)} for whichever sheets exist."""
+    out = {}
+    for name, label in SHEETS.items():
+        sheet = read_sheet(os.path.join(run_dir, name))
+        if sheet:
+            out[label] = score(sheet)
+    return out
+
+
 def collect(patterns):
     out = {}
     for pattern in patterns:
@@ -126,8 +144,17 @@ def main():
     rows = {name: score(sheet) for name, sheet in runs.items()}
 
     if args.json:
-        json.dump({n: {"smoke": l, "smoke_strict": s, "discounted": d}
-                   for n, (l, s, d) in rows.items()}, sys.stdout, indent=1, sort_keys=True)
+        payload = {}
+        for pattern in (args.patterns or ["/tmp/preflight_runs/*"]):
+            for d in sorted(glob.glob(pattern)):
+                if not os.path.isdir(d):
+                    continue
+                per = score_dir(d)
+                if per:
+                    payload[os.path.basename(d.rstrip("/"))] = {
+                        label: {"smoke": l, "smoke_strict": st, "discounted": disc}
+                        for label, (l, st, disc) in per.items()}
+        json.dump(payload, sys.stdout, indent=1, sort_keys=True)
         print()
         return 0
 

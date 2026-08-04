@@ -399,15 +399,22 @@ run_live() {
         # second number, and the two belong together. Emitted only when a per-check sheet exists,
         # absent rather than zero otherwise.
         if [ -s "$run_dir/preserved-smoke.txt" ] || [ -s "$run_dir/artifact-smoke.txt" ]; then
-            strict=$(python3 "$REPO/scripts/smoke_strict.py" --json "$run_dir" 2>/dev/null \
+            # One line per TREE. `smoke` scores the final files and `smoke_preserved` the best
+            # saved copy, so a single strict number beside both is ambiguous — the first wiring
+            # read as "4 points withheld" on a run where nothing was withheld and the two numbers
+            # simply described different artifacts.
+            python3 "$REPO/scripts/smoke_strict.py" --json "$run_dir" 2>/dev/null \
                 | python3 -c 'import json,sys
 try:
     d=json.load(sys.stdin)
     r=next(iter(d.values()))
-    print("%d/23 discounted=%s" % (r["smoke_strict"], ",".join(map(str, r["discounted"])) or "none"))
+    for label,field in (("artifact","smoke_strict"),("preserved","smoke_preserved_strict")):
+        if label in r:
+            e=r[label]
+            print("%s=%d/23 discounted=%s" % (field, e["smoke_strict"],
+                                              ",".join(map(str, e["discounted"])) or "none"))
 except Exception:
-    pass' 2>/dev/null)
-            [ -n "$strict" ] && echo "smoke_strict=$strict"
+    pass' 2>/dev/null
         fi
         echo "merges=$(grep -c 'mutation_merged' "$run_dir/behaviour.ndjson" 2>/dev/null)"
         echo "grounding_stamps=$(grep -c 'criteria-grounding: goal' "$run_dir/autobuilder.log" 2>/dev/null)"

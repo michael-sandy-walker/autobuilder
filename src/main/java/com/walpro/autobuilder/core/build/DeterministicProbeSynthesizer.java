@@ -82,11 +82,59 @@ public final class DeterministicProbeSynthesizer {
         // the criterion does not say which collection each belongs to. Left unprobed.
         if (variableCount(assertion.path()) > 1) return Optional.empty();
         return switch (assertion.expectedStatus()) {
+            case 200, 201 -> succeeded(assertion, artifactRoot);
             case 400 -> rejectedInput(assertion, artifactRoot);
             case 404 -> absentResource(assertion, artifactRoot);
             case 409 -> collision(assertion, artifactRoot);
             default -> Optional.empty();
         };
+    }
+
+    /**
+     * T4-DB: the request the application must ACCEPT. Measured 2026-08-04 over 625 criteria from
+     * recent runs, the happy path is the largest unprobed shape by a wide margin — 201 is 17% of
+     * all criteria and 200 is 15%, together <b>83% of everything the synthesizer could not build</b>,
+     * against 6.6% for the bounded-count 422 this ticket was chasing. The loop could probe REFUSAL
+     * (400/404/409) and not SUCCESS, so {@code T4-CU} could never refute the commonest claim of
+     * all: that an endpoint works.
+     *
+     * <p>Two shapes, both expressible with the existing pieces:
+     * <ul>
+     *   <li>a read of a collection — one request, no body at all;</li>
+     *   <li>a read of one resource — create it first, then address it by {@code $1.id}, exactly the
+     *       setup {@link #rejectedInput} already performs, including its abstention when the setup
+     *       request is refused.</li>
+     * </ul>
+     *
+     * <p><b>A create is deliberately NOT probed, and the field says why.</b> {@code derivedBody}
+     * fills placeholders — {@code {"name":"value","email":"value"}}, {@code {"bookId":1}} — which a
+     * correct application refuses: run 2026-08-04_14-58-02 shows 53 setup requests declined for
+     * exactly that reason. Asserting 201 against such a body would report a contradiction the
+     * application never committed, on a spec whose {@code isbn} must match {@code \d{13}}. The
+     * whole value of a success probe is destroyed if it cannot tell "my body was invalid" from
+     * "your endpoint is broken", and nothing in the criterion supplies a valid body. Covering 200
+     * honestly is worth more than covering 201 wrongly.
+     */
+    private static Optional<List<ProbeRequest>> succeeded(BehaviouralCriterionParser.Assertion a,
+                                                          Path artifactRoot) {
+        boolean parameterized = isParameterized(a.path());
+        if (!carriesBody(a.verb())) {
+            if (!parameterized) {
+                // Read a collection: nothing to set up, nothing to guess.
+                return Optional.of(List.of(new ProbeRequest(a.verb(), a.path(), null)));
+            }
+            // Read one resource: it has to exist first, or the answer is 404 and says nothing
+            // about the criterion.
+            Optional<String> setupBody = derivedBody(collectionPath(a.path()), artifactRoot);
+            if (setupBody.isEmpty()) return Optional.empty();
+            return Optional.of(List.of(
+                    new ProbeRequest("POST", collectionPath(a.path()), setupBody.get()),
+                    new ProbeRequest(a.verb(), ground(a.path(), CREATED_ID), null)));
+        }
+        // Body-carrying verbs are left unprobed for success: the only body available is derived
+        // from field names and a correct application refuses it, so a 400 answer would be read as
+        // a contradiction against a working endpoint.
+        return Optional.empty();
     }
 
     /**

@@ -39,6 +39,57 @@ class DeterministicProbeSynthesizerTest {
         return result.get();
     }
 
+    // ---- success (T4-DB) ------------------------------------------------------------------
+
+    @Test
+    void aCollectionReadIsProbedWithASingleRequestAndNoBody() {
+        List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("GET /books returns HTTP 200 with a JSON array of books"), artifactRoot));
+
+        assertThat(seq).hasSize(1);
+        assertThat(seq.get(0).method()).isEqualTo("GET");
+        assertThat(seq.get(0).path()).isEqualTo("/books");
+        assertThat(seq.get(0).body()).isNull();
+    }
+
+    @Test
+    void aCreateIsNotProbedForSuccessEvenWhenABodyCanBeDerived() throws IOException {
+        // derivedBody fills placeholders — {"title":"value","isbn":"value"} — and a correct
+        // application refuses them (this spec requires isbn to match \d{13}). Run
+        // 2026-08-04_14-58-02 shows 53 setup requests declined for exactly that reason. Asserting
+        // 201 against such a body reports a contradiction the application never committed.
+        Path root = withModel("Book", "public class Book { private String title; private String isbn; }");
+
+        assertThat(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /books returns HTTP 201 with the created book"), root))
+                .isEmpty();
+    }
+
+    @Test
+    void aSingleResourceReadCreatesTheResourceFirst() throws IOException {
+        Path root = withModel("Book", "public class Book { private String title; private String isbn; }");
+
+        List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("GET /books/{id} returns HTTP 200 with the book body"), root));
+
+        assertThat(seq).hasSize(2);
+        assertThat(seq.get(0).method()).isEqualTo("POST");
+        assertThat(seq.get(0).path()).isEqualTo("/books");
+        assertThat(seq.get(1).method()).isEqualTo("GET");
+        assertThat(seq.get(1).path()).contains("$1.id");   // addressed by what was just created
+    }
+
+    @Test
+    void aBodyCarryingVerbOnAParameterizedPathAbstains() throws IOException {
+        // Needs both a valid resource and a valid body for a different shape; guessing either is
+        // what this method refuses to do.
+        Path root = withModel("Book", "public class Book { private String title; }");
+
+        assertThat(DeterministicProbeSynthesizer.synthesize(
+                assertion("PUT /books/{id} returns HTTP 200 with the updated book"), root))
+                .isEmpty();
+    }
+
     // ---- rejected input -------------------------------------------------------------------
 
     @Test
@@ -278,14 +329,21 @@ class DeterministicProbeSynthesizerTest {
     // ---- what it deliberately will not do ------------------------------------------------
 
     @Test
-    void successStatusesAreNotProbed() throws IOException {
-        // A 2xx probe needs values satisfying constraints stated in prose; type-derived
-        // placeholders do not, and such a probe reports a correct artifact as broken.
+    void aSuccessStatusIsNotProbedWhenTheRequestCarriesABody() throws IOException {
+        // The original rule here excluded ALL 2xx, for a reason that still holds and is worth
+        // keeping verbatim: "a 2xx probe needs values satisfying constraints stated in prose;
+        // type-derived placeholders do not, and such a probe reports a correct artifact as
+        // broken." Run 2026-08-04_14-58-02 confirms it in the field — 53 setup requests refused
+        // because derivedBody sent {"email":"value"} and {"bookId":1}.
+        //
+        // T4-DB narrows it rather than overturning it: the reasoning is about VALUES, so it
+        // applies exactly to requests that carry a body. A collection read carries none, and
+        // 200/201 were together 32% of all criteria and 83% of everything left unprobed.
         Path root = withModel("Book", "class Book { private String isbn; }");
         assertThat(DeterministicProbeSynthesizer.synthesize(
                 assertion("POST /books returns HTTP 201"), root)).isEmpty();
         assertThat(DeterministicProbeSynthesizer.synthesize(
-                assertion("GET /books returns HTTP 200"), root)).isEmpty();
+                assertion("GET /books returns HTTP 200"), root)).isPresent();
     }
 
     @Test

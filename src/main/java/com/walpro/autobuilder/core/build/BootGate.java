@@ -445,6 +445,11 @@ public class BootGate {
         int unparsed = 0;
         int unprobeable = 0;
         int transport = 0;
+        // Which SHAPES are missing, not just how many. "unprobeable=5" cannot tell a missing 422
+        // synthesizer from a missing 409 one, and those are different builds. Aggregated onto the
+        // existing line rather than logged per criterion: a gate run can carry dozens, and a
+        // debug-level line is invisible at the level runs actually use.
+        java.util.Map<Integer, Integer> unprobeableByStatus = new java.util.TreeMap<>();
         for (String criterion : criteria) {
             if (failures.size() >= MAX_NAMED_FAILURES) break;
             Optional<BehaviouralCriterionParser.Assertion> parsed = BehaviouralCriterionParser.parse(criterion);
@@ -459,8 +464,7 @@ public class BootGate {
                 // Parsed cleanly and still no probe: the shape has no synthesizer. This is the
                 // set T4-DB is about, and the status it asserts names which shape is missing.
                 unprobeable++;
-                log.debug("T4-DB: no probe shape for {} (expects {})",
-                        assertion.describe(), assertion.expectedStatus());
+                unprobeableByStatus.merge(assertion.expectedStatus(), 1, Integer::sum);
                 continue;
             }
             Optional<Integer> observed = executeSequence(client, port, sequence.get());
@@ -476,9 +480,11 @@ public class BootGate {
             }
         }
         log.info("T4-CU: behavioural criteria probed={} skipped={} "
-                        + "(unparsed={} unprobeable={} transport={}) contradicted={}",
+                        + "(unparsed={} unprobeable={}{} transport={}) contradicted={}",
                 probed, unparsed + unprobeable + transport,
-                unparsed, unprobeable, transport, failures.size());
+                unparsed, unprobeable,
+                unprobeableByStatus.isEmpty() ? "" : unprobeableByStatus.toString(),
+                transport, failures.size());
         return failures;
     }
 

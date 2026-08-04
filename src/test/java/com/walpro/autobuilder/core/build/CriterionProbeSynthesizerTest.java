@@ -138,7 +138,7 @@ class CriterionProbeSynthesizerTest {
         assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("POST /members returns HTTP 409"))).isEmpty();
 
         modelAnswers("");
-        assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("GET /books returns HTTP 200"))).isEmpty();
+        assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("POST /books returns HTTP 201"))).isEmpty();
     }
 
     @Test
@@ -193,16 +193,21 @@ class CriterionProbeSynthesizerTest {
 
     @Test
     void aShapeItDoesNotCoverAbstainsRatherThanAskingTheModel() {
-        assertThat(synthesizer.synthesize(SPEC, assertion("GET /books returns HTTP 200"), null)).isEmpty();
+        // Was "GET /books returns HTTP 200" until T4-DB gave collection reads a shape. A CREATE is
+        // still uncovered on purpose — its body would have to be guessed, and a guessed body is
+        // refused and read as a contradiction against a correct application.
+        assertThat(synthesizer.synthesize(SPEC, assertion("POST /books returns HTTP 201"), null)).isEmpty();
         verify(llmClient, never()).ask(any());
     }
 
     @Test
     void theModelIsConsultedForTheRemainderOnlyWhenTheFallbackIsEnabled() {
-        modelAnswers("1. GET /books -");
+        // Uses a CREATE: T4-DB gave collection reads a deterministic shape, so a GET is no longer
+        // "the remainder" and the model would never be reached for it.
+        modelAnswers("1. POST /books {\"title\":\"t\",\"isbn\":\"1234567890123\"}");
         synthesizer.setLlmFallbackEnabled(true);
 
-        assertThat(synthesizer.synthesize(SPEC, assertion("GET /books returns HTTP 200"), null)).isPresent();
+        assertThat(synthesizer.synthesize(SPEC, assertion("POST /books returns HTTP 201"), null)).isPresent();
         verify(llmClient, times(1)).ask(any());
     }
 

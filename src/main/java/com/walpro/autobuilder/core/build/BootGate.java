@@ -437,24 +437,35 @@ public class BootGate {
             return failures;
         }
         int probed = 0;
-        int skipped = 0;
+        // T4-DB: three unrelated causes used to share one `skipped` counter, which made the
+        // ticket's central claim — "the loop repairs what it can probe and fails what it cannot" —
+        // unmeasurable per run. They want opposite responses: an UNPARSED criterion is an
+        // authoring problem (T2-EX), an UNPROBEABLE one is a missing probe shape (this ticket),
+        // and a TRANSPORT failure is the environment. A run reporting skipped=46 said none of that.
+        int unparsed = 0;
+        int unprobeable = 0;
+        int transport = 0;
         for (String criterion : criteria) {
             if (failures.size() >= MAX_NAMED_FAILURES) break;
             Optional<BehaviouralCriterionParser.Assertion> parsed = BehaviouralCriterionParser.parse(criterion);
             if (parsed.isEmpty()) {
-                skipped++;
+                unparsed++;
                 continue;
             }
             BehaviouralCriterionParser.Assertion assertion = parsed.get();
             Optional<List<CriterionProbeSynthesizer.ProbeRequest>> sequence =
                     criterionProbeSynthesizer.synthesize(specText, assertion, artifactRoot);
             if (sequence.isEmpty()) {
-                skipped++;
+                // Parsed cleanly and still no probe: the shape has no synthesizer. This is the
+                // set T4-DB is about, and the status it asserts names which shape is missing.
+                unprobeable++;
+                log.debug("T4-DB: no probe shape for {} (expects {})",
+                        assertion.describe(), assertion.expectedStatus());
                 continue;
             }
             Optional<Integer> observed = executeSequence(client, port, sequence.get());
             if (observed.isEmpty()) {
-                skipped++; // transport failure — no observation, so no opinion
+                transport++; // no observation, so no opinion
                 continue;
             }
             probed++;
@@ -464,8 +475,10 @@ public class BootGate {
                         + " to " + sequence.get().get(sequence.get().size() - 1));
             }
         }
-        log.info("T4-CU: behavioural criteria probed={} skipped={} contradicted={}",
-                probed, skipped, failures.size());
+        log.info("T4-CU: behavioural criteria probed={} skipped={} "
+                        + "(unparsed={} unprobeable={} transport={}) contradicted={}",
+                probed, unparsed + unprobeable + transport,
+                unparsed, unprobeable, transport, failures.size());
         return failures;
     }
 

@@ -156,7 +156,7 @@
 
 ## Tier 2 — Steering quality (120)
 
-- [ ] `T2-FE` — A BUILD_FIX work item scoped to the file the compiler pointed at cannot be satisfied when the defect is in another file; correct steering loses to the subgoal's scope
+- [~] `T2-FE` — A BUILD_FIX work item scoped to the file the compiler pointed at cannot be satisfied when the defect is in another file; correct steering loses to the subgoal's scope
 - [~] `T2-FD` — Suppressing the wrong advice about an unwrapped container left silence; new block states the two admissible repairs (70 diagnostics / 9 runs; field DoD open)
 - [r] `T2-FC` — Later subjects reach evolution without their types planned; the raw 98%-vs-38% ladder gap is mostly RUN LENGTH (corrected same day) and the residual is 56%/67% vs 100% on n=9
 - [~] `T2-FA` — The injector's most-fired resolver path fails 77% of the time and burns the recurrence budget; the symbol path now defers to a package migration that can clear the build (field firing outstanding)

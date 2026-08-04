@@ -36,7 +36,64 @@ class BuildFixAcceptanceHeuristicTest {
                 .withEvolutionOutcome(evolution);
     }
 
+    private static BuildOutcome containerMismatch(String consumerPath) {
+        // Verbatim shape from run 2026-08-02_20-33-26. Note the coordinate names ONLY the
+        // consumer — the producer's file never appears anywhere in the diagnostic.
+        return new BuildOutcome(BuildResult.COMPILE_ERROR,
+                "[ERROR] " + consumerPath + ":[41,68] incompatible types: "
+                        + "com.example.library.model.Book cannot be converted to "
+                        + "java.util.Optional<com.example.library.model.Book>",
+                1000L, "mvn compile", "cycle-1");
+    }
+
     // ── happy path ─────────────────────────────────────────────────────────────
+
+    @Test
+    void evaluate_containerMismatch_acceptsTheProducerTheCompilerNeverNamed() {
+        // T2-FE: the repair belongs in the repository's return type, and that file appears in no
+        // diagnostic, so neither the subgoal scope nor T2-DQ's stderr-named rule admits it.
+        EvolutionOutcome evolution = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/library/repository/BookRepository.java",
+                        "public class BookRepository {\n"
+                                + "    public Optional<Book> findById(Long id) { return null; }\n}")),
+                List.of(), "return Optional", "#fix");
+
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(
+                containerMismatch("/out/src/main/java/com/example/library/service/LoanService.java"),
+                evolution), rejected());
+
+        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
+    @Test
+    void evaluate_containerMismatch_ignoresAFileThatMerelyMentionsTheType() {
+        // Declaration, not mention — otherwise every file touching Book would be exempt.
+        EvolutionOutcome evolution = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/library/util/Helper.java",
+                        "public class Helper {\n    void log(Book b) { System.out.println(b); }\n}")),
+                List.of(), "unrelated", "#x");
+
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(
+                containerMismatch("/out/src/main/java/com/example/library/service/LoanService.java"),
+                evolution), rejected());
+
+        assertThat(op.mutationState()).isNotEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
+    @Test
+    void evaluate_noContainerMismatchInStderr_leavesTheCarveOutClosed() {
+        // The exemption is gated on the wrapping shape; an ordinary compile error must not widen
+        // BUILD_FIX scope, which is the failure T2-DQ's sibling ticket records.
+        EvolutionOutcome evolution = new EvolutionOutcome(
+                List.of(new FileMutation("src/main/java/com/example/Other.java",
+                        "class Other { public Book findById(Long id) { return null; } }")),
+                List.of(), "unrelated", "#x");
+
+        HeuristicOpinion op = heuristic.evaluate(ctxWith(compileError(), evolution), rejected());
+
+        assertThat(op.mutationState()).isNotEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
+
 
     @Test
     void evaluate_compileError_pomXmlMutation_overridesToAccepted() {

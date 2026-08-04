@@ -21,6 +21,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.walpro.autobuilder.core.build.ContainerMismatchExtractor;
+
 /**
  * Overrides evaluation to ACCEPTED (CRITICAL confidence) when the build state shows
  * COMPILE_ERROR AND the mutation touches a file the build error already names — either
@@ -88,6 +90,14 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
         String matchKind;
         if (touchesBuildConfig(evolution)) {
             matchKind = "build-config";
+        } else if (touchesContainerMismatchProducer(evolution, build.stderrTail())) {
+            // T2-FE: a wrapping disagreement is reported at the CONSUMER — javac names the file
+            // that used the value, never the method that produced it. So T2-DQ's stderr-named
+            // carve-out cannot cover the producer, and a proposal that fixes the return type is
+            // both off-subgoal and outside every existing exemption. Field-observed 2026-08-02:
+            // the steering block asked for exactly this repair, the work item named only the
+            // consumer, and SUBGOAL_SCOPE_MISMATCH fired twice.
+            matchKind = "container-mismatch producer";
         } else if (touchesStderrNamedFile(evolution, build.stderrTail())) {
             // T2-DQ: candidate touches a Java file the compiler itself named in its diagnostic.
             // The LLM evaluator may have rejected it as "off-subgoal", but the build error
@@ -137,6 +147,41 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
      * comparison keeps the check robust against directory-prefix differences between the
      * compiler's absolute paths and our relative {@code output/...} mutation paths.
      */
+    /**
+     * T2-FE: does the candidate edit a plausible PRODUCER for a wrapping disagreement the compiler
+     * reported? Narrow by construction — it requires
+     * {@link com.walpro.autobuilder.core.build.ContainerMismatchExtractor} to have found a
+     * {@code X cannot be converted to Container<X>} diagnostic, and then admits only a file that
+     * DECLARES a method returning that same type. Declaration, not mention: the consumer file
+     * names the type constantly and is already covered by the stderr-named rule.
+     *
+     * <p>This makes the correct repair permissible. It does not instruct anyone to make it — the
+     * evolution block already does that, and the two were pulling in opposite directions.
+     */
+    private static boolean touchesContainerMismatchProducer(EvolutionOutcome evolution,
+                                                            String stderrTail) {
+        if (stderrTail == null || stderrTail.isBlank()) return false;
+        List<com.walpro.autobuilder.agent.evolution.model.FileMutation> files =
+                evolution.addedOrChangedFiles();
+        if (files == null || files.isEmpty()) return false;
+
+        List<ContainerMismatchExtractor.Entry> mismatches =
+                ContainerMismatchExtractor.extract(stderrTail);
+        if (mismatches.isEmpty()) return false;
+
+        for (ContainerMismatchExtractor.Entry mismatch : mismatches) {
+            Pattern declaresProducer = Pattern.compile(
+                    "(?m)^[^/*\\n]*\\b(?:" + Pattern.quote(mismatch.containerType())
+                            + "\\s*<\\s*)?" + Pattern.quote(mismatch.plainType())
+                            + "\\s*>?\\s+\\w+\\s*\\(");
+            for (com.walpro.autobuilder.agent.evolution.model.FileMutation file : files) {
+                if (file == null || file.content() == null) continue;
+                if (declaresProducer.matcher(file.content()).find()) return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean touchesStderrNamedFile(EvolutionOutcome evolution, String stderrTail) {
         if (stderrTail == null || stderrTail.isBlank()) return false;
         List<com.walpro.autobuilder.agent.evolution.model.FileMutation> files =

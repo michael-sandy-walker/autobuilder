@@ -444,7 +444,7 @@ public class BootGate {
         // and a TRANSPORT failure is the environment. A run reporting skipped=46 said none of that.
         int unparsed = 0;
         int unprobeable = 0;
-        int transport = 0;
+        java.util.Map<Unobserved, Integer> unobserved = new java.util.EnumMap<>(Unobserved.class);
         // Which SHAPES are missing, not just how many. "unprobeable=5" cannot tell a missing 422
         // synthesizer from a missing 409 one, and those are different builds. Aggregated onto the
         // existing line rather than logged per criterion: a gate run can carry dozens, and a
@@ -467,33 +467,51 @@ public class BootGate {
                 unprobeableByStatus.merge(assertion.expectedStatus(), 1, Integer::sum);
                 continue;
             }
-            Optional<Integer> observed = executeSequence(client, port, sequence.get());
-            if (observed.isEmpty()) {
-                transport++; // no observation, so no opinion
+            SequenceOutcome observed = executeSequence(client, port, sequence.get());
+            if (!observed.isObserved()) {
+                unobserved.merge(observed.abstain(), 1, Integer::sum);  // no observation, no opinion
                 continue;
             }
             probed++;
-            if (observed.get() != assertion.expectedStatus()) {
+            if (observed.status() != assertion.expectedStatus()) {
                 failures.add("\"" + assertion.criterionText() + "\" — " + assertion.describe()
-                        + ", but the running application answered " + observed.get()
+                        + ", but the running application answered " + observed.status()
                         + " to " + sequence.get().get(sequence.get().size() - 1));
             }
         }
+        int unobservedTotal = unobserved.values().stream().mapToInt(Integer::intValue).sum();
         log.info("T4-CU: behavioural criteria probed={} skipped={} "
-                        + "(unparsed={} unprobeable={}{} transport={}) contradicted={}",
-                probed, unparsed + unprobeable + transport,
+                        + "(unparsed={} unprobeable={}{} unobserved={}{}) contradicted={}",
+                probed, unparsed + unprobeable + unobservedTotal,
                 unparsed, unprobeable,
                 unprobeableByStatus.isEmpty() ? "" : unprobeableByStatus.toString(),
-                transport, failures.size());
+                unobservedTotal, unobserved.isEmpty() ? "" : unobserved.toString(),
+                failures.size());
         return failures;
     }
 
     /**
-     * Sends the sequence in order and returns the FINAL response's status. Empty when any request
-     * could not be delivered — a partial sequence proves nothing about the criterion.
+     * Why a sequence produced no observation. Naming these apart matters: they were reported as
+     * one "transport" number until 2026-08-04, and transport was the RAREST of the three. The
+     * common case is {@code SETUP_REFUSED} — the probe's own setup body is derived from field
+     * names ({@code {"email":"value"}}) and a correct application declines it, 53 times in one
+     * run. Calling that a transport failure sends the reader looking at the network.
      */
-    private Optional<Integer> executeSequence(HttpClient client, int port,
-                                              List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
+    enum Unobserved { SETUP_REFUSED, UNRESOLVED_REFERENCE, TRANSPORT }
+
+    /** The final status, or the reason there is none. Exactly one field is set. */
+    record SequenceOutcome(Integer status, Unobserved abstain) {
+        static SequenceOutcome observed(int status) { return new SequenceOutcome(status, null); }
+        static SequenceOutcome none(Unobserved why) { return new SequenceOutcome(null, why); }
+        boolean isObserved() { return status != null; }
+    }
+
+    /**
+     * Sends the sequence in order and returns the FINAL response's status, or the reason no
+     * observation was made — a partial sequence proves nothing about the criterion.
+     */
+    private SequenceOutcome executeSequence(HttpClient client, int port,
+                                            List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
         int status = -1;
         List<String> bodies = new ArrayList<>();
         for (int i = 0; i < sequence.size(); i++) {
@@ -506,7 +524,7 @@ public class BootGate {
             Optional<CriterionProbeSynthesizer.ProbeRequest> resolved = resolveReferences(r, bodies);
             if (resolved.isEmpty()) {
                 log.info("T4-CU: could not ground {} from earlier responses — criterion not judged", r);
-                return Optional.empty();
+                return SequenceOutcome.none(Unobserved.UNRESOLVED_REFERENCE);
             }
             try {
                 HttpResponse<String> response = client.send(
@@ -523,17 +541,17 @@ public class BootGate {
                 if (i < sequence.size() - 1 && status >= 400) {
                     log.info("T4-CU: probe setup request {} was refused with {} — criterion not judged",
                             resolved.get(), status);
-                    return Optional.empty();
+                    return SequenceOutcome.none(Unobserved.SETUP_REFUSED);
                 }
             } catch (IOException e) {
                 log.info("T4-CU: probe request {} got no answer ({}) — criterion not judged", r, e.getMessage());
-                return Optional.empty();
+                return SequenceOutcome.none(Unobserved.TRANSPORT);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return Optional.empty();
+                return SequenceOutcome.none(Unobserved.TRANSPORT);
             }
         }
-        return status < 0 ? Optional.empty() : Optional.of(status);
+        return status < 0 ? SequenceOutcome.none(Unobserved.TRANSPORT) : SequenceOutcome.observed(status);
     }
 
     /** {@code $N.field} → that field of response N (1-based). Empty when any reference is unresolvable. */

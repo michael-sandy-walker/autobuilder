@@ -157,7 +157,16 @@ public class CriterionProbeSynthesizer {
                     assertion.describe());
             return Optional.empty();
         }
-        return synthesizeWithModel(specification, assertion);
+        // T4-DB: at INFO, because this is the expensive path and a mechanism whose firing cannot
+        // be seen cannot be judged. Shipped without it on 2026-08-04 and the first run could not
+        // answer whether the edge fallback had run at all. Once per unprobed criterion at the
+        // completion edge, so the volume is bounded by the thing it is reporting.
+        long t0 = System.currentTimeMillis();
+        Optional<List<ProbeRequest>> viaModel = synthesizeWithModel(specification, assertion);
+        log.info("T4-DB: model fallback for [{}] -> {} ({} ms)", assertion.describe(),
+                viaModel.map(seq -> seq.size() + " request(s)").orElse("no usable probe"),
+                System.currentTimeMillis() - t0);
+        return viaModel;
     }
 
     /**

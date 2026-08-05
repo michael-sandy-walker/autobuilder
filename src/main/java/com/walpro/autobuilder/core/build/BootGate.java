@@ -464,6 +464,14 @@ public class BootGate {
         int unparsed = 0;
         int unprobeable = 0;
         java.util.Map<Unobserved, Integer> unobserved = new java.util.EnumMap<>(Unobserved.class);
+        // T4-DB: a HARD CAP on model-fallback calls per sweep, and it is not a tuning knob — it
+        // was bought. Run 2026-08-05_20-58-50 reached the completion edge with 49 criteria of
+        // which 30 were unprobed; the fallback fired against a model already returning timeouts,
+        // the first network error landed in the same second as the sweep, five consecutive
+        // failures opened the circuit breaker and the run was dead 15 seconds later. T4-CY had
+        // measured this exact hazard and switched the path off; "affordable at the completion
+        // edge" is true of a handful of calls and false of thirty.
+        int modelFallbacksLeft = MAX_MODEL_FALLBACKS_PER_SWEEP;
         // Which SHAPES are missing, not just how many. "unprobeable=5" cannot tell a missing 422
         // synthesizer from a missing 409 one, and those are different builds. Aggregated onto the
         // existing line rather than logged per criterion: a gate run can carry dozens, and a
@@ -477,9 +485,16 @@ public class BootGate {
                 continue;
             }
             BehaviouralCriterionParser.Assertion assertion = parsed.get();
+            // Deterministic first, always. Only if it abstains is the model consulted, and the
+            // budget is spent on the CONSULTATION rather than on its outcome — the cost that took
+            // a run down is the call itself, whether or not it yields a usable probe. Asking twice
+            // is free: the deterministic path is milliseconds and reads only the artifact sources.
             Optional<List<CriterionProbeSynthesizer.ProbeRequest>> sequence =
-                    criterionProbeSynthesizer.synthesize(specText, assertion, artifactRoot,
-                            allowModelFallback);
+                    criterionProbeSynthesizer.synthesize(specText, assertion, artifactRoot, false);
+            if (sequence.isEmpty() && allowModelFallback && modelFallbacksLeft > 0) {
+                modelFallbacksLeft--;
+                sequence = criterionProbeSynthesizer.synthesize(specText, assertion, artifactRoot, true);
+            }
             if (sequence.isEmpty()) {
                 // Parsed cleanly and still no probe: the shape has no synthesizer. This is the
                 // set T4-DB is about, and the status it asserts names which shape is missing.
@@ -518,6 +533,15 @@ public class BootGate {
      * run. Calling that a transport failure sends the reader looking at the network.
      */
     enum Unobserved { SETUP_REFUSED, UNRESOLVED_REFERENCE, TRANSPORT }
+
+    /**
+     * How many criteria in one completion-edge sweep may fall through to the model. Five, because
+     * a sweep of 49 criteria left 30 unprobed and firing 30 synchronous calls at a local model
+     * already timing out took the run down (2026-08-05_20-58-50). The point of the fallback is to
+     * recover a few high-value criteria the deterministic path cannot express, not to re-ask the
+     * model about everything it declined.
+     */
+    static final int MAX_MODEL_FALLBACKS_PER_SWEEP = 5;
 
     /** The final status, or the reason there is none. Exactly one field is set. */
     record SequenceOutcome(Integer status, Unobserved abstain) {

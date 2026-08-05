@@ -17,6 +17,8 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -235,6 +237,66 @@ class BootGateTest {
             "Build a REST service exposing GET /items and POST /carts endpoints.";
 
     /** A gate whose probe synthesizer returns {@code sequence} for every criterion it is asked about. */
+    @Test
+    void theModelFallbackIsCappedPerSweep() throws Exception {
+        // Bought with a run: 2026-08-05_20-58-50 reached the completion edge with 49 criteria, 30
+        // unprobed, fired 30 synchronous model calls at an already-struggling local model, and the
+        // circuit breaker opened in the same second as the sweep. The field cannot be relied on to
+        // re-test this — the edge is only reached on a root-closure attempt, and the very next run
+        // (109 cycles) never got there — so the bound is pinned here instead.
+        packagedArtifact();   // without this the gate abstains before it ever probes
+        BootGate g = gate(true, probeServerCommand(), "", 30_000);
+        CriterionProbeSynthesizer synthesizer = mock(CriterionProbeSynthesizer.class);
+        // Nothing is probeable by either path, so every criterion is a fallback candidate.
+        when(synthesizer.synthesize(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(Optional.empty());
+        g.setCriterionProbeSynthesizer(synthesizer);
+
+        List<String> many = new java.util.ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            many.add("GET /thing" + i + "/{id} returns HTTP 409");
+        }
+        g.verifyBootsAndServes("cycle-cap", "", many, true);
+
+        // atMost alone would pass vacuously if the model were never consulted at all — the trap
+        // that let nine green T2-EY tests guard a gate that had never fired. Assert the path is
+        // REACHED as well as bounded.
+        verify(synthesizer, org.mockito.Mockito.atLeastOnce())
+                .synthesize(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.eq(true));
+        verify(synthesizer, org.mockito.Mockito.atMost(BootGate.MAX_MODEL_FALLBACKS_PER_SWEEP))
+                .synthesize(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.eq(true));
+    }
+
+    @Test
+    void withoutPermissionTheModelIsNeverConsulted() throws Exception {
+        // The three in-cycle callers must keep the deterministic-only path that T4-CY's
+        // measurement demanded.
+        packagedArtifact();
+        BootGate g = gate(true, probeServerCommand(), "", 30_000);
+        CriterionProbeSynthesizer synthesizer = mock(CriterionProbeSynthesizer.class);
+        when(synthesizer.synthesize(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(Optional.empty());
+        g.setCriterionProbeSynthesizer(synthesizer);
+
+        g.verifyBootsAndServes("cycle-nofallback", "",
+                List.of("GET /thing/{id} returns HTTP 409"), false);
+
+        verify(synthesizer, never()).synthesize(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(true));
+    }
+
     private BootGate gateProbing(List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
         BootGate g = gate(true, probeServerCommand(), "", 30_000);
         CriterionProbeSynthesizer synthesizer = mock(CriterionProbeSynthesizer.class);

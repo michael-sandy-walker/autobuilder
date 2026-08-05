@@ -238,9 +238,13 @@ class BootGateTest {
     private BootGate gateProbing(List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
         BootGate g = gate(true, probeServerCommand(), "", 30_000);
         CriterionProbeSynthesizer synthesizer = mock(CriterionProbeSynthesizer.class);
+        // T4-DB added a per-call model-fallback flag, so the gate calls the four-argument form.
+        // Stubbing only the three-argument one made this mock silently return empty and the test
+        // fail with "expected a value" — worth stubbing by the signature the gate actually calls.
         when(synthesizer.synthesize(org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.any())).thenReturn(Optional.of(sequence));
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(Optional.of(sequence));
         g.setCriterionProbeSynthesizer(synthesizer);
         return g;
     }

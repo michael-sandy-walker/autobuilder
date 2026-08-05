@@ -146,9 +146,25 @@ public class BootGate {
 
     public Optional<String> verifyBootsAndServes(String cycleId, String specText,
                                                  List<String> behaviouralCriteria) {
+        return verifyBootsAndServes(cycleId, specText, behaviouralCriteria, false);
+    }
+
+    /**
+     * T4-DB: as above, permitting the model fallback for probe synthesis on THIS call.
+     *
+     * <p>Only the completion edge should pass {@code true}. T4-CY measured the model path costing
+     * 29.5 and 14.9 minutes of a 90-minute run when called synchronously inside cycles, and left
+     * it globally off with the note that it is <i>"affordable at the completion edge, and not
+     * inside a cycle"</i>. Of this gate's four callers, one is that edge; the other three run per
+     * cycle and must keep the deterministic-only path.
+     */
+    public Optional<String> verifyBootsAndServes(String cycleId, String specText,
+                                                 List<String> behaviouralCriteria,
+                                                 boolean allowModelFallback) {
         long t0 = System.nanoTime();
         try {
-            return verifyBootsAndServesTimed(cycleId, specText, behaviouralCriteria);
+            return verifyBootsAndServesTimed(cycleId, specText, behaviouralCriteria,
+                    allowModelFallback);
         } finally {
             if (buildCostTracker != null) {
                 buildCostTracker.record(cycleId, "boot-gate", (System.nanoTime() - t0) / 1_000_000L);
@@ -157,7 +173,8 @@ public class BootGate {
     }
 
     private Optional<String> verifyBootsAndServesTimed(String cycleId, String specText,
-                                                       List<String> behaviouralCriteria) {
+                                                       List<String> behaviouralCriteria,
+                                                       boolean allowModelFallback) {
         if (!enabled || !buildExecutor.isEnabled()) {
             return Optional.empty();
         }
@@ -185,7 +202,7 @@ public class BootGate {
 
         long start = System.currentTimeMillis();
         Optional<String> failure = launchAndObserve(artifact.get(), declared, workingDir,
-                specText, behaviouralCriteria);
+                specText, behaviouralCriteria, allowModelFallback);
         long elapsed = System.currentTimeMillis() - start;
         log.info("T4-BV: boot gate result={} (durationMs={})", failure.isEmpty() ? "OK" : "BLOCKED", elapsed);
         if (behaviourLogger != null) {
@@ -202,7 +219,8 @@ public class BootGate {
      */
     private Optional<String> launchAndObserve(Path artifact, Set<EndpointSurfaceQuery.Endpoint> declared,
                                               Path workingDir, String specText,
-                                              List<String> behaviouralCriteria) {
+                                              List<String> behaviouralCriteria,
+                                              boolean allowModelFallback) {
         int port;
         try (ServerSocket socket = new ServerSocket(0)) {
             port = socket.getLocalPort();
@@ -284,7 +302,7 @@ public class BootGate {
             // creation 500s, a probe's setup sequence fails and later criteria are contradicted
             // for a reason that is not their own, and the reader needs the 500 before the five
             // symptoms. The shared cap keeps the item short.
-            List<String> criterionFailures = probeBehaviouralCriteria(
+            List<String> criterionFailures = probeBehaviouralCriteria(allowModelFallback,
                     client, port, specText, behaviouralCriteria, workingDir);
             if (!endpointFailures.isEmpty() || !criterionFailures.isEmpty()) {
                 StringBuilder summary = new StringBuilder("the application runs, but ");
@@ -429,7 +447,8 @@ public class BootGate {
      *       words the planner wrote.</li>
      * </ul>
      */
-    private List<String> probeBehaviouralCriteria(HttpClient client, int port, String specText,
+    private List<String> probeBehaviouralCriteria(boolean allowModelFallback,
+                                                  HttpClient client, int port, String specText,
                                                   List<String> criteria, Path artifactRoot) {
         List<String> failures = new ArrayList<>();
         if (!criterionProbeEnabled || criterionProbeSynthesizer == null
@@ -459,7 +478,8 @@ public class BootGate {
             }
             BehaviouralCriterionParser.Assertion assertion = parsed.get();
             Optional<List<CriterionProbeSynthesizer.ProbeRequest>> sequence =
-                    criterionProbeSynthesizer.synthesize(specText, assertion, artifactRoot);
+                    criterionProbeSynthesizer.synthesize(specText, assertion, artifactRoot,
+                            allowModelFallback);
             if (sequence.isEmpty()) {
                 // Parsed cleanly and still no probe: the shape has no synthesizer. This is the
                 // set T4-DB is about, and the status it asserts names which shape is missing.

@@ -121,6 +121,28 @@ public class CriterionProbeSynthesizer {
     public Optional<List<ProbeRequest>> synthesize(String specification,
                                                    BehaviouralCriterionParser.Assertion assertion,
                                                    Path artifactRoot) {
+        return synthesize(specification, assertion, artifactRoot, false);
+    }
+
+    /**
+     * T4-DB: as above, but the caller may permit the model fallback for THIS call regardless of
+     * the global flag.
+     *
+     * <p>T4-CY switched the fallback off after measuring 29.5 and 14.9 minutes of a 90-minute run
+     * consumed by synchronous calls to the same local model the loop was using — and recorded the
+     * condition under which it is still worth having: <i>"affordable at the completion edge, and
+     * not inside a cycle."</i> That distinction was expressible all along (the completion edge is
+     * one of four call sites) and simply was not expressed, so the capability stayed globally off.
+     *
+     * <p>Measured 2026-08-04, on a healthy artifact roughly 15 of 18 remaining abstentions share
+     * one cause: no request body the application will accept. {@code derivedBody} fills
+     * placeholders from field names, and a correct application declines them. The model is the
+     * only source of a body that satisfies constraints stated in prose.
+     */
+    public Optional<List<ProbeRequest>> synthesize(String specification,
+                                                   BehaviouralCriterionParser.Assertion assertion,
+                                                   Path artifactRoot,
+                                                   boolean allowModelFallback) {
         if (assertion == null) return Optional.empty();
 
         Optional<List<ProbeRequest>> deterministic =
@@ -130,7 +152,7 @@ public class CriterionProbeSynthesizer {
                     assertion.describe(), deterministic.get());
             return deterministic;
         }
-        if (!llmFallbackEnabled) {
+        if (!llmFallbackEnabled && !allowModelFallback) {
             log.debug("T4-CY: no deterministic probe for [{}] and the model fallback is off — not probed",
                     assertion.describe());
             return Optional.empty();

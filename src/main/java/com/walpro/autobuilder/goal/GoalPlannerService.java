@@ -3092,10 +3092,17 @@ public class GoalPlannerService {
                 // "POST /books with invalid input returns HTTP 400" marked ✓ by the evaluator and
                 // no validation anywhere in the artifact — a claim about runtime behaviour that
                 // only a request can settle.
+                // T4-DB: this is THE completion edge — the one call site of four that is not
+                // inside a cycle — so the model fallback is permitted here and nowhere else.
+                // T4-CY measured that path costing 29.5 and 14.9 minutes of a 90-minute run when
+                // called per cycle, and recorded that it is "affordable at the completion edge".
+                // Roughly 15 of 18 remaining abstentions need one thing the deterministic path
+                // cannot supply: a request body the application will accept.
                 java.util.Optional<String> bootFailure = bootGate.verifyBootsAndServes(
                         currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge",
                         root.getDescription(),
-                        specBoundBehaviouralCriteria());
+                        specBoundBehaviouralCriteria(),
+                        true);
                 if (bootFailure.isPresent()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                             "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — "

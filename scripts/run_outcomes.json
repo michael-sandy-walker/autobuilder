@@ -1112,7 +1112,32 @@
    "smoke_total": 23,
    "terminal": "honest-halt",
    "total_cycles": "72"
+  },
+  "2026-08-05_20-58-50": {
+   "clauses_closed_vs_control": "2",
+   "cost_readout": "sms-commit=2745270ms/11 build=301897ms/78 boot-gate=125942ms/24 package-gate=96830ms/24 sms-batch-build=1863ms/12 sms-lineage-stamp=118ms/11 sms-cycle-merge=87ms/11 sms-cycle-link=76ms/10",
+   "criteria_authored": "114",
+   "criteria_executable_count": "77",
+   "criteria_executable_pct": "68",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "51",
+   "merges": "26",
+   "peaked_at_cycle": "cycle-1785959290127 (54/54)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-08-05",
+   "repeat_proposals": "0",
+   "repeats_refused": "0",
+   "run_duration_min": "49.3",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 18/23",
+   "smoke_failed_checks": "14,15,19,20,22",
+   "smoke_pass": 18,
+   "smoke_preserved": "SMOKE: 18/23",
+   "smoke_strict": "18/23 discounted=none",
+   "smoke_total": 23,
+   "terminal": "honest-halt:llm-circuit-breaker",
+   "total_cycles": "54"
   }
  },
- "updated": "2026-08-04"
+ "updated": "2026-08-05"
 }

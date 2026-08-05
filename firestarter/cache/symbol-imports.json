@@ -1,15 +1,6 @@
 {
-  "dependencyContext" : "org.projectlombok:lombok:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
+  "dependencyContext" : "org.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-web:",
   "entries" : {
-    "returnLoan" : null,
-    "isReturned" : null,
-    "getAllLoans" : null,
-    "Loan" : null,
-    "MemberService" : null,
-    "findById" : null,
-    "BookService" : null,
-    "getBookId" : null,
-    "LoanService" : null,
-    "Member" : null
+    "ErrorResponse" : null
   }
 }

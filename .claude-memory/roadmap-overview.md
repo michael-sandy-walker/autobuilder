@@ -327,6 +327,7 @@
 
 ## Tier 4 — New systems (88)
 
+- [ ] `T4-DE` — Parts of one graph as distinct identities with their own agent, narrative and voice, communicating with each other (PARKED, very far future)
 - [x] `T4-CZ` — The self-check computes WHY the artifact cannot package seven times a run and throws the answer away
 - [ ] `T4-DD` — Target-domain knowledge behind a seam (deferred by user until stable); the seam has never been exercised — both targets ever run are REST
 - [ ] `T4-DC` — A controller catches exception types its service never throws, so the catches are dead and every domain error falls to the last resort (23/23 run had 8 matched types; 14/23 run zero overlap)

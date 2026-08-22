@@ -76,14 +76,40 @@ guard_no_jvm() {
 }
 
 probe_model() {
-    local url model t0 t1
+    local url model effort t0 t1
     url=$(grep -A4 '^llm:' src/main/resources/application.yml | grep 'url:' | grep -v '^\s*#' | awk '{print $2}')
     model=$(grep -A8 '^llm:' src/main/resources/application.yml | grep 'model:' | grep -v '^\s*#' | awk '{print $2}')
+    # Probe with the DEPLOYED reasoning budget, and count hidden reasoning as an answer.
+    # 2026-08-22: the probe asked for a 5-token reply and sent no budget, so on a reasoning-capable
+    # model (qwen3.8) all five tokens went to hidden reasoning, `content` came back empty, and a
+    # healthy endpoint was reported unreachable — the gate was testing something the app never does.
+    # Unique key in the file, so no -A offset to keep in sync with the block above.
+    effort=$(grep -E '^[[:space:]]*reasoning-effort:[[:space:]]*[^[:space:]]' src/main/resources/application.yml \
+        | grep -v '^[[:space:]]*#' | head -1 | awk '{print $2}')
+    local effort_field=""
+    [ -n "$effort" ] && effort_field=",\"reasoning_effort\":\"$effort\""
+    # Two calls: the first absorbs a model LOAD, the second is the one timed.
+    # 2026-08-22: a series run died here on model-slow:18559ms that was purely 17 GB coming off
+    # disk (an eval run had just evicted the model). The gate exists to catch an ORPHANED
+    # GENERATION still occupying the endpoint -- that condition makes BOTH calls slow, while a
+    # cold load only makes the first one slow. Timing the second tells the two apart; timing the
+    # first cannot, and cost a run.
+    local probe_body
+    probe_body="{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"Say OK\"}],\"max_tokens\":16$effort_field}"
+    ask() {
+        curl -s --max-time 120 "$url" -H 'Content-Type: application/json' -d "$probe_body" \
+            | python3 -c "import json,sys; m=json.load(sys.stdin)['choices'][0]['message']; print(((m.get('content') or '') + (m.get('reasoning') or '')).strip())" 2>/dev/null
+    }
+    local warm
+    warm=$(ask)
+    if [ -z "$warm" ]; then
+        say "G2: model at $url did not answer (warm-up call)"
+        FAILURES+=("model-unreachable")
+        return 1
+    fi
     t0=$(date +%s%N)
     local out
-    out=$(curl -s --max-time 30 "$url" -H 'Content-Type: application/json' \
-        -d "{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"Say OK\"}],\"max_tokens\":5}" \
-        | python3 -c "import json,sys; print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null)
+    out=$(ask)
     t1=$(date +%s%N)
     local ms=$(( (t1 - t0) / 1000000 ))
     if [ -z "$out" ]; then

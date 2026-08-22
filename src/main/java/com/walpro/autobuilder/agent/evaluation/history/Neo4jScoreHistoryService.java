@@ -22,6 +22,29 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
     // lineage's history be told apart from the run currently executing.
     private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
+    /**
+     * T1-FS: the run whose scores may be read, or null when the run has no identity yet.
+     *
+     * <p>The writers have always STAMPED {@code runId}/{@code lineageId} — the stamp is what tells
+     * a lineage's history apart from the run currently executing — and every reader dropped it.
+     * Until {@code T1-D} (2026-07-26) a reset wiped the graph, so an unscoped read was
+     * accidentally correct; making lineages durable turned the same code into a leak. Measured on
+     * 2026-08-23: 9,216 scores from 71 runs reaching one prompt, 269 file paths of which 259 did
+     * not exist, and the model calling a 10-file project "severely fragmented" as a result.
+     *
+     * <p><b>Scoped to the RUN, not the lineage, deliberately.</b> A resumed run's own prior scores
+     * describe the same tree and could be argued for — but {@code T4-CD} already holds that loaded
+     * state is hypothesis rather than fact and drops banked criteria reads on resume, so carrying
+     * prior-run SCORES across the boundary would contradict the contract the rest of resume obeys.
+     *
+     * <p><b>Null means EMPTY, never everything.</b> Falling back to an unscoped read on a missing
+     * run id would restore exactly the defect this fixes, and silently. Having no history is safe;
+     * having a stranger's is not.
+     */
+    private String currentRunId() {
+        return runIdentity == null ? null : runIdentity.runId();
+    }
+
     @Override
     public void recordScores(String cycleId, Map<String, Double> scores) {
         if (cycleId == null || cycleId.isBlank() || scores == null || scores.isEmpty()) return;
@@ -61,12 +84,16 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
     public List<Double> getScoreHistory(String filePath) {
         if (filePath == null || filePath.isBlank()) return List.of();
 
+        String runId = currentRunId();
+        if (runId == null) return List.of();
+
         return neo4j.query("""
-                MATCH (fs:FileScore {path:$path})
+                MATCH (fs:FileScore {path:$path, runId:$runId})
                 RETURN fs.score AS score, fs.created AS created
                 ORDER BY created ASC
                 """)
                 .bind(filePath).to("path")
+                .bind(runId).to("runId")
                 .fetch()
                 .all()
                 .stream()
@@ -90,11 +117,15 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
 
     @Override
     public Map<String, List<Double>> getAllScoreHistories() {
+        String runId = currentRunId();
+        if (runId == null) return Map.of();
+
         Collection<Map<String, Object>> rows = neo4j.query("""
-                MATCH (fs:FileScore)
+                MATCH (fs:FileScore {runId:$runId})
                 RETURN fs.path AS path, fs.score AS score, fs.created AS created
                 ORDER BY path ASC, created ASC
                 """)
+                .bind(runId).to("runId")
                 .fetch()
                 .all();
 
@@ -136,12 +167,16 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
     @Override
     public Optional<Double> getLastGlobalScore() {
         // return "previous" if available (2nd latest), to mimic typical "lastScore" semantics
+        String runId = currentRunId();
+        if (runId == null) return Optional.empty();
+
         List<Double> two = neo4j.query("""
-                MATCH (gs:GlobalScore)
+                MATCH (gs:GlobalScore {runId:$runId})
                 RETURN gs.score AS score, gs.created AS created
                 ORDER BY created DESC
                 LIMIT 2
                 """)
+                .bind(runId).to("runId")
                 .fetch()
                 .all()
                 .stream()

@@ -5,7 +5,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -100,13 +101,21 @@ public class RetentionPolicy {
         List<Entry> candidates = new ArrayList<>(entries.subList(minKeep, entries.size()));
         List<Entry> deleted = new ArrayList<>();
 
-        if (limits.getMaxAgeDays() > 0) {
-            Instant cutoff = Instant.now().minus(limits.getMaxAgeDays(), ChronoUnit.DAYS);
-            for (Entry e : new ArrayList<>(candidates)) {
-                if (e.lastModified().isBefore(cutoff)) {
-                    if (delete(e)) {
-                        deleted.add(e);
-                        candidates.remove(e);
+        if (limits.getMaxActiveDays() > 0) {
+            // Count ACTIVE days, not calendar days: the window is the last N days on which this
+            // directory actually received something, so a gap where nothing ran does not age the
+            // corpus out. A calendar window silently shortens the record across idle stretches --
+            // measured 2026-08-22, when only 4 of 28 failing runs still had a log because the
+            // failures predated a 10-CALENDAR-day window that idle days had eaten into.
+            // This can only ever retain MORE than the calendar form, never less.
+            LocalDate cutoffDay = activeDayCutoff(entries, limits.getMaxActiveDays());
+            if (cutoffDay != null) {
+                for (Entry e : new ArrayList<>(candidates)) {
+                    if (dayOf(e).isBefore(cutoffDay)) {
+                        if (delete(e)) {
+                            deleted.add(e);
+                            candidates.remove(e);
+                        }
                     }
                 }
             }
@@ -144,6 +153,30 @@ public class RetentionPolicy {
             log.info("Retention {}: removed {} entries (kept {}).",
                     name, deleted.size(), entries.size() - deleted.size());
         }
+    }
+
+    /** The local day an entry belongs to. Retention groups by day, so the unit must be a day. */
+    static LocalDate dayOf(Entry e) {
+        return LocalDate.ofInstant(e.lastModified(), ZoneId.systemDefault());
+    }
+
+    /**
+     * Oldest day still inside a window of {@code activeDays} ACTIVE days, or null when the
+     * corpus does not yet span that many active days (in which case nothing ages out).
+     *
+     * <p>Computed over ALL entries rather than the deletion candidates, so {@code min-keep}
+     * cannot distort the day count and make the window appear shorter than it is.
+     */
+    static LocalDate activeDayCutoff(List<Entry> entries, int activeDays) {
+        if (activeDays <= 0 || entries.isEmpty()) {
+            return null;
+        }
+        List<LocalDate> days = entries.stream()
+                .map(RetentionPolicy::dayOf)
+                .distinct()
+                .sorted(Comparator.reverseOrder())
+                .toList();
+        return days.size() < activeDays ? null : days.get(activeDays - 1);
     }
 
     private boolean delete(Entry entry) {

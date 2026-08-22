@@ -346,17 +346,22 @@ autobuilder:
     # T5-AE: time-only retention for archived run logs. Live targets autobuilder.log /
     # behaviour.ndjson are not subject to retention (StartupLogRotator renames them on
     # JVM startup; only the renamed *-YYYY-MM-DD_HH-mm-ss.* files are pruned here).
+    #
+    # max-active-days counts days on which the directory RECEIVED something, not calendar days:
+    # a week with no runs does not age the corpus out. Changed from calendar days 2026-08-23
+    # after T6-M found only 4 of 28 failing runs still had a log — the failures predated a
+    # 10-CALENDAR-day window that idle days had eaten into. Retains more, never less.
     logs:
-      max-age-days: 10
+      max-active-days: 10
       max-size-mb: 0    # 0 = disabled — total corpus ~47 MB on disk; no size pressure
     snapshots:
-      max-age-days: 14
+      max-active-days: 14
       max-cycles: 1000
     mutations:
-      max-age-days: 14
+      max-active-days: 14
       max-cycles: 1000
     responses:
-      max-age-days: 7
+      max-active-days: 7
       max-size-mb: 200
 file:
     base-path: ${FILE_BASE_PATH:/data/firestarter}

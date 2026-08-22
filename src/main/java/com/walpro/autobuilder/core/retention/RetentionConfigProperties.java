@@ -32,15 +32,19 @@ public class RetentionConfigProperties {
     @Setter
     public static class DirectoryLimits {
 
-        private int maxAgeDays;
+        /**
+         * Retention window measured in ACTIVE days -- days on which this directory actually
+         * received something -- not calendar days. Idle days do not count against it.
+         */
+        private int maxActiveDays;
         private int maxSizeMb;
         private int maxCycles;
 
         public DirectoryLimits() {
         }
 
-        public DirectoryLimits(int maxAgeDays, int maxSizeMb, int maxCycles) {
-            this.maxAgeDays = maxAgeDays;
+        public DirectoryLimits(int maxActiveDays, int maxSizeMb, int maxCycles) {
+            this.maxActiveDays = maxActiveDays;
             this.maxSizeMb = maxSizeMb;
             this.maxCycles = maxCycles;
         }

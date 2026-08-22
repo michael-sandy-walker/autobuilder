@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: c9e3b0ac-5788-4223-9c33-25e792b76246
+  modified: 2026-08-21T22:21:35.616Z
 ---
 
 Drop two registers of wording across the whole project — in conversation, code identifiers, comments, roadmap, and memory:
@@ -24,6 +25,8 @@ Prefer plain, descriptive words. Suggested replacements: verdict → result / cl
 **Enforcement is light-touch BY CHOICE (user steer, 2026-07-07):** do NOT build a lint gate / pre-commit wordlist / mechanical blocklist for this — the user explicitly rejected word censorship (a blocklist can't tell an apt word from a lazy one, and freezes a list that has legitimate carve-outs like `CRITICAL` and prompt text). The agreed mechanism is to CORRECT IT WHEN IT COMES UP TOO MUCH — human notices recurrence, we prune. Reactive-by-design, not automated. Don't re-propose the gate.
 
 **How to apply:** when naming a component or describing behaviour, reach for the neutral descriptive word first. Watch myself especially — I drift into "interrogate / verdict / blast radius / tactical" under load. See [[feedback-no-target-domain-in-framework-strings]] and [[feedback-no-ecosystem-jargon-in-framework-code]] for the related "keep framework language clean" principle.
+
+**Drift incident (2026-08-22, ELEVENTH correction — "blast radius", a word this file already named):** during the qwen3.8 model swap I wrote "Let me check the blast radius first" before grepping for the callers of a DTO constructor I was about to change. User: "please don't mention 'blast radius' again." It was listed in the military register and in the replacement table (→ scope / extent / reach) from the day this file was written, so this is pure recurrence, not a gap. **The trigger is a new spot, worth naming:** not the output of a check (the verdict family) but *the moment before editing shared code, when I ask how far a change reaches*. The words there are: how many callers / what this touches / the scope of the change / where this is used. Say the concrete thing — "one call site" — rather than any metaphor for it.
 
 **Drift incident (2026-06-10, second correction):** three days after this rule was filed I shipped `GoalAdoptionService.parseVerdict` + a `noneVerdict` test, wrote "progress-aware verdicts" in a commit message and roadmap, and used "Verdict:" as a summary label — all caught by the user, all renamed (→ `parseMatchResponse`, "decisions", "Decision:"). The drift happens at *naming time*, not review time — the check has to run before I write an identifier or label, not after. Method/label names involving the result of an LLM/reviewer call are the highest-risk spot.
 

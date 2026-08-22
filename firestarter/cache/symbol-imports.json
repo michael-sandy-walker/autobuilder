@@ -1,6 +1,29 @@
 {
-  "dependencyContext" : "org.springframework.boot:spring-boot-starter-test:\norg.springframework.boot:spring-boot-starter-web:",
+  "dependencyContext" : "org.projectlombok:lombok:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
   "entries" : {
-    "ErrorResponse" : null
+    "BookRepository" : null,
+    "Optional" : {
+      "fqn" : "java.util.Optional",
+      "groupId" : null,
+      "artifactId" : null,
+      "version" : null
+    },
+    "isActive" : null,
+    "LoanNotFoundException" : null,
+    "body" : null,
+    "LoanService" : null,
+    "LoanRepository" : null,
+    "isReturned" : null,
+    "Loan" : null,
+    "Book" : null,
+    "BookService" : null,
+    "setId" : null,
+    "JpaRepository" : {
+      "fqn" : "org.springframework.data.jpa.repository.JpaRepository",
+      "groupId" : "org.springframework.data",
+      "artifactId" : "spring-data-jpa",
+      "version" : null
+    },
+    "Member" : null
   }
 }

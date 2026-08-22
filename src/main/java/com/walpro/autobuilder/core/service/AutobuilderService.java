@@ -46,6 +46,13 @@ public class AutobuilderService {
     private final SystemResetConfig systemResetConfig;
     private final CycleContextCoordinator contextCoordinator;
     private final CycleExecutor cycleExecutor;
+
+    /** T3-BY: preserve every N merged cycles during the run; 0 disables (terminal-only, pre-T3-BY). */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.preserve.interval-cycles:10}")
+    private int preserveIntervalCycles;
+
+    /** Merged cycles since the last mid-run preserve. */
+    private int cyclesSincePreserve;
     private final CyclePersistenceService cyclePersistenceService;
     private final CycleLoggingService cycleLoggingService;
     private final SmsCycleIngestor smsCycleIngestor;
@@ -1158,12 +1165,46 @@ public class AutobuilderService {
 
         log.info("Cycle {} complete. Result: {}, Merged: {}", context.cycleName(), context.cycleResultState(), context.merged());
 
+        // T3-BY: preserve DURING the run, not only at an in-process terminal.
+        //
+        // T4-CA's preserve fires in the systemPaused branch, and its own comment says it runs
+        // there because "an external watcher may kill it". But the watcher does not wait for a
+        // pause: measured over 64 recorded runs, 4 ended AFTER their best cycle and every one of
+        // them scored 0 — tails of 1, 3, 12 and 64 cycles, terminals deadline x3 and jvm-died.
+        // One held a 23/23 artifact at cycle 71 of 74 and shipped a tree that will not compile.
+        // A SIGTERM/SIGKILL five seconds apart is not a window a tree copy plus a verification
+        // build can be trusted to finish in, so this preserves as it goes instead of trying to
+        // react at the end.
+        //
+        // Interval-gated because preserve() runs a real build probe per candidate: firing every
+        // cycle would add a build to every cycle. Gated on merged() too — an unmerged cycle
+        // produced no new state worth the probe.
+        if (preservedArtifactService != null && dueForMidRunPreserve(context.merged())) {
+            preservedArtifactService.preserve(context);
+        }
+
         // T5-BF follow-up: any pause reason raised INSIDE this tick (planner empty-backlog
         // injection limit, convergence brake, runaway guards, circuit breaker…) becomes a
         // behaviour event now — not silently a tick later, and never never.
         if (DerivedFacts.systemPaused(context)) {
             emitSystemPausedOnce(context.cycleName(), context.pausedReason(), 0);
         }
+    }
+
+    /**
+     * T3-BY: is this cycle the one that should re-preserve? Counts MERGED cycles only — an
+     * unmerged cycle produced no new state, so probing for it would spend a build on nothing —
+     * and resets on firing so the interval is between preserves rather than since the run start.
+     * Extracted from the cycle tail so the interval arithmetic is testable without a full tick.
+     *
+     * @param merged whether the just-finished cycle merged a mutation
+     * @return true when the caller should preserve now
+     */
+    boolean dueForMidRunPreserve(boolean merged) {
+        if (preserveIntervalCycles <= 0 || !merged) return false;
+        if (++cyclesSincePreserve < preserveIntervalCycles) return false;
+        cyclesSincePreserve = 0;
+        return true;
     }
 
     /**

@@ -33,7 +33,7 @@ Last line is machine readable:
     CONVERGENCE: runs=<n> failed=<n> drifted=<n> never-there=<n> top-early=<feature|none>
     CONVERGENCE-PREFIX: runs=<n> prefix=<k> separating=<feature|none>
 """
-import argparse, json, os, re, statistics as st, sys
+import argparse, gzip, json, os, re, statistics as st, sys
 
 # Outcome bands. The smoke score is a stateful chain, so these are coarse on purpose --
 # comparing bands, never adjacent totals.
@@ -140,7 +140,8 @@ def read_behaviour(path):
     the .ndjson name -- reading them line by line yields nothing. Truncated trailing objects are
     expected (a run is killed mid-write at the deadline) and end the scan without failing.
     """
-    with open(path, encoding="utf-8", errors="replace") as fh:
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8", errors="replace") as fh:
         raw = fh.read()
     dec, i, out = json.JSONDecoder(), 0, []
     while i < len(raw):
@@ -212,8 +213,13 @@ def run_dir_outcome(d):
 def prefix_mode(dirs, k):
     rows = []
     for d in dirs:
-        beh = os.path.join(d, "behaviour.ndjson")
-        if not os.path.exists(beh):
+        # A live run_dir holds behaviour.ndjson; the T6-N archive holds it gzipped. Accept both,
+        # so the instrument keeps working once /tmp is cleared -- which is the entire point of
+        # archiving in the first place.
+        beh = next((c for c in (os.path.join(d, "behaviour.ndjson"),
+                                os.path.join(d, "behaviour.ndjson.gz"))
+                    if os.path.exists(c)), None)
+        if beh is None:
             print(f"  {os.path.basename(d):26s} (no behaviour.ndjson -- skipped)")
             continue
         f = prefix_features(read_behaviour(beh), k)

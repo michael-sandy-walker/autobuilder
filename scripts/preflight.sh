@@ -538,6 +538,31 @@ PYCYC
     # read watch_report.txt instead of hand-running greps. Best-effort, never gates the run.
     python3 "$REPO/scripts/watch_report.py" "$run_dir" 2>&1 | tee "$run_dir/watch_report.txt" | sed 's/^/[preflight] /' || true
 
+    # T6-N slice 1: archive the analysis-relevant slice of the run_dir OUTSIDE /tmp.
+    #
+    # run_dirs are 94-135 MB each and live in /tmp, so a reboot takes them: of 72 recorded runs
+    # only 5 still had one, which left every per-cycle question (T6-N, T6-M) unanswerable no
+    # matter how many runs were made. T6-E already fixed exactly this loss for the outcome
+    # ledger; the lesson did not reach the corpora the ledger points AT.
+    #
+    # Archived slim, not whole: the graph dumps are 80 MB of the 120 and answer nothing offline,
+    # while artifact-build.log / artifact-boot.log are a few KB and are the ONLY record of why an
+    # artifact would not build or boot once the tree is gone. Gzipped, a run costs ~2 MB.
+    # Never gates the run -- an archiving failure must not fail a run that already happened.
+    local archive="${PREFLIGHT_ARCHIVE:-$HOME/.autobuilder/run-archive}/$stamp"
+    if mkdir -p "$archive" 2>/dev/null; then
+        for f in summary.txt target.txt extra_flags.txt watch_report.txt preserved-smoke.txt \
+                 artifact-build.log artifact-boot.log; do
+            [ -f "$run_dir/$f" ] && cp "$run_dir/$f" "$archive/" 2>/dev/null
+        done
+        for f in behaviour.ndjson autobuilder.log GoalStack.json; do
+            [ -f "$run_dir/$f" ] && gzip -c "$run_dir/$f" > "$archive/$f.gz" 2>/dev/null
+        done
+        say "archived run to $archive ($(du -sh "$archive" 2>/dev/null | cut -f1))"
+    else
+        say "WARNING: could not create $archive — this run's corpus stays in /tmp only"
+    fi
+
     case "$terminal" in
         GOAL_FULFILLED) pass_out "(terminal=GOAL_FULFILLED smoke=$smoke smoke_preserved=$smoke_preserved run=$run_dir)";;
         GOAL_EXHAUSTED|PAUSED|deadline|honest-halt*)

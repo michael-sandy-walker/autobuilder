@@ -32,11 +32,158 @@ public final class HollowVsRealFixtures {
 
     public static List<LabeledCase> all() {
         return List.of(computedPricing(), orderPersisted(), invalidCheckoutMaps4xx(), emptyCartZeroPricing(),
-                unenforcedFieldValidation());
+                unenforcedFieldValidation(), repositoryBeanMissing(), exceptionMappedButNeverThrown());
     }
+
+    /**
+     * T6-O: the two cases below come from OBSERVED field failures rather than invention, because a
+     * synthetic case that does not match the real distribution manufactures false findings.
+     *
+     * <p>Scope note: only the WIRING family maps onto this corpus. The other measured failure
+     * family — a type the code references that nobody ever wrote — never reaches the verifier at
+     * all, because the compiler rejects it first. A hollow/real pair must COMPILE on both sides,
+     * so a missing type cannot be expressed here; it belongs to the build-gate chain instead.
+     */
 
     private static final String SUBJECT =
             "A REST checkout endpoint: POST /carts/{id}/checkout prices the cart, persists an order, and maps failures to HTTP status codes.";
+
+    /**
+     * From run {@code 2026-08-22_06-19-55}: the run ended {@code boot-failed} with
+     * "No qualifying bean of type 'BookRepository' available" — the artifact COMPILED and passed
+     * every compile gate, then failed at context startup. The hollow side is a plain interface
+     * that no Spring Data proxy will ever implement and nothing registers as a bean; the code
+     * reads as finished and cannot persist anything.
+     */
+    public static LabeledCase repositoryBeanMissing() {
+        String criterion = "POST /carts/{id}/checkout persists the order so a later read returns it (the repository is a real, registered bean).";
+        Map<String, String> hollow = Map.of(
+                "src/main/java/com/example/demo/OrderRepository.java", """
+                        package com.example.demo;
+                        import java.util.Optional;
+                        // Declared, never implemented, and not a Spring Data interface: no proxy is
+                        // generated and no bean is registered, so injection fails at startup.
+                        public interface OrderRepository {
+                            Order save(Order order);
+                            Optional<Order> findById(Long id);
+                        }
+                        """,
+                "src/main/java/com/example/demo/OrderService.java", """
+                        package com.example.demo;
+                        import org.springframework.stereotype.Service;
+                        @Service
+                        public class OrderService {
+                            private final OrderRepository orders;
+                            public OrderService(OrderRepository orders) { this.orders = orders; }
+                            public Order checkout(Long cartId) {
+                                Order o = new Order(cartId);
+                                return orders.save(o);
+                            }
+                        }
+                        """);
+        Map<String, String> real = Map.of(
+                "src/main/java/com/example/demo/OrderRepository.java", """
+                        package com.example.demo;
+                        import org.springframework.data.jpa.repository.JpaRepository;
+                        import org.springframework.stereotype.Repository;
+                        @Repository
+                        public interface OrderRepository extends JpaRepository<Order, Long> {
+                        }
+                        """,
+                "src/main/java/com/example/demo/OrderService.java", """
+                        package com.example.demo;
+                        import org.springframework.stereotype.Service;
+                        @Service
+                        public class OrderService {
+                            private final OrderRepository orders;
+                            public OrderService(OrderRepository orders) { this.orders = orders; }
+                            public Order checkout(Long cartId) {
+                                Order o = new Order(cartId);
+                                return orders.save(o);
+                            }
+                        }
+                        """);
+        return new LabeledCase("repository-bean-missing", SUBJECT, criterion, hollow, real);
+    }
+
+    /**
+     * The {@code T4-DC} shape, filed from the field: a handler maps an exception type the service
+     * never throws, so the mapping exists, reads as complete, and every real failure still falls
+     * through to a 500. The hollow side is deliberately harder than a missing handler — the
+     * handler is PRESENT and correct-looking, and only the throw site is absent.
+     */
+    public static LabeledCase exceptionMappedButNeverThrown() {
+        String criterion = "Checking out a cart that is already checked out returns 409 CONFLICT (the mapped exception is actually thrown).";
+        Map<String, String> hollow = Map.of(
+                "src/main/java/com/example/demo/CheckoutExceptionHandler.java", """
+                        package com.example.demo;
+                        import org.springframework.http.HttpStatus;
+                        import org.springframework.http.ResponseEntity;
+                        import org.springframework.web.bind.annotation.ExceptionHandler;
+                        import org.springframework.web.bind.annotation.RestControllerAdvice;
+                        @RestControllerAdvice
+                        public class CheckoutExceptionHandler {
+                            @ExceptionHandler(CartAlreadyCheckedOutException.class)
+                            public ResponseEntity<String> handle(CartAlreadyCheckedOutException e) {
+                                return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+                            }
+                        }
+                        """,
+                "src/main/java/com/example/demo/CartAlreadyCheckedOutException.java", """
+                        package com.example.demo;
+                        public class CartAlreadyCheckedOutException extends RuntimeException {
+                            public CartAlreadyCheckedOutException(String m) { super(m); }
+                        }
+                        """,
+                "src/main/java/com/example/demo/OrderService.java", """
+                        package com.example.demo;
+                        import org.springframework.stereotype.Service;
+                        @Service
+                        public class OrderService {
+                            // Nothing here ever throws CartAlreadyCheckedOutException, so the
+                            // handler above can never fire and a re-checkout surfaces as a 500.
+                            public Order checkout(Cart cart) {
+                                return new Order(cart.getId());
+                            }
+                        }
+                        """);
+        Map<String, String> real = Map.of(
+                "src/main/java/com/example/demo/CheckoutExceptionHandler.java", """
+                        package com.example.demo;
+                        import org.springframework.http.HttpStatus;
+                        import org.springframework.http.ResponseEntity;
+                        import org.springframework.web.bind.annotation.ExceptionHandler;
+                        import org.springframework.web.bind.annotation.RestControllerAdvice;
+                        @RestControllerAdvice
+                        public class CheckoutExceptionHandler {
+                            @ExceptionHandler(CartAlreadyCheckedOutException.class)
+                            public ResponseEntity<String> handle(CartAlreadyCheckedOutException e) {
+                                return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+                            }
+                        }
+                        """,
+                "src/main/java/com/example/demo/CartAlreadyCheckedOutException.java", """
+                        package com.example.demo;
+                        public class CartAlreadyCheckedOutException extends RuntimeException {
+                            public CartAlreadyCheckedOutException(String m) { super(m); }
+                        }
+                        """,
+                "src/main/java/com/example/demo/OrderService.java", """
+                        package com.example.demo;
+                        import org.springframework.stereotype.Service;
+                        @Service
+                        public class OrderService {
+                            public Order checkout(Cart cart) {
+                                if (cart.isCheckedOut()) {
+                                    throw new CartAlreadyCheckedOutException("cart " + cart.getId() + " already checked out");
+                                }
+                                cart.markCheckedOut();
+                                return new Order(cart.getId());
+                            }
+                        }
+                        """);
+        return new LabeledCase("exception-mapped-never-thrown", SUBJECT, criterion, hollow, real);
+    }
 
     /** The headline false-completion criterion: checkout returns a COMPUTED price breakdown. */
     public static LabeledCase computedPricing() {

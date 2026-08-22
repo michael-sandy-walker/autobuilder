@@ -69,6 +69,13 @@ autobuilder:
     # goal state kept + re-grounded). Wins over reset-on-start when resumable state exists;
     # falls through to it otherwise — so both flags together mean "resume if possible, else fresh".
     resume-from-preserved: false
+  preserve:
+    # T3-BY: preserve the best verified snapshot every N MERGED cycles during the run, not only
+    # at an in-process terminal. Measured over 64 runs: 4 ended after their peak and all 4 scored
+    # 0 (one spent 64 cycles past a 22/23 peak), and every one was killed from outside — where
+    # the terminal-only hook never runs. preserve() runs a build probe per candidate, so this is
+    # interval-gated; 0 restores the pre-T3-BY terminal-only behaviour.
+    interval-cycles: 10
   heuristic:
     score-strategy: weightedAverageScoreAdjustmentStrategy
   criteria:

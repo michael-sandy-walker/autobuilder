@@ -11,6 +11,7 @@ because the two kinds of zero need different fixes, and a separation statistic c
 from one sample is tested to return nothing rather than a confident number.
 """
 import contextlib
+import gzip
 import importlib.util
 import io
 import json
@@ -197,6 +198,29 @@ class PrefixFeatureTest(unittest.TestCase):
 
     def test_no_completed_cycles_yields_nothing(self):
         self.assertIsNone(cr.prefix_features([{"cycleId": "c1", "event": "cycle_start"}], 5))
+
+
+class ArchiveReadingTest(unittest.TestCase):
+    """The T6-N archive stores the behaviour file gzipped. If the instrument cannot read the
+    archive, retaining it buys nothing -- that is the whole point of keeping it."""
+
+    def test_gzipped_behaviour_file_is_read(self):
+        d = tempfile.mkdtemp()
+        with gzip.open(os.path.join(d, "behaviour.ndjson.gz"), "wt", encoding="utf-8") as fh:
+            json.dump(_cyc("c1", True), fh)
+        evs = cr.read_behaviour(os.path.join(d, "behaviour.ndjson.gz"))
+        self.assertEqual(len(evs), 1)
+
+    def test_prefix_mode_accepts_an_archived_dir(self):
+        d = tempfile.mkdtemp()
+        with gzip.open(os.path.join(d, "behaviour.ndjson.gz"), "wt", encoding="utf-8") as fh:
+            json.dump(_cyc("c1", True), fh)
+        with open(os.path.join(d, "summary.txt"), "w") as fh:
+            fh.write("smoke=SMOKE: 23/23\n")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            cr.prefix_mode([d], 15)
+        self.assertIn("CONVERGENCE-PREFIX: runs=1", buf.getvalue())
 
 
 class PrefixModeTest(unittest.TestCase):

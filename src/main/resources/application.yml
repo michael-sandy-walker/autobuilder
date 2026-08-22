@@ -361,7 +361,7 @@ llm:
         # value satisfies local endpoints (Ollama ignores auth) and fails fast on real APIs.
         key: ${OPENAI_API_KEY:local-only-no-key}
         #model: gpt-4o
-        model: qwen3-coder:30b
+        model: qwen3.8
         # Prompt-budget deployment facts (PromptTokenBudget). context-window-tokens is the
         # DEPLOYED window — for Ollama that is num_ctx / OLLAMA_CONTEXT_LENGTH, usually far
         # below the model's architectural max (qwen3-coder:30b supports 262144). Keep in sync
@@ -369,6 +369,15 @@ llm:
         # model's reply.
         context-window-tokens: 32768
         response-reserve-tokens: 4096
+        # Reasoning budget for models that think before answering ("none"/"low"/"medium"/"high").
+        # Blank = send nothing, so the model keeps its own default and non-reasoning endpoints see
+        # no change. Measured on a ~9.3k-token verifier prompt with qwen3.8: default reasoning
+        # spends ~700-850 hidden tokens for 19-21 s per call, "none" answers the same in 1.8 s.
+        # Those hidden tokens also come out of response-reserve-tokens above. Set to "none" on
+        # 2026-08-22: on the T5-AF hollow/real corpus qwen3.8 scored precision 1.00 / recall 1.00
+        # with reasoning suppressed and 0.83 / 1.00 with it at the model's default, so the hidden
+        # tokens bought a false alarm and a ~10x slower call. Blank it to restore the default.
+        reasoning-effort: none
         read-timeout-ms: 120000  # generous for local models; override per-environment
         # T1-FP: escalate the read timeout on retries so a slow-but-progressing local generation
         # (large prompt / cold model reload) can finish on a later attempt instead of timing out

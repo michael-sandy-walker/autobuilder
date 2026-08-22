@@ -52,6 +52,12 @@ public class LLMClient {
     @Value("${llm.api.read-timeout-ms:120000}")
     private int readTimeoutMs;
 
+    // Reasoning budget for models that think before answering ("none"/"low"/"medium"/"high").
+    // Blank = send nothing, so the model keeps its own default and non-reasoning endpoints are
+    // untouched. See ChatRequest#reasoningEffort for the measured cost this controls.
+    @Value("${llm.api.reasoning-effort:}")
+    private String reasoningEffort;
+
     // T1-FP: escalate the read timeout across retry attempts so a slow-but-progressing local
     // generation (large prompt / cold model reload) gets a genuine chance to finish on a later
     // attempt instead of timing out at the base on every try and tripping the circuit breaker
@@ -89,7 +95,8 @@ public class LLMClient {
             log.warn("LLM call rejected — circuit open ({}). Failing fast.", reason);
             throw new ResourceAccessException("LLM circuit open — failing fast: " + reason);
         }
-        ChatRequest request = new ChatRequest(model, conversation, 0.0);
+        ChatRequest request = new ChatRequest(model, conversation, 0.0,
+                reasoningEffort == null || reasoningEffort.isBlank() ? null : reasoningEffort.trim());
 
         log.debug("Sending request to LLM (core={}):", model);
         for (Message message : conversation) {

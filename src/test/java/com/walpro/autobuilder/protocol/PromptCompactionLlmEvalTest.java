@@ -284,6 +284,7 @@ class PromptCompactionLlmEvalTest {
                 env("LLM_API_URL", "http://localhost:11434/v1/chat/completions"));
         ReflectionTestUtils.setField(client, "apiKey", env("OPENAI_API_KEY", "local-only-no-key"));
         ReflectionTestUtils.setField(client, "model", env("LLM_API_MODEL", "qwen3-coder:30b"));
+        ReflectionTestUtils.setField(client, "reasoningEffort", env("LLM_REASONING_EFFORT", ""));
         ReflectionTestUtils.setField(client, "readTimeoutMs", 180_000);
         ReflectionTestUtils.setField(client, "retryMaxAttempts", 1);
         ReflectionTestUtils.setField(client, "retryDelayMs", 1_000L);

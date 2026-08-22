@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (447 tickets, 2026-08-04):** 30 open `[ ]` · 5 in-progress `[~]` · 31 deferred `[>]` · 385 closed, of which **358 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 2 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (450 header lines, 446 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (452 tickets, 2026-08-22):** 33 open `[ ]` · 5 in-progress `[~]` · 31 deferred `[>]` · 385 closed, of which **358 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 2 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (450 header lines, 446 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -285,8 +285,9 @@
 - [x] `T2-EN` — Injection recurrence needs a run-level brake
 - [x] `T2-H3` — Propagate InterpretationAgent summary/directives to next-cycle agent prompts
 
-## Tier 3 — Feature completion (37)
+## Tier 3 — Feature completion (38)
 
+- [ ] `T3-BY` — A run killed from outside ships its LAST state, not its BEST — the T4-CA preserve scaffold never fires at deadline/jvm-died; 4 of 64 runs ended past their peak and all 4 scored 0
 - [~] `T3-BX` — Validation layer is decorative (`@Valid` everywhere, zero constraints) → bad input 500s instead of 400
 - [x] `T3-BW` — Peer-consistency odd-one-out rule in `WiringFactsAnalyzer` — SHIPPED 2026-07-27; vocabulary-free, verified on the real run output, reaches the evolution prompt
 - [>] `T3-B` — Activate `GoalEntity.expectedArtifacts`
@@ -469,8 +470,11 @@
 - [x] `T5-BF` — Mission-control cockpit tells the run's story
 - [x] `T5-P2` — Unify cycle reference field name across artifact types
 
-## Tier 6 — Harness & yardsticks (9)
+## Tier 6 — Harness & yardsticks (12)
 
+- [ ] `T6-M` — 86% of failing runs never reached a working artifact and only 2 of 28 have been looked at; the old baseline excluded them, reading 17.2 instead of 10.4
+- [ ] `T6-N` — Can a run's outcome be predicted from its first K cycles? Slice 1 is run_dir retention — only 5 of 72 survive `/tmp`
+- [ ] `T6-O` — Every accuracy claim about the local model rests on FIVE scenarios; both evals share one corpus and strong models saturate it
 - [x] `T6-K` — Five of the 23 smoke checks can be passed by the endpoint being ABSENT; failing-check SETS now preserved, gating rule still open
 - [ ] `T6-L` — A stated outcome baseline (75% per RUN ATTEMPTED) and the check families that own the gap — 2026-08-02: the loans gap is measured as a COMPILE gap, not an attention gap
 - [x] `T6-F` — Dual smoke score could report a PREVIOUS run's preserved artifact — SHIPPED 2026-07-26 (`preserved_freshness.py` + 19 tests · `select_preserved.py --run-log` run-scoping + 5 tests); reconstruction half awaits a field firing (`t6f-stale-loop-copy-ignored`)

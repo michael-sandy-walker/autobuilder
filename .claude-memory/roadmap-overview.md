@@ -286,8 +286,9 @@
 - [x] `T2-EN` — Injection recurrence needs a run-level brake
 - [x] `T2-H3` — Propagate InterpretationAgent summary/directives to next-cycle agent prompts
 
-## Tier 3 — Feature completion (38)
+## Tier 3 — Feature completion (39)
 
+- [ ] `T3-BZ` — A type placed differently from its own structural peers is never noticed (Book in `domain`, Loan/Member in `domain.model`); derive the norm from the project's majority among code-established peers, never a convention table
 - [~] `T3-BY` — A run killed from outside ships its LAST state, not its BEST — BUILT 2026-08-22 loop-side (`preserve.interval-cycles: 10`, 6 tests); field DoD open
 - [~] `T3-BX` — Validation layer is decorative (`@Valid` everywhere, zero constraints) → bad input 500s instead of 400
 - [x] `T3-BW` — Peer-consistency odd-one-out rule in `WiringFactsAnalyzer` — SHIPPED 2026-07-27; vocabulary-free, verified on the real run output, reaches the evolution prompt

@@ -16,7 +16,7 @@
 
 ## Tier 1 — Correctness (132)
 
-- [ ] `T1-FS` — Every score read is unscoped: the evaluation prompt carries 9,216 scores from 71 runs (~60% of the context window) and 259 files that do not exist; manufactures the "severely fragmented" diagnosis. Regression from T1-D 2026-07-26
+- [~] `T1-FS` — Every score read is unscoped: the evaluation prompt carries 9,216 scores from 71 runs (~60% of the context window) and 259 files that do not exist; manufactures the "severely fragmented" diagnosis. Regression from T1-D 2026-07-26 — FIXED + 6 Neo4j ITs 2026-08-23; field DoD open
 - [x] `T1-FR` — The model is told which MEMBERS to add but never which TYPES to create; missing types go to the injector and are stubbed silently (2346 diagnostics vs 905 member ones)
 - [x] `T1-D` — Reset no longer wipes the graph — lineages survive as history (SHIPPED 2026-07-26; `purgeAll()` kept as a deliberate wipe)
 - [>] `T1-BL` — T2-BM veto must use criteria progress gate

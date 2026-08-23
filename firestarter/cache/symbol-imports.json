@@ -8,6 +8,7 @@
       "artifactId" : null,
       "version" : null
     },
+    "ConflictException" : null,
     "isActive" : null,
     "LoanNotFoundException" : null,
     "body" : null,

@@ -1,6 +1,6 @@
 ---
 name: project-session-agenda
-description: "Sequenced agenda for the next ~6 sessions (written 2026-08-06). Orders EXISTING roadmap tickets plus the user's 2026-08-06 backlog; is rationale, never a parallel queue. Each session carries a first action, a done-when, an explicit do-not, and what it unblocks. S1 closes the verification thread; S2 pays the cleanliness/prose debt the user raised three ways; S3 cuts the first T4-DD seam; S4 builds layer D's first consumer (T4-CT); S5 runs T6-I, the only thing that can falsify the whole accumulating-system thesis; S6 is the second target's yardstick. Standing rules and the deliberately-not-doing list at the end."
+description: "⚠ SUPERSEDED ORDERING — read the 2026-08-23 REORDER section at the END of this file first; the S1-S6 order below predates T1-FS and wave 2's measurements and is kept for its reasoning, not its sequence. Original: Sequenced agenda for the next ~6 sessions (written 2026-08-06). Orders EXISTING roadmap tickets plus the user's 2026-08-06 backlog; is rationale, never a parallel queue. Each session carries a first action, a done-when, an explicit do-not, and what it unblocks. S1 closes the verification thread; S2 pays the cleanliness/prose debt the user raised three ways; S3 cuts the first T4-DD seam; S4 builds layer D's first consumer (T4-CT); S5 runs T6-I, the only thing that can falsify the whole accumulating-system thesis; S6 is the second target's yardstick. Standing rules and the deliberately-not-doing list at the end."
 metadata: 
   node_type: memory
   type: project
@@ -182,3 +182,67 @@ suite has stopped discriminating and this becomes the bottleneck.
 - A flag-based A/B for the steering blocks — **sd ≈ 31 points** means ~39 runs per arm for a
   20-point effect. Use `steering_followthrough.py` (per firing) instead.
 - `T4-DE` (graph regions as identities) — parked; preconditions are S4 and S5.
+
+---
+
+# 2026-08-23 REORDER — appended, and it supersedes the S1-S6 SEQUENCE above
+
+**The S1-S6 sections are kept intact and are still worth reading for their REASONING.** Their ORDER is
+stale: it was written 2026-08-06, before the qwen3.8 swap, before wave 2's measurements, and before
+`T1-FS`. Nothing above is deleted; this section decides sequence from here.
+
+## What changed underneath the old order
+
+- **`T1-FS` closed 2026-08-23 — and it invalidates the measurement basis.** Every score read was
+  unscoped, so one evaluation prompt carried 9,216 scores from 71 runs (~60% of its own context
+  window) and 269 file paths of which 259 did not exist. **Every outcome number this project has
+  predates the fix.** Fixed, field-proven (block down to 2 paths / 34 tokens), baseline re-measure
+  handed to `T6-L`/`T6-M`.
+- **Re-measuring is now CHEAP.** `T6-N` slice 1 ships a ~1 MB/run archive outside `/tmp`, and
+  `scripts/failure_family.py` classifies failures automatically. The baseline costs RUNS, not build
+  effort.
+- **Closed/built since 2026-08-06:** `T6-O` (corpus 5→7 from field failures, saturation broken),
+  `T3-BY` (mid-run preserve, field-proven `preserved_source=loop-preserved`), `T6-N` slice 1,
+  `T1-FS`, active-day retention, two preflight G2 fixes. Filed: `T3-BY`, `T3-BZ`, `T6-M`, `T6-N`,
+  `T6-O`, `T1-FS`.
+
+## The order
+
+**0. Bank clean runs — a standing action, not a ticket.** Each run now feeds FOUR tickets at once:
+`T6-N`'s corpus (5 of 20 needed), `T6-M`'s failure families, `T6-L`'s baseline, `T3-BY`'s field
+evidence. Nothing in the queue has that leverage; the analysis is already built.
+
+**1. `T3-BZ`** — measured cause of **6 of 33 compile failures** in run `2026-08-23_02-12-34`. Rule
+shape already shipped (`T3-BW`), calibration borrowed, self-gating settled. Best value-per-effort
+in the queue.
+
+**2. `T4-CL`** — the audit of per-run-disposable assumptions. `T1-FS` was ONE instance **found by
+accident, because the user read a live prompt**. That is not a search strategy. Jumped hard.
+
+**3. `T6-L` / `T6-M` / `T6-N`** — re-establish the baseline. Build work done; what remains is
+periodic analysis over accruing runs.
+
+**4. `T2-FA`** — most-fired resolver path fails 77% and burns the recurrence budget. In-progress,
+adjacent to the symbol-import path.
+
+**5. `T4-DB`** — S1's real work; this run already accrues its data (`unprobeable {404,409,422}`).
+
+**6. `T4-DC`** — exceptions caught but never thrown. Seen twice on 2026-08-23: in `T6-M`'s
+classification and as a new `T6-O` corpus case.
+
+**7. `T3-BX`** · **8. `T2-EX`** — as argued in S1/S2 above; reasoning unchanged.
+
+**Later, deliberately:** `T4-DD` (S3's seam) · `T4-CT` (S4) · `T5-BJ` · `T4-CY`.
+
+## ⚠ MOVED BACK, with its reason
+
+**`T6-I` was S5 and must NOT start yet.** It measures whether accumulated knowledge improves
+outcomes — against a baseline that no longer means anything. Run now, it produces a confident and
+worthless number. **Precondition: a post-`T1-FS` baseline exists.** The portability chain
+(`T4-CQ`/`CR`/`CS`) stays parked, still gated on `T4-CT`.
+
+## ⚠ Caveat on this ordering
+
+Items 1-3 are weighted heavily by evidence gathered in a single night. That is exactly the recency
+bias [[feedback-roadmap-is-the-queue]] and the S6 note warn about. The roadmap remains the queue;
+this is order and rationale only. If items 1-3 look inflated on a colder read, they probably are.

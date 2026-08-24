@@ -141,8 +141,13 @@ class CriterionProbeSynthesizerTest {
         assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("POST /books returns HTTP 201"))).isEmpty();
     }
 
+    /**
+     * T1-FU: this test previously asserted that an over-long answer is TRUNCATED to the cap, and
+     * that assertion encoded the defect — a prefix of a sequence is a different experiment, not a
+     * shorter version of the same one. Over budget is now an abstention.
+     */
     @Test
-    void sequenceLengthIsCapped() {
+    void anAnswerLongerThanTheBudgetIsRefusedRatherThanTruncated() {
         StringBuilder sb = new StringBuilder();
         for (int i = 1; i <= CriterionProbeSynthesizer.MAX_REQUESTS + 4; i++) {
             sb.append(i).append(". POST /members {\"n\":").append(i).append("}\n");
@@ -150,8 +155,46 @@ class CriterionProbeSynthesizerTest {
         modelAnswers(sb.toString());
 
         assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("POST /members returns HTTP 409")))
+                .isEmpty();
+    }
+
+    @Test
+    void anAnswerThatExactlyFitsTheBudgetIsStillUsed() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= CriterionProbeSynthesizer.MAX_REQUESTS; i++) {
+            sb.append(i).append(". POST /members {\"n\":").append(i).append("}\n");
+        }
+        modelAnswers(sb.toString());
+
+        assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("POST /members returns HTTP 409")))
                 .get().asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
                 .hasSize(CriterionProbeSynthesizer.MAX_REQUESTS);
+    }
+
+    /**
+     * The field answer, verbatim from run 2026-08-24_22-14-05 at 22:45:31. The model got the
+     * requirement RIGHT — four DIFFERENT books so the collision rule cannot fire first, one member,
+     * four loans — and truncation to six kept the books, the member and ONE loan, so the probe
+     * asked a member holding one loan to be refused a second. The application correctly answered
+     * 201 and was recorded as contradicting its specification, blocking root closure 9-34 times per
+     * run across four runs and three builds.
+     */
+    @Test
+    void theBoundedCountAnswerFromTheFieldAbstainsInsteadOfAccusingCorrectCode() {
+        modelAnswers("""
+                1. POST /books {"title":"Book A","isbn":"1234567890123"}
+                2. POST /books {"title":"Book B","isbn":"1234567890124"}
+                3. POST /books {"title":"Book C","isbn":"1234567890125"}
+                4. POST /books {"title":"Book D","isbn":"1234567890126"}
+                5. POST /members {"name":"Member 1","email":"member1@example.com"}
+                6. POST /loans {"bookId":$1.id,"memberId":$5.id}
+                7. POST /loans {"bookId":$2.id,"memberId":$5.id}
+                8. POST /loans {"bookId":$3.id,"memberId":$5.id}
+                9. POST /loans {"bookId":$4.id,"memberId":$5.id}
+                """);
+
+        assertThat(synthesizer.synthesizeWithModel(
+                SPEC, assertion("POST /loans returns HTTP 422 — if exceeded"))).isEmpty();
     }
 
     @Test

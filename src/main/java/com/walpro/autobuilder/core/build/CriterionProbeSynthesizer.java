@@ -217,17 +217,42 @@ public class CriterionProbeSynthesizer {
         return sb.toString();
     }
 
-    /** Numbered request lines, in order. A body of {@code -} (or absent) becomes null. */
+    /**
+     * Numbered request lines, in order. A body of {@code -} (or absent) becomes null.
+     *
+     * <p><b>T1-FU: an answer longer than the budget is REFUSED, never cut down.</b> This loop used
+     * to stop at {@link #MAX_REQUESTS} and return the prefix, which turns a correct answer into a
+     * different experiment. Measured on run 2026-08-24_22-14-05: for "a member may hold at most 3
+     * active loans — 422 if exceeded" the model answered with nine requests — four DIFFERENT books,
+     * one member, four loans — which is exactly right. Truncation kept the first six, so the three
+     * loans that ESTABLISH the precondition were dropped, and the probe then asked a member holding
+     * ONE loan to be refused a second. The application correctly answered 201 and was recorded as
+     * contradicting the specification, which blocked root closure 9 to 34 times per run across four
+     * runs and three builds — the loop reaching a correct artifact and being told it had not.
+     *
+     * <p>Nothing downstream can detect the damage: {@code isUsable} only checks that the sequence
+     * ENDS on the asserted verb and path, and a truncated tail still does; {@code SETUP_REFUSED}
+     * only fires when a setup request is REJECTED, and these all legitimately succeed.
+     *
+     * <p>Abstaining costs one criterion. Raising the cap instead would trade a false contradiction
+     * for an unbounded probe budget, which is the thing the cap exists to prevent.
+     */
     List<ProbeRequest> parse(String raw) {
         List<ProbeRequest> out = new ArrayList<>();
         Matcher m = REQUEST_LINE.matcher(raw);
-        while (m.find() && out.size() < MAX_REQUESTS) {
+        while (m.find()) {
             String path = EndpointSurfaceQuery.normalizePath(m.group(2));
             if (path == null) continue;
             String body = m.group(3) == null ? "" : m.group(3).strip();
             out.add(new ProbeRequest(m.group(1).toUpperCase(),
                     path,
                     body.isEmpty() || "-".equals(body) ? null : body));
+            if (out.size() > MAX_REQUESTS) {
+                log.info("T1-FU: the synthesized sequence needs more than {} requests — abstaining "
+                        + "rather than truncating, because a shortened setup tests a different situation",
+                        MAX_REQUESTS);
+                return List.of();
+            }
         }
         return out;
     }

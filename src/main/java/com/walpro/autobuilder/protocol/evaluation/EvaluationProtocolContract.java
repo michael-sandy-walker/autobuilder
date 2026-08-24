@@ -339,18 +339,37 @@ public class EvaluationProtocolContract {
                 .map(Object::toString)
                 .collect(Collectors.joining("\n"));
 
+        // T1-FS follow-on: the file-keyed blocks describe the tree being judged, so a path that is
+        // not IN that tree is noise the model has to reason around. Scoping the score READS to the
+        // current run (T1-FS) removed 259 of 261 such paths; the rest are this run's own — a
+        // mutation is scored per file at evaluation time, BEFORE the accept/reject decision, and
+        // ContextLineageTracker carries the map forward whatever that decision was, so a rejected
+        // attempt's files stay in the history permanently. Run 2026-08-23_02-12-34 ended with 19
+        // paths of which 2 had never reached the tree.
+        //
+        // Filtering at RENDER rather than at the source keeps the history itself intact for any
+        // caller that wants the whole record, and fails OPEN: an absent or empty file map filters
+        // nothing, because blanking the block would be a worse error than an extra line.
+        java.util.Set<String> presentFiles =
+                context.previousOutput() == null || context.previousOutput().isEmpty()
+                        ? null : context.previousOutput().keySet();
+
         StringBuilder scoreHistoryBlock = new StringBuilder();
         if (context.scoreHistoryByFile() != null) {
-	        context.scoreHistoryByFile().forEach((file, history) -> {
-	            scoreHistoryBlock.append(file).append(": ").append(history).append("\n");
-	        });
+            context.scoreHistoryByFile().forEach((file, history) -> {
+                if (presentFiles == null || presentFiles.contains(file)) {
+                    scoreHistoryBlock.append(file).append(": ").append(history).append("\n");
+                }
+            });
         }
 
         StringBuilder deltaBlock = new StringBuilder();
         if (context.recentDeltas() != null) {
-        	context.recentDeltas().forEach((file, delta) -> {
-        		deltaBlock.append(file).append(": ").append(String.format("%.2f", delta)).append("\n");
-        	});
+            context.recentDeltas().forEach((file, delta) -> {
+                if (presentFiles == null || presentFiles.contains(file)) {
+                    deltaBlock.append(file).append(": ").append(String.format("%.2f", delta)).append("\n");
+                }
+            });
         }
         
         String diffSummary = "";

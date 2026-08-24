@@ -4675,6 +4675,30 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
     - **So the residue unique to T4-CO is the category-specific extraction of `(endpoint, condition, status)`, which is exactly the part the 2026-07-22 reframe already ruled out building.** A ticket whose surviving scope is the piece it was told not to build is subsumed, not deferred.
     - **Kept for whoever revisits:** the non-uniformity framing (parallel spec subjects getting unequal criterion density) is NOT owned by any of the three, and it is the one idea here worth re-filing if the T2-EX six-run measurement shows density skewed by resource rather than uniformly thin.
 
+- [ ] **T1-FV: a probe's request body is derived from the ENTITY, so it carries server-assigned fields the endpoint rejects — the probe manufactures a 400 and then blames the artifact for it** (`core/build/RequestBodySynthesizer`, T4-CB derivation) — **filed 2026-08-25, isolated field-by-field against a booted artifact.**
+  - **The category error, in one line:** an entity's fields are not the fields an endpoint ACCEPTS. `id`, `createdAt` and `returnedAt` are server-assigned — present in the response, refused in the request.
+  - **Measured on run `2026-08-24_22-14-05`'s artifact, absent ids throughout, one field at a time:**
+
+    | body | answer |
+    |---|---|
+    | `{"bookId":N,"memberId":N}` | **404** — exactly what the specification asks for |
+    | `+ createdAt` | 400 |
+    | `+ returnedAt` | 400 |
+    | `+ loanedAt` | 400 |
+
+  - **Any ONE of the entity's extra fields is sufficient**, so this is not about a particular field's name or value.
+  - **Why it fails here specifically:** the controller takes `Map<String, Long>` and the synthesizer emits `createdAt`/`returnedAt` as ISO date STRINGS, which cannot bind to `Long`. The request never reaches the handler, the application answers 400, and the probe records *"POST /loans → 404, but the running application answered 400"*.
+  - **This is a SECOND, independent cause of false contradictions** beside `T1-FU`'s truncation, and it is filed separately on purpose: different cause, different fix, and folding them together would be two invariants in one home ([[feedback-one-invariant-one-home]]). Both appear in the same closure-block line, which is why one grep made them look like a single defect.
+  - **`T4-CB` built this deliberately** — *"derived from the target artifact's OWN model sources — discovery, never domain knowledge baked into the framework"* — and the instinct is right; the SOURCE is wrong. Deriving from what the endpoint accepts (the handler's parameter type, or a request DTO when one exists) is the same discovery principle pointed at the correct evidence.
+  - **Not a regression:** reproduces on the pre-today baseline at `8c375af` (`POST /loans {…,"loanedAt":…,"returnedAt":…}` appears there too).
+  - **DoD:** a derived body contains only fields the endpoint's own signature accepts; where that cannot be determined the synthesizer declines rather than guessing; replay over the retained corpora shows the false 400s gone and genuine contradictions still reported.
+  - **⚠ Gate before building:** count how many contradictions across the archive are of this shape (an asserted 4xx/2xx answered 400 with a derived body carrying extra fields) versus genuine. The fix is cheap but the harm class — a probe change that silences real defects — is the one that got two steering changes reverted in July.
+    - **✅ GATE RUN IMMEDIATELY, AND IT MODERATES THIS TICKET: 5 of 145 distinct contradictions across 14 runs match this shape (3.4%).** Deduplicated per run by (criterion, wanted, observed) so re-renders do not inflate it. **The defect is proven but RARE** — it is not a major source of false verdicts, and this ticket should be sized accordingly.
+    - **⚠ AND THE 145 IS NOT "145 FALSE ACCUSATIONS" — I nearly reported it that way.** Contradictions are observations of an artifact that CHANGES during the run; most were true when recorded and fixed later. Deduplicating across a whole run collapses time and mixes "true at cycle 10" with "still true at the end". **Only the contradictions present at the CLOSURE-BLOCK moments matter**, because those are what deny the run its terminal state.
+    - **Measured on that population instead** (run `2026-08-24_22-14-05`, final artifact booted): of the four criteria named in its closure blocks, **three are false at the end** — the 422 limit is enforced (`T1-FU`), `GET /loans?memberId` for a member with no loans answers `200 []`, and `POST /loans` with absent ids answers `404` once the derived extra fields are removed (this ticket). The fourth, `POST /books` wanting 201, **is genuine**: the artifact answers 200, which its own smoke check `[1]` also fails.
+    - **So the honest scale is: the closure-blocking set is mostly false, while the run-wide contradiction stream is mostly ordinary mid-run observation.** Two different populations, and only the first is evidence for these tickets.
+  - **Tier note:** T1 — a correct application is reported as defective.
+
 - [ ] **T1-FU: a probe sequence longer than the request budget is TRUNCATED and then judged, so the setup that establishes the precondition is silently dropped and correct code is accused** (`core/build/CriterionProbeSynthesizer` model-fallback path, `core/build/BootGate` sequence execution, `goal/GoalPlannerService` T4-BV closure gate) — **filed 2026-08-24; mechanism PINNED the same night from the model's own logged answer plus the code, after two wrong guesses that are kept below.**
   - **What is established, and it is enough to matter:**
     - **All three of the recent 23/23 runs were blocked from root closure by the SAME criterion**, counted as distinct closure-block EVENTS rather than log lines ([[feedback-count-events-not-log-lines]]): `2026-08-23_22-34-35` **34**, `2026-08-23_21-01-40` **33**, `2026-08-24_17-48-02` **21**. Every block names `"POST /loans returns HTTP 422 — if exceeded"` and reports *"the running application answered 201"*.

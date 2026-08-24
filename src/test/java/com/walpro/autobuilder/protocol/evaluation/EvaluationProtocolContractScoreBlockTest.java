@@ -42,6 +42,47 @@ class EvaluationProtocolContractScoreBlockTest {
     }
 
     @Test
+    void aLongHistoryRendersItsTrendAndItsRecord_notEveryEntry() {
+        // The residual T1-FS left open: paths are bounded per run, a path's score ARRAY is not.
+        // 14 entries is what one file reached in a 90-minute run.
+        List<Double> fourteen = List.of(0.10, 0.20, 0.30, 0.40, 0.50, 0.90, 0.45,
+                0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80);
+
+        String rendered = EvaluationProtocolContract.renderScoreHistory(fourteen);
+
+        assertThat(rendered).isEqualTo("0.70 -> 0.75 -> 0.80 (latest of 14, best 0.90)");
+        assertThat(rendered).doesNotContain("0.10");
+    }
+
+    @Test
+    void aShortHistoryIsRenderedWhole_withNoSummaryTail() {
+        assertThat(EvaluationProtocolContract.renderScoreHistory(List.of(0.4, 0.55)))
+                .isEqualTo("0.40 -> 0.55");
+        assertThat(EvaluationProtocolContract.renderScoreHistory(List.of(0.4, 0.55, 0.7)))
+                .isEqualTo("0.40 -> 0.55 -> 0.70");
+    }
+
+    @Test
+    void anEmptyHistorySaysSoRatherThanRenderingBrackets() {
+        assertThat(EvaluationProtocolContract.renderScoreHistory(List.of())).isEqualTo("(none)");
+        assertThat(EvaluationProtocolContract.renderScoreHistory(null)).isEqualTo("(none)");
+    }
+
+    @Test
+    void theRenderedBlockWidthDoesNotGrowWithTheRunsLength() {
+        // The property the residual is about: two runs of very different length produce the same
+        // block width for the same file.
+        List<Double> shortRun = List.of(0.4, 0.5, 0.6);
+        List<Double> longRun = new java.util.ArrayList<>(shortRun);
+        for (int i = 0; i < 200; i++) longRun.add(0.6);
+
+        int shortWidth = EvaluationProtocolContract.renderScoreHistory(shortRun).length();
+        int longWidth = EvaluationProtocolContract.renderScoreHistory(longRun).length();
+
+        assertThat(longWidth - shortWidth).isLessThan(30);
+    }
+
+    @Test
     void aScoredFileThatNeverReachedTheTreeIsNotRendered() {
         // The rejected mutation of cycle-1787444599094 staged these files and scored them 0.8; the
         // cycle was REJECTED on a compile probe and they never reached output.

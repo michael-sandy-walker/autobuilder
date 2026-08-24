@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (452 tickets, 2026-08-22):** 33 open `[ ]` · 5 in-progress `[~]` · 31 deferred `[>]` · 385 closed, of which **358 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 2 retracted `[r]`**. So **93% of closed tickets delivered a capability; 13 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the `roadmap.md` headers and is the authoritative count (450 header lines, 446 distinct ids; 4 ids headed twice: `T2-CU`, `T2-DD`, `T2-DV`, `T3-BT`).
+**Census (454 tickets, 2026-08-24):** 29 open `[ ]` · 6 in-progress `[~]` · 31 deferred `[>]` · 392 closed, of which **365 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 2 retracted `[r]`**. So **93% of closed tickets delivered a capability; 14 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the roadmap, which is authoritative.
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -158,13 +158,13 @@
 ## Tier 2 — Steering quality (120)
 
 - [~] `T2-FE` — A BUILD_FIX work item scoped to the file the compiler pointed at cannot be satisfied when the defect is in another file; correct steering loses to the subgoal's scope
-- [~] `T2-FD` — Suppressing the wrong advice about an unwrapped container left silence; new block states the two admissible repairs (70 diagnostics / 9 runs; field DoD open)
+- [x] `T2-FD` — Suppressing the wrong advice about an unwrapped container left silence; new block states the two admissible repairs (70 diagnostics / 9 runs; field DoD open)
 - [r] `T2-FC` — Later subjects reach evolution without their types planned; the raw 98%-vs-38% ladder gap is mostly RUN LENGTH (corrected same day) and the residual is 56%/67% vs 100% on n=9
 - [~] `T2-FA` — The injector's most-fired resolver path fails 77% of the time and burns the recurrence budget; the symbol path now defers to a package migration that can clear the build (field firing outstanding)
 - [x] `T2-FB` — A banked-criteria early exit and a contradicted-criteria closure refusal livelocked; the refusal now clears the banked pass-map so the loop re-checks instead of re-declaring
 - [x] `T2-EZ` — injector skeletons are discarded exactly when the build is still red; `Loan` skeleton created 138x, present 0x; 8 of 9 smoke failures were the one file this blocked
 - [x] `T2-EY` — A correct rejection with a stated reason does not produce a different next proposal — BUILT 2026-07-31: a proposal already rejected this run, with nothing merged since, is refused before the probe and the evaluator (39 duplicates in 33 corpora, 38 safely blockable); field DoD MET 2026-08-01 — refused a repeat with no evaluator call, and the next proposal differed (n=1, uncontrolled)
-- [ ] `T2-EX` — How much of a run is verifiable is decided at criterion-authoring time (77%/32%/79% executable across three frozen runs) and nothing measures it
+- [x] `T2-EX` — How much of a run is verifiable is decided at criterion-authoring time (77%/32%/79% executable across three frozen runs) and nothing measures it
 - [ ] `T2-ET` — A gate-raised work item is closed by an LLM score; the gate never votes on its own closure (completes T4-CC's authority)
 - [ ] `T2-ES` — "Already implemented" vs "criterion unmet" is a diagnosis, not a retry (27/110 cycles lost on one subgoal)
 - [x] `T2-EU` — A retired goal blocked its own replacement, defeating the prescribed stuck-subgoal workflow (shipped + field-verified 2026-07-27)
@@ -289,7 +289,7 @@
 ## Tier 3 — Feature completion (39)
 
 - [ ] `T3-BZ` — A type placed differently from its own structural peers is never noticed (Book in `domain`, Loan/Member in `domain.model`); derive the norm from the project's majority among code-established peers, never a convention table
-- [~] `T3-BY` — A run killed from outside ships its LAST state, not its BEST — BUILT 2026-08-22 loop-side (`preserve.interval-cycles: 10`, 6 tests); field DoD open
+- [x] `T3-BY` — A run killed from outside ships its LAST state, not its BEST — BUILT 2026-08-22 loop-side (`preserve.interval-cycles: 10`, 6 tests); field DoD open
 - [~] `T3-BX` — Validation layer is decorative (`@Valid` everywhere, zero constraints) → bad input 500s instead of 400
 - [x] `T3-BW` — Peer-consistency odd-one-out rule in `WiringFactsAnalyzer` — SHIPPED 2026-07-27; vocabulary-free, verified on the real run output, reaches the evolution prompt
 - [>] `T3-B` — Activate `GoalEntity.expectedArtifacts`
@@ -334,7 +334,7 @@
 - [x] `T4-CZ` — The self-check computes WHY the artifact cannot package seven times a run and throws the answer away
 - [ ] `T4-DD` — Target-domain knowledge behind a seam (deferred by user until stable); the seam has never been exercised — both targets ever run are REST
 - [ ] `T4-DC` — A controller catches exception types its service never throws, so the catches are dead and every domain error falls to the last resort (23/23 run had 8 matched types; 14/23 run zero overlap)
-- [ ] `T4-DB` — The loop repairs what it can probe and fails exactly what it cannot: the 3 always-failing checks are the 3 shapes the probe synthesizer abstains on (the measured 18→23 gap)
+- [x] `T4-DB` — The loop repairs what it can probe and fails exactly what it cannot: the 3 always-failing checks are the 3 shapes the probe synthesizer abstains on (the measured 18→23 gap)
 - [ ] `T4-DA` — Nothing asks whether the subgoals TOGETHER still solve the seed (incl. whether every requirement has a criterion), and the agents are never told — readout first, injection second
 - [n] `T4-CP` — Internal drift reflection (loop notices mid-run it's regressing from its best, acts to save later-stage tokens); introspection north-star — T6-B gate resolved NEGATIVE 2026-07-25, do not build as filed; re-entry on the ticket
 - [ ] `T4-A` — Implement alignment layer
@@ -349,7 +349,7 @@
 - [s] `T4-CV` — Forward-looking requirement for a runnable entry point (shipped + FIELD-VERIFIED 2026-07-27: gate fired at min 5, loop wrote the entry point in ~60s)
 - [ ] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals (latent; free at 558 goals, hot path per proposal)
 - [x] `T4-CX` — Startup-wiring forecast no longer precedes the gate that measures it (shipped 2026-07-28)
-- [~] `T4-CY` — Loop observes its own running behaviour mid-run: PROVEN, disabled on cost until probe synthesis is deterministic
+- [x] `T4-CY` — Loop observes its own running behaviour mid-run: PROVEN, disabled on cost until probe synthesis is deterministic
 - [ ] `T4-CQ` — Import and continue an existing project (cold read; with or without a graph)
 - [ ] `T4-CR` — Portable project+graph bundle: store a phase, restore it elsewhere (unblocked by T1-D lineage separation)
 - [ ] `T4-CS` — Code-layer merge across lineages (code-side sibling of T4-CM; gated on an overlap measurement)

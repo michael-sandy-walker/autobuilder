@@ -2,6 +2,12 @@
   "dependencyContext" : "org.projectlombok:lombok:\norg.springframework.boot:spring-boot-starter-validation:\norg.springframework.boot:spring-boot-starter-web:",
   "entries" : {
     "BookRepository" : null,
+    "IllegalStateException" : {
+      "fqn" : "java.lang.IllegalStateException",
+      "groupId" : null,
+      "artifactId" : null,
+      "version" : null
+    },
     "Optional" : {
       "fqn" : "java.util.Optional",
       "groupId" : null,

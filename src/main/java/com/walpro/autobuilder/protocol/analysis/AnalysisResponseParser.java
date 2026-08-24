@@ -64,7 +64,7 @@ public final class AnalysisResponseParser {
             if (section.equals("proposed") && t.startsWith("-")) {
                 inCriteriaBlock = false;
                 String item = t.substring(1).trim();
-                if (!item.isEmpty()) {
+                if (!item.isEmpty() && !isFormatPlaceholder(item)) {
                     proposed.add(item);
                     lastProposed = item;
                 }
@@ -84,6 +84,21 @@ public final class AnalysisResponseParser {
         return new AnalysisOutcome(findings, hypotheses, proposed,
                 criteriaMap.isEmpty() ? null : criteriaMap,
                 message, goalKind, possiblyComplete, injectionThrottle);
+    }
+
+    /**
+     * T1-FT: this contract prints its response format with a literal {@code - <next subgoal
+     * description>} line, and a model that echoes the format back had its placeholder admitted as
+     * real work. In run 2026-08-22_06-19-55 the resulting node was the run's most frequent current
+     * subgoal — 11 renders, ~21 minutes of 55 — and was then marked COMPLETED, which is worse than
+     * the wasted time: it counts a goal that never meant anything towards completion.
+     *
+     * <p>Only a line that is NOTHING BUT a placeholder is refused. "Contains an angle bracket"
+     * would reject real descriptions — {@code ResponseEntity<Book>} is ordinary subgoal prose.
+     */
+    static boolean isFormatPlaceholder(String item) {
+        String t = item.trim();
+        return t.length() > 1 && t.startsWith("<") && t.endsWith(">") && t.indexOf('>') == t.length() - 1;
     }
 
     private AnalysisOutcome.Finding parseFinding(String item) {

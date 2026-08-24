@@ -86,6 +86,50 @@ class SymbolImportResolverTest {
         Files.writeString(target, content);
     }
 
+    /**
+     * T2-FA: stderr verbatim from run {@code 2026-08-24_00-07-06}, whose artifact imported a
+     * package its own pom never declared. The registry happens to hold a row for this one; the
+     * test denies it that row, because the question is what happens for the packages nobody wrote
+     * a row for — before this path, nothing at all, and the symbol path spent the build adding an
+     * import beside one that cannot resolve.
+     */
+    private static final String UNDECLARED_DEPENDENCY_STDERR = """
+            [ERROR] /out/src/main/java/com/example/library/domain/repository/LoanRepository.java:[3,47] package org.springframework.data.jpa.repository does not exist
+            [ERROR] /out/src/main/java/com/example/library/domain/repository/LoanRepository.java:[5,41] cannot find symbol
+            [ERROR]   symbol: class JpaRepository
+            """;
+
+    @Test
+    void resolve_undeclaredDependency_addsTheSearchedCoordinateToThePom() throws IOException {
+        writeOutput("pom.xml", BASE_POM);
+        when(discovery.lookupUndeclaredPackage(
+                "org.springframework.data.jpa.repository", "JpaRepository", tmp.resolve("output")))
+                .thenReturn(Optional.of(new PackageDiscoveryService.Discovery(
+                        new Resolution(
+                                "org.springframework.data.jpa.repository.JpaRepository",
+                                "org.springframework.boot", "spring-boot-starter-data-jpa", "3.3.2"),
+                        "coordinate-search")));
+
+        Optional<FixProposal> proposal = resolver.resolve(
+                cls(Kind.PACKAGE_DOES_NOT_EXIST), "org.springframework.data.jpa.repository",
+                UNDECLARED_DEPENDENCY_STDERR, ctx);
+
+        assertThat(proposal).isPresent();
+        assertThat(proposal.get().record().rule()).isEqualTo("coordinate-search:spring-boot-starter-data-jpa");
+        assertThat(proposal.get().mutations()).hasSize(1);
+        assertThat(proposal.get().mutations().get(0).content())
+                .contains("spring-boot-starter-data-jpa");
+    }
+
+    @Test
+    void resolve_undeclaredDependency_abstainsWhenNoProbeCanNameIt() throws IOException {
+        writeOutput("pom.xml", BASE_POM);
+        // Discovery, registry and search all silent — the mocks' default. The old path had the
+        // same outcome for a different reason: it never asked.
+        assertThat(resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST),
+                "org.springframework.data.jpa.repository", UNDECLARED_DEPENDENCY_STDERR, ctx)).isEmpty();
+    }
+
     @Test
     void resolve_wrongKind_returnsEmpty() {
         assertThat(resolver.resolve(cls(Kind.MISSING_POM), "X", null, ctx)).isEmpty();

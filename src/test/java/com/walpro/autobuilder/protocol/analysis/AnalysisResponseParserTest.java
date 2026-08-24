@@ -9,6 +9,53 @@ class AnalysisResponseParserTest {
 
     private final AnalysisResponseParser parser = new AnalysisResponseParser();
 
+
+    /**
+     * T1-FT: the contract prints its own format, and a model that echoes it back had the
+     * placeholder admitted to the goal tree — in run 2026-08-22_06-19-55 as a node that became the
+     * current subgoal 11 times and was then marked COMPLETED.
+     */
+    @org.junit.jupiter.api.Test
+    void theContractsOwnFormatPlaceholderIsNotAProposal() {
+        String echoedFormat = """
+                ProposedExecutableSubGoals:
+                - <subgoal description — MUST be directly executable as code changes>
+                Criteria:
+                * <acceptance criterion 1>
+                - <next subgoal description>
+                Message: echoing the format
+                GoalKind: EXECUTABLE
+                """;
+
+        var parsed = parser.parse(echoedFormat);
+
+        org.assertj.core.api.Assertions.assertThat(parsed.proposedExecutableSubGoals()).isEmpty();
+    }
+
+    @org.junit.jupiter.api.Test
+    void aRealDescriptionCarryingAngleBracketsStillParses() {
+        String response = """
+                ProposedExecutableSubGoals:
+                - Change BookController.getBook to return ResponseEntity<Book> rather than a raw Map
+                Message: ok
+                GoalKind: EXECUTABLE
+                """;
+
+        var parsed = parser.parse(response);
+
+        org.assertj.core.api.Assertions.assertThat(parsed.proposedExecutableSubGoals())
+                .containsExactly("Change BookController.getBook to return ResponseEntity<Book> rather than a raw Map");
+    }
+
+    @org.junit.jupiter.api.Test
+    void placeholderRecognitionIsAnchoredToTheWholeLine() {
+        org.assertj.core.api.Assertions.assertThat(
+                AnalysisResponseParser.isFormatPlaceholder("<next subgoal description>")).isTrue();
+        org.assertj.core.api.Assertions.assertThat(
+                AnalysisResponseParser.isFormatPlaceholder("Return ResponseEntity<Book> from getBook")).isFalse();
+        org.assertj.core.api.Assertions.assertThat(
+                AnalysisResponseParser.isFormatPlaceholder("<A> and then <B>")).isFalse();
+    }
     private static final String FULL_RESPONSE = """
             Findings:
             - [WARNING] MISSING_IMPL :: method not found :: src/main/java/Foo.java

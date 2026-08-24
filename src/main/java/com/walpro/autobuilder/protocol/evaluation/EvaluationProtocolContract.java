@@ -334,6 +334,9 @@ public class EvaluationProtocolContract {
         return getUserPrompt(context, 150);
     }
 
+    /** How many of a file's most recent scores are rendered in full; see {@link #renderScoreHistory}. */
+    private static final int SCORE_HISTORY_TAIL = 3;
+
     public static String getUserPrompt(CycleContextData context, int fileContentMaxLines) {
         String findings = context.findings() == null ? "" : context.findings().stream()
                 .map(Object::toString)
@@ -358,7 +361,7 @@ public class EvaluationProtocolContract {
         if (context.scoreHistoryByFile() != null) {
             context.scoreHistoryByFile().forEach((file, history) -> {
                 if (presentFiles == null || presentFiles.contains(file)) {
-                    scoreHistoryBlock.append(file).append(": ").append(history).append("\n");
+                    scoreHistoryBlock.append(file).append(": ").append(renderScoreHistory(history)).append("\n");
                 }
             });
         }
@@ -495,6 +498,30 @@ public class EvaluationProtocolContract {
             sb.append("[").append(i + 1).append("] \u2713 or \u2717 ").append(criteria.get(i)).append("\n");
         }
         return sb.toString().stripTrailing();
+    }
+
+    /**
+     * T1-FS residual: T1-FS bounded how many PATHS this block can carry (269 -> 19, by run rather
+     * than by lifetime), leaving each path's score ARRAY as the one axis that still grows without
+     * limit — one file reached 14 entries in a 90-minute run and the block crept 457 -> 525 tokens
+     * over 21 renders. Harmless at that length, unbounded over a longer one.
+     *
+     * <p>What the block is FOR is the trend, so the recent scores are rendered and everything
+     * older becomes the count and the best it ever reached — the file's whole record still
+     * answers "is this getting better", in a width that does not depend on how long the run has
+     * been going.
+     */
+    static String renderScoreHistory(List<Double> history) {
+        if (history == null || history.isEmpty()) return "(none)";
+        List<Double> tail = history.size() <= SCORE_HISTORY_TAIL
+                ? history
+                : history.subList(history.size() - SCORE_HISTORY_TAIL, history.size());
+        String rendered = tail.stream()
+                .map(d -> String.format("%.2f", d))
+                .collect(Collectors.joining(" -> "));
+        if (history.size() == tail.size()) return rendered;
+        double best = history.stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
+        return String.format("%s (latest of %d, best %.2f)", rendered, history.size(), best);
     }
 
     private static String buildFileContentBlock(CycleContextData context, int maxLines) {

@@ -7,6 +7,8 @@ no measured composition, only anecdote. This assigns each failing run a FAMILY, 
 distribution can be stated with counts instead of guessed from whichever run was examined last.
 
 Families:
+  dependency-missing      a package nothing on the classpath provides -- the artifact's pom does
+                          not declare the library it imports, so every type in it is unresolvable
   compile-missing-type    a type the code references was never written (the T1-FR shape)
   compile-missing-member  the type exists, a member it is called on does not (the T1-FQ shape)
   compile-other           it did not compile, for some other reason
@@ -29,6 +31,8 @@ Last line is machine readable:
 import argparse, gzip, os, re, sys
 from collections import Counter
 
+MISSING_PACKAGE = re.compile(r"package ([\w.]+) does not exist")
+SOURCE_PATH = re.compile(r"src/main/java/([\w/]+)/\w+\.java")
 MISSING_TYPE = re.compile(r"symbol:\s+class\s+(\w+)")
 MISSING_MEMBER = re.compile(r"symbol:\s+(?:method|variable)\s+([\w.<>,() ]+)")
 WIRING = re.compile(r"No qualifying bean|UnsatisfiedDependencyException|"
@@ -55,10 +59,41 @@ def _first(d, *names):
     return None
 
 
+def project_packages(text):
+    """The artifact's OWN package prefixes, read from the compiler's file paths. Needed to tell
+    an undeclared library apart from a package the artifact simply has not written yet -- the
+    diagnostic text is identical for both and the owning defect is not."""
+    return {p.replace("/", ".") for p in SOURCE_PATH.findall(text)}
+
+
+def project_namespaces(text, depth=2):
+    """The leading segments the artifact's own packages share with each other -- `com.example`
+    for `com.example.library.domain.repository`. Compared at this depth deliberately: a failing
+    build often names ONE source file, so the artifact's full package is not its root, and a
+    sibling package it has not written yet would then read as an undeclared library."""
+    return {".".join(p.split(".")[:depth]) for p in project_packages(text)}
+
+
+def last_build_block(text):
+    """Just the LAST failing compilation in the text. The scorer's own log holds one build, but
+    the run-log fallback holds every build the run attempted, and an early one names defects the
+    run went on to repair -- one such diagnostic sat 116k lines before the failure that actually
+    ended run 2026-08-05_22-14-13."""
+    marks = [m.start() for m in re.finditer(r"COMPILATION ERROR", text)]
+    return text[marks[-1]:] if marks else text
+
+
 def classify_build(text):
     """Family for a failed BUILD, plus the symbol that names it."""
     if not text.strip():
         return None, None
+    text = last_build_block(text)
+    own = project_namespaces(text)
+    for pkg in MISSING_PACKAGE.findall(text):
+        # Cause before cascade: an undeclared dependency makes every type it holds report as a
+        # missing symbol, so reading those symbols first names the effect and the wrong ticket.
+        if own and not any(pkg == ns or pkg.startswith(ns + ".") for ns in own):
+            return "dependency-missing", pkg
     types = MISSING_TYPE.findall(text)
     if types:
         return "compile-missing-type", types[-1]

@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -420,6 +421,81 @@ class PackageDiscoveryServiceTest {
         assertThat(hit.get().source()).isEqualTo("classpath");
         assertThat(hit.get().resolution().artifactId()).isEqualTo("validation-api");
         assertThat(hit.get().resolution().version()).isEqualTo("2.0.1.Final");
+    }
+
+    // ── T2-FA: an undeclared dependency, named by the build's own two diagnostics ─────────
+
+    @Test
+    void lookupUndeclaredPackage_composesTheFqnFromBothDiagnosticsAndSearchesIt() {
+        // The field shape, run 2026-08-24_00-07-06: `package org.springframework.data.jpa.repository
+        // does not exist` on the import line, `symbol: class JpaRepository` on the use. Neither
+        // half is searchable alone; together they are an exact FQN.
+        when(searchClient.findByFullyQualifiedName("org.springframework.data.jpa.repository.JpaRepository"))
+                .thenReturn(Optional.of(new CoordinateSearchClient.Coordinates(
+                        "org.springframework.boot", "spring-boot-starter-data-jpa", "3.3.2")));
+
+        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupUndeclaredPackage(
+                "org.springframework.data.jpa.repository", "JpaRepository", projectRoot);
+
+        assertThat(hit).isPresent();
+        assertThat(hit.get().source()).isEqualTo("coordinate-search");
+        assertThat(hit.get().resolution().artifactId()).isEqualTo("spring-boot-starter-data-jpa");
+        assertThat(hit.get().resolution().version()).isEqualTo("3.3.2");
+    }
+
+    @Test
+    void lookupUndeclaredPackage_prefersTheClasspathWhenItCanAnswer() throws IOException {
+        repositoryJar("jakarta.validation", "jakarta.validation-api", "3.0.2",
+                "jakarta.validation.constraints.NotNull");
+
+        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupUndeclaredPackage(
+                "jakarta.validation.constraints", "NotNull", projectRoot);
+
+        assertThat(hit).isPresent();
+        assertThat(hit.get().source()).isEqualTo("classpath");
+        verifyNoInteractions(searchClient);
+    }
+
+    @Test
+    void lookupUndeclaredPackage_neverSearchesAPackageTheProjectDeclaresItself() throws IOException {
+        // A type the loop has not written yet. No dependency can supply it, so searching for one
+        // can only return something wrong.
+        projectSource("src/main/java/com/example/domain/service/Existing.java", """
+                package com.example.domain.service;
+                public class Existing {}
+                """);
+
+        assertThat(discovery.lookupUndeclaredPackage(
+                "com.example.domain.service", "LoanService", projectRoot)).isEmpty();
+        verifyNoInteractions(searchClient);
+    }
+
+    @Test
+    void lookupUndeclaredPackage_treatsAnUnwrittenSiblingAsTheProjectsOwn() throws IOException {
+        // The package that is MISSING is by definition one the project has not written yet, so an
+        // exact membership check would send an unwritten sibling's name to a public artifact index.
+        projectSource("src/main/java/com/example/library/domain/Book.java", """
+                package com.example.library.domain;
+                public class Book {}
+                """);
+
+        assertThat(discovery.lookupUndeclaredPackage(
+                "com.example.library.domain.repository", "BookRepository", projectRoot)).isEmpty();
+        verifyNoInteractions(searchClient);
+    }
+
+    @Test
+    void lookupUndeclaredPackage_abstainsWhenTheSearchCannotAnswer() {
+        assertThat(discovery.lookupUndeclaredPackage("com.absent.pkg", "Widget", projectRoot)).isEmpty();
+    }
+
+    @Test
+    void lookupUndeclaredPackage_needsATypeName_andItMustNameAType() {
+        assertThat(discovery.lookupUndeclaredPackage("com.absent.pkg", null, projectRoot)).isEmpty();
+        assertThat(discovery.lookupUndeclaredPackage("com.absent.pkg", "findAll", projectRoot))
+                .as("a member name is not the other half of an FQN")
+                .isEmpty();
+        verifyNoInteractions(searchClient);
     }
 
     @Test

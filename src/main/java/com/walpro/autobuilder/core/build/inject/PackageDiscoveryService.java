@@ -60,6 +60,7 @@ import java.util.stream.Stream;
 public class PackageDiscoveryService {
 
     private static final long CLASSPATH_TIMEOUT_MS = 30_000L;
+    private static final Pattern SIMPLE_TYPE_NAME = Pattern.compile("[A-Z][A-Za-z0-9_$]*");
     private static final Pattern IMPORT_LINE = Pattern.compile(
             "^\\s*import\\s+(static\\s+)?([\\w$]+(?:\\.[\\w$]+)*)(\\.\\*)?\\s*;");
 
@@ -203,6 +204,59 @@ public class PackageDiscoveryService {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * T2-FA: coordinates for a package the build reports as ABSENT, when the classpath cannot
+     * answer because the dependency was never declared. {@link #lookupPackage} covers the case
+     * where the package is already resolved; this covers the case where nothing provides it.
+     *
+     * <p>A package name cannot be searched directly, but the same build names a type from it —
+     * {@code package p does not exist} on the import line, {@code symbol: class T} on every use —
+     * and {@code p.T} is an exact fully-qualified name, which is the only query this index answers
+     * precisely. So the compiler's own two diagnostics, read together, supply what neither
+     * supplies alone.
+     *
+     * <p>A package the project DECLARES in its own sources is never searched: that is a type the
+     * loop has not written yet, and no dependency can supply it (the same distinction the
+     * classpath path draws for an imported FQN under an own package).
+     */
+    public Optional<Discovery> lookupUndeclaredPackage(String packageName, String typeName, Path projectRoot) {
+        Optional<Discovery> onClasspath = lookupPackage(packageName, projectRoot);
+        if (onClasspath.isPresent()) return onClasspath;
+
+        if (packageName == null || packageName.isBlank() || !packageName.contains(".")) return Optional.empty();
+        if (typeName == null || !SIMPLE_TYPE_NAME.matcher(typeName).matches()) return Optional.empty();
+        if (projectRoot == null || !Files.isDirectory(projectRoot)) return Optional.empty();
+        if (sharesNamespaceWithProject(packageName, declaredPackages(projectRoot))) {
+            log.debug("T2-FA: {} is inside the project's own namespace — a type it has not written,"
+                    + " not a dependency to add; abstaining", packageName);
+            return Optional.empty();
+        }
+
+        String fqn = packageName + "." + typeName;
+        Optional<CoordinateSearchClient.Coordinates> coords = coordinateSearchClient.findByFullyQualifiedName(fqn);
+        if (coords.isEmpty()) return Optional.empty();
+        return Optional.of(discovered(packageName, "coordinate-search", new Resolution(
+                fqn, coords.get().groupId(), coords.get().artifactId(), coords.get().version())));
+    }
+
+    /**
+     * Compared at namespace depth rather than by exact membership, because the package that is
+     * MISSING is by definition one the project has not written yet — an exact check would call
+     * an unwritten sibling of `…domain` an undeclared library and send its name to a public
+     * artifact index.
+     */
+    private static boolean sharesNamespaceWithProject(String packageName, Set<String> declared) {
+        String ns = namespaceOf(packageName);
+        return ns != null && declared.stream().map(PackageDiscoveryService::namespaceOf)
+                .anyMatch(ns::equals);
+    }
+
+    private static String namespaceOf(String pkg) {
+        if (pkg == null) return null;
+        String[] parts = pkg.split("\\.");
+        return parts.length < 2 ? pkg : parts[0] + "." + parts[1];
     }
 
     // ── source 1: classpath jars ─────────────────────────────────────────────

@@ -57,6 +57,62 @@ class ClassifyBuildTest(unittest.TestCase):
         self.assertEqual(ff.classify_build("   "), (None, None))
 
 
+class DependencyGapTest(unittest.TestCase):
+    """The distinction this family exists for: the compiler says the same thing about a library
+    the pom forgot and a package the artifact has not written, and they are different defects."""
+
+    FIELD = (  # verbatim shape from run 2026-08-24_00-07-06
+        "[ERROR] /tmp/preflight_runs/x/artifact/src/main/java/com/example/library/domain/"
+        "repository/LoanRepository.java:[3,47] package org.springframework.data.jpa.repository "
+        "does not exist\n"
+        "[ERROR] /tmp/preflight_runs/x/artifact/src/main/java/com/example/library/domain/"
+        "repository/LoanRepository.java:[5,41] cannot find symbol\n"
+        "[ERROR]   symbol: class JpaRepository\n")
+
+    def test_undeclared_library_is_a_dependency_gap_not_a_missing_type(self):
+        fam, detail = ff.classify_build(self.FIELD)
+        self.assertEqual(fam, "dependency-missing")
+        self.assertEqual(detail, "org.springframework.data.jpa.repository")
+
+    def test_the_artifacts_own_absent_package_is_not_a_dependency_gap(self):
+        text = (
+            "[ERROR] /x/src/main/java/com/example/library/api/LoanController.java:[3,47] "
+            "package com.example.library.domain.service does not exist\n"
+            "[ERROR]   symbol: class LoanService\n")
+        fam, detail = ff.classify_build(text)
+        self.assertEqual(fam, "compile-missing-type")
+        self.assertEqual(detail, "LoanService")
+
+    def test_project_packages_are_read_from_the_compilers_paths(self):
+        self.assertIn("com.example.library.domain.repository",
+                      ff.project_packages(self.FIELD))
+        self.assertEqual(ff.project_namespaces(self.FIELD), {"com.example"})
+
+
+class LastBuildTest(unittest.TestCase):
+    """A run log holds every build the run attempted; an early failure it later repaired must not
+    outrank the one that ended the run."""
+
+    LOG = (
+        "[ERROR] COMPILATION ERROR : \n"
+        "[ERROR] /o/src/main/java/com/example/library/model/Member.java:[3,1] package "
+        "jakarta.persistence does not exist\n"
+        "... 116k lines of repair ...\n"
+        "[ERROR] COMPILATION ERROR : \n"
+        "[ERROR] /o/src/main/java/com/example/library/service/MemberService.java:[3,37] "
+        "cannot find symbol\n"
+        "[ERROR]   symbol:   class DuplicateEmailException\n")
+
+    def test_the_repaired_earlier_failure_does_not_win(self):
+        fam, detail = ff.classify_build(self.LOG)
+        self.assertEqual(fam, "compile-missing-type")
+        self.assertEqual(detail, "DuplicateEmailException")
+
+    def test_a_single_build_is_unaffected(self):
+        self.assertIn("COMPILATION ERROR", ff.last_build_block("[ERROR] COMPILATION ERROR : \nx"))
+        self.assertEqual(ff.last_build_block("no marker here"), "no marker here")
+
+
 class ClassifyBootTest(unittest.TestCase):
     def test_missing_bean_is_wiring_and_names_the_bean(self):
         fam, detail = ff.classify_boot(

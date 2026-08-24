@@ -183,6 +183,7 @@ public class WiringFactsAnalyzer {
         List<CompilationUnit> units = parseAll(outputFiles);
         List<String> out = new ArrayList<>();
         collectPeerAnnotationOutliers(units, out);
+        announce("T3-BW", "annotation", out);
         return out;
     }
 
@@ -209,7 +210,24 @@ public class WiringFactsAnalyzer {
         List<CompilationUnit> units = parseAll(outputFiles);
         List<String> out = new ArrayList<>();
         collectPeerPlacementOutliers(units, out);
+        announce("T3-BZ", "placement", out);
         return out;
+    }
+
+    /**
+     * Both peer rules reached the evolution prompt and nowhere else, so whether either had ever
+     * fired in the field could only be answered by reading a prompt — and prompts are not logged.
+     * A watch calibrated against a proxy (a non-empty deleted-file list) scored NO-OPPORTUNITY on
+     * runs where the rule may well have spoken.
+     *
+     * <p>One line per FIRING, carrying the facts themselves, rather than one per anomaly: the
+     * analyzer is called on several paths in a cycle, so a reader must count DISTINCT statements,
+     * not lines ([[feedback-count-events-not-log-lines]]).
+     */
+    private void announce(String ticket, String kind, List<String> anomalies) {
+        if (anomalies.isEmpty()) return;
+        log.info("{}: {} peer {} anomal{} reported — {}", ticket, anomalies.size(), kind,
+                anomalies.size() == 1 ? "y" : "ies", String.join(" | ", anomalies));
     }
 
     private void collectPeerPlacementOutliers(List<CompilationUnit> units, List<String> out) {

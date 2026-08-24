@@ -83,7 +83,7 @@ public class SymbolImportResolver implements CompileFixResolver {
         // split still reads kind() — category alone cannot separate the two config shapes.
         Kind kind = classification.kind();
         if (kind == Kind.PACKAGE_DOES_NOT_EXIST) {
-            return resolveMissingPackage(missingToken, context);
+            return resolveMissingPackage(missingToken, stderr, context);
         }
 
         if (kind != Kind.CANNOT_FIND_SYMBOL) return Optional.empty();
@@ -159,7 +159,7 @@ public class SymbolImportResolver implements CompileFixResolver {
         String manifest = registry.readManifestOrEmpty(context.outputPath() + "/" + POM_PATH);
         if (registry.replacementFor(deadPackage.get(), manifest).isEmpty()) return Optional.empty();
 
-        Optional<FixProposal> proposal = resolveMissingPackage(deadPackage.get(), context);
+        Optional<FixProposal> proposal = resolveMissingPackage(deadPackage.get(), stderr, context);
         if (proposal.isPresent()) {
             log.info("T2-FA: deferring the missing-symbol fix — the same build reports {} as absent and it has a"
                     + " known replacement; migrating the import instead of adding a second one", deadPackage.get());
@@ -171,6 +171,23 @@ public class SymbolImportResolver implements CompileFixResolver {
         if (discoveryService == null) return Optional.empty();
         try {
             return discoveryService.lookupType(simpleName, fileService.resolveSecurePath(OUTPUT_DIR));
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+    }
+
+    /** The type name the same build reports as unresolvable — the other half of the FQN. */
+    private static String symbolNameIn(String stderr) {
+        return com.walpro.autobuilder.core.build.BuildErrorClassifier
+                .extractToken(stderr, Kind.CANNOT_FIND_SYMBOL).orElse(null);
+    }
+
+    private Optional<PackageDiscoveryService.Discovery> lookupUndeclaredPackageInDiscovery(
+            String missingPackage, String typeName) {
+        if (discoveryService == null || typeName == null) return Optional.empty();
+        try {
+            return discoveryService.lookupUndeclaredPackage(
+                    missingPackage, typeName, fileService.resolveSecurePath(OUTPUT_DIR));
         } catch (IOException e) {
             return Optional.empty();
         }
@@ -191,18 +208,35 @@ public class SymbolImportResolver implements CompileFixResolver {
      * prefix with a modern successor), bundles source-import rewrites into the same
      * {@link FixProposal} so the next probe sees the full fix.
      */
-    private Optional<FixProposal> resolveMissingPackage(String missingPackage, CycleContextData context) {
+    private Optional<FixProposal> resolveMissingPackage(String missingPackage, String stderr,
+                                                       CycleContextData context) {
         String manifest = registry.readManifestOrEmpty(context.outputPath() + "/" + POM_PATH);
 
         // T4-BM: discovery first — when the package is already on the project's resolved
         // classpath, its OWN coordinates win over any registry assumption (failure mode 3:
         // the registry's worldview overriding the project's).
+        // Existing sources keep the rule name they have always had — the ledger and every
+        // corpus report key on it. Only the new source needs a name of its own.
+        String coordinateSource = "registry";
         Optional<WellKnownPackageRegistry.Gav> gav = lookupPackageInDiscovery(missingPackage)
                 .map(d -> new WellKnownPackageRegistry.Gav(
                         d.resolution().groupId(), d.resolution().artifactId(), d.resolution().version()));
         if (gav.isEmpty()) {
             gav = registry.lookup(missingPackage, manifest);
             gav.ifPresent(g -> emitRegistryHit(missingPackage, g));
+        }
+        // T2-FA: the registry answers only for packages someone wrote a row for, so before this
+        // path it decided the OUTCOME rather than merely supplying a coordinate — an undeclared
+        // dependency it did not know produced no repair at all, and the symbol path then spent the
+        // build adding an import beside one that cannot resolve. The search asks the project's own
+        // build what is missing instead: the dead package plus the type the same stderr names is
+        // an exact fully-qualified name. Last, so nothing that already resolves changes, and
+        // silent when the search cannot answer — an undeclared dependency is not a guess to make.
+        if (gav.isEmpty()) {
+            gav = lookupUndeclaredPackageInDiscovery(missingPackage, symbolNameIn(stderr))
+                    .map(d -> new WellKnownPackageRegistry.Gav(
+                            d.resolution().groupId(), d.resolution().artifactId(), d.resolution().version()));
+            if (gav.isPresent()) coordinateSource = "coordinate-search";
         }
         if (gav.isEmpty()) return Optional.empty();
 
@@ -236,9 +270,11 @@ public class SymbolImportResolver implements CompileFixResolver {
 
         // T4-BI: the package-replace rule only fires when an actual source rewrite happened.
         // A registry hit with no source files needing migration is the original T4-BG pom-only path.
+        // The rule names WHERE the coordinate came from, because the ledger keys on it and a
+        // searched coordinate is a different claim from a curated row.
         String rule = (replacement.isPresent() && rewrittenCount > 0)
                 ? "package-replace:" + replacement.get().oldPrefix() + "->" + replacement.get().newPrefix()
-                : "registry:" + resolution.artifactId();
+                : coordinateSource + ":" + resolution.artifactId();
         StringBuilder desc = new StringBuilder();
         if (pomMutation.isPresent()) {
             desc.append("Added ").append(resolution.groupId()).append(":")

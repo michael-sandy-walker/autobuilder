@@ -23,6 +23,7 @@
     "isReturned" : null,
     "Loan" : null,
     "Book" : null,
+    "setReturned" : null,
     "BookService" : null,
     "setId" : null,
     "JpaRepository" : {

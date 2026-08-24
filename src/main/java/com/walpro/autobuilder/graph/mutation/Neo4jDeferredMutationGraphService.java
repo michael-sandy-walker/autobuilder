@@ -93,6 +93,18 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
                     + "_id_idx IF NOT EXISTS FOR (n:" + label + ") ON (n.id)");
         }
 
+        // T5-BJ: T6-J above indexed Goal.id, but the dedup reads filter on lineageId, so they
+        // stayed full label scans. Measured on the live graph at 3,028 goals / 78 lineages:
+        // `MATCH (g:Goal) WHERE g.lineageId = $lineageId RETURN count(g)` costs 6,057 DbHits to
+        // return 96 rows — the hits track the TOTAL goal count, not the lineage's own size, which
+        // is what a scan means. Every subgoal proposal pays it (findAllDescriptions), and again
+        // for the unachievable guard (findDescriptionsByStatus).
+        runInOwnTransaction("CREATE INDEX goal_lineage_idx IF NOT EXISTS FOR (g:Goal) ON (g.lineageId)");
+        // Composite, because findDescriptionsByStatus filters on both and a lineage's goals are
+        // mostly one status late in a run — the lineage index alone still scans them all.
+        runInOwnTransaction(
+                "CREATE INDEX goal_lineage_status_idx IF NOT EXISTS FOR (g:Goal) ON (g.lineageId, g.status)");
+
         // T5-AD: sentinel write-and-delete to register every property key referenced by the
         // MATCH/MERGE persist queries. The sentinel id is namespaced so a real DeferredMutation
         // can never collide with it. Runs after the schema has settled (separate transactions).

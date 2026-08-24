@@ -138,6 +138,9 @@ public class WiringFactsAnalyzer {
         collectPeerAnnotationOutliers(units, observations);
         if (observations.size() >= MAX_OBSERVATIONS) return observations.subList(0, MAX_OBSERVATIONS);
 
+        collectUnregisteredInjectedTypes(units, observations);
+        if (observations.size() >= MAX_OBSERVATIONS) return observations.subList(0, MAX_OBSERVATIONS);
+
         if (anyThrow && !anyStatusMapping && catchMappedTypes(units).isEmpty()) {
             observations.add(NO_STATUS_MAPPING_FACT);
         } else if (anyThrow) {
@@ -183,6 +186,7 @@ public class WiringFactsAnalyzer {
         List<CompilationUnit> units = parseAll(outputFiles);
         List<String> out = new ArrayList<>();
         collectPeerAnnotationOutliers(units, out);
+        collectUnregisteredInjectedTypes(units, out);
         announce("T3-BW", "annotation", out);
         return out;
     }
@@ -330,6 +334,110 @@ public class WiringFactsAnalyzer {
             }
         }
         return units;
+    }
+
+    /**
+     * T3-CA: the type that carries NOTHING. {@link #collectPeerAnnotationOutliers} only considers
+     * types that already have an annotation, so it reports "has @A, missing @B" and is structurally
+     * blind to "has nothing while its peers have @A" — which is the case where the type is never
+     * registered at all, and therefore the only one of the two that stops the application starting.
+     *
+     * <p>Field case (run 2026-08-22_06-19-55, boot-failed, replayed): {@code BookRepository} plain,
+     * its two same-package peers annotated in 27 of 27 renders, and it is a constructor parameter
+     * of an annotated service. All three rules returned empty on that tree, so the loop had no
+     * structural fact about the defect that ended the run.
+     *
+     * <p>Three independent pieces of the project's own evidence must agree, which is what keeps
+     * this quiet on legitimate plain types (models, DTOs, exceptions): the INJECTION SITE says the
+     * type has to be supplied from outside, the PEERS say how types in that package are supplied,
+     * and the type itself carries nothing. Names no framework and no annotation
+     * ([[feedback-no-ecosystem-jargon-in-framework-code]]); a project that annotates nothing
+     * produces no fact.
+     */
+    private void collectUnregisteredInjectedTypes(List<CompilationUnit> units, List<String> out) {
+        Map<String, Set<String>> annotationsByType = new LinkedHashMap<>();
+        Map<String, String> packageByType = new LinkedHashMap<>();
+        Set<String> interfaces = new LinkedHashSet<>();
+        for (CompilationUnit cu : units) {
+            String pkg = cu.getPackageDeclaration().map(pd -> pd.getNameAsString()).orElse("");
+            for (TypeDeclaration<?> type : cu.getTypes()) {
+                annotationsByType.put(type.getNameAsString(), type.getAnnotations().stream()
+                        .map(AnnotationExpr::getNameAsString)
+                        .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new)));
+                packageByType.put(type.getNameAsString(), pkg);
+                if (type instanceof com.github.javaparser.ast.body.ClassOrInterfaceDeclaration c
+                        && c.isInterface()) {
+                    interfaces.add(type.getNameAsString());
+                }
+            }
+        }
+
+        // Constructor parameters of ANNOTATED types only: a plain class's constructor argument is
+        // supplied by whoever calls new, and says nothing about registration.
+        Set<String> injectedIntoAnnotated = new LinkedHashSet<>();
+        Map<String, String> injectedBy = new LinkedHashMap<>();
+        for (CompilationUnit cu : units) {
+            for (TypeDeclaration<?> type : cu.getTypes()) {
+                if (type.getAnnotations().isEmpty()) continue;
+                for (var ctor : type.findAll(com.github.javaparser.ast.body.ConstructorDeclaration.class)) {
+                    for (Parameter param : ctor.getParameters()) {
+                        String name = param.getType().asString().replaceAll("<.*>", "");
+                        if (annotationsByType.containsKey(name) && injectedIntoAnnotated.add(name)) {
+                            injectedBy.put(name, type.getNameAsString());
+                        }
+                    }
+                }
+            }
+        }
+
+        // A type an annotated class INSTANTIATES has a supply route that owes nothing to its own
+        // annotations — a factory method hands the instance over ready-made. Found by calibrating
+        // against real trees rather than reasoned about: run 2026-08-22_04-48-23 scored 23/23 while
+        // its LoanRepository carried nothing, because a configuration type built all three
+        // repositories itself. Without this the rule contradicts a working artifact.
+        Set<String> suppliedByFactory = new LinkedHashSet<>();
+        for (CompilationUnit cu : units) {
+            for (TypeDeclaration<?> type : cu.getTypes()) {
+                if (type.getAnnotations().isEmpty()) continue;
+                for (var created : type.findAll(com.github.javaparser.ast.expr.ObjectCreationExpr.class)) {
+                    suppliedByFactory.add(created.getType().getNameAsString());
+                }
+            }
+        }
+
+        for (String candidate : injectedIntoAnnotated) {
+            if (!annotationsByType.get(candidate).isEmpty()) continue;
+            if (suppliedByFactory.contains(candidate)) continue;
+            // An interface the project never implements is supplied from outside it, so the
+            // project's own annotation habits say nothing about whether it is available. Also
+            // found by calibration, on run 2026-08-24_00-07-06: a bare interface extending a
+            // library supertype, beside two annotated siblings — a style difference, not a
+            // wiring defect. An interface WITH a project implementation is likewise fine; the
+            // implementation is where registration would live.
+            if (interfaces.contains(candidate)) continue;
+            String pkg = packageByType.get(candidate);
+            List<String> peers = packageByType.entrySet().stream()
+                    .filter(e -> e.getValue().equals(pkg) && !e.getKey().equals(candidate))
+                    .map(Map.Entry::getKey)
+                    .filter(t -> !annotationsByType.get(t).isEmpty())
+                    .toList();
+            if (peers.size() < PEER_GROUP_MIN_OTHERS) continue;
+
+            // Unanimity, as elsewhere in this class: one dissenter makes it a style choice.
+            Set<String> unanimous = new LinkedHashSet<>(annotationsByType.get(peers.get(0)));
+            for (String peer : peers) unanimous.retainAll(annotationsByType.get(peer));
+            if (unanimous.isEmpty()) continue;
+
+            String shared = unanimous.iterator().next();
+            out.add(String.format(
+                    "%s is a constructor parameter of %s, which is annotated, but %s itself carries no "
+                            + "annotation at all — while all %d other types in its package carry @%s (%s). "
+                            + "If @%s is what makes a type available for injection, %s cannot be supplied "
+                            + "and %s cannot be constructed.",
+                    candidate, injectedBy.get(candidate), candidate, peers.size(), shared,
+                    String.join(", ", peers), shared, candidate, injectedBy.get(candidate)));
+            if (out.size() >= MAX_OBSERVATIONS) return;
+        }
     }
 
     private void collectPeerAnnotationOutliers(List<CompilationUnit> units, List<String> out) {

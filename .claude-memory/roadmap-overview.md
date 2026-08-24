@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (456 tickets, 2026-08-24):** 30 open `[ ]` · 6 in-progress `[~]` · 32 deferred `[>]` · 392 closed, of which **365 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 2 retracted `[r]`**. So **93% of closed tickets delivered a capability; 14 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the roadmap, which is authoritative.
+**Census (457 tickets, 2026-08-24):** 31 open `[ ]` · 6 in-progress `[~]` · 32 deferred `[>]` · 392 closed, of which **365 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 2 retracted `[r]`**. So **93% of closed tickets delivered a capability; 14 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the roadmap, which is authoritative.
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -16,6 +16,7 @@
 
 ## Tier 1 — Correctness (132)
 
+- [ ] `T1-FT` — The analysis contract's own response-format placeholder is admitted to the goal tree as a subgoal, worked, and marked COMPLETED — FIXED 2026-08-24; occurs in 3 of 12 retained runs and predicts no outcome; field clause open
 - [x] `T1-FS` — Every score read is unscoped: the evaluation prompt carries 9,216 scores from 71 runs (~60% of the context window) and 259 files that do not exist; manufactures the "severely fragmented" diagnosis. Regression from T1-D 2026-07-26 — CLOSED 2026-08-23: 6 Neo4j ITs + field-proven (block 269 paths/17,205 tok -> 2 paths/34 tok, 0 phantom); baseline re-measure handed to T6-L
 - [x] `T1-FR` — The model is told which MEMBERS to add but never which TYPES to create; missing types go to the injector and are stubbed silently (2346 diagnostics vs 905 member ones)
 - [x] `T1-D` — Reset no longer wipes the graph — lineages survive as history (SHIPPED 2026-07-26; `purgeAll()` kept as a deliberate wipe)
@@ -157,6 +158,7 @@
 
 ## Tier 2 — Steering quality (120)
 
+- [>] `T2-FF` — A method whose branches return different shapes emits a diagnostic no extractor can read; the loop re-proposes the same edit — DEFERRED 2026-08-24 by its own gate: persisted into the last failing build in only 4 of 12 runs and NOT in the zero-run it was filed from
 - [~] `T2-FE` — A BUILD_FIX work item scoped to the file the compiler pointed at cannot be satisfied when the defect is in another file; correct steering loses to the subgoal's scope
 - [x] `T2-FD` — Suppressing the wrong advice about an unwrapped container left silence; new block states the two admissible repairs (70 diagnostics / 9 runs; field DoD open)
 - [r] `T2-FC` — Later subjects reach evolution without their types planned; the raw 98%-vs-38% ladder gap is mostly RUN LENGTH (corrected same day) and the residual is 56%/67% vs 100% on n=9
@@ -288,6 +290,7 @@
 
 ## Tier 3 — Feature completion (39)
 
+- [ ] `T3-CA` — A type that carries NO annotation at all is invisible to the odd-one-out rule, so the one defect that stops the application starting is the one nothing reports — BUILT+CALIBRATED 2026-08-24 (1 firing across 12 real trees, both false positives found by replay); field DoD open
 - [ ] `T3-BZ` — A type placed differently from its own structural peers is never noticed (Book in `domain`, Loan/Member in `domain.model`); derive the norm from the project's majority among code-established peers, never a convention table
 - [x] `T3-BY` — A run killed from outside ships its LAST state, not its BEST — BUILT 2026-08-22 loop-side (`preserve.interval-cycles: 10`, 6 tests); field DoD open
 - [~] `T3-BX` — Validation layer is decorative (`@Valid` everywhere, zero constraints) → bad input 500s instead of 400
@@ -347,7 +350,7 @@
 - [ ] `T4-CT` — The loop CONSULTS accumulated cross-run knowledge before acting (the payoff layer; previously homeless across three tickets' slices)
 - [s] `T4-CU` — The loop EXECUTES its own acceptance criteria against the booted artifact instead of asking the model whether they hold (shipped 2026-07-27) — PLACEMENT GAP CLOSED 2026-07-31: criteria are now checked when the SUBGOAL closes, not only at the run's closure edge, via the `ClosureClaimVerifier` port (T4-DD's first exercise); field DoD needs a refused closure
 - [s] `T4-CV` — Forward-looking requirement for a runnable entry point (shipped + FIELD-VERIFIED 2026-07-27: gate fired at min 5, loop wrote the entry point in ~60s)
-- [ ] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals (latent; free at 558 goals, hot path per proposal)
+- [ ] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals — MEASURED+BUILT 2026-08-24 (6,057 DbHits for 96 rows at 3,028 goals; T6-J's `goal_id_idx` indexed the wrong property); after-measurement pending a free box
 - [x] `T4-CX` — Startup-wiring forecast no longer precedes the gate that measures it (shipped 2026-07-28)
 - [x] `T4-CY` — Loop observes its own running behaviour mid-run: PROVEN, disabled on cost until probe synthesis is deterministic
 - [ ] `T4-CQ` — Import and continue an existing project (cold read; with or without a graph)

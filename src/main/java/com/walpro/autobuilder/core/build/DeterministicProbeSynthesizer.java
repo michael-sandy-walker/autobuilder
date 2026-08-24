@@ -131,10 +131,23 @@ public final class DeterministicProbeSynthesizer {
                     new ProbeRequest("POST", collectionPath(a.path()), setupBody.get()),
                     new ProbeRequest(a.verb(), ground(a.path(), CREATED_ID), null)));
         }
-        // Body-carrying verbs are left unprobed for success: the only body available is derived
-        // from field names and a correct application refuses it, so a 400 answer would be read as
-        // a contradiction against a working endpoint.
-        return Optional.empty();
+        // A create. This was left unprobed until 2026-08-23, and the reason it now can be is not a
+        // new shape but a new INGREDIENT: FieldConstraintDiscovery reads the artifact's own
+        // validation, so the body carries an identifier matching the pattern the artifact enforces
+        // rather than the placeholder it always refused. The old objection still governs what
+        // happens when that fails — acceptableBody declines rather than degrade, and BootGate reads
+        // a refusal of THIS request as an abstention, not a contradiction. Both halves are needed:
+        // without the first there is no probe, without the second a strict application scores a
+        // defect it does not have.
+        if (parameterized) {
+            // Success on a parameterized body-carrying path (an update, a state change) needs the
+            // resource to exist AND a body it accepts. The second is discoverable, the first is
+            // the setup below; but which body an update accepts is not the same question as which
+            // body a create accepts, and nothing here answers it yet.
+            return Optional.empty();
+        }
+        return acceptableBody(a.path(), artifactRoot)
+                .map(body -> List.of(new ProbeRequest(a.verb(), a.path(), body)));
     }
 
     /**
@@ -299,6 +312,15 @@ public final class DeterministicProbeSynthesizer {
      * single-element result means only that fallback was available — which is not a body that can
      * create anything.
      */
+    /**
+     * A body whose every discovered constraint is satisfied, for the one question a placeholder
+     * cannot answer: did the application ACCEPT this. Empty means abstain.
+     */
+    static Optional<String> acceptableBody(String path, Path artifactRoot) {
+        return RequestBodySynthesizer.acceptableBody(path, artifactRoot)
+                .map(DeterministicProbeSynthesizer::withoutAssignedIdentifier);
+    }
+
     static Optional<String> derivedBody(String path, Path artifactRoot) {
         List<String> candidates = RequestBodySynthesizer.candidateBodies(path, artifactRoot);
         return candidates.size() > 1 ? Optional.of(withoutAssignedIdentifier(candidates.get(0))) : Optional.empty();

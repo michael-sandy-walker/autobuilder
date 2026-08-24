@@ -507,6 +507,23 @@ public class BootGate {
                 unobserved.merge(observed.abstain(), 1, Integer::sum);  // no observation, no opinion
                 continue;
             }
+            List<CriterionProbeSynthesizer.ProbeRequest> requests = sequence.get();
+            CriterionProbeSynthesizer.ProbeRequest asserted = requests.get(requests.size() - 1);
+            // T4-DB: a success probe sends a body this side derived, and no derivation can be sure
+            // it satisfies validation it never discovered. A client-error answer to THAT request
+            // therefore means "the body was refused", which says nothing about the criterion — the
+            // application may well create correctly from a body it likes. Reading it as a
+            // contradiction would score a defect against a strict, correct artifact, which is the
+            // objection that kept creates unprobed in the first place. A server error is left
+            // alone: it is not a refusal, and the existing comparison already reports it.
+            if (asserted.body() != null
+                    && assertion.expectedStatus() < 300
+                    && observed.status() >= 400 && observed.status() < 500) {
+                log.info("T4-CU: probe body for {} was refused with {} — criterion not judged",
+                        asserted, observed.status());
+                unobserved.merge(Unobserved.BODY_REFUSED, 1, Integer::sum);
+                continue;
+            }
             probed++;
             if (observed.status() != assertion.expectedStatus()) {
                 failures.add("\"" + assertion.criterionText() + "\" — " + assertion.describe()
@@ -531,8 +548,13 @@ public class BootGate {
      * common case is {@code SETUP_REFUSED} — the probe's own setup body is derived from field
      * names ({@code {"email":"value"}}) and a correct application declines it, 53 times in one
      * run. Calling that a transport failure sends the reader looking at the network.
+     *
+     * <p>{@code BODY_REFUSED} is the same distinction one step later: the ASSERTED request of a
+     * success probe was declined, so the body was wrong rather than the endpoint. Counting it as a
+     * contradiction would be the false positive that kept creates unprobed; counting it as probed
+     * would claim an observation nobody made.
      */
-    enum Unobserved { SETUP_REFUSED, UNRESOLVED_REFERENCE, TRANSPORT }
+    enum Unobserved { SETUP_REFUSED, UNRESOLVED_REFERENCE, TRANSPORT, BODY_REFUSED }
 
     /**
      * How many criteria in one completion-edge sweep may fall through to the model. Five, because

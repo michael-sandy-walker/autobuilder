@@ -82,4 +82,73 @@ class RequestBodySynthesizerTest {
         assertThat(RequestBodySynthesizer.candidateBodies("/orders", null)).containsExactly("{}");
         assertThat(RequestBodySynthesizer.candidateBodies(null, tempDir)).containsExactly("{}");
     }
+
+    // ---- T4-DB: acceptableBody, the stricter sibling ------------------------------------------
+
+    @Test
+    void acceptableBodyAppliesTheArtifactsOwnConstraintsToTheValues() throws IOException {
+        model("Book.java", "public class Book { private String title; private String isbn; }");
+        model("BookService.java", """
+                import java.util.regex.Pattern;
+                public class BookService {
+                    private static final Pattern ISBN_PATTERN = Pattern.compile("\\\\d{13}");
+                    public void create(String isbn) {
+                        if (!ISBN_PATTERN.matcher(isbn).matches()) throw new IllegalArgumentException();
+                    }
+                }
+                """);
+
+        assertThat(RequestBodySynthesizer.acceptableBody("/books", tempDir))
+                .contains("{\"title\":\"value\",\"isbn\":\"0000000000000\"}");
+    }
+
+    @Test
+    void oneUnsatisfiableConstraintFailsTheWholeBody() throws IOException {
+        // A body carrying one value the application rejects is not a body that can create
+        // anything, however correct its other fields are — so this must be empty, not partial.
+        model("Book.java", "public class Book { private String title; private String isbn; }");
+        model("BookService.java", """
+                import java.util.regex.Pattern;
+                public class BookService {
+                    private static final Pattern ISBN_PATTERN = Pattern.compile("(alpha|beta)+");
+                    public void create(String isbn) {
+                        if (!ISBN_PATTERN.matcher(isbn).matches()) throw new IllegalArgumentException();
+                    }
+                }
+                """);
+
+        assertThat(RequestBodySynthesizer.acceptableBody("/books", tempDir)).isEmpty();
+    }
+
+    @Test
+    void aConstrainedNonTextualFieldIsDeclinedRatherThanShaped() throws IOException {
+        // Only a textual value can be shaped to a pattern or a length; anything else is a shape
+        // this class does not model, and guessing would send a body that gets refused.
+        model("Book.java", "public class Book { private int copies; }");
+        model("BookService.java", """
+                public class BookService {
+                    public void create(String copies) {
+                        if (copies.length() > 3) throw new IllegalArgumentException();
+                    }
+                }
+                """);
+
+        assertThat(RequestBodySynthesizer.acceptableBody("/books", tempDir)).isEmpty();
+    }
+
+    @Test
+    void acceptableBodyDeclinesWhenNoModelSourceMatchesThePath() {
+        // candidateBodies falls back to {}; acceptableBody must not, because {} creates nothing.
+        assertThat(RequestBodySynthesizer.acceptableBody("/unknowns", tempDir)).isEmpty();
+    }
+
+    @Test
+    void anUnconstrainedProjectStillYieldsPlaceholders() throws IOException {
+        // No discovered constraint is not evidence of no validation — the probe may still be
+        // refused, and BootGate reads that refusal as an abstention rather than a contradiction.
+        model("Book.java", "public class Book { private String title; }");
+
+        assertThat(RequestBodySynthesizer.acceptableBody("/books", tempDir))
+                .contains("{\"title\":\"value\"}");
+    }
 }

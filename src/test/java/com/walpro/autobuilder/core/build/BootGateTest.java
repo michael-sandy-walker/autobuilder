@@ -313,18 +313,54 @@ class BootGateTest {
 
     @Test
     void criterionContradictedByTheRunningApplication_blocksAndQuotesIt() throws Exception {
-        // /carts answers 400 to a POST; the criterion claims 201. Only a request can settle this.
+        // /items answers 200 to a POST; the criterion claims 201. Only a request can settle this,
+        // and the two statuses being BOTH successful is what makes it settleable: the application
+        // accepted the body and still answered the wrong thing, so no doubt about the body's
+        // validity can explain it away. This is the live failure of run 2026-08-23_02-12-34, where
+        // all five failing smoke checks were a create answering 200 where the spec says 201.
+        packagedArtifact();
+        Optional<String> blocker = gateProbing(List.of(
+                new CriterionProbeSynthesizer.ProbeRequest("POST", "/items", "{\"name\":\"x\"}")))
+                .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
+                        List.of("POST /items creates an item and returns HTTP 201 with the item body"));
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get())
+                .contains("POST /items creates an item and returns HTTP 201")
+                .contains("POST /items → 201")
+                .contains("answered 200");
+    }
+
+    @Test
+    void aProbeBodyTheApplicationRefusesAbstainsRatherThanReportingAContradiction() throws Exception {
+        // /carts answers 400 to a POST. The criterion claims 201, so this LOOKS like the strongest
+        // possible contradiction — and it is precisely the one that must not be reported. The body
+        // was derived on this side, and no derivation can be sure it satisfies validation it never
+        // discovered, so a client error is evidence about the body and not about the endpoint.
+        // Reporting it would score a defect against a strict, correct artifact, which is the
+        // objection that kept creates unprobed until the ingredient existed (T4-DB).
         packagedArtifact();
         Optional<String> blocker = gateProbing(List.of(
                 new CriterionProbeSynthesizer.ProbeRequest("POST", "/carts", "{\"name\":\"x\"}")))
                 .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
                         List.of("POST /carts creates a cart and returns HTTP 201 with the cart body"));
 
+        assertThat(blocker).isEmpty();
+    }
+
+    @Test
+    void aServerErrorOnACreateIsStillReported_itIsNotARefusal() throws Exception {
+        // The abstention above is about REFUSAL. /orders answers 500 to a POST, which is not the
+        // application declining a body — it is the application breaking, and the recorded
+        // false-completion class this gate exists for.
+        packagedArtifact();
+        Optional<String> blocker = gateProbing(List.of(
+                new CriterionProbeSynthesizer.ProbeRequest("POST", "/orders", "{\"name\":\"x\"}")))
+                .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
+                        List.of("POST /orders creates an order and returns HTTP 201 with the order body"));
+
         assertThat(blocker).isPresent();
-        assertThat(blocker.get())
-                .contains("POST /carts creates a cart and returns HTTP 201")
-                .contains("POST /carts → 201")
-                .contains("answered 400");
+        assertThat(blocker.get()).contains("answered 500");
     }
 
     @Test

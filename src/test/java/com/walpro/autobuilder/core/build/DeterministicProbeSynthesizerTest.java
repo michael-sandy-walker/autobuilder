@@ -52,16 +52,85 @@ class DeterministicProbeSynthesizerTest {
         assertThat(seq.get(0).body()).isNull();
     }
 
+    /** The validation a real run wrote (`2026-08-23_02-12-34`, `BookService`). */
+    private static final String BOOK_SERVICE = """
+            package com.example;
+            import java.util.regex.Pattern;
+            public class BookService {
+                private static final Pattern ISBN_PATTERN = Pattern.compile("\\\\d{13}");
+                public void create(String title, String isbn) {
+                    if (title == null || title.isBlank()) throw new IllegalArgumentException();
+                    if (title.length() > 120) throw new IllegalArgumentException();
+                    if (!ISBN_PATTERN.matcher(isbn).matches()) throw new IllegalArgumentException();
+                }
+            }
+            """;
+
     @Test
-    void aCreateIsNotProbedForSuccessEvenWhenABodyCanBeDerived() throws IOException {
-        // derivedBody fills placeholders — {"title":"value","isbn":"value"} — and a correct
-        // application refuses them (this spec requires isbn to match \d{13}). Run
-        // 2026-08-04_14-58-02 shows 53 setup requests declined for exactly that reason. Asserting
-        // 201 against such a body reports a contradiction the application never committed.
+    void aCreateIsProbedForSuccessOnceTheBodyCanSatisfyTheArtifactsOwnValidation() throws IOException {
+        // Until 2026-08-23 this abstained, because derivedBody fills placeholders —
+        // {"title":"value","isbn":"value"} — which this specification refuses (isbn must match
+        // \d{13}), and asserting 201 against a refused body reports a contradiction the
+        // application never committed. What changed is the ingredient, not the shape: the pattern
+        // is read from the artifact's own validation, so the body is one it will accept.
+        Path root = withModel("Book", "public class Book { private Long id; private String title; private String isbn; }");
+        withModel("BookService", BOOK_SERVICE);
+
+        List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /books returns HTTP 201 with the created book"), root));
+
+        assertThat(seq).hasSize(1);
+        assertThat(seq.get(0).method()).isEqualTo("POST");
+        assertThat(seq.get(0).path()).isEqualTo("/books");
+        assertThat(seq.get(0).body()).contains("\"isbn\":\"0000000000000\"");
+        // The server assigns the identifier; a client creating a resource does not supply it.
+        assertThat(seq.get(0).body()).doesNotContain("\"id\"");
+    }
+
+    @Test
+    void aCreateAbstainsWhenADiscoveredConstraintCannotBeSatisfied() throws IOException {
+        // Discovering a constraint and failing to meet it is the one case that MUST abstain: the
+        // body would be refused for a reason we already knew about, and the refusal would look
+        // like a defect in the application.
         Path root = withModel("Book", "public class Book { private String title; private String isbn; }");
+        withModel("BookService", """
+                package com.example;
+                import java.util.regex.Pattern;
+                public class BookService {
+                    private static final Pattern ISBN_PATTERN = Pattern.compile("(alpha|beta)+");
+                    public void create(String isbn) {
+                        if (!ISBN_PATTERN.matcher(isbn).matches()) throw new IllegalArgumentException();
+                    }
+                }
+                """);
 
         assertThat(DeterministicProbeSynthesizer.synthesize(
                 assertion("POST /books returns HTTP 201 with the created book"), root))
+                .isEmpty();
+    }
+
+    @Test
+    void aCreateIsProbedWithPlaceholdersWhenTheArtifactStatesNoConstraintsToDiscover() throws IOException {
+        // No discovered constraint is not evidence of no validation, so this probe may still be
+        // refused — and BootGate reads a refusal of the asserted request as an abstention rather
+        // than a contradiction. That guard is what makes probing here safe rather than reckless.
+        Path root = withModel("Book", "public class Book { private String title; private String isbn; }");
+
+        List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /books returns HTTP 201 with the created book"), root));
+
+        assertThat(seq).hasSize(1);
+        assertThat(seq.get(0).body()).isEqualTo("{\"title\":\"value\",\"isbn\":\"value\"}");
+    }
+
+    @Test
+    void aParameterizedBodyCarryingSuccessIsStillLeftUnprobed() throws IOException {
+        // Which body an UPDATE accepts is not the same question as which body a create accepts,
+        // and nothing here answers it yet.
+        Path root = withModel("Book", "public class Book { private String title; private String isbn; }");
+
+        assertThat(DeterministicProbeSynthesizer.synthesize(
+                assertion("PUT /books/{id} returns HTTP 200 with the updated book"), root))
                 .isEmpty();
     }
 
@@ -329,17 +398,29 @@ class DeterministicProbeSynthesizerTest {
     // ---- what it deliberately will not do ------------------------------------------------
 
     @Test
-    void aSuccessStatusIsNotProbedWhenTheRequestCarriesABody() throws IOException {
-        // The original rule here excluded ALL 2xx, for a reason that still holds and is worth
-        // keeping verbatim: "a 2xx probe needs values satisfying constraints stated in prose;
-        // type-derived placeholders do not, and such a probe reports a correct artifact as
-        // broken." Run 2026-08-04_14-58-02 confirms it in the field — 53 setup requests refused
-        // because derivedBody sent {"email":"value"} and {"bookId":1}.
+    void aSuccessStatusIsNotProbedWhenTheBodysValuesCannotBeMadeAcceptable() throws IOException {
+        // The original rule here excluded ALL 2xx, for a reason worth keeping verbatim: "a 2xx
+        // probe needs values satisfying constraints stated in prose; type-derived placeholders do
+        // not, and such a probe reports a correct artifact as broken." Run 2026-08-04_14-58-02
+        // confirms it in the field — 53 setup requests refused because derivedBody sent
+        // {"email":"value"} and {"bookId":1}.
         //
-        // T4-DB narrows it rather than overturning it: the reasoning is about VALUES, so it
-        // applies exactly to requests that carry a body. A collection read carries none, and
-        // 200/201 were together 32% of all criteria and 83% of everything left unprobed.
+        // T4-DB narrowed it once to requests that CARRY a body, since the reasoning is about
+        // values. 2026-08-23 narrows it again, to the values it is actually about: the constraints
+        // are no longer "stated in prose" when the artifact enforces them in code that can be
+        // read. What survives untouched is the case where a constraint IS discovered and cannot be
+        // met — there the original sentence still applies word for word.
         Path root = withModel("Book", "class Book { private String isbn; }");
+        withModel("BookService", """
+                package com.example;
+                import java.util.regex.Pattern;
+                public class BookService {
+                    private static final Pattern ISBN_PATTERN = Pattern.compile("(alpha|beta)+");
+                    public void create(String isbn) {
+                        if (!ISBN_PATTERN.matcher(isbn).matches()) throw new IllegalArgumentException();
+                    }
+                }
+                """);
         assertThat(DeterministicProbeSynthesizer.synthesize(
                 assertion("POST /books returns HTTP 201"), root)).isEmpty();
         assertThat(DeterministicProbeSynthesizer.synthesize(

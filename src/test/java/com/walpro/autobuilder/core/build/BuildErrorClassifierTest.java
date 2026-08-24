@@ -88,6 +88,47 @@ class BuildErrorClassifierTest {
         assertThat(c.criteria().toString()).contains("org.springframework.data");
     }
 
+    @Test
+    void classify_packageAndCascadeSymbol_reportsThePackage_notTheSymptom() {
+        // Verbatim from run 2026-08-24_00-07-06, which halted on a convergence stall after 20
+        // cycles editing this file. An unresolvable import emits BOTH markers: the package on the
+        // import line, the symbol on every use of a type from it. Returning the symbol sends the
+        // loop to create or import JpaRepository — neither of which can work, because the package
+        // is not on the classpath at all. The package is the cause and routes to CONFIG_FIXABLE.
+        String stderr = """
+                [ERROR] /src/main/java/com/example/library/domain/repository/LoanRepository.java:[3,47] package org.springframework.data.jpa.repository does not exist
+                [ERROR] /src/main/java/com/example/library/domain/repository/LoanRepository.java:[5,41] cannot find symbol
+                [ERROR]   symbol: class JpaRepository
+                """;
+        Classification c = BuildErrorClassifier.classify(stderr);
+
+        assertThat(c.kind()).isEqualTo(Kind.PACKAGE_DOES_NOT_EXIST);
+        assertThat(c.criteria().toString()).contains("org.springframework.data.jpa.repository");
+        assertThat(c.criteria().toString()).doesNotContain("JpaRepository is defined");
+    }
+
+    @Test
+    void classify_packageDoesNotExist_routesToTheClasspathCategory() {
+        // The reorder only matters because the two kinds route differently.
+        assertThat(BuildErrorClassifier.defaultCategoryFor(Kind.PACKAGE_DOES_NOT_EXIST))
+                .isEqualTo(BuildErrorClassifier.Category.CONFIG_FIXABLE);
+        assertThat(BuildErrorClassifier.defaultCategoryFor(Kind.CANNOT_FIND_SYMBOL))
+                .isEqualTo(BuildErrorClassifier.Category.SOURCE_FIXABLE);
+    }
+
+    @Test
+    void classify_symbolOnly_isUnaffectedByTheReorder() {
+        // Stderr with no package marker must still classify as a symbol problem.
+        String stderr = """
+                [ERROR] /src/main/java/Foo.java:[12,15] cannot find symbol
+                [ERROR]   symbol:   class BookService
+                """;
+        Classification c = BuildErrorClassifier.classify(stderr);
+
+        assertThat(c.kind()).isEqualTo(Kind.CANNOT_FIND_SYMBOL);
+        assertThat(c.criteria().toString()).contains("BookService");
+    }
+
     // ── UNKNOWN ──────────────────────────────────────────────────────────────
 
     @Test

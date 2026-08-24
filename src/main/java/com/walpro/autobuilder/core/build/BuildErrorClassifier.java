@@ -83,20 +83,35 @@ public final class BuildErrorClassifier {
             ));
         }
 
-        Matcher symbolMatcher = CANNOT_FIND_SYMBOL_PATTERN.matcher(plain);
-        if (symbolMatcher.find()) {
-            String symbol = symbolMatcher.group(1);
-            return new Classification(Kind.CANNOT_FIND_SYMBOL, List.of(
-                    "The missing symbol '" + symbol + "' is defined or imported correctly",
-                    "mvn compile exits 0 with no errors"
-            ));
-        }
-
+        // CAUSE BEFORE CASCADE. An unresolvable import emits BOTH markers for the same file:
+        // "package p does not exist" on the import line, then "cannot find symbol: class T" on
+        // every use of a type from p. Testing the symbol first returned the CASCADE, so the
+        // criterion became "the missing symbol 'JpaRepository' is defined or imported correctly"
+        // — pointing the loop at creating or importing a type that no import can reach, because
+        // the package is absent from the classpath. Measured on run 2026-08-24_00-07-06: the
+        // package marker was present in every failing build and PACKAGE_DOES_NOT_EXIST was
+        // classified ZERO times, while the loop spent 20 cycles editing the file and halted on a
+        // convergence stall. A missing package almost always produces cascade symbol errors, so
+        // the symptom masked the cause essentially whenever the cause occurred.
+        //
+        // The two kinds route differently and that is the point: PACKAGE_DOES_NOT_EXIST is
+        // CONFIG_FIXABLE (the classpath/dependency path), CANNOT_FIND_SYMBOL is SOURCE_FIXABLE.
+        // Stderr carrying only symbol errors is unaffected — this reorder only decides which wins
+        // when both are present, and when both are present the package is the one to fix.
         Matcher packageMatcher = PACKAGE_DOES_NOT_EXIST_PATTERN.matcher(plain);
         if (packageMatcher.find()) {
             String pkg = packageMatcher.group(1);
             return new Classification(Kind.PACKAGE_DOES_NOT_EXIST, List.of(
                     "The missing package '" + pkg + "' is available on the compile classpath",
+                    "mvn compile exits 0 with no errors"
+            ));
+        }
+
+        Matcher symbolMatcher = CANNOT_FIND_SYMBOL_PATTERN.matcher(plain);
+        if (symbolMatcher.find()) {
+            String symbol = symbolMatcher.group(1);
+            return new Classification(Kind.CANNOT_FIND_SYMBOL, List.of(
+                    "The missing symbol '" + symbol + "' is defined or imported correctly",
                     "mvn compile exits 0 with no errors"
             ));
         }

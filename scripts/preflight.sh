@@ -282,8 +282,13 @@ run_live() {
             # 2026-07-17 run 2 was misclassified deadline: its halt line is
             # "Exhaustion runaway detected: ... Escalating to root exhaustion" — none of the
             # prior patterns. Prose marker maps to the pausedReason spelling for the run_dir.
-            hreason=$(grep -oE 'root-convergence-stall|build-blocked-deadlock|Exhaustion runaway detected' "$applog" | tail -1)
+            hreason=$(grep -oE 'root-convergence-stall|root convergence stall|build-blocked-deadlock|Exhaustion runaway detected' "$applog" | tail -1)
             hreason=${hreason/Exhaustion runaway detected/exhaustion-runaway}
+            # 2026-08-24 run 00-07-06 recorded a bare honest-halt: RootConvergenceTracker writes
+            # the reason with SPACES at the moment it fires, the hyphenated token exists only in
+            # the end report, and that run was killed before the report was written. Reading the
+            # halt EVENT rather than a downstream report is what makes the reason survive.
+            hreason=${hreason/root convergence stall/root-convergence-stall}
             # Prose token missing for this flavor (e.g. planner-output-amputation's "Pausing
             # for review") → the end-report line names the true reason for every flavor.
             if [ -z "$hreason" ]; then

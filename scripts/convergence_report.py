@@ -163,10 +163,18 @@ def prefix_features(events, k):
     k is a cycle count, not an event count, so runs of different speeds are compared at the same
     point in their own progress rather than at the same wall-clock moment.
     """
+    # The window is built from events that MARK A CYCLE, not from any event carrying a cycleId.
+    # Deferred mutations dropped at startup carry the cycleId they were created under — in a
+    # resumed run those are ids from a PREVIOUS run, and they arrive before the first real cycle.
+    # Ordering by "any id seen" put 15 dead ids at the front of run 2026-08-24_17-48-02, so its
+    # "first 15 cycles" contained ONE, and its feature row was computed from a single cycle while
+    # other runs got fifteen. That silently breaks the one property prefix mode exists to give:
+    # comparing runs at the same point in their own progress.
+    CYCLE_MARKERS = ("cycle_start", "cycle_end")
     ends, fixes, order = [], [], []
     for e in events:
         cid = e.get("cycleId")
-        if cid and cid not in order:
+        if cid and e.get("event") in CYCLE_MARKERS and cid not in order:
             order.append(cid)
         if e.get("event") == "cycle_end":
             ends.append((cid, e.get("payload") or {}))

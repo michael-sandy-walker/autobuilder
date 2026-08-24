@@ -196,6 +196,32 @@ class PrefixFeatureTest(unittest.TestCase):
         spread = cr.prefix_features([_cyc("c1", False), fix("c1", ["A"]), fix("c1", ["B"])], 5)
         self.assertGreater(same["fix_file_concentration"], spread["fix_file_concentration"])
 
+    def test_ids_from_a_previous_run_do_not_consume_the_window(self):
+        """A resumed run drops deferred mutations created under a PREVIOUS run's cycleIds, before
+        its own first cycle. Counting any id seen put 15 dead ids at the front of run
+        2026-08-24_17-48-02, so its 'first 15 cycles' held ONE and its row was computed from a
+        single cycle while every other run got fifteen."""
+        stale = [{"cycleId": f"old-{i}", "event": "deferred_mutation_dropped", "payload": {}}
+                 for i in range(15)]
+        evs = stale + [_cyc("c1", True), _cyc("c2", True), _cyc("c3", True)]
+
+        f = cr.prefix_features(evs, 15)
+
+        self.assertEqual(f["cycles"], 3)
+        self.assertAlmostEqual(f["merge_rate"], 1.0)
+
+    def test_a_cycle_start_without_an_end_still_claims_its_place(self):
+        # The window is "the first k cycles the run began", so an unfinished last cycle occupies a
+        # slot without contributing an outcome — otherwise a slow run silently gets a wider window.
+        evs = [{"cycleId": "c1", "event": "cycle_start"}, _cyc("c1", True),
+               {"cycleId": "c2", "event": "cycle_start"}, _cyc("c2", False),
+               {"cycleId": "c3", "event": "cycle_start"}]
+
+        f = cr.prefix_features(evs, 2)
+
+        self.assertEqual(f["cycles"], 2)
+        self.assertAlmostEqual(f["merge_rate"], 0.5)
+
     def test_no_completed_cycles_yields_nothing(self):
         self.assertIsNone(cr.prefix_features([{"cycleId": "c1", "event": "cycle_start"}], 5))
 

@@ -746,4 +746,136 @@ class WiringFactsAnalyzerTest {
         assertThat(analyzer.analyze(Map.of())).isEmpty();
         assertThat(analyzer.analyze(Map.of("README.md", "not java"))).isEmpty();
     }
+
+    // ---- T3-BZ: placement anomalies ---------------------------------------------------------
+
+    /** The live shape of run 2026-08-23_02-12-34: three peers naming three types, one placed apart. */
+    private static Map<String, String> peersNaming(String bookPackage) {
+        return Map.of(
+                "src/main/java/x/BookRepository.java", """
+                        package com.example.library.domain.repository;
+                        import %s.Book;
+                        public class BookRepository { public Book find() { return null; } }
+                        """.formatted(bookPackage),
+                "src/main/java/x/LoanRepository.java", """
+                        package com.example.library.domain.repository;
+                        import com.example.library.domain.model.Loan;
+                        public class LoanRepository { public Loan find() { return null; } }
+                        """,
+                "src/main/java/x/MemberRepository.java", """
+                        package com.example.library.domain.repository;
+                        import com.example.library.domain.model.Member;
+                        public class MemberRepository { public Member find() { return null; } }
+                        """,
+                "src/main/java/x/Book.java", "package %s; public class Book { }".formatted(bookPackage),
+                "src/main/java/x/Loan.java", "package com.example.library.domain.model; public class Loan { }",
+                "src/main/java/x/Member.java", "package com.example.library.domain.model; public class Member { }");
+    }
+
+    @Test
+    void aTypePlacedApartFromThePeersItsOwnPeerNamesIsReported() {
+        List<String> anomalies = analyzer.peerPlacementAnomalies(peersNaming("com.example.library.domain"));
+
+        assertThat(anomalies).hasSize(1);
+        assertThat(anomalies.get(0))
+                .contains("Book sits in com.example.library.domain")
+                .contains("com.example.library.domain.model");
+    }
+
+    @Test
+    void theRuleNamesNoConventionOfItsOwn() {
+        // The whole point: the norm is the project's majority, never a table of ours. If these
+        // words appear, a convention has been encoded rather than derived.
+        List<String> anomalies = analyzer.peerPlacementAnomalies(peersNaming("com.example.library.domain"));
+
+        assertThat(anomalies.get(0).toLowerCase())
+                .doesNotContain("entity").doesNotContain("should").doesNotContain("convention")
+                .doesNotContain("best practice");
+    }
+
+    @Test
+    void anInternallyConsistentProjectIsNeverNagged() {
+        assertThat(analyzer.peerPlacementAnomalies(peersNaming("com.example.library.domain.model")))
+                .isEmpty();
+    }
+
+    @Test
+    void twoPeersAreAStyleChoiceRatherThanANorm() {
+        // PEER_GROUP_MIN_OTHERS = 2: one dissenter against two is not a majority worth reporting.
+        Map<String, String> files = Map.of(
+                "src/main/java/x/BookRepository.java", """
+                        package r;
+                        import com.example.domain.Book;
+                        public class BookRepository { public Book find() { return null; } }
+                        """,
+                "src/main/java/x/LoanRepository.java", """
+                        package r;
+                        import com.example.domain.model.Loan;
+                        public class LoanRepository { public Loan find() { return null; } }
+                        """,
+                "src/main/java/x/Book.java", "package com.example.domain; public class Book { }",
+                "src/main/java/x/Loan.java", "package com.example.domain.model; public class Loan { }");
+
+        assertThat(analyzer.peerPlacementAnomalies(files)).isEmpty();
+    }
+
+    @Test
+    void aDeliberateSplitWithNoMajorityYieldsNoOpinion() {
+        // Three peers, three different packages: the project has stated no norm, so neither does
+        // the rule. This is the guard against becoming a style police.
+        Map<String, String> files = new java.util.LinkedHashMap<>();
+        String[] packages = {"com.example.a", "com.example.b", "com.example.c"};
+        String[] names = {"Alpha", "Beta", "Gamma"};
+        for (int i = 0; i < 3; i++) {
+            files.put("src/main/java/x/" + names[i] + "Repository.java", """
+                    package r;
+                    import %s.%s;
+                    public class %sRepository { public %s find() { return null; } }
+                    """.formatted(packages[i], names[i], names[i], names[i]));
+            files.put("src/main/java/x/" + names[i] + ".java",
+                    "package %s; public class %s { }".formatted(packages[i], names[i]));
+        }
+
+        assertThat(analyzer.peerPlacementAnomalies(files)).isEmpty();
+    }
+
+    @Test
+    void aPeerNamingSeveralProjectTypesNominatesNothing() {
+        // A unit about several types has no single subject, so it cannot establish what its
+        // package's peers are "about" — services naming both a model and a repository are the
+        // field case, and reporting from them would double-count the same anomaly.
+        Map<String, String> files = Map.of(
+                "src/main/java/x/BookService.java", """
+                        package s;
+                        import com.example.domain.Book;
+                        import com.example.domain.repository.BookRepository;
+                        public class BookService { public Book find(BookRepository r) { return null; } }
+                        """,
+                "src/main/java/x/LoanService.java", """
+                        package s;
+                        import com.example.domain.model.Loan;
+                        import com.example.domain.repository.LoanRepository;
+                        public class LoanService { public Loan find(LoanRepository r) { return null; } }
+                        """,
+                "src/main/java/x/MemberService.java", """
+                        package s;
+                        import com.example.domain.model.Member;
+                        import com.example.domain.repository.MemberRepository;
+                        public class MemberService { public Member find(MemberRepository r) { return null; } }
+                        """,
+                "src/main/java/x/Book.java", "package com.example.domain; public class Book { }",
+                "src/main/java/x/Loan.java", "package com.example.domain.model; public class Loan { }",
+                "src/main/java/x/Member.java", "package com.example.domain.model; public class Member { }",
+                "src/main/java/x/BookRepository.java", "package com.example.domain.repository; public class BookRepository { }",
+                "src/main/java/x/LoanRepository.java", "package com.example.domain.repository; public class LoanRepository { }",
+                "src/main/java/x/MemberRepository.java", "package com.example.domain.repository; public class MemberRepository { }");
+
+        assertThat(analyzer.peerPlacementAnomalies(files)).isEmpty();
+    }
+
+    @Test
+    void noInputYieldsNothingRatherThanFailing() {
+        assertThat(analyzer.peerPlacementAnomalies(Map.of())).isEmpty();
+        assertThat(analyzer.peerPlacementAnomalies(null)).isEmpty();
+    }
 }

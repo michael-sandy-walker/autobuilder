@@ -172,6 +172,21 @@
    "why": "T4-DA's remaining DoD half: does a work item appear for a specification clause BECAUSE the readout named it? A goal claiming a named clause proves nothing on its own — the planner reads the seed too. The control is the three frozen runs of 2026-07-30 (df2a907, no readout), in which 11 of the 16 seed clauses are NEVER fully articulated by any run's plan. Those 11 are the discriminating set.",
    "look_for": "EVALUATE WITH: python3 scripts/clause_coverage.py --against-control scripts/clause_control_df2a907.txt <run_dir>. The control file holds the 11 clauses no run of the df2a907 frozen series articulates; the per-run baseline is 0 of 11 (verified: all three controls score 0). DECISION RULE, stated in advance: 3 or more readout-enabled runs averaging >=1 closed clause supports the mechanism; averaging 0 refutes it and T4-DA's readout should be re-read as inert prompt weight rather than defended. First observation 2026-07-30_18-39-00 closed 1 ('title required, max 120 chars'), n=1, nothing concluded. JUDGE NET EFFECT, NOT CLAUSE CLOSURE ALONE — the cost side is measured and non-trivial: scripts/prompt_block_report.py puts the SPECIFICATION COVERAGE block at ~665 est tokens per call, 23% of the evolution prompt (2.3% of a run's total prompt tokens), and the first readout-enabled run's median cycle was 162s against 130/135/140s for the three controls (+16-25%, n=1, confounded by ordinary model variance). A run that closes 1 clause and loses 8 cycles is not obviously a gain. Record median cycle time alongside closed clauses for each of the three runs. CORRECTION 2026-07-30: the +16-25% cycle-time figure was attributed to this block and the token accounting refutes that — the block is 2.3% of a run's prompt tokens (evaluation is 72%), so it cannot explain a 20% slowdown; the run stalled in LLMClient timeout retries minutes later with the model alive at 85% GPU. Still record median cycle time, but read it as generation variance unless a token-accounting delta backs it.",
    "status": "open"
+  },
+  {
+   "id": "t3bz-placement-anomaly-moved-a-class",
+   "ticket": "T3-BZ",
+   "description": "the placement fact is a readout, and a readout without an actuator is a pattern this project has been bitten by. The opportunity is the fact reaching the evolution prompt; the firing is a type actually being written to the package its peers agree on. Slice 1 deliberately does NOT move the class, so a run that reports the anomaly for its whole length and never relocates the type is the outcome that decides whether the mover has to be built.",
+   "type": "watch",
+   "fired": {
+    "file": "applog",
+    "pattern": "Deleted Files: \\[[^\\]\\s]"
+   },
+   "opportunity": {
+    "file": "applog",
+    "pattern": "sits in [^\\n]*, but \\d+ of the \\d+ types named by the peers"
+   },
+   "check": "confirm BY EYE that the deleted file is the type the anomaly named and that a file of the same name now sits under the majority package the fact quoted — a relocation necessarily deletes the old file, but not every deletion is a relocation. Then confirm the anomaly stops being reported in later cycles. Control: run 2026-08-23_02-12-34 has 52 'Deleted Files: []' and no non-empty one, so this pattern is silent on a run where nothing moved. If the fact fires for a whole run and no move follows, record it on T3-BZ — the readout alone is not an actuator, and the relocation decision (package declaration, every import, the component-scan root) then has to be taken explicitly."
   }
  ]
 }

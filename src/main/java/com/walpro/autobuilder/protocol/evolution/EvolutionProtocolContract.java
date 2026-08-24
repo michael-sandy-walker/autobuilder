@@ -401,12 +401,19 @@ public class EvolutionProtocolContract {
                 input.seedCoverage(), com.walpro.autobuilder.protocol.coverage.SeedCoverageBlock.Audience.EVOLUTION);
         if (seedCoverage != null) prompt.append(seedCoverage).append("\n");
 
-        List<String> wiringAnomalies = wiringAnalyzer.peerAnnotationAnomalies(input.previousOutput());
+        // T3-BW reports a type whose ANNOTATIONS differ from its peers'; T3-BZ reports one whose
+        // PLACEMENT does. Same block on purpose: both say "this type disagrees with the project's
+        // own majority", and one enumerated, name-anchored list is the shape that survives the
+        // prompt audit (T4-AP) — two headers for one idea would not.
+        List<String> wiringAnomalies = new java.util.ArrayList<>(
+                wiringAnalyzer.peerAnnotationAnomalies(input.previousOutput()));
+        wiringAnomalies.addAll(wiringAnalyzer.peerPlacementAnomalies(input.previousOutput()));
         if (!wiringAnomalies.isEmpty()) {
-            prompt.append("STRUCTURAL ANOMALY — a type differs from every one of its peers:\n");
+            prompt.append("STRUCTURAL ANOMALY — a type disagrees with every one of its peers:\n");
             for (String a : wiringAnomalies) prompt.append("- ").append(a).append("\n");
             prompt.append("If a required behaviour is reported missing while its code appears present, "
-                    + "this difference is the likeliest cause — correct it rather than re-writing the code.\n\n");
+                    + "or a type cannot be found although it exists, this difference is the likeliest "
+                    + "cause — correct it rather than re-writing the code.\n\n");
         }
 
         // T4-BD: lastCompileErrorsBlock retired; BuildResultPromptBlock above now renders the

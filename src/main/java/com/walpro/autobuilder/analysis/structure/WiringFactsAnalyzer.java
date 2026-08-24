@@ -186,6 +186,118 @@ public class WiringFactsAnalyzer {
         return out;
     }
 
+    /**
+     * T3-BZ: a type placed differently from its own structural peers. Same shape as
+     * {@link #peerAnnotationAnomalies} one axis over — the norm is the project's own majority, and
+     * where there is no majority there is no opinion.
+     *
+     * <p>The peer relation is DERIVED, never declared. Types sharing a package are peers by
+     * placement; each of them that names exactly one project type nominates it; the nominated types
+     * are the group whose placement is compared. Field case (run 2026-08-23_02-12-34): three
+     * repositories share a package and name {@code Book}, {@code Loan} and {@code Member}; two of
+     * those sit in {@code …domain.model} and {@code Book} sits in {@code …domain}. It compiled and
+     * booted, so no gate had reason to speak — and {@code Book} was the only cannot-find-symbol
+     * class in the whole run, because freshly written code kept looking where its peers live.
+     *
+     * <p><b>No convention is encoded and none is learned.</b> The words this rule would need to be
+     * a convention table — what a package "should" be called, how deep it should nest, which layout
+     * is better — appear nowhere in it. It can only speak when the project has already established
+     * a norm and one type breaks it, which is what stops it becoming a style police
+     * ([[feedback-no-hardcoded-ecosystem-data]], [[feedback-relative-thresholds]]).
+     */
+    public List<String> peerPlacementAnomalies(Map<String, String> outputFiles) {
+        List<CompilationUnit> units = parseAll(outputFiles);
+        List<String> out = new ArrayList<>();
+        collectPeerPlacementOutliers(units, out);
+        return out;
+    }
+
+    private void collectPeerPlacementOutliers(List<CompilationUnit> units, List<String> out) {
+        Map<String, String> packageByType = new LinkedHashMap<>();
+        for (CompilationUnit cu : units) {
+            String pkg = cu.getPackageDeclaration().map(d -> d.getNameAsString()).orElse("");
+            for (TypeDeclaration<?> type : cu.getTypes()) packageByType.put(type.getNameAsString(), pkg);
+        }
+        if (packageByType.size() <= PEER_GROUP_MIN_OTHERS) return;
+
+        // Types sharing a package are peers by placement; each nominates the one project type it
+        // is about. A unit naming several has no single subject and nominates nothing.
+        Map<String, Map<String, String>> nominationsByPackage = new LinkedHashMap<>();
+        for (CompilationUnit cu : units) {
+            String pkg = cu.getPackageDeclaration().map(d -> d.getNameAsString()).orElse("");
+            Set<String> own = cu.getTypes().stream().map(TypeDeclaration::getNameAsString)
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            Set<String> named = namedProjectTypes(cu, packageByType.keySet(), own);
+            if (named.size() != 1) continue;
+            String nominee = named.iterator().next();
+            for (String owner : own) {
+                nominationsByPackage.computeIfAbsent(pkg, k -> new LinkedHashMap<>()).put(owner, nominee);
+            }
+        }
+
+        for (Map.Entry<String, Map<String, String>> group : nominationsByPackage.entrySet()) {
+            Map<String, String> nominations = group.getValue();
+            // Fewer than three nominating peers is a style choice, not a norm.
+            if (nominations.size() <= PEER_GROUP_MIN_OTHERS) continue;
+
+            Map<String, Long> byPackage = new LinkedHashMap<>();
+            for (String nominee : new LinkedHashSet<>(nominations.values())) {
+                String pkg = packageByType.get(nominee);
+                if (pkg != null) byPackage.merge(pkg, 1L, Long::sum);
+            }
+            long total = byPackage.values().stream().mapToLong(Long::longValue).sum();
+            if (total <= PEER_GROUP_MIN_OTHERS) continue;
+
+            String majority = null;
+            long best = 0;
+            boolean tied = false;
+            for (Map.Entry<String, Long> e : byPackage.entrySet()) {
+                if (e.getValue() > best) { best = e.getValue(); majority = e.getKey(); tied = false; }
+                else if (e.getValue() == best) { tied = true; }
+            }
+            // No strict majority means the project has stated no norm, so neither does this.
+            if (majority == null || tied || best * 2 <= total) continue;
+
+            for (Map.Entry<String, String> nomination : nominations.entrySet()) {
+                String nominee = nomination.getValue();
+                String actual = packageByType.get(nominee);
+                if (actual == null || actual.equals(majority)) continue;
+                final String norm = majority;
+                List<String> agreeing = new LinkedHashSet<>(nominations.values()).stream()
+                        .filter(t -> norm.equals(packageByType.get(t)))
+                        .toList();
+                out.add(String.format(
+                        "%s sits in %s, but %d of the %d types named by the peers in %s sit in %s (%s do) — "
+                                + "%s names %s the way its peers name theirs, so code written to that pattern "
+                                + "will look for %s in %s and not find it.",
+                        nominee, actual.isEmpty() ? "the default package" : actual,
+                        best, total, group.getKey().isEmpty() ? "the default package" : group.getKey(),
+                        majority, String.join(", ", agreeing),
+                        nomination.getKey(), nominee, nominee, majority));
+                if (out.size() >= MAX_OBSERVATIONS) return;
+            }
+        }
+    }
+
+    /**
+     * Project types this unit names — via an import that resolves to a declared type, or by using
+     * one directly (a same-package reference needs no import). Its own types never count.
+     */
+    private Set<String> namedProjectTypes(CompilationUnit cu, Set<String> declared, Set<String> own) {
+        Set<String> named = new LinkedHashSet<>();
+        cu.getImports().forEach(i -> {
+            String simple = i.getNameAsString();
+            simple = simple.substring(simple.lastIndexOf('.') + 1);
+            if (declared.contains(simple) && !own.contains(simple)) named.add(simple);
+        });
+        for (com.github.javaparser.ast.type.ClassOrInterfaceType t
+                : cu.findAll(com.github.javaparser.ast.type.ClassOrInterfaceType.class)) {
+            String simple = t.getNameAsString();
+            if (declared.contains(simple) && !own.contains(simple)) named.add(simple);
+        }
+        return named;
+    }
+
     /** Shared parse step: unparseable or empty entries are skipped, never fatal. */
     private List<CompilationUnit> parseAll(Map<String, String> outputFiles) {
         List<CompilationUnit> units = new ArrayList<>();

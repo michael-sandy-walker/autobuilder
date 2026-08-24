@@ -4675,6 +4675,24 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
     - **So the residue unique to T4-CO is the category-specific extraction of `(endpoint, condition, status)`, which is exactly the part the 2026-07-22 reframe already ruled out building.** A ticket whose surviving scope is the piece it was told not to build is subsumed, not deferred.
     - **Kept for whoever revisits:** the non-uniformity framing (parallel spec subjects getting unequal criterion density) is NOT owned by any of the three, and it is the one idea here worth re-filing if the T2-EX six-run measurement shows density skewed by resource rather than uniformly thin.
 
+- [ ] **T1-FW: the probe drops the query string, so a criterion about `GET /loans?memberId={id}` is tested by requesting `GET /loans` — the artifact correctly refuses a missing required parameter and is recorded as failing** (`analysis/structure/EndpointSurfaceQuery.normalizePath` used as a REQUEST builder by `core/build/BehaviouralCriterionParser.parse`) — **filed 2026-08-25, proven against a booted artifact.**
+  - **One helper, two incompatible purposes.** `normalizePath` strips the query deliberately — `int q = p.indexOf('?'); if (q >= 0) p = p.substring(0, q)` — and that is CORRECT for its original job, comparing endpoint IDENTITY: a controller maps `/loans` and binds `memberId` as a separate parameter, so the query must not be part of the comparison. **Six callers share it; five want identity and one wants a request to send.**
+  - **Proven on run `2026-08-24_22-14-05`'s artifact:** `GET /loans` → **400** (the parameter is required) · `GET /loans?memberId=1` → **200**. The probe sends the former for a criterion that states the latter.
+  - **This is the LARGEST contributor to that run's false closure blocks — 2 of the 4 named criteria**, both `memberId` variants, which is more than `T1-FU` (1) or `T1-FV` (1). It reached no model fallback because the criterion parses cleanly; it simply loses its parameter on the way to being requested.
+  - **The run's closure-block set decomposes completely**, and only one quarter of it is real:
+
+    | blocking criterion | cause | verdict |
+    |---|---|---|
+    | `GET /loans?memberId={id}` ×2 | query string dropped (this ticket) | false |
+    | `POST /loans` → 422 | over-budget truncation (`T1-FU`) | false |
+    | `POST /loans` → 404 | entity-derived body fields (`T1-FV`) | false |
+    | `POST /books` → 201 | — | **genuine** (answers 200; smoke `[1]` agrees) |
+
+  - **Fix direction — do NOT change the shared helper.** Five callers depend on the query being stripped; changing it to satisfy the sixth would break endpoint identity comparison everywhere ([[feedback-one-invariant-one-home]] read the other way: one function currently serving two invariants). Probe-request construction needs its own path-preserving form, with the identity form left exactly as it is.
+  - **DoD:** a criterion naming a query parameter is requested WITH it; endpoint identity comparison is unchanged (its existing tests stay green untouched); replay over the retained corpora shows the `GET /loans` 400s gone and no new silence on genuine failures.
+  - **⚠ SEQUENCING, stated because it is easy to get wrong:** this is one of THREE independent causes and **no single fix restores `GOAL_FULFILLED`**. Shipping one and watching the terminal state would read as a failed fix. Each must be verified against the same booted-artifact test on its own criterion, and only the full set can be expected to change a run's outcome.
+  - **Tier note:** T1 — a correct application is reported as defective.
+
 - [ ] **T1-FV: a probe's request body is derived from the ENTITY, so it carries server-assigned fields the endpoint rejects — the probe manufactures a 400 and then blames the artifact for it** (`core/build/RequestBodySynthesizer`, T4-CB derivation) — **filed 2026-08-25, isolated field-by-field against a booted artifact.**
   - **The category error, in one line:** an entity's fields are not the fields an endpoint ACCEPTS. `id`, `createdAt` and `returnedAt` are server-assigned — present in the response, refused in the request.
   - **Measured on run `2026-08-24_22-14-05`'s artifact, absent ids throughout, one field at a time:**

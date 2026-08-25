@@ -145,3 +145,67 @@ is not, this is where that shows up.
 Every new ecosystem-aware rule added in the meantime increases the eventual migration. When
 adding one, note it here rather than only in its ticket, so the inventory stays current.
 Today's `T4-DC` (catch-clause status mapping in `WiringFactsAnalyzer`) is such an addition.
+
+---
+
+# 2026-08-25 — THE NON-REST TARGET EXISTS AND HAS RUN. The premise of this note needs correcting.
+
+The note's blocker was that both targets ever run were REST web services, so "where does the joint
+actually fall" had no empirical answer. It has one now.
+
+**What was built** (`907f6ca`): `clitarget/bootstrap/seed.txt` — a delimited-text command-line tool
+with no network surface, no long-running process, argv in and stdout/stderr out, and an exit status
+per outcome. `scripts/smoke_cli.sh` scores it in the same shape as `smoke23.sh` and was calibrated
+BOTH ways before use (12/12 on a reference implementation, 10/12 with two injected defects naming
+exactly those checks). The harness needed no change — `T4-CK` had already added `PREFLIGHT_TARGET`
+and `PREFLIGHT_SMOKE`, so only a non-REST target was ever missing.
+
+## The result contradicts what this note predicts
+
+**The loop built a fully correct CLI tool: 12/12 at twelve minutes, and still 12/12 at nineteen
+merges with three classes.** No HTTP, no Spring, no endpoints anywhere. Measured by running the
+artefact, not inferred.
+
+| behaviour | on a CLI target |
+|---|---|
+| planner decomposition, criteria authoring, evolution, merge, compile gates | **transferred cleanly** — criteria read *"exits 5"*, *"prints nothing to stdout and exits 0"* |
+| criterion → probe synthesis, boot/HTTP observation, `T4-CY` | **abstained honestly** — *"closure claim not checked — none of its 3 criterion(s) can be executed"*, and **zero** false findings all run |
+| a handful of framework STRINGS | **actively wrong** |
+| an outcome representation that is not an HTTP status | **missing** |
+
+## So the joint is NOT where this note places it
+
+**The note ranks `GoalPlannerService` at 66 HTTP hits as "the sharpest signal — the component that
+owns the goal tree should not know what an endpoint is." The file is right and the reason is wrong.**
+The planner's REASONING transferred; what leaked is a small set of hardcoded strings that assert a
+REST world onto whatever target is loaded. The clearest, observed live on a target with no network
+surface at all:
+
+- `GoalPlannerService:3108` — `"[BUILD_FIX] Make the packaged application start and serve the specified endpoint"`, injected as a work item and then demanded at closure **18 times** in one run.
+- `"Provide a runnable application entry point — the goal specification names HTTP"`.
+- `"provide tests for every endpoint"`.
+
+**Hit counts measured MENTIONS. This measures what actually blocks.** They disagree, and the run wins.
+
+## The revised shape of the work — two things, not five seams
+
+1. **One missing abstraction: an observable outcome that is not an HTTP status.**
+   `BehaviouralCriterionParser` can express only `verb + path + status`, so *"exits 5"* has nowhere
+   to live and everything downstream abstains for want of a representation. This is the same defect
+   family as `T1-FW` (a requirement losing part of itself between being read and being exercised) —
+   there a component of the input, here the entire outcome channel.
+2. **A handful of leaked strings**, enumerable by grep, that describe the target as a web service.
+
+That is materially cheaper than extracting five subsystems, and it is grounded in a run.
+
+## ⚠ The caveat that keeps this honest
+
+**The loop produced a correct artefact while flying BLIND.** Its verifier could execute none of the
+criteria, so nothing checked the work in-loop: it got there on the model's competence plus compile
+gates alone. That is encouraging about the loop and says nothing good about the verification chain.
+A harder CLI specification — one where the obvious implementation is wrong — would likely separate
+them, and that is the next experiment rather than a conclusion to draw now.
+
+**Also unproven:** one CLI target, one run, one seed. The five-seam decomposition may still be right
+for a target kind that is neither a service nor a command (a library, a parser). This corrects the
+note from one shape seen twice to two shapes seen once each.

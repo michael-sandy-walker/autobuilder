@@ -1,0 +1,929 @@
+{
+  "cycleName" : "cycle-1787665188933",
+  "outputPath" : "/home/anugeshtu/IdeaProjects/autobuilder/clitarget/output",
+  "mutationPath" : "mutations/cycle-1787665130486",
+  "snapshotPath" : "snapshots/cycle-1787665130486",
+  "previousOutput" : {
+    "src/main/java/com/example/cli/Main.java" : "package com.example.cli;\n\nimport com.example.cli.reader.CsvReader;\nimport com.example.cli.reader.CsvReaderException;\n\nimport java.io.IOException;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.util.List;\n\npublic final class Main {\n\n    private Main() {\n    }\n\n    public static void main(String[] args) {\n        if (args.length == 0) {\n            System.err.println(\"unknown command: \");\n            System.exit(3);\n            return;\n        }\n\n        String command = args[0];\n        String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);\n\n        switch (command) {\n            case \"check\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for check\");\n                    System.exit(5);\n                    return;\n                }\n                runCheck(rest[0]);\n            }\n            case \"count\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for count\");\n                    System.exit(5);\n                    return;\n                }\n                runCount(rest[0]);\n            }\n            case \"column\" -> {\n                if (rest.length != 2) {\n                    System.err.println(\"wrong number of arguments for column\");\n                    System.exit(5);\n                    return;\n                }\n                runColumn(rest[0], rest[1]);\n            }\n            default -> {\n                System.err.println(\"unknown command: \" + command);\n                System.exit(3);\n            }\n        }\n    }\n\n    private static void runCheck(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            int expected = header.size();\n            boolean malformed = false;\n\n            for (int i = 0; i < reader.rows().size(); i++) {\n                List<String> row = reader.rows().get(i);\n                if (row.size() != expected) {\n                    System.out.println(\"line \" + (i + 2) + \": expected \" + expected + \" fields, found \" + row.size());\n                    malformed = true;\n                }\n            }\n\n            System.exit(malformed ? 2 : 0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runCount(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            System.out.println(reader.rows().size());\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runColumn(String filePath, String columnName) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            int colIndex = header.indexOf(columnName);\n\n            if (colIndex == -1) {\n                System.err.println(\"no such column: \" + columnName);\n                System.exit(4);\n                return;\n            }\n\n            for (List<String> row : reader.rows()) {\n                if (colIndex < row.size()) {\n                    System.out.println(row.get(colIndex));\n                }\n            }\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n}",
+    "src/main/java/com/example/cli/reader/CsvReaderException.java" : "package com.example.cli.reader;\n\npublic class CsvReaderException extends Exception {\n\n    public CsvReaderException(String message) {\n        super(message);\n    }\n\n    public CsvReaderException(String message, Throwable cause) {\n        super(message, cause);\n    }\n}",
+    "pom.xml" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project xmlns=\"http://maven.apache.org/POM/4.0.0\"\n         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n         xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">\n    <modelVersion>4.0.0</modelVersion>\n\n    <groupId>com.example</groupId>\n    <artifactId>cli-tool</artifactId>\n    <version>1.0.0</version>\n    <packaging>jar</packaging>\n\n    <properties>\n        <maven.compiler.source>21</maven.compiler.source>\n        <maven.compiler.target>21</maven.compiler.target>\n        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>\n    </properties>\n\n    <build>\n        <plugins>\n            <plugin>\n                <groupId>org.apache.maven.plugins</groupId>\n                <artifactId>maven-jar-plugin</artifactId>\n                <version>3.3.0</version>\n                <configuration>\n                    <archive>\n                        <manifest>\n                            <mainClass>com.example.cli.Main</mainClass>\n                        </manifest>\n                    </archive>\n                </configuration>\n            </plugin>\n        </plugins>\n    </build>\n</project>",
+    "src/main/java/com/example/cli/reader/CsvReader.java" : "package com.example.cli.reader;\n\nimport java.io.IOException;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.util.ArrayList;\nimport java.util.List;\n\npublic class CsvReader {\n\n    private final List<String> header;\n    private final List<List<String>> rows;\n\n    public CsvReader(Path path) throws CsvReaderException {\n        try {\n            List<String> lines = Files.readAllLines(path);\n            if (lines.isEmpty()) {\n                this.header = List.of();\n                this.rows = List.of();\n                return;\n            }\n\n            this.header = splitLine(lines.get(0));\n            this.rows = new ArrayList<>();\n            for (int i = 1; i < lines.size(); i++) {\n                this.rows.add(splitLine(lines.get(i)));\n            }\n        } catch (IOException e) {\n            throw new CsvReaderException(\"Failed to read file: \" + e.getMessage(), e);\n        }\n    }\n\n    public List<String> header() {\n        return header;\n    }\n\n    public List<List<String>> rows() {\n        return rows;\n    }\n\n    private static List<String> splitLine(String line) {\n        if (line == null || line.isEmpty()) {\n            return List.of();\n        }\n        String[] parts = line.split(\",\", -1);\n        return List.of(parts);\n    }\n}"
+  },
+  "projectSummary" : "src/main/java/com/example/cli/Main.java\n    - public static void main(String[] args) {\n    - private static void runCheck(String filePath) {\n    - private static void runCount(String filePath) {\n    - private static void runColumn(String filePath, String columnName) {\n\nsrc/main/java/com/example/cli/reader/CsvReader.java\n    - public List<String> header() {\n    - public List<List<String>> rows() {\n    - private static List<String> splitLine(String line) {\n\nsrc/main/java/com/example/cli/reader/CsvReaderException.java\n\nNon-Java project files:\n\n  .xml files:\n\n    - pom.xml",
+  "projectDiff" : {
+    "structuredDiff" : {
+      "oldElement" : null,
+      "newElement" : null,
+      "children" : [ {
+        "oldElement" : {
+          "id" : "src/main/java/com/example/cli/Main.java",
+          "type" : "FILE",
+          "content" : "package com.example.cli;\n\nimport com.example.cli.reader.CsvReader;\nimport com.example.cli.reader.CsvReaderException;\n\nimport java.io.IOException;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.util.List;\n\npublic final class Main {\n\n    private Main() {\n    }\n\n    public static void main(String[] args) {\n        if (args.length == 0) {\n            System.err.println(\"unknown command: \");\n            System.exit(3);\n            return;\n        }\n\n        String command = args[0];\n        String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);\n\n        switch (command) {\n            case \"check\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for check\");\n                    System.exit(5);\n                    return;\n                }\n                runCheck(rest[0]);\n            }\n            case \"count\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for count\");\n                    System.exit(5);\n                    return;\n                }\n                runCount(rest[0]);\n            }\n            case \"column\" -> {\n                if (rest.length != 2) {\n                    System.err.println(\"wrong number of arguments for column\");\n                    System.exit(5);\n                    return;\n                }\n                runColumn(rest[0], rest[1]);\n            }\n            default -> {\n                System.err.println(\"unknown command: \" + command);\n                System.exit(3);\n            }\n        }\n    }\n\n    private static void runCheck(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            List<List<String>> rows = reader.rows();\n            int expected = header.size();\n            boolean malformed = false;\n\n            for (int i = 0; i < rows.size(); i++) {\n                int found = rows.get(i).size();\n                if (found != expected) {\n                    System.out.println(\"line \" + (i + 2) + \": expected \" + expected + \" fields, found \" + found);\n                    malformed = true;\n                }\n            }\n\n            System.exit(malformed ? 2 : 0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runCount(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            int count = reader.rows().size();\n            System.out.println(count);\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runColumn(String filePath, String columnName) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            int colIndex = header.indexOf(columnName);\n\n            if (colIndex == -1) {\n                System.err.println(\"no such column: \" + columnName);\n                System.exit(4);\n                return;\n            }\n\n            List<List<String>> rows = reader.rows();\n            for (List<String> row : rows) {\n                if (colIndex < row.size()) {\n                    System.out.println(row.get(colIndex));\n                }\n            }\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n}",
+          "metadata" : {
+            "path" : "src/main/java/com/example/cli/Main.java"
+          }
+        },
+        "newElement" : {
+          "id" : "src/main/java/com/example/cli/Main.java",
+          "type" : "FILE",
+          "content" : "package com.example.cli;\n\nimport com.example.cli.reader.CsvReader;\nimport com.example.cli.reader.CsvReaderException;\n\nimport java.io.IOException;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.util.List;\n\npublic final class Main {\n\n    private Main() {\n    }\n\n    public static void main(String[] args) {\n        if (args.length == 0) {\n            System.err.println(\"unknown command: \");\n            System.exit(3);\n            return;\n        }\n\n        String command = args[0];\n        String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);\n\n        switch (command) {\n            case \"check\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for check\");\n                    System.exit(5);\n                    return;\n                }\n                runCheck(rest[0]);\n            }\n            case \"count\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for count\");\n                    System.exit(5);\n                    return;\n                }\n                runCount(rest[0]);\n            }\n            case \"column\" -> {\n                if (rest.length != 2) {\n                    System.err.println(\"wrong number of arguments for column\");\n                    System.exit(5);\n                    return;\n                }\n                runColumn(rest[0], rest[1]);\n            }\n            default -> {\n                System.err.println(\"unknown command: \" + command);\n                System.exit(3);\n            }\n        }\n    }\n\n    private static void runCheck(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            int expected = header.size();\n            boolean malformed = false;\n\n            for (int i = 0; i < reader.rows().size(); i++) {\n                List<String> row = reader.rows().get(i);\n                if (row.size() != expected) {\n                    System.out.println(\"line \" + (i + 2) + \": expected \" + expected + \" fields, found \" + row.size());\n                    malformed = true;\n                }\n            }\n\n            System.exit(malformed ? 2 : 0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runCount(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            System.out.println(reader.rows().size());\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runColumn(String filePath, String columnName) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            int colIndex = header.indexOf(columnName);\n\n            if (colIndex == -1) {\n                System.err.println(\"no such column: \" + columnName);\n                System.exit(4);\n                return;\n            }\n\n            for (List<String> row : reader.rows()) {\n                if (colIndex < row.size()) {\n                    System.out.println(row.get(colIndex));\n                }\n            }\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n}",
+          "metadata" : {
+            "path" : "src/main/java/com/example/cli/Main.java"
+          }
+        },
+        "children" : [ {
+          "oldElement" : {
+            "id" : "com.example.cli.Main",
+            "type" : "CLASS",
+            "content" : "public final class Main {\n\n    private Main() {\n    }\n\n    public static void main(String[] args) {\n        if (args.length == 0) {\n            System.err.println(\"unknown command: \");\n            System.exit(3);\n            return;\n        }\n        String command = args[0];\n        String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);\n        switch(command) {\n            case \"check\" ->\n                {\n                    if (rest.length != 1) {\n                        System.err.println(\"wrong number of arguments for check\");\n                        System.exit(5);\n                        return;\n                    }\n                    runCheck(rest[0]);\n                }\n            case \"count\" ->\n                {\n                    if (rest.length != 1) {\n                        System.err.println(\"wrong number of arguments for count\");\n                        System.exit(5);\n                        return;\n                    }\n                    runCount(rest[0]);\n                }\n            case \"column\" ->\n                {\n                    if (rest.length != 2) {\n                        System.err.println(\"wrong number of arguments for column\");\n                        System.exit(5);\n                        return;\n                    }\n                    runColumn(rest[0], rest[1]);\n                }\n            default ->\n                {\n                    System.err.println(\"unknown command: \" + command);\n                    System.exit(3);\n                }\n        }\n    }\n\n    private static void runCheck(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            List<List<String>> rows = reader.rows();\n            int expected = header.size();\n            boolean malformed = false;\n            for (int i = 0; i < rows.size(); i++) {\n                int found = rows.get(i).size();\n                if (found != expected) {\n                    System.out.println(\"line \" + (i + 2) + \": expected \" + expected + \" fields, found \" + found);\n                    malformed = true;\n                }\n            }\n            System.exit(malformed ? 2 : 0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runCount(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n        try {\n            CsvReader reader = new CsvReader(path);\n            int count = reader.rows().size();\n            System.out.println(count);\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runColumn(String filePath, String columnName) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            int colIndex = header.indexOf(columnName);\n            if (colIndex == -1) {\n                System.err.println(\"no such column: \" + columnName);\n                System.exit(4);\n                return;\n            }\n            List<List<String>> rows = reader.rows();\n            for (List<String> row : rows) {\n                if (colIndex < row.size()) {\n                    System.out.println(row.get(colIndex));\n                }\n            }\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n}",
+            "metadata" : { }
+          },
+          "newElement" : {
+            "id" : "com.example.cli.Main",
+            "type" : "CLASS",
+            "content" : "public final class Main {\n\n    private Main() {\n    }\n\n    public static void main(String[] args) {\n        if (args.length == 0) {\n            System.err.println(\"unknown command: \");\n            System.exit(3);\n            return;\n        }\n        String command = args[0];\n        String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);\n        switch(command) {\n            case \"check\" ->\n                {\n                    if (rest.length != 1) {\n                        System.err.println(\"wrong number of arguments for check\");\n                        System.exit(5);\n                        return;\n                    }\n                    runCheck(rest[0]);\n                }\n            case \"count\" ->\n                {\n                    if (rest.length != 1) {\n                        System.err.println(\"wrong number of arguments for count\");\n                        System.exit(5);\n                        return;\n                    }\n                    runCount(rest[0]);\n                }\n            case \"column\" ->\n                {\n                    if (rest.length != 2) {\n                        System.err.println(\"wrong number of arguments for column\");\n                        System.exit(5);\n                        return;\n                    }\n                    runColumn(rest[0], rest[1]);\n                }\n            default ->\n                {\n                    System.err.println(\"unknown command: \" + command);\n                    System.exit(3);\n                }\n        }\n    }\n\n    private static void runCheck(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            int expected = header.size();\n            boolean malformed = false;\n            for (int i = 0; i < reader.rows().size(); i++) {\n                List<String> row = reader.rows().get(i);\n                if (row.size() != expected) {\n                    System.out.println(\"line \" + (i + 2) + \": expected \" + expected + \" fields, found \" + row.size());\n                    malformed = true;\n                }\n            }\n            System.exit(malformed ? 2 : 0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runCount(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n        try {\n            CsvReader reader = new CsvReader(path);\n            System.out.println(reader.rows().size());\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runColumn(String filePath, String columnName) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            int colIndex = header.indexOf(columnName);\n            if (colIndex == -1) {\n                System.err.println(\"no such column: \" + columnName);\n                System.exit(4);\n                return;\n            }\n            for (List<String> row : reader.rows()) {\n                if (colIndex < row.size()) {\n                    System.out.println(row.get(colIndex));\n                }\n            }\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n}",
+            "metadata" : { }
+          },
+          "children" : [ {
+            "oldElement" : {
+              "id" : "com.example.cli.Main.Main",
+              "type" : "CONSTRUCTOR",
+              "content" : "private Main() {\n}",
+              "metadata" : {
+                "line" : 13,
+                "modifiers" : "[private ]"
+              }
+            },
+            "newElement" : {
+              "id" : "com.example.cli.Main.Main",
+              "type" : "CONSTRUCTOR",
+              "content" : "private Main() {\n}",
+              "metadata" : {
+                "line" : 13,
+                "modifiers" : "[private ]"
+              }
+            },
+            "children" : [ ],
+            "id" : "com.example.cli.Main.Main",
+            "type" : "CONSTRUCTOR",
+            "added" : false,
+            "deleted" : false,
+            "modified" : false,
+            "unchanged" : true
+          }, {
+            "oldElement" : {
+              "id" : "com.example.cli.Main.main",
+              "type" : "METHOD",
+              "content" : "public static void main(String[] args) {\n    if (args.length == 0) {\n        System.err.println(\"unknown command: \");\n        System.exit(3);\n        return;\n    }\n    String command = args[0];\n    String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);\n    switch(command) {\n        case \"check\" ->\n            {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for check\");\n                    System.exit(5);\n                    return;\n                }\n                runCheck(rest[0]);\n            }\n        case \"count\" ->\n            {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for count\");\n                    System.exit(5);\n                    return;\n                }\n                runCount(rest[0]);\n            }\n        case \"column\" ->\n            {\n                if (rest.length != 2) {\n                    System.err.println(\"wrong number of arguments for column\");\n                    System.exit(5);\n                    return;\n                }\n                runColumn(rest[0], rest[1]);\n            }\n        default ->\n            {\n                System.err.println(\"unknown command: \" + command);\n                System.exit(3);\n            }\n    }\n}",
+              "metadata" : {
+                "returnType" : "void",
+                "line" : 16,
+                "modifiers" : "[public , static ]"
+              }
+            },
+            "newElement" : {
+              "id" : "com.example.cli.Main.main",
+              "type" : "METHOD",
+              "content" : "public static void main(String[] args) {\n    if (args.length == 0) {\n        System.err.println(\"unknown command: \");\n        System.exit(3);\n        return;\n    }\n    String command = args[0];\n    String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);\n    switch(command) {\n        case \"check\" ->\n            {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for check\");\n                    System.exit(5);\n                    return;\n                }\n                runCheck(rest[0]);\n            }\n        case \"count\" ->\n            {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for count\");\n                    System.exit(5);\n                    return;\n                }\n                runCount(rest[0]);\n            }\n        case \"column\" ->\n            {\n                if (rest.length != 2) {\n                    System.err.println(\"wrong number of arguments for column\");\n                    System.exit(5);\n                    return;\n                }\n                runColumn(rest[0], rest[1]);\n            }\n        default ->\n            {\n                System.err.println(\"unknown command: \" + command);\n                System.exit(3);\n            }\n    }\n}",
+              "metadata" : {
+                "returnType" : "void",
+                "line" : 16,
+                "modifiers" : "[public , static ]"
+              }
+            },
+            "children" : [ ],
+            "id" : "com.example.cli.Main.main",
+            "type" : "METHOD",
+            "added" : false,
+            "deleted" : false,
+            "modified" : false,
+            "unchanged" : true
+          }, {
+            "oldElement" : {
+              "id" : "com.example.cli.Main.runCheck",
+              "type" : "METHOD",
+              "content" : "private static void runCheck(String filePath) {\n    Path path = Path.of(filePath);\n    if (!Files.exists(path)) {\n        System.err.println(\"no such file: \" + filePath);\n        System.exit(1);\n        return;\n    }\n    try {\n        CsvReader reader = new CsvReader(path);\n        List<String> header = reader.header();\n        List<List<String>> rows = reader.rows();\n        int expected = header.size();\n        boolean malformed = false;\n        for (int i = 0; i < rows.size(); i++) {\n            int found = rows.get(i).size();\n            if (found != expected) {\n                System.out.println(\"line \" + (i + 2) + \": expected \" + expected + \" fields, found \" + found);\n                malformed = true;\n            }\n        }\n        System.exit(malformed ? 2 : 0);\n    } catch (CsvReaderException e) {\n        System.err.println(\"error reading file: \" + e.getMessage());\n        System.exit(1);\n    }\n}",
+              "metadata" : {
+                "returnType" : "void",
+                "line" : 58,
+                "modifiers" : "[private , static ]"
+              }
+            },
+            "newElement" : {
+              "id" : "com.example.cli.Main.runCheck",
+              "type" : "METHOD",
+              "content" : "private static void runCheck(String filePath) {\n    Path path = Path.of(filePath);\n    if (!Files.exists(path)) {\n        System.err.println(\"no such file: \" + filePath);\n        System.exit(1);\n        return;\n    }\n    try {\n        CsvReader reader = new CsvReader(path);\n        List<String> header = reader.header();\n        int expected = header.size();\n        boolean malformed = false;\n        for (int i = 0; i < reader.rows().size(); i++) {\n            List<String> row = reader.rows().get(i);\n            if (row.size() != expected) {\n                System.out.println(\"line \" + (i + 2) + \": expected \" + expected + \" fields, found \" + row.size());\n                malformed = true;\n            }\n        }\n        System.exit(malformed ? 2 : 0);\n    } catch (CsvReaderException e) {\n        System.err.println(\"error reading file: \" + e.getMessage());\n        System.exit(1);\n    }\n}",
+              "metadata" : {
+                "returnType" : "void",
+                "line" : 58,
+                "modifiers" : "[private , static ]"
+              }
+            },
+            "children" : [ ],
+            "id" : "com.example.cli.Main.runCheck",
+            "type" : "METHOD",
+            "added" : false,
+            "deleted" : false,
+            "modified" : true,
+            "unchanged" : false
+          }, {
+            "oldElement" : {
+              "id" : "com.example.cli.Main.runColumn",
+              "type" : "METHOD",
+              "content" : "private static void runColumn(String filePath, String columnName) {\n    Path path = Path.of(filePath);\n    if (!Files.exists(path)) {\n        System.err.println(\"no such file: \" + filePath);\n        System.exit(1);\n        return;\n    }\n    try {\n        CsvReader reader = new CsvReader(path);\n        List<String> header = reader.header();\n        int colIndex = header.indexOf(columnName);\n        if (colIndex == -1) {\n            System.err.println(\"no such column: \" + columnName);\n            System.exit(4);\n            return;\n        }\n        List<List<String>> rows = reader.rows();\n        for (List<String> row : rows) {\n            if (colIndex < row.size()) {\n                System.out.println(row.get(colIndex));\n            }\n        }\n        System.exit(0);\n    } catch (CsvReaderException e) {\n        System.err.println(\"error reading file: \" + e.getMessage());\n        System.exit(1);\n    }\n}",
+              "metadata" : {
+                "returnType" : "void",
+                "line" : 107,
+                "modifiers" : "[private , static ]"
+              }
+            },
+            "newElement" : {
+              "id" : "com.example.cli.Main.runColumn",
+              "type" : "METHOD",
+              "content" : "private static void runColumn(String filePath, String columnName) {\n    Path path = Path.of(filePath);\n    if (!Files.exists(path)) {\n        System.err.println(\"no such file: \" + filePath);\n        System.exit(1);\n        return;\n    }\n    try {\n        CsvReader reader = new CsvReader(path);\n        List<String> header = reader.header();\n        int colIndex = header.indexOf(columnName);\n        if (colIndex == -1) {\n            System.err.println(\"no such column: \" + columnName);\n            System.exit(4);\n            return;\n        }\n        for (List<String> row : reader.rows()) {\n            if (colIndex < row.size()) {\n                System.out.println(row.get(colIndex));\n            }\n        }\n        System.exit(0);\n    } catch (CsvReaderException e) {\n        System.err.println(\"error reading file: \" + e.getMessage());\n        System.exit(1);\n    }\n}",
+              "metadata" : {
+                "returnType" : "void",
+                "line" : 105,
+                "modifiers" : "[private , static ]"
+              }
+            },
+            "children" : [ ],
+            "id" : "com.example.cli.Main.runColumn",
+            "type" : "METHOD",
+            "added" : false,
+            "deleted" : false,
+            "modified" : true,
+            "unchanged" : false
+          }, {
+            "oldElement" : {
+              "id" : "com.example.cli.Main.runCount",
+              "type" : "METHOD",
+              "content" : "private static void runCount(String filePath) {\n    Path path = Path.of(filePath);\n    if (!Files.exists(path)) {\n        System.err.println(\"no such file: \" + filePath);\n        System.exit(1);\n        return;\n    }\n    try {\n        CsvReader reader = new CsvReader(path);\n        int count = reader.rows().size();\n        System.out.println(count);\n        System.exit(0);\n    } catch (CsvReaderException e) {\n        System.err.println(\"error reading file: \" + e.getMessage());\n        System.exit(1);\n    }\n}",
+              "metadata" : {
+                "returnType" : "void",
+                "line" : 88,
+                "modifiers" : "[private , static ]"
+              }
+            },
+            "newElement" : {
+              "id" : "com.example.cli.Main.runCount",
+              "type" : "METHOD",
+              "content" : "private static void runCount(String filePath) {\n    Path path = Path.of(filePath);\n    if (!Files.exists(path)) {\n        System.err.println(\"no such file: \" + filePath);\n        System.exit(1);\n        return;\n    }\n    try {\n        CsvReader reader = new CsvReader(path);\n        System.out.println(reader.rows().size());\n        System.exit(0);\n    } catch (CsvReaderException e) {\n        System.err.println(\"error reading file: \" + e.getMessage());\n        System.exit(1);\n    }\n}",
+              "metadata" : {
+                "returnType" : "void",
+                "line" : 87,
+                "modifiers" : "[private , static ]"
+              }
+            },
+            "children" : [ ],
+            "id" : "com.example.cli.Main.runCount",
+            "type" : "METHOD",
+            "added" : false,
+            "deleted" : false,
+            "modified" : true,
+            "unchanged" : false
+          } ],
+          "id" : "com.example.cli.Main",
+          "type" : "CLASS",
+          "added" : false,
+          "deleted" : false,
+          "modified" : true,
+          "unchanged" : false
+        } ],
+        "id" : "src/main/java/com/example/cli/Main.java",
+        "type" : "FILE",
+        "added" : false,
+        "deleted" : false,
+        "modified" : true,
+        "unchanged" : false
+      } ],
+      "id" : "(unknown)",
+      "type" : "UNKNOWN",
+      "added" : false,
+      "deleted" : false,
+      "modified" : false,
+      "unchanged" : false
+    },
+    "changedFiles" : {
+      "src/main/java/com/example/cli/Main.java" : "package com.example.cli;\n\nimport com.example.cli.reader.CsvReader;\nimport com.example.cli.reader.CsvReaderException;\n\nimport java.io.IOException;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.util.List;\n\npublic final class Main {\n\n    private Main() {\n    }\n\n    public static void main(String[] args) {\n        if (args.length == 0) {\n            System.err.println(\"unknown command: \");\n            System.exit(3);\n            return;\n        }\n\n        String command = args[0];\n        String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);\n\n        switch (command) {\n            case \"check\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for check\");\n                    System.exit(5);\n                    return;\n                }\n                runCheck(rest[0]);\n            }\n            case \"count\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for count\");\n                    System.exit(5);\n                    return;\n                }\n                runCount(rest[0]);\n            }\n            case \"column\" -> {\n                if (rest.length != 2) {\n                    System.err.println(\"wrong number of arguments for column\");\n                    System.exit(5);\n                    return;\n                }\n                runColumn(rest[0], rest[1]);\n            }\n            default -> {\n                System.err.println(\"unknown command: \" + command);\n                System.exit(3);\n            }\n        }\n    }\n\n    private static void runCheck(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            int expected = header.size();\n            boolean malformed = false;\n\n            for (int i = 0; i < reader.rows().size(); i++) {\n                List<String> row = reader.rows().get(i);\n                if (row.size() != expected) {\n                    System.out.println(\"line \" + (i + 2) + \": expected \" + expected + \" fields, found \" + row.size());\n                    malformed = true;\n                }\n            }\n\n            System.exit(malformed ? 2 : 0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runCount(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            System.out.println(reader.rows().size());\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runColumn(String filePath, String columnName) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n            return;\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            int colIndex = header.indexOf(columnName);\n\n            if (colIndex == -1) {\n                System.err.println(\"no such column: \" + columnName);\n                System.exit(4);\n                return;\n            }\n\n            for (List<String> row : reader.rows()) {\n                if (colIndex < row.size()) {\n                    System.out.println(row.get(colIndex));\n                }\n            }\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n}"
+    },
+    "deletedPaths" : [ ]
+  },
+  "currentGoalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+  "currentSubGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended",
+  "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+  "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+  "analysisScopeGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+  "analysisScopeSubGoalId" : "goal-1e559371-3b07-4f98-83bb-ab9d5ead7ab9",
+  "lastAnalysisScopeGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+  "lastAnalysisScopeSubGoalId" : "goal-a428d8af-2595-43e6-8fb9-31a893325819",
+  "remainingGoals" : [ {
+    "id" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "description" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended",
+    "role" : "coverage-retro",
+    "type" : "SUBGOAL",
+    "status" : "ACTIVE",
+    "created" : "2026-08-25T13:30:11.762353423Z",
+    "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
+    "metadata" : {
+      "planningRunId" : 0,
+      "subgoalOrigin" : "required",
+      "parentAttemptId" : "attempt-6aa650f3-6537-4ff8-b213-472f4c50edd3",
+      "activeAttemptId" : "attempt-1521f860-5f65-4a05-8315-ccfd8ef23bd3",
+      "originatingGate" : "boot-gate",
+      "blockerType" : "BUILD_FIX",
+      "subsumptionReason" : "COVERED",
+      "mergeCount" : 10,
+      "mergedFiles" : [ "Main.java", "CsvReader.java", "pom.xml", "CsvReaderException.java" ],
+      "lastProgressState" : "FULFILLED",
+      "lastUpdated" : "2026-08-25T13:39:36.064878259Z",
+      "closureEdgeReopens" : 20,
+      "subgoalRequests" : {
+        "REPETITION_DETECTED" : {
+          "urgency" : 1.0,
+          "age" : 1,
+          "source" : "EvolutionExecutionAgent",
+          "validForCycles" : 19
+        },
+        "DIVERGENCE_REQUEST" : {
+          "urgency" : 1.7,
+          "age" : 1,
+          "source" : "repetition",
+          "validForCycles" : 10
+        },
+        "STAGNATION" : {
+          "urgency" : 0.7,
+          "age" : 1,
+          "source" : "pattern:empty-diff",
+          "validForCycles" : 4
+        }
+      }
+    },
+    "expectedArtifacts" : [ ],
+    "subGoals" : [ ]
+  } ],
+  "completedGoals" : [ {
+    "id" : "goal-91147dea-39e4-42fd-8f79-4c0704cbceb0",
+    "description" : "Implement the CLI entry point and argument parsing: dispatch on the command word, enforce per-command argument counts, and handle the common error cases (unknown command, missing file, wrong arg count) with the specified exit codes and stderr messages",
+    "role" : "planner",
+    "type" : "SUBGOAL",
+    "status" : "COMPLETED",
+    "created" : "2026-08-25T13:21:00.326609559Z",
+    "completed" : "2026-08-25T13:22:30.481397981Z",
+    "resolution" : "all acceptance criteria banked",
+    "metadata" : {
+      "planningRunId" : 2,
+      "lastProgressState" : "FULFILLED",
+      "goalKind" : "EXECUTABLE",
+      "acceptanceCriteria" : [ "Running with no arguments or an unrecognized command word prints \"unknown command: <word>\" to stderr and exits 3", "Running a known command with the wrong number of arguments exits 5", "Running any command with a file path that does not exist prints \"no such file: <path>\" to stderr and exits 1" ],
+      "lastUpdated" : "2026-08-25T13:22:30.469831057Z",
+      "subgoalOrigin" : "required",
+      "parentAttemptId" : "attempt-6aa650f3-6537-4ff8-b213-472f4c50edd3",
+      "activeAttemptId" : "attempt-c623efb6-782a-4998-ba6c-a27536978a5d",
+      "criteriaBinding" : {
+        "1" : "AUTHORED",
+        "2" : "SPEC",
+        "3" : "SPEC"
+      },
+      "criteriaPassStatus" : {
+        "1" : true,
+        "2" : true,
+        "3" : true
+      },
+      "mergedFiles" : [ "Main.java", "pom.xml" ],
+      "criteriaFailStreak" : {
+        "1" : 0,
+        "2" : 0,
+        "3" : 0
+      },
+      "mergeCount" : 1
+    },
+    "expectedArtifacts" : [ ],
+    "subGoals" : [ ]
+  }, {
+    "id" : "goal-f35474b5-5adb-47c7-97b5-030b5031850f",
+    "description" : "Implement a shared CSV reader that reads a file from disk, treats the first line as the header, splits fields on commas, and exposes the header field names and the data rows in file order",
+    "role" : "planner",
+    "type" : "SUBGOAL",
+    "status" : "COMPLETED",
+    "created" : "2026-08-25T13:21:02.680033061Z",
+    "completed" : "2026-08-25T13:23:10.534560661Z",
+    "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+    "metadata" : {
+      "planningRunId" : 2,
+      "subgoalOrigin" : "required",
+      "parentAttemptId" : "attempt-6aa650f3-6537-4ff8-b213-472f4c50edd3",
+      "activeAttemptId" : "attempt-343add50-a0d0-4370-a232-14a9472bdfc9",
+      "goalKind" : "EXECUTABLE",
+      "mergeCount" : 1,
+      "mergedFiles" : [ "Main.java", "CsvReader.java" ]
+    },
+    "expectedArtifacts" : [ ],
+    "subGoals" : [ ]
+  }, {
+    "id" : "goal-241e9ac6-5613-420a-89d2-2742748c9103",
+    "description" : "Implement the `count <file>` command: print the number of data rows (excluding the header) to stdout as a bare integer, exit 0",
+    "role" : "planner",
+    "type" : "SUBGOAL",
+    "status" : "COMPLETED",
+    "created" : "2026-08-25T13:21:02.731938281Z",
+    "completed" : "2026-08-25T13:23:33.673338558Z",
+    "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+    "metadata" : {
+      "planningRunId" : 2,
+      "acceptanceCriteria" : [ "`count` prints the number of data rows (excluding the header) as a bare integer to stdout and exits 0" ],
+      "subgoalOrigin" : "required",
+      "parentAttemptId" : "attempt-6aa650f3-6537-4ff8-b213-472f4c50edd3",
+      "activeAttemptId" : "attempt-86e8e29a-cfe3-42bc-ad62-a300d2c20f5a",
+      "criteriaBinding" : {
+        "1" : "SPEC"
+      },
+      "goalKind" : "EXECUTABLE",
+      "criteriaPassStatus" : {
+        "1" : true
+      },
+      "criteriaFailStreak" : {
+        "1" : 0
+      },
+      "lastProgressState" : "FULFILLED",
+      "lastUpdated" : "2026-08-25T13:23:33.663690069Z"
+    },
+    "expectedArtifacts" : [ ],
+    "subGoals" : [ ]
+  }, {
+    "id" : "goal-2b9cc4da-d403-4a64-b695-5b924c4c04e1",
+    "description" : "Implement the `main` method in `src/main/java/com/example/cli/Main.java` to parse `argv`, validate the command word against `check`, `count`, and `column`, and enforce the specific exit codes (1, 2, 3, 4, 5) and stderr messages for invalid inputs, missing files, and unknown commands.",
+    "role" : "analysis",
+    "type" : "SUBGOAL",
+    "status" : "COMPLETED",
+    "created" : "2026-08-25T13:28:28.923899336Z",
+    "completed" : "2026-08-25T13:30:09.105529724Z",
+    "resolution" : "fulfilled (score=0.82): score-based closure + meaningful diff",
+    "metadata" : {
+      "planningRunId" : 4,
+      "acceptanceCriteria" : [ "When invoked with an unknown command (e.g., `java -jar app.jar foo`), the tool prints `unknown command: foo` to stderr and exits with code 3.", "When invoked with a known command but incorrect number of arguments (e.g., `java -jar app.jar check`), the tool exits with code 5.", "When invoked with a file path that does not exist (e.g., `java -jar app.jar check /nonexistent`), the tool prints `no such file: /nonexistent` to stderr and exits with code 1.", "When invoked with `check <file>` where the file exists and all rows are well-formed, the tool exits with code 0 and prints nothing to stdout.", "When invoked with `check <file>` where the file exists and contains malformed rows, the tool prints one line per malformed row to stdout in the format `line <n>: expected <h> fields, found <f>` and exits with code 2.", "When invoked with `count <file>` where the file exists, the tool prints the number of data rows (excluding header) as a bare integer to stdout and exits with code 0.", "When invoked with `column <file> <name>` where the column exists, the tool prints every value of that column one per line to stdout in file order and exits with code 0.", "When invoked with `column <file> <name>` where the column does not exist in the header, the tool prints `no such column: <name>` to stderr and exits with code 4.", "<acceptance criterion 1>" ],
+      "subgoalOrigin" : "extra",
+      "parentAttemptId" : "attempt-3a6a5397-1d59-4f67-a8e5-6095cfafaf07",
+      "activeAttemptId" : "attempt-616d4050-afc5-45e2-9c59-595f25b22da5",
+      "criteriaBinding" : {
+        "1" : "SPEC",
+        "2" : "SPEC",
+        "3" : "SPEC",
+        "4" : "SPEC",
+        "5" : "SPEC",
+        "6" : "SPEC",
+        "7" : "SPEC",
+        "8" : "SPEC",
+        "9" : "AUTHORED"
+      },
+      "spawnedBy" : "analysis",
+      "goalKind" : "EXECUTABLE",
+      "mergeCount" : 1,
+      "mergedFiles" : [ "Main.java" ],
+      "criteriaPassStatus" : {
+        "1" : true,
+        "2" : true,
+        "3" : true,
+        "4" : true,
+        "5" : true,
+        "6" : true,
+        "7" : true,
+        "8" : true,
+        "9" : true
+      },
+      "criteriaFailStreak" : {
+        "1" : 0,
+        "2" : 0,
+        "3" : 0,
+        "4" : 0,
+        "5" : 0,
+        "6" : 0,
+        "7" : 0,
+        "8" : 0,
+        "9" : 0
+      },
+      "lastProgressState" : "FULFILLED",
+      "lastUpdated" : "2026-08-25T13:30:09.090753250Z"
+    },
+    "expectedArtifacts" : [ ],
+    "subGoals" : [ ]
+  }, {
+    "id" : "goal-f45763ac-c8e7-4d5c-a5af-d34b7567129a",
+    "description" : "Rewrite src/main/java/com/example/cli/Main.java so that main(String[] args) parses argv and dispatches to check/count/column, enforcing per-command argument counts and the specified exit codes and stderr messages",
+    "role" : "planner",
+    "type" : "SUBGOAL",
+    "status" : "COMPLETED",
+    "created" : "2026-08-25T13:28:43.524803980Z",
+    "completed" : "2026-08-25T13:29:20.796420850Z",
+    "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+    "metadata" : {
+      "planningRunId" : 5,
+      "acceptanceCriteria" : [ "Running `java -jar app.jar unknown` prints \"unknown command: unknown\" to stderr and exits with code 3", "Running `java -jar app.jar check` (missing file arg) prints an error to stderr and exits with code 5", "Running `java -jar app.jar check file.csv extra` (too many args) prints an error to stderr and exits with code 5", "Running `java -jar app.jar check missing.csv` prints \"no such file: missing.csv\" to stderr and exits with code 1" ],
+      "lastUpdated" : "2026-08-25T13:29:20.780188261Z",
+      "subgoalOrigin" : "required",
+      "parentAttemptId" : "attempt-6aa650f3-6537-4ff8-b213-472f4c50edd3",
+      "activeAttemptId" : "attempt-d683ac1d-de4d-4309-8c6b-9d5feb527bb3",
+      "criteriaBinding" : {
+        "1" : "SPEC",
+        "2" : "SPEC",
+        "3" : "SPEC",
+        "4" : "SPEC"
+      },
+      "criteriaPassStatus" : {
+        "1" : true,
+        "2" : true,
+        "3" : true,
+        "4" : true
+      },
+      "mergedFiles" : [ "Main.java" ],
+      "lastProgressState" : "FULFILLED",
+      "criteriaFailStreak" : {
+        "1" : 0,
+        "2" : 0,
+        "3" : 0,
+        "4" : 0
+      },
+      "mergeCount" : 1
+    },
+    "expectedArtifacts" : [ ],
+    "subGoals" : [ ]
+  } ],
+  "abandonedGoals" : [ ],
+  "skippedGoals" : null,
+  "goalDepth" : 2,
+  "bestMatchSubGoalId" : null,
+  "rejectionFeedback" : null,
+  "priorRunEndReport" : null,
+  "recommendation" : null,
+  "evolutionOutcome" : {
+    "addedOrChangedFiles" : [ {
+      "path" : "src/main/java/com/example/cli/Main.java",
+      "content" : "package com.example.cli;\n\nimport com.example.cli.reader.CsvReader;\nimport com.example.cli.reader.CsvReaderException;\n\nimport java.io.IOException;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.util.List;\n\npublic final class Main {\n\n    private Main() {\n    }\n\n    public static void main(String[] args) {\n        if (args.length == 0) {\n            System.err.println(\"unknown command: \");\n            System.exit(3);\n        }\n\n        String command = args[0];\n        String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);\n\n        switch (command) {\n            case \"check\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for check\");\n                    System.exit(5);\n                }\n                runCheck(rest[0]);\n            }\n            case \"count\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for count\");\n                    System.exit(5);\n                }\n                runCount(rest[0]);\n            }\n            case \"column\" -> {\n                if (rest.length != 2) {\n                    System.err.println(\"wrong number of arguments for column\");\n                    System.exit(5);\n                }\n                runColumn(rest[0], rest[1]);\n            }\n            default -> {\n                System.err.println(\"unknown command: \" + command);\n                System.exit(3);\n            }\n        }\n    }\n\n    private static void runCheck(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            List<List<String>> rows = reader.rows();\n            int expected = header.size();\n            boolean malformed = false;\n\n            for (int i = 0; i < rows.size(); i++) {\n                int found = rows.get(i).size();\n                if (found != expected) {\n                    System.out.println(\"line \" + (i + 2) + \": expected \" + expected + \" fields, found \" + found);\n                    malformed = true;\n                }\n            }\n\n            System.exit(malformed ? 2 : 0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runCount(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<List<String>> rows = reader.rows();\n            System.out.println(rows.size());\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runColumn(String filePath, String columnName) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            List<List<String>> rows = reader.rows();\n\n            int colIndex = header.indexOf(columnName);\n            if (colIndex == -1) {\n                System.err.println(\"no such column: \" + columnName);\n                System.exit(4);\n            }\n\n            for (List<String> row : rows) {\n                if (colIndex < row.size()) {\n                    System.out.println(row.get(colIndex));\n                }\n            }\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n}"
+    }, {
+      "path" : "src/main/java/com/example/cli/reader/CsvReader.java",
+      "content" : "package com.example.cli.reader;\n\nimport java.io.IOException;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.util.ArrayList;\nimport java.util.List;\n\npublic class CsvReader {\n\n    private final List<String> header;\n    private final List<List<String>> rows;\n\n    public CsvReader(Path path) throws CsvReaderException {\n        try {\n            List<String> lines = Files.readAllLines(path);\n            if (lines.isEmpty()) {\n                this.header = List.of();\n                this.rows = List.of();\n                return;\n            }\n\n            this.header = splitLine(lines.get(0));\n            this.rows = new ArrayList<>();\n            for (int i = 1; i < lines.size(); i++) {\n                this.rows.add(splitLine(lines.get(i)));\n            }\n        } catch (IOException e) {\n            throw new CsvReaderException(\"Failed to read file: \" + e.getMessage(), e);\n        }\n    }\n\n    public List<String> header() {\n        return header;\n    }\n\n    public List<List<String>> rows() {\n        return rows;\n    }\n\n    private static List<String> splitLine(String line) {\n        if (line == null || line.isEmpty()) {\n            return List.of();\n        }\n        String[] parts = line.split(\",\", -1);\n        return List.of(parts);\n    }\n}"
+    }, {
+      "path" : "src/main/java/com/example/cli/reader/CsvReaderException.java",
+      "content" : "package com.example.cli.reader;\n\npublic class CsvReaderException extends Exception {\n\n    public CsvReaderException(String message) {\n        super(message);\n    }\n\n    public CsvReaderException(String message, Throwable cause) {\n        super(message, cause);\n    }\n}"
+    } ],
+    "deletedFiles" : [ ],
+    "summary" : "Parsed 3 changed file(s), 0 deleted file(s).",
+    "rawResponse" : "```java [src/main/java/com/example/cli/Main.java]\npackage com.example.cli;\n\nimport com.example.cli.reader.CsvReader;\nimport com.example.cli.reader.CsvReaderException;\n\nimport java.io.IOException;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.util.List;\n\npublic final class Main {\n\n    private Main() {\n    }\n\n    public static void main(String[] args) {\n        if (args.length == 0) {\n            System.err.println(\"unknown command: \");\n            System.exit(3);\n        }\n\n        String command = args[0];\n        String[] rest = java.util.Arrays.copyOfRange(args, 1, args.length);\n\n        switch (command) {\n            case \"check\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for check\");\n                    System.exit(5);\n                }\n                runCheck(rest[0]);\n            }\n            case \"count\" -> {\n                if (rest.length != 1) {\n                    System.err.println(\"wrong number of arguments for count\");\n                    System.exit(5);\n                }\n                runCount(rest[0]);\n            }\n            case \"column\" -> {\n                if (rest.length != 2) {\n                    System.err.println(\"wrong number of arguments for column\");\n                    System.exit(5);\n                }\n                runColumn(rest[0], rest[1]);\n            }\n            default -> {\n                System.err.println(\"unknown command: \" + command);\n                System.exit(3);\n            }\n        }\n    }\n\n    private static void runCheck(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            List<List<String>> rows = reader.rows();\n            int expected = header.size();\n            boolean malformed = false;\n\n            for (int i = 0; i < rows.size(); i++) {\n                int found = rows.get(i).size();\n                if (found != expected) {\n                    System.out.println(\"line \" + (i + 2) + \": expected \" + expected + \" fields, found \" + found);\n                    malformed = true;\n                }\n            }\n\n            System.exit(malformed ? 2 : 0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runCount(String filePath) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<List<String>> rows = reader.rows();\n            System.out.println(rows.size());\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n\n    private static void runColumn(String filePath, String columnName) {\n        Path path = Path.of(filePath);\n        if (!Files.exists(path)) {\n            System.err.println(\"no such file: \" + filePath);\n            System.exit(1);\n        }\n\n        try {\n            CsvReader reader = new CsvReader(path);\n            List<String> header = reader.header();\n            List<List<String>> rows = reader.rows();\n\n            int colIndex = header.indexOf(columnName);\n            if (colIndex == -1) {\n                System.err.println(\"no such column: \" + columnName);\n                System.exit(4);\n            }\n\n            for (List<String> row : rows) {\n                if (colIndex < row.size()) {\n                    System.out.println(row.get(colIndex));\n                }\n            }\n            System.exit(0);\n        } catch (CsvReaderException e) {\n            System.err.println(\"error reading file: \" + e.getMessage());\n            System.exit(1);\n        }\n    }\n}\n```\n\n```java [src/main/java/com/example/cli/reader/CsvReader.java]\npackage com.example.cli.reader;\n\nimport java.io.IOException;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.util.ArrayList;\nimport java.util.List;\n\npublic class CsvReader {\n\n    private final List<String> header;\n    private final List<List<String>> rows;\n\n    public CsvReader(Path path) throws CsvReaderException {\n        try {\n            List<String> lines = Files.readAllLines(path);\n            if (lines.isEmpty()) {\n                this.header = List.of();\n                this.rows = List.of();\n                return;\n            }\n\n            this.header = splitLine(lines.get(0));\n            this.rows = new ArrayList<>();\n            for (int i = 1; i < lines.size(); i++) {\n                this.rows.add(splitLine(lines.get(i)));\n            }\n        } catch (IOException e) {\n            throw new CsvReaderException(\"Failed to read file: \" + e.getMessage(), e);\n        }\n    }\n\n    public List<String> header() {\n        return header;\n    }\n\n    public List<List<String>> rows() {\n        return rows;\n    }\n\n    private static List<String> splitLine(String line) {\n        if (line == null || line.isEmpty()) {\n            return List.of();\n        }\n        String[] parts = line.split(\",\", -1);\n        return List.of(parts);\n    }\n}\n```\n\n```java [src/main/java/com/example/cli/reader/CsvReaderException.java]\npackage com.example.cli.reader;\n\npublic class CsvReaderException extends Exception {\n\n    public CsvReaderException(String message) {\n        super(message);\n    }\n\n    public CsvReaderException(String message, Throwable cause) {\n        super(message, cause);\n    }\n}\n```",
+    "recombined" : true,
+    "noOp" : false
+  },
+  "evaluationOutcome" : null,
+  "plannerOutcome" : null,
+  "analysisOutcome" : {
+    "findings" : [ {
+      "severity" : "HIGH",
+      "type" : "SPECIFICATION_DRIFT",
+      "observation" : "The specification coverage report indicates that the current plan lacks explicit articulation of the core CLI behaviors (exit codes, stderr messages, specific output formats for `check`, `count`, `column`). The plan appears to be high-level or missing the detailed implementation requirements for the `Main.java` dispatch logic.",
+      "path" : "(n/a)"
+    }, {
+      "severity" : "MEDIUM",
+      "type" : "ROLE_EVOLUTION",
+      "observation" : "High evolution score (3.00) suggests recent significant changes to the codebase structure or logic, likely related to the CLI implementation.",
+      "path" : "(n/a)"
+    }, {
+      "severity" : "LOW",
+      "type" : "DIAGNOSTIC_STAGNATION",
+      "observation" : "The diagnostic scan shows low recurrence of specific debug signals, indicating no immediate blocking errors in the orchestration history, but the specification gap remains the primary issue.",
+      "path" : "(n/a)"
+    } ],
+    "hypotheses" : [ "The `Main.java` file currently exists but does not fully implement the strict argument parsing, exit code enforcement, and specific stdout/stderr formatting required by the specification.", "The existing code may be a placeholder or a partial implementation that handles some commands but fails on edge cases (wrong arg counts, unknown commands, missing files).", "The \"Specification Coverage\" gap is due to the plan not explicitly listing the acceptance criteria for the CLI behavior, rather than the code being entirely absent." ],
+    "proposedExecutableSubGoals" : [ "Implement the `main` method in `src/main/java/com/example/cli/Main.java` to parse `argv`, validate the command word against `check`, `count`, and `column`, and enforce the specific exit codes (1, 2, 3, 4, 5) and stderr messages for invalid inputs, missing files, and unknown commands." ],
+    "goalCriteria" : {
+      "Implement the `main` method in `src/main/java/com/example/cli/Main.java` to parse `argv`, validate the command word against `check`, `count`, and `column`, and enforce the specific exit codes (1, 2, 3, 4, 5) and stderr messages for invalid inputs, missing files, and unknown commands." : [ "When invoked with an unknown command (e.g., `java -jar app.jar foo`), the tool prints `unknown command: foo` to stderr and exits with code 3.", "When invoked with a known command but incorrect number of arguments (e.g., `java -jar app.jar check`), the tool exits with code 5.", "When invoked with a file path that does not exist (e.g., `java -jar app.jar check /nonexistent`), the tool prints `no such file: /nonexistent` to stderr and exits with code 1.", "When invoked with `check <file>` where the file exists and all rows are well-formed, the tool exits with code 0 and prints nothing to stdout.", "When invoked with `check <file>` where the file exists and contains malformed rows, the tool prints one line per malformed row to stdout in the format `line <n>: expected <h> fields, found <f>` and exits with code 2.", "When invoked with `count <file>` where the file exists, the tool prints the number of data rows (excluding header) as a bare integer to stdout and exits with code 0.", "When invoked with `column <file> <name>` where the column exists, the tool prints every value of that column one per line to stdout in file order and exits with code 0.", "When invoked with `column <file> <name>` where the column does not exist in the header, the tool prints `no such column: <name>` to stderr and exits with code 4.", "<acceptance criterion 1>" ]
+    },
+    "message" : "The current plan lacks explicit articulation of the CLI behavior requirements; the subgoal focuses on implementing the strict argument parsing and exit code logic in Main.java.",
+    "goalKind" : "EXECUTABLE",
+    "possiblyComplete" : false,
+    "injectionThrottle" : false
+  },
+  "evaluationFeedback" : null,
+  "evaluationInterpretation" : null,
+  "mutationState" : "ACCEPTED",
+  "goalProgress" : "PROGRESSING",
+  "cycleResultState" : "CONTINUE",
+  "subgoalPromoted" : false,
+  "merged" : true,
+  "evolutionRanThisCycle" : true,
+  "lastEvolutionFingerprint" : "664b9baf43da47bf99c1434e97195eb479a51d92dd69e1c809dfbf3f8194ad14",
+  "lastEvaluatedEvolutionFingerprint" : null,
+  "lastRecombinationFingerprint" : null,
+  "recentEvolutionFingerprints" : [ "664b9baf43da47bf99c1434e97195eb479a51d92dd69e1c809dfbf3f8194ad14", "fa7c1a2e55f9462034915f5b9ff376a8e904da7da1818eb477ff61afa94ea3e1", "3879382c6cb8d923845efba3d8cab6ebf1b877077224b9a374b001f85d4e64ff", "918c6559da73f272bfba2dba2d3931e6b488a86f13bd63207f06996939dcc9ee", "e425ec367e04d1215e8fd0fcad08ae9f5a31fa7c60861634eaf71a17223f29bb", "5700dfc11b5412fdaa700a11218e0945131895d9d6c9c0b31f1817d689d577e4", "ee1e9fbb02723cf978b12c178486edb5e7038b7e0db2eaf6dac903227ffbfc21", "2082c526618709852d5240aafb08e42aae5a318f9b841ec0b862c774a5a5b991", "16e4845a85426fa95c33f377ef7e318b4f73efa53413165fcf10ef7b3b2266bf", "fadd64d449163ffd4e020c1817d8c8e74af094cdff71766124905466089e7403" ],
+  "previousAcceptedCycleName" : null,
+  "parentCycleName" : "cycle-1787665130486",
+  "recombinationSourceCycleName" : null,
+  "lastEvolutionOutcome" : null,
+  "lastEvaluationOutcome" : {
+    "score" : 0.76875,
+    "mutationState" : "ACCEPTED",
+    "goalProgress" : "PROGRESSING",
+    "feedbackMessage" : "CRITICAL: Heuristic 'DeterministicScoreHeuristic' overruled (1.00): Deterministic score from ScoringService.globalScore=0.758 confidence=1.00",
+    "recommendation" : "Verify that the `CsvReader` implementation correctly handles edge cases such as empty files or files with only a header to ensure robustness."
+  },
+  "lastPlannerOutcome" : {
+    "updated" : true,
+    "newGoals" : [ "Rewrite src/main/java/com/example/cli/Main.java so that main(String[] args) parses argv and dispatches to check/count/column, enforcing per-command argument counts and the specified exit codes and stderr messages" ],
+    "goalsToRemove" : [ "goal-0ea62b08-837e-41b7-beb4-f420830571ab", "goal-1e559371-3b07-4f98-83bb-ab9d5ead7ab9" ],
+    "message" : "Removed the stale build-fix goal (this is a CLI tool, not a service) and the prior Main.java subgoal that was rejected for scope mismatch; re-proposed a tightly-scoped Main.java rewrite targeting the exact exit-code and stderr-message acceptance criteria.",
+    "goalCriteria" : {
+      "Rewrite src/main/java/com/example/cli/Main.java so that main(String[] args) parses argv and dispatches to check/count/column, enforcing per-command argument counts and the specified exit codes and stderr messages" : [ "Running `java -jar app.jar unknown` prints \"unknown command: unknown\" to stderr and exits with code 3", "Running `java -jar app.jar check` (missing file arg) prints an error to stderr and exits with code 5", "Running `java -jar app.jar check file.csv extra` (too many args) prints an error to stderr and exits with code 5", "Running `java -jar app.jar check missing.csv` prints \"no such file: missing.csv\" to stderr and exits with code 1" ]
+    },
+    "planRationale" : null,
+    "reactivateGoalIds" : [ ]
+  },
+  "lastAnalysisOutcome" : {
+    "findings" : [ {
+      "severity" : "HIGH",
+      "type" : "MISSING_BEHAVIOR",
+      "observation" : "The specification requires specific exit codes (1, 2, 3, 4, 5) and stderr messages for error conditions (unknown command, missing file, wrong arg count, missing column), but the current plan/subgoal only mentions exit codes 3 and 5. The `check` command's specific exit code 2 for malformed rows and exit code 1 for missing files are not explicitly covered in the subgoal description, though they are part of the root goal.",
+      "path" : "(n/a)"
+    }, {
+      "severity" : "MEDIUM",
+      "type" : "INCOMPLETE_DISPATCH",
+      "observation" : "The subgoal focuses on parsing `argv` and dispatching, but the `check` command requires reading the file, parsing the header, and validating row field counts. This logic is not yet implemented or described in the subgoal.",
+      "path" : "(n/a)"
+    }, {
+      "severity" : "MEDIUM",
+      "type" : "MISSING_COMMAND_LOGIC",
+      "observation" : "The `count` and `column` commands require specific file reading and output formatting logic that is not yet implemented.",
+      "path" : "(n/a)"
+    }, {
+      "severity" : "LOW",
+      "type" : "PACKAGE_STRUCTURE",
+      "observation" : "The package constraint requires `com.example.cli`. The diff summary mentions \"Added: 1 class\", but it's unclear if it's in the correct package.",
+      "path" : "(n/a)"
+    } ],
+    "hypotheses" : [ "The current implementation likely has a `main` method that starts parsing arguments but lacks the full dispatch logic for all three commands and their specific error handling.", "The `check` command's validation logic (comparing field counts) is likely missing or incomplete.", "The `count` and `column` commands are likely stubs or missing entirely.", "The exit codes and stderr messages are likely not fully implemented according to the specification." ],
+    "proposedExecutableSubGoals" : [ "Implement the `main` entry point to parse `argv`, validate the command word, and dispatch to `check`, `count`, or `column` commands. Return exit code 3 for unknown commands with \"unknown command: <word>\" to stderr. Return exit code 5 for incorrect argument counts for known commands.", "Implement the `check` command to read the specified file, parse the header to determine expected field count, and validate each subsequent row. Print \"line <n>: expected <h> fields, found <f>\" to stdout for each malformed row in ascending line order. Exit 0 if all rows are well-formed, exit 2 if any row is malformed. Exit 1 if the file does not exist, printing \"no such file: <path>\" to stderr.", "Implement the `count` command to read the specified file and print the number of data rows (excluding the header) to stdout as a bare integer. Exit 0 on success. Exit 1 if the file does not exist, printing \"no such file: <path>\" to stderr.", "Implement the `column` command to read the specified file, find the named column in the header, and print every value of that column to stdout, one per line, in file order. Exit 0 on success. Exit 4 if the named column is not present in the header, printing \"no such column: <name>\" to stderr. Exit 1 if the file does not exist, printing \"no such file: <path>\" to stderr." ],
+    "goalCriteria" : {
+      "Implement the `main` entry point to parse `argv`, validate the command word, and dispatch to `check`, `count`, or `column` commands. Return exit code 3 for unknown commands with \"unknown command: <word>\" to stderr. Return exit code 5 for incorrect argument counts for known commands." : [ "Running `java -jar app.jar invalid` prints \"unknown command: invalid\" to stderr and exits with code 3.", "Running `java -jar app.jar check` (missing file arg) exits with code 5.", "Running `java -jar app.jar count` (missing file arg) exits with code 5.", "Running `java -jar app.jar column` (missing file and name args) exits with code 5.", "Running `java -jar app.jar check file.txt extra` (too many args) exits with code 5." ],
+      "Implement the `check` command to read the specified file, parse the header to determine expected field count, and validate each subsequent row. Print \"line <n>: expected <h> fields, found <f>\" to stdout for each malformed row in ascending line order. Exit 0 if all rows are well-formed, exit 2 if any row is malformed. Exit 1 if the file does not exist, printing \"no such file: <path>\" to stderr." : [ "Running `java -jar app.jar check missing.txt` prints \"no such file: missing.txt\" to stderr and exits with code 1.", "Running `java -jar app.jar check valid.csv` (where all rows match header field count) exits with code 0 and prints nothing to stdout.", "Running `java -jar app.jar check invalid.csv` (where some rows have different field counts) prints \"line <n>: expected <h> fields, found <f>\" for each malformed row to stdout and exits with code 2." ],
+      "Implement the `count` command to read the specified file and print the number of data rows (excluding the header) to stdout as a bare integer. Exit 0 on success. Exit 1 if the file does not exist, printing \"no such file: <path>\" to stderr." : [ "Running `java -jar app.jar count missing.txt` prints \"no such file: missing.txt\" to stderr and exits with code 1.", "Running `java -jar app.jar count data.csv` (with 5 data rows) prints \"5\" to stdout and exits with code 0." ],
+      "Implement the `column` command to read the specified file, find the named column in the header, and print every value of that column to stdout, one per line, in file order. Exit 0 on success. Exit 4 if the named column is not present in the header, printing \"no such column: <name>\" to stderr. Exit 1 if the file does not exist, printing \"no such file: <path>\" to stderr." : [ "Running `java -jar app.jar column missing.txt name` prints \"no such file: missing.txt\" to stderr and exits with code 1.", "Running `java -jar app.jar column data.csv nonexistent` prints \"no such column: nonexistent\" to stderr and exits with code 4.", "Running `java -jar app.jar column data.csv name` (where \"name\" is a valid column) prints the values of the \"name\" column, one per line, to stdout and exits with code 0." ]
+    },
+    "message" : "The current implementation is incomplete; all three commands and their specific error handling, exit codes, and output formats need to be implemented according to the specification.",
+    "goalKind" : "EXECUTABLE",
+    "possiblyComplete" : false,
+    "injectionThrottle" : false
+  },
+  "lastAttemptId" : "cycle-1787665188933",
+  "parentAttemptId" : "attempt-6aa650f3-6537-4ff8-b213-472f4c50edd3",
+  "mergedPath" : null,
+  "mergedBaseContent" : null,
+  "mergedVariants" : [ ],
+  "mergeTrace" : {
+    "mergedCycles" : [ ],
+    "preMergeContent" : { },
+    "postMergeContent" : { }
+  },
+  "findings" : [ ],
+  "scoreHistoryByFile" : {
+    "pom.xml" : [ 0.8, 0.8 ],
+    "src/main/java/com/example/cli/Main.java" : [ 0.8, 0.7, 0.7, 0.78, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.8, 0.75, 0.75, 0.75, 0.75, 0.8, 0.75, 0.75 ],
+    "src/main/java/com/example/cli/reader/CsvReader.java" : [ 0.8, 0.78, 0.75, 0.7, 0.8, 0.8, 0.8, 0.75, 0.75, 0.7, 0.75 ],
+    "src/main/java/com/example/cli/reader/CsvReaderException.java" : [ 0.8, 0.8, 0.8 ]
+  },
+  "recentDeltas" : {
+    "src/main/java/com/example/cli/Main.java" : 0.0,
+    "src/main/java/com/example/cli/reader/CsvReaderException.java" : 0.0,
+    "pom.xml" : 0.0,
+    "src/main/java/com/example/cli/reader/CsvReader.java" : 0.050000000000000044
+  },
+  "score" : 0.76875,
+  "lastScore" : 0.7575,
+  "lastAcceptedSubgoalScore" : 0.76875,
+  "subgoalScoreHistory" : [ 0.76875, 0.7906963901769644, 0.7962439463353369, 0.7756688004908838, 0.7761242565975545 ],
+  "evaluationBias" : null,
+  "scoringComputed" : false,
+  "scoringResult" : {
+    "globalScore" : 0.7575,
+    "lastGlobalScore" : 0.7575,
+    "lastAcceptedGoalScore" : null,
+    "lastGoalEvaluationScore" : null,
+    "perFileScores" : {
+      "src/main/java/com/example/cli/Main.java" : 0.75
+    },
+    "findings" : [ {
+      "description" : "Only a few files modified, no adds/deletes",
+      "severity" : "INFO",
+      "type" : "minor-edits",
+      "path" : null
+    } ],
+    "scoreHistoryByFile" : {
+      "pom.xml" : [ 0.8, 0.8 ],
+      "src/main/java/com/example/cli/Main.java" : [ 0.8, 0.7, 0.7, 0.78, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.8, 0.75, 0.75, 0.75, 0.75, 0.8, 0.75, 0.75 ],
+      "src/main/java/com/example/cli/reader/CsvReader.java" : [ 0.8, 0.78, 0.75, 0.7, 0.8, 0.8, 0.8, 0.75, 0.75, 0.7, 0.75 ],
+      "src/main/java/com/example/cli/reader/CsvReaderException.java" : [ 0.8, 0.8, 0.8 ]
+    },
+    "scoreDeltas" : {
+      "src/main/java/com/example/cli/Main.java" : 0.0,
+      "src/main/java/com/example/cli/reader/CsvReaderException.java" : 0.0,
+      "pom.xml" : 0.0,
+      "src/main/java/com/example/cli/reader/CsvReader.java" : 0.050000000000000044
+    },
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317"
+  },
+  "lastFitnessScores" : { },
+  "deliberationResult" : {
+    "mode" : "UNDIRECTED",
+    "confidence" : 0.55,
+    "rationale" : "No strong reason to deviate from the default execution flow.",
+    "considerations" : [ "No pause", "No stagnation", "No rejection" ],
+    "observations" : [ ],
+    "meta" : { },
+    "proposedRequests" : [ ],
+    "proposedWindows" : [ ]
+  },
+  "lastGoalProgressApplication" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "promoted" : false,
+    "previousSubGoalId" : null,
+    "newSubGoalId" : null,
+    "rootAutoCompleted" : false
+  },
+  "problemContext" : {
+    "open" : [ ],
+    "resolved" : [ {
+      "id" : "problem::goal-46b413ae-057d-414a-aae4-65197b0b6f0a::goal-f45763ac-c8e7-4d5c-a5af-d34b7567129a::signal:LOW_CONFIDENCE::",
+      "status" : "RESOLVED",
+      "severity" : "WARNING",
+      "title" : "Signal: LOW_CONFIDENCE",
+      "description" : "Detected strong signal LOW_CONFIDENCE strength=0.7",
+      "keywords" : [ "source:signal", "signal:LOW_CONFIDENCE" ],
+      "targetGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+      "targetSubGoalId" : "goal-f45763ac-c8e7-4d5c-a5af-d34b7567129a",
+      "firstSeenCycleId" : "cycle-1787664489902",
+      "lastSeenCycleId" : "cycle-1787664489902",
+      "createdAt" : "2026-08-25T13:29:14.264907372Z",
+      "updatedAt" : "2026-08-25T13:29:59.616160218Z",
+      "observationCycles" : [ ],
+      "observationNotes" : [ "Auto-resolved: signal weakened/absent (signal:LOW_CONFIDENCE)." ]
+    }, {
+      "id" : "problem::goal-46b413ae-057d-414a-aae4-65197b0b6f0a::goal-a428d8af-2595-43e6-8fb9-31a893325819::eval:STAGNATING::",
+      "status" : "RESOLVED",
+      "severity" : "WARNING",
+      "title" : "Evaluation: STAGNATING",
+      "description" : "Target `src/main/java/com/example/cli/Main.java` and implement the `main` method with argv parsing, command dispatch, and the specified exit codes (3 for unknown command, 5 for wrong argument count).",
+      "keywords" : [ "source:evaluation", "eval:STAGNATING" ],
+      "targetGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+      "targetSubGoalId" : "goal-a428d8af-2595-43e6-8fb9-31a893325819",
+      "firstSeenCycleId" : "cycle-1787664405174",
+      "lastSeenCycleId" : "cycle-1787664405174",
+      "createdAt" : "2026-08-25T13:27:46.404891031Z",
+      "updatedAt" : "2026-08-25T13:29:14.265769414Z",
+      "observationCycles" : [ ],
+      "observationNotes" : [ "Auto-resolved: no longer stagnating." ]
+    }, {
+      "id" : "problem::goal-46b413ae-057d-414a-aae4-65197b0b6f0a::goal-a428d8af-2595-43e6-8fb9-31a893325819::eval:REJECTED::",
+      "status" : "RESOLVED",
+      "severity" : "WARNING",
+      "title" : "Evaluation: REJECTED",
+      "description" : "The mutation only touches `CsvReader.java` (a minor `splitLine` refinement), but the subgoal requires implementing `main` entry point dispatch and exit codes in `Main.java`. None of the three acceptance criteria can be satisfied by changes to `CsvReader.java` alone.",
+      "keywords" : [ "source:evaluation", "eval:REJECTED" ],
+      "targetGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+      "targetSubGoalId" : "goal-a428d8af-2595-43e6-8fb9-31a893325819",
+      "firstSeenCycleId" : "cycle-1787664405174",
+      "lastSeenCycleId" : "cycle-1787664405174",
+      "createdAt" : "2026-08-25T13:27:46.404891031Z",
+      "updatedAt" : "2026-08-25T13:29:14.265733758Z",
+      "observationCycles" : [ ],
+      "observationNotes" : [ "Auto-resolved: evaluation accepted." ]
+    } ]
+  },
+  "previousProblemContext" : {
+    "open" : [ ],
+    "resolved" : [ {
+      "id" : "problem::goal-46b413ae-057d-414a-aae4-65197b0b6f0a::goal-f45763ac-c8e7-4d5c-a5af-d34b7567129a::signal:LOW_CONFIDENCE::",
+      "status" : "RESOLVED",
+      "severity" : "WARNING",
+      "title" : "Signal: LOW_CONFIDENCE",
+      "description" : "Detected strong signal LOW_CONFIDENCE strength=0.7",
+      "keywords" : [ "source:signal", "signal:LOW_CONFIDENCE" ],
+      "targetGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+      "targetSubGoalId" : "goal-f45763ac-c8e7-4d5c-a5af-d34b7567129a",
+      "firstSeenCycleId" : "cycle-1787664489902",
+      "lastSeenCycleId" : "cycle-1787664489902",
+      "createdAt" : "2026-08-25T13:29:14.264907372Z",
+      "updatedAt" : "2026-08-25T13:29:59.616160218Z",
+      "observationCycles" : [ ],
+      "observationNotes" : [ "Auto-resolved: signal weakened/absent (signal:LOW_CONFIDENCE)." ]
+    }, {
+      "id" : "problem::goal-46b413ae-057d-414a-aae4-65197b0b6f0a::goal-a428d8af-2595-43e6-8fb9-31a893325819::eval:STAGNATING::",
+      "status" : "RESOLVED",
+      "severity" : "WARNING",
+      "title" : "Evaluation: STAGNATING",
+      "description" : "Target `src/main/java/com/example/cli/Main.java` and implement the `main` method with argv parsing, command dispatch, and the specified exit codes (3 for unknown command, 5 for wrong argument count).",
+      "keywords" : [ "source:evaluation", "eval:STAGNATING" ],
+      "targetGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+      "targetSubGoalId" : "goal-a428d8af-2595-43e6-8fb9-31a893325819",
+      "firstSeenCycleId" : "cycle-1787664405174",
+      "lastSeenCycleId" : "cycle-1787664405174",
+      "createdAt" : "2026-08-25T13:27:46.404891031Z",
+      "updatedAt" : "2026-08-25T13:29:14.265769414Z",
+      "observationCycles" : [ ],
+      "observationNotes" : [ "Auto-resolved: no longer stagnating." ]
+    }, {
+      "id" : "problem::goal-46b413ae-057d-414a-aae4-65197b0b6f0a::goal-a428d8af-2595-43e6-8fb9-31a893325819::eval:REJECTED::",
+      "status" : "RESOLVED",
+      "severity" : "WARNING",
+      "title" : "Evaluation: REJECTED",
+      "description" : "The mutation only touches `CsvReader.java` (a minor `splitLine` refinement), but the subgoal requires implementing `main` entry point dispatch and exit codes in `Main.java`. None of the three acceptance criteria can be satisfied by changes to `CsvReader.java` alone.",
+      "keywords" : [ "source:evaluation", "eval:REJECTED" ],
+      "targetGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+      "targetSubGoalId" : "goal-a428d8af-2595-43e6-8fb9-31a893325819",
+      "firstSeenCycleId" : "cycle-1787664405174",
+      "lastSeenCycleId" : "cycle-1787664405174",
+      "createdAt" : "2026-08-25T13:27:46.404891031Z",
+      "updatedAt" : "2026-08-25T13:29:14.265733758Z",
+      "observationCycles" : [ ],
+      "observationNotes" : [ "Auto-resolved: evaluation accepted." ]
+    } ]
+  },
+  "interpretationSummary" : "The current cycle (cycle-1787665130486) exhibits a score regression (0.79 -> 0.77) and a re-escalation of the DeterministicScoreHeuristic to CRITICAL level, reversing the improvement seen in the previous cycle. This indicates instability in the evolution path for the CLI subgoal, with the system oscillating between acceptance and critical evaluation states.",
+  "interpretationDirectives" : "Inject LOW_CONFIDENCE to flag the score regression and critical heuristic status. Direct the next cycle to specifically address the `CsvReader` edge cases (empty files, header-only) and `column` command robustness (IndexOutOfBounds) identified in the evaluation recommendation before attempting further feature expansion.",
+  "cumulativeStagnatingCycles" : 0,
+  "stagnationCircuitBreakerActive" : false,
+  "lastAcceptedMutationFileCount" : 3,
+  "plateauCycles" : 7,
+  "criticalHeuristicStreaks" : { },
+  "persistentHeuristicWarnings" : [ ],
+  "establishedBasePackage" : "com.example.cli",
+  "currentSubGoalCriteria" : null,
+  "criteriaAssessments" : [ ],
+  "cumulativeCriteriaStatus" : null,
+  "lastCriteriaPassCount" : 0,
+  "criteriaConsecutiveFailCount" : null,
+  "currentSubGoalParentId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+  "planRationale" : "The root goal is a single CLI tool with three commands sharing common file/argument validation; I will build the shared foundation (argument parsing, file existence check, CSV reading) first, then implement each command in dependency order so each builds on the previous.",
+  "evaluatorRepeatRetries" : 0,
+  "buildOutcome" : {
+    "result" : "COMPILE_OK",
+    "stderrTail" : "[\u001B[1;34mINFO\u001B[m] Scanning for projects...\n[\u001B[1;34mINFO\u001B[m] \n[\u001B[1;34mINFO\u001B[m] \u001B[1m------------------------< \u001B[0;36mcom.example:cli-tool\u001B[0;1m >------------------------\u001B[m\n[\u001B[1;34mINFO\u001B[m] \u001B[1mBuilding cli-tool 1.0.0\u001B[m\n[\u001B[1;34mINFO\u001B[m] \u001B[1m--------------------------------[ jar ]---------------------------------\u001B[m\n[\u001B[1;34mINFO\u001B[m] \n[\u001B[1;34mINFO\u001B[m] \u001B[1m--- \u001B[0;32mmaven-resources-plugin:2.6:resources\u001B[m \u001B[1m(default-resources)\u001B[m @ \u001B[36mcli-tool\u001B[0;1m ---\u001B[m\n[\u001B[1;34mINFO\u001B[m] Using 'UTF-8' encoding to copy filtered resources.\n[\u001B[1;34mINFO\u001B[m] skip non existing resourceDirectory /home/anugeshtu/IdeaProjects/autobuilder/clitarget/output/src/main/resources\n[\u001B[1;34mINFO\u001B[m] \n[\u001B[1;34mINFO\u001B[m] \u001B[1m--- \u001B[0;32mmaven-compiler-plugin:3.1:compile\u001B[m \u001B[1m(default-compile)\u001B[m @ \u001B[36mcli-tool\u001B[0;1m ---\u001B[m\n[\u001B[1;34mINFO\u001B[m] Changes detected - recompiling the module!\n[\u001B[1;34mINFO\u001B[m] Compiling 3 source files to /home/anugeshtu/IdeaProjects/autobuilder/clitarget/output/target/classes\n[\u001B[1;34mINFO\u001B[m] \u001B[1m------------------------------------------------------------------------\u001B[m\n[\u001B[1;34mINFO\u001B[m] \u001B[1;32mBUILD SUCCESS\u001B[m\n[\u001B[1;34mINFO\u001B[m] \u001B[1m------------------------------------------------------------------------\u001B[m\n[\u001B[1;34mINFO\u001B[m] Total time:  1.518 s\n[\u001B[1;34mINFO\u001B[m] Finished at: 2026-08-25T15:39:30+02:00\n[\u001B[1;34mINFO\u001B[m] \u001B[1m------------------------------------------------------------------------\u001B[m",
+    "durationMs" : 2966,
+    "command" : "mvn compile",
+    "cycleId" : "cycle-1787665130486"
+  },
+  "lastProbeOutcome" : {
+    "result" : "COMPILE_OK",
+    "stderrTail" : "[\u001B[1;34mINFO\u001B[m] Scanning for projects...\n[\u001B[1;34mINFO\u001B[m] \n[\u001B[1;34mINFO\u001B[m] \u001B[1m------------------------< \u001B[0;36mcom.example:cli-tool\u001B[0;1m >------------------------\u001B[m\n[\u001B[1;34mINFO\u001B[m] \u001B[1mBuilding cli-tool 1.0.0\u001B[m\n[\u001B[1;34mINFO\u001B[m] \u001B[1m--------------------------------[ jar ]---------------------------------\u001B[m\n[\u001B[1;34mINFO\u001B[m] \n[\u001B[1;34mINFO\u001B[m] \u001B[1m--- \u001B[0;32mmaven-resources-plugin:2.6:resources\u001B[m \u001B[1m(default-resources)\u001B[m @ \u001B[36mcli-tool\u001B[0;1m ---\u001B[m\n[\u001B[1;34mINFO\u001B[m] Using 'UTF-8' encoding to copy filtered resources.\n[\u001B[1;34mINFO\u001B[m] skip non existing resourceDirectory /home/anugeshtu/IdeaProjects/autobuilder/clitarget/output/src/main/resources\n[\u001B[1;34mINFO\u001B[m] \n[\u001B[1;34mINFO\u001B[m] \u001B[1m--- \u001B[0;32mmaven-compiler-plugin:3.1:compile\u001B[m \u001B[1m(default-compile)\u001B[m @ \u001B[36mcli-tool\u001B[0;1m ---\u001B[m\n[\u001B[1;34mINFO\u001B[m] Changes detected - recompiling the module!\n[\u001B[1;34mINFO\u001B[m] Compiling 3 source files to /home/anugeshtu/IdeaProjects/autobuilder/clitarget/output/target/classes\n[\u001B[1;34mINFO\u001B[m] \u001B[1m------------------------------------------------------------------------\u001B[m\n[\u001B[1;34mINFO\u001B[m] \u001B[1;32mBUILD SUCCESS\u001B[m\n[\u001B[1;34mINFO\u001B[m] \u001B[1m------------------------------------------------------------------------\u001B[m\n[\u001B[1;34mINFO\u001B[m] Total time:  1.576 s\n[\u001B[1;34mINFO\u001B[m] Finished at: 2026-08-25T15:39:16+02:00\n[\u001B[1;34mINFO\u001B[m] \u001B[1m------------------------------------------------------------------------\u001B[m",
+    "durationMs" : 3010,
+    "command" : "mvn compile",
+    "cycleId" : "cycle-1787665130486-probe"
+  },
+  "consecutiveBuildFixAttempts" : 0,
+  "lastRollbackPoint" : null,
+  "rolledBackThisCycle" : false,
+  "lastRollback" : null,
+  "sameFailureStreakKey" : null,
+  "sameFailureStreak" : 0,
+  "packageFragmentationThisCycle" : false,
+  "packageFragmentation" : null,
+  "injectorFixes" : [ ],
+  "relatedAbandonedGoals" : [ ],
+  "seedCoverage" : {
+    "unclaimed" : [ {
+      "clause" : "It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit",
+      "missingTerms" : [ "write", "terminate" ]
+    }, {
+      "clause" : "printing \"unknown command: <word>\" to stderr.",
+      "missingTerms" : [ "printing" ]
+    }, {
+      "clause" : "check <file> — read the file and report malformed rows.",
+      "missingTerms" : [ "report", "malformed" ]
+    }, {
+      "clause" : "differs from the header's.",
+      "missingTerms" : [ "differ" ]
+    }, {
+      "clause" : "\"no such column: <name>\" to stderr.",
+      "missingTerms" : [ "such" ]
+    }, {
+      "clause" : "Exit 5 when the wrong number of arguments is given",
+      "missingTerms" : [ "when", "given" ]
+    }, {
+      "clause" : "The first line of a file is always its header.",
+      "missingTerms" : [ "alway", "its" ]
+    }, {
+      "clause" : "column <file> <name> — print every value of the named column, one per line, in file order.",
+      "missingTerms" : [ "every", "value", "named", "one" ]
+    }, {
+      "clause" : "for a known command.",
+      "missingTerms" : [ "known" ]
+    }, {
+      "clause" : "Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited",
+      "missingTerms" : [ "evolve", "21", "into", "tool", "summarise", "delimited" ]
+    }, {
+      "clause" : "Print one line per malformed row to stdout as",
+      "missingTerms" : [ "one", "malformed", "row" ]
+    }, {
+      "clause" : "Common rules: exit 1 when the file argument names a path that does not exist, printing",
+      "missingTerms" : [ "rule", "when", "path", "does", "not", "exist", "printing" ]
+    }, {
+      "clause" : "Invocation: java -jar app.jar <command> [arguments]",
+      "missingTerms" : [ "invocation", "jar", "app" ]
+    }, {
+      "clause" : "\"line <n>: expected <h> fields, found <f>\", in ascending line order.",
+      "missingTerms" : [ "expected", "found", "ascending" ]
+    }, {
+      "clause" : "Exit 4 when the named column is not present in the header, printing",
+      "missingTerms" : [ "when", "named", "not", "present", "printing" ]
+    }, {
+      "clause" : "\"no such file: <path>\" to stderr.",
+      "missingTerms" : [ "such", "path" ]
+    }, {
+      "clause" : "Exit 3 when the command word is not one of the three above,",
+      "missingTerms" : [ "when", "not", "one", "three", "above" ]
+    }, {
+      "clause" : "Exit 0 when every row is",
+      "missingTerms" : [ "when", "every", "row" ]
+    }, {
+      "clause" : "A row is malformed when its field count",
+      "missingTerms" : [ "row", "malformed", "when", "its" ]
+    }, {
+      "clause" : "Fields are separated by",
+      "missingTerms" : [ "are", "separated" ]
+    }, {
+      "clause" : "well formed, exit 2 when at least one row is malformed.",
+      "missingTerms" : [ "well", "formed", "when", "least", "one", "row", "malformed" ]
+    }, {
+      "clause" : "It is not a service: it has no network surface, no HTTP, and no long-running process.",
+      "missingTerms" : [ "not", "service", "has", "network", "surface", "http", "long", "running" ]
+    }, {
+      "clause" : "No quoting or escaping is required.",
+      "missingTerms" : [ "quoting", "escaping", "required" ]
+    } ],
+    "unprovable" : [ ]
+  },
+  "skippedProposalMatches" : null,
+  "lastAuthorErrors" : null,
+  "buildDiagnostic" : null,
+  "scopeGuardResult" : null,
+  "goalExhaustedReason" : null,
+  "evolutionFingerprintChangedThisCycle" : true,
+  "unmergedEvolutionWork" : true,
+  "requests" : {
+    "open" : {
+      "SignalType[name=SIGNALTYPE[NAME=SIGNALTYPE[NAME=SIGNALTYPE[NAME=DIVERGENCE_REQUEST]]]]" : {
+        "kind" : {
+          "name" : "DIVERGENCE_REQUEST"
+        },
+        "urgency" : 1.7,
+        "source" : "repetition",
+        "subGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+        "age" : 1,
+        "validForCycles" : 10,
+        "meta" : { }
+      }
+    }
+  },
+  "windows" : {
+    "active" : {
+      "evolution" : {
+        "role" : "evolution",
+        "boost" : 3.0,
+        "source" : "cycle-start",
+        "age" : 1,
+        "validForCycles" : 59,
+        "decayEquivalent" : 0.05
+      },
+      "evaluation" : {
+        "role" : "evaluation",
+        "boost" : 3.0,
+        "source" : "cycle-start",
+        "age" : 0,
+        "validForCycles" : 59,
+        "decayEquivalent" : 0.05
+      },
+      "planner" : {
+        "role" : "planner",
+        "boost" : 1.872,
+        "source" : "cycle-start",
+        "age" : 13,
+        "validForCycles" : 37,
+        "decayEquivalent" : 0.05
+      },
+      "analysis" : {
+        "role" : "analysis",
+        "boost" : 3.0,
+        "source" : "cycle-start",
+        "age" : 13,
+        "validForCycles" : null,
+        "decayEquivalent" : 0.0
+      },
+      "merge" : {
+        "role" : "merge",
+        "boost" : 1.0,
+        "source" : "reinforce",
+        "age" : 1,
+        "validForCycles" : 19,
+        "decayEquivalent" : 0.05
+      }
+    }
+  },
+  "pausedReason" : null,
+  "steeringSuppressed" : false,
+  "restageSuppressed" : false
+}

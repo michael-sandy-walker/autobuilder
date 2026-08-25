@@ -1,0 +1,11 @@
+{
+  "fromCycle" : "cycle-1787665130486",
+  "entryPointPresent" : true,
+  "entryPointRequired" : true,
+  "buildResult" : "COMPILE_OK",
+  "verifiedBuildResult" : "COMPILE_OK",
+  "candidatesProbed" : 1,
+  "snapshotsConsidered" : 23,
+  "haltCycle" : "cycle-1787665130486",
+  "preservedAt" : "2026-08-25T13:39:48.930983390Z"
+}

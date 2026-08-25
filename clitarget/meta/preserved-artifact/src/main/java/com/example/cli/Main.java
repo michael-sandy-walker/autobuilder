@@ -62,20 +62,18 @@ public final class Main {
             System.exit(1);
             return;
         }
-
         try {
             CsvReader reader = new CsvReader(path);
-            int headerCount = reader.header().size();
+            int expected = reader.header().size();
             boolean malformed = false;
-
-            for (int i = 0; i < reader.rows().size(); i++) {
-                List<String> row = reader.rows().get(i);
-                if (row.size() != headerCount) {
-                    System.out.println("line " + (i + 2) + ": expected " + headerCount + " fields, found " + row.size());
+            int lineNum = 1;
+            for (List<String> row : reader.rows()) {
+                lineNum++;
+                if (row.size() != expected) {
+                    System.out.println("line " + lineNum + ": expected " + expected + " fields, found " + row.size());
                     malformed = true;
                 }
             }
-
             System.exit(malformed ? 2 : 0);
         } catch (CsvReaderException e) {
             System.err.println("error reading file: " + e.getMessage());
@@ -90,7 +88,6 @@ public final class Main {
             System.exit(1);
             return;
         }
-
         try {
             CsvReader reader = new CsvReader(path);
             System.out.println(reader.rows().size());
@@ -108,21 +105,18 @@ public final class Main {
             System.exit(1);
             return;
         }
-
         try {
             CsvReader reader = new CsvReader(path);
             List<String> header = reader.header();
-            int colIndex = header.indexOf(columnName);
-
-            if (colIndex == -1) {
+            int idx = header.indexOf(columnName);
+            if (idx == -1) {
                 System.err.println("no such column: " + columnName);
                 System.exit(4);
                 return;
             }
-
             for (List<String> row : reader.rows()) {
-                if (colIndex < row.size()) {
-                    System.out.println(row.get(colIndex));
+                if (idx < row.size()) {
+                    System.out.println(row.get(idx));
                 }
             }
             System.exit(0);

@@ -17,6 +17,7 @@ public final class Main {
         if (args.length == 0) {
             System.err.println("unknown command: ");
             System.exit(3);
+            return;
         }
 
         String command = args[0];
@@ -27,6 +28,7 @@ public final class Main {
                 if (rest.length != 1) {
                     System.err.println("wrong number of arguments for check");
                     System.exit(5);
+                    return;
                 }
                 runCheck(rest[0]);
             }
@@ -34,6 +36,7 @@ public final class Main {
                 if (rest.length != 1) {
                     System.err.println("wrong number of arguments for count");
                     System.exit(5);
+                    return;
                 }
                 runCount(rest[0]);
             }
@@ -41,6 +44,7 @@ public final class Main {
                 if (rest.length != 2) {
                     System.err.println("wrong number of arguments for column");
                     System.exit(5);
+                    return;
                 }
                 runColumn(rest[0], rest[1]);
             }
@@ -56,21 +60,21 @@ public final class Main {
         if (!Files.exists(path)) {
             System.err.println("no such file: " + filePath);
             System.exit(1);
+            return;
         }
 
         try {
             CsvReader reader = new CsvReader(path);
-            int headerCount = reader.header().size();
+            int expected = reader.header().size();
             boolean malformed = false;
-
-            for (int i = 0; i < reader.rows().size(); i++) {
-                List<String> row = reader.rows().get(i);
-                if (row.size() != headerCount) {
-                    System.out.println("line " + (i + 2) + ": expected " + headerCount + " fields, found " + row.size());
+            int lineNum = 1;
+            for (List<String> row : reader.rows()) {
+                lineNum++;
+                if (row.size() != expected) {
+                    System.out.println("line " + lineNum + ": expected " + expected + " fields, found " + row.size());
                     malformed = true;
                 }
             }
-
             System.exit(malformed ? 2 : 0);
         } catch (CsvReaderException e) {
             System.err.println("error reading file: " + e.getMessage());
@@ -83,6 +87,7 @@ public final class Main {
         if (!Files.exists(path)) {
             System.err.println("no such file: " + filePath);
             System.exit(1);
+            return;
         }
 
         try {
@@ -100,18 +105,18 @@ public final class Main {
         if (!Files.exists(path)) {
             System.err.println("no such file: " + filePath);
             System.exit(1);
+            return;
         }
 
         try {
             CsvReader reader = new CsvReader(path);
             List<String> header = reader.header();
             int colIndex = header.indexOf(columnName);
-
             if (colIndex == -1) {
                 System.err.println("no such column: " + columnName);
                 System.exit(4);
+                return;
             }
-
             for (List<String> row : reader.rows()) {
                 if (colIndex < row.size()) {
                     System.out.println(row.get(colIndex));

@@ -792,11 +792,11 @@
   },
   "evaluationFeedback" : null,
   "evaluationInterpretation" : null,
-  "mutationState" : null,
+  "mutationState" : "ACCEPTED",
   "goalProgress" : "PROGRESSING",
   "cycleResultState" : "CONTINUE",
   "subgoalPromoted" : false,
-  "merged" : false,
+  "merged" : true,
   "evolutionRanThisCycle" : true,
   "lastEvolutionFingerprint" : "918c6559da73f272bfba2dba2d3931e6b488a86f13bd63207f06996939dcc9ee",
   "lastEvaluatedEvolutionFingerprint" : null,
@@ -1232,7 +1232,7 @@
   "unmergedEvolutionWork" : true,
   "requests" : {
     "open" : {
-      "SignalType[name=DIVERGENCE_REQUEST]" : {
+      "SignalType[name=SIGNALTYPE[NAME=SIGNALTYPE[NAME=SIGNALTYPE[NAME=DIVERGENCE_REQUEST]]]]" : {
         "kind" : {
           "name" : "DIVERGENCE_REQUEST"
         },

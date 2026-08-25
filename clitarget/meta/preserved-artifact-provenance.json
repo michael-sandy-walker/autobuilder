@@ -1,11 +1,11 @@
 {
-  "fromCycle" : "cycle-1787666561274",
+  "fromCycle" : "cycle-1787667072089",
   "entryPointPresent" : true,
   "entryPointRequired" : true,
   "buildResult" : "COMPILE_OK",
   "verifiedBuildResult" : "COMPILE_OK",
   "candidatesProbed" : 1,
-  "snapshotsConsidered" : 43,
-  "haltCycle" : "cycle-1787666561274",
-  "preservedAt" : "2026-08-25T14:04:00.065231022Z"
+  "snapshotsConsidered" : 50,
+  "haltCycle" : "cycle-1787667072089",
+  "preservedAt" : "2026-08-25T14:12:35.520460214Z"
 }

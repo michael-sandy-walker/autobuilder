@@ -1,0 +1,11 @@
+{
+  "dependencyContext" : "",
+  "entries" : {
+    "IOException" : {
+      "fqn" : "java.io.IOException",
+      "groupId" : null,
+      "artifactId" : null,
+      "version" : null
+    }
+  }
+}

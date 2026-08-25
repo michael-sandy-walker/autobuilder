@@ -15,16 +15,17 @@ public class CsvReader {
         try {
             List<String> lines = Files.readAllLines(path);
             if (lines.isEmpty()) {
-                throw new CsvReaderException("empty file");
+                this.header = List.of();
+                this.rows = List.of();
+                return;
             }
-
             this.header = splitLine(lines.get(0));
             this.rows = new ArrayList<>();
             for (int i = 1; i < lines.size(); i++) {
                 this.rows.add(splitLine(lines.get(i)));
             }
         } catch (IOException e) {
-            throw new CsvReaderException("failed to read file: " + e.getMessage(), e);
+            throw new CsvReaderException("Failed to read file: " + e.getMessage(), e);
         }
     }
 

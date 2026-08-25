@@ -225,3 +225,8 @@ question "did it stay up?" in the core has moved nothing.
 **Only a target that TERMINATES could have revealed this.** It is invisible to hit counts, invisible
 to code reading, and invisible to a second REST target. That is the argument for the non-REST target
 having been the right prerequisite all along.
+
+**Quantified cost of the liveness assumption:** the CLI tool scored 12/12 at merge 12 and 12/12 at
+merge 37, across the same three source files — **25 of 37 merges (68%) produced no measurable
+improvement**. The loop finished the target in twelve minutes and was denied closure for another
+forty-five. Items 1 and 2 above cost accuracy; **item 3 costs the run**, and should be fixed first.

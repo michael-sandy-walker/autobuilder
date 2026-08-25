@@ -4726,6 +4726,20 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
     - **So the honest scale is: the closure-blocking set is mostly false, while the run-wide contradiction stream is mostly ordinary mid-run observation.** Two different populations, and only the first is evidence for these tickets.
   - **Tier note:** T1 — a correct application is reported as defective.
 
+- [~] **T6-Q: does 2026-08-24's work regress the loop? — a paired A/B screening series with N and the decision rule fixed BEFORE the runs** (`scripts/preflight.sh` from two fixed worktrees; ledger `ab_results.tsv`) — **opened 2026-08-25 at the user's request after a single pair went the wrong way.**
+  - **Why it exists:** pair 1 gave **A (pre-today) 23/23 vs B (today) 19/23**. One pair cannot attribute — this project measures a per-attempt spread of **sd ≈ 31 points** — but the direction is the opposite of "today's commits are harmless", so it is worth N rather than an explanation ([[feedback-replay-over-batches]]: live batches only for strategic questions with N and a rule stated in advance).
+  - **Arms, both FIXED worktrees so the main repo can keep evolving without touching the experiment:**
+    - **A = `8c375af`** — last commit before 2026-08-24.
+    - **B = `9cef43a`** — HEAD at the moment the question was asked. **Deliberately NOT current HEAD**: `T1-FU`'s fix landed after, and folding a behaviour change into an arm mid-series would confound it.
+  - **Design:** strictly sequential runs (a concurrent pair starves the box and voids both — measured tonight, a 19-minute stall). Alternating order, and pair 2 starts with **B** so arm order is swapped against pair 1.
+  - **📋 DECISION RULE, fixed in advance:** four pairs total. Metric = per-run `smoke` (an unscorable artifact counts 0).
+    - **≥3 of 4 pairs favour A AND mean(A−B) ≥ 8 points → treat as evidence of regression and bisect the 2026-08-24 commits.**
+    - **Pairs split, or mean |A−B| < 8 → no evidence of regression at this N; say so and stop.**
+    - A run lost to environment (`jvm-died`, contention) is VOID and re-run; it does not count toward N.
+  - **⚠ WHAT THIS CAN AND CANNOT DO.** At N=4 with sd ≈ 31 this is a screening test for a LARGE regression only. A null result does not mean "no regression" — it means "none large enough to see at four pairs". Do not report it as safety.
+  - **⚠ AND IT CANNOT VALIDATE THE PROBE FIXES.** `T1-FU`/`T1-FV`/`T1-FW` are verified by `scripts/probe_truth.sh` against a booted artifact, not by run scores — the runs are far too noisy, and pointing at a score after shipping them would be exactly the inference this ticket exists to avoid.
+  - **Tier note:** T6 — the subject is the measurement apparatus around the loop, not the loop.
+
 - [ ] **T1-FU: a probe sequence longer than the request budget is TRUNCATED and then judged, so the setup that establishes the precondition is silently dropped and correct code is accused** (`core/build/CriterionProbeSynthesizer` model-fallback path, `core/build/BootGate` sequence execution, `goal/GoalPlannerService` T4-BV closure gate) — **filed 2026-08-24; mechanism PINNED the same night from the model's own logged answer plus the code, after two wrong guesses that are kept below.**
   - **What is established, and it is enough to matter:**
     - **All three of the recent 23/23 runs were blocked from root closure by the SAME criterion**, counted as distinct closure-block EVENTS rather than log lines ([[feedback-count-events-not-log-lines]]): `2026-08-23_22-34-35` **34**, `2026-08-23_21-01-40` **33**, `2026-08-24_17-48-02` **21**. Every block names `"POST /loans returns HTTP 422 — if exceeded"` and reports *"the running application answered 201"*.

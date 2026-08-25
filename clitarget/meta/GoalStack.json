@@ -1,6 +1,6 @@
 {
   "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
-  "currentSubGoalId" : null,
+  "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
   "goalTree" : {
     "id" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
     "description" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
@@ -323,8 +323,6 @@
       "type" : "SUBGOAL",
       "status" : "ACTIVE",
       "created" : 1787664611.762353423,
-      "completed" : 1787666858.316079945,
-      "givenUp" : 1787666927.29707956,
       "resolution" : "Build fixed — BUILD_FIX subgoal no longer needed",
       "metadata" : {
         "planningRunId" : 0,
@@ -333,12 +331,12 @@
         "activeAttemptId" : "attempt-1521f860-5f65-4a05-8315-ccfd8ef23bd3",
         "originatingGate" : "boot-gate",
         "blockerType" : "BUILD_FIX",
-        "subsumptionReason" : "REPLACED",
-        "mergeCount" : 24,
+        "subsumptionReason" : "COVERED",
+        "mergeCount" : 25,
         "mergedFiles" : [ "Main.java", "CsvReader.java", "pom.xml", "CsvReaderException.java" ],
-        "lastProgressState" : "FULFILLED",
-        "lastUpdated" : "2026-08-25T14:07:38.315108140Z",
-        "closureEdgeReopens" : 48,
+        "lastProgressState" : "PROGRESSING",
+        "lastUpdated" : "2026-08-25T14:20:09.254313162Z",
+        "closureEdgeReopens" : 50,
         "analysisClassifiedKind" : "EXECUTABLE",
         "planRationale" : "The current [BUILD_FIX] subgoal is misaligned with the CLI specification (it references \"endpoints\" and \"serve\" which do not apply to a CLI tool) and is stagnating. I am removing it to replace it with concrete, specification-aligned subgoals that implement the missing `check` command logic and ensure the `main` method correctly handles exit codes and stderr output as required by the root goal.",
         "subgoalRequests" : {

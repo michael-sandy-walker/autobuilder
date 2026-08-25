@@ -230,3 +230,11 @@ having been the right prerequisite all along.
 merge 37, across the same three source files — **25 of 37 merges (68%) produced no measurable
 improvement**. The loop finished the target in twelve minutes and was denied closure for another
 forty-five. Items 1 and 2 above cost accuracy; **item 3 costs the run**, and should be fixed first.
+
+**The assumption is in the HARNESS too, not only the loop.** The CLI run scored `smoke=boot-failed`
+while the identical artefact measured 12/12 by hand. `preflight.sh:build_boot_smoke` starts the jar
+with `--server.port`, waits for a `Started` banner, and returns `boot-failed` without ever running
+the yardstick — which it would have called with a URL anyway. **`T4-CK` parameterised WHICH yardstick
+runs, not HOW the artefact is observed.** Any seam design must cover the harness's observation model
+as well as the loop's, or a non-REST target scores a false zero in the ledger no matter how correct
+it is.

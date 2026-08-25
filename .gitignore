@@ -10,6 +10,11 @@ target
 /firestarter/a.txt
 /firestarter/b.txt
 /firestarter/meta/bootstrap.done
+/clitarget/snapshots/
+/clitarget/mutations/
+/clitarget/output/
+/clitarget/logs/
+/clitarget/meta/bootstrap.done
 /.idea/compiler.xml
 /.idea/IntelliLang.xml
 /.idea/jarRepositories.xml

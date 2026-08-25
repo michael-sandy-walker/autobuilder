@@ -60,15 +60,13 @@ public final class Main {
 
         try {
             CsvReader reader = new CsvReader(path);
-            List<String> header = reader.header();
-            List<List<String>> rows = reader.rows();
-            int expected = header.size();
+            int headerCount = reader.header().size();
             boolean malformed = false;
 
-            for (int i = 0; i < rows.size(); i++) {
-                List<String> row = rows.get(i);
-                if (row.size() != expected) {
-                    System.out.println("line " + (i + 2) + ": expected " + expected + " fields, found " + row.size());
+            for (int i = 0; i < reader.rows().size(); i++) {
+                List<String> row = reader.rows().get(i);
+                if (row.size() != headerCount) {
+                    System.out.println("line " + (i + 2) + ": expected " + headerCount + " fields, found " + row.size());
                     malformed = true;
                 }
             }
@@ -89,8 +87,7 @@ public final class Main {
 
         try {
             CsvReader reader = new CsvReader(path);
-            List<List<String>> rows = reader.rows();
-            System.out.println(rows.size());
+            System.out.println(reader.rows().size());
             System.exit(0);
         } catch (CsvReaderException e) {
             System.err.println("error reading file: " + e.getMessage());
@@ -108,15 +105,14 @@ public final class Main {
         try {
             CsvReader reader = new CsvReader(path);
             List<String> header = reader.header();
-            List<List<String>> rows = reader.rows();
-
             int colIndex = header.indexOf(columnName);
+
             if (colIndex == -1) {
                 System.err.println("no such column: " + columnName);
                 System.exit(4);
             }
 
-            for (List<String> row : rows) {
+            for (List<String> row : reader.rows()) {
                 if (colIndex < row.size()) {
                     System.out.println(row.get(colIndex));
                 }

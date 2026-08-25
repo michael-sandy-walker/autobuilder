@@ -9682,3 +9682,5774 @@
     "durationMs" : 0
   }
 }
+{
+  "timestamp" : "2026-08-25T15:44:35.781286337+02:00",
+  "cycleId" : "cycle-1787665412386",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4140,
+    "completionTokens" : 176,
+    "totalTokens" : 4316,
+    "durationMs" : 7160
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:44:35.833745865+02:00",
+  "cycleId" : "cycle-1787665412386",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 9163,
+    "sessionBuildMs" : 215818,
+    "cycleBuildCount" : 3,
+    "sessionBuildCount" : 77
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:44:41.274841937+02:00",
+  "cycleId" : "cycle-1787665412386",
+  "event" : "artifact_preserved",
+  "payload" : {
+    "fromCycle" : "cycle-1787665412386",
+    "entryPointPresent" : true,
+    "entryPointRequired" : true,
+    "buildResult" : "COMPILE_OK",
+    "snapshotsConsidered" : 28
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:44:41.460654529+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:44:41.522096915+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ ],
+    "rationale" : "No strong reason to deviate from the default execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:44:41.522504783+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "evolution",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.7,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "analysis",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 1.872,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:44:41.523029096+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "REPETITION_DETECTED" : 1.0,
+      "ROLE_MERGE" : 1.0,
+      "ROLE_PLANNER" : 1.872,
+      "DIVERGENCE_REQUEST" : 1.7,
+      "STAGNATION" : 0.7
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:44:42.298655003+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:06.701384104+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 3778,
+    "completionTokens" : 1701,
+    "totalTokens" : 5479,
+    "durationMs" : 24383
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:06.770939240+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "3f46a09de0a8307df4384f8a7e69fa9bf8e27befc490d080460825fa990fef15",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:07.857013987+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 4.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:10.038432447+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "analysis",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:12.197120432+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:14.414709880+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "merge",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:17.969145311+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "pattern_detected",
+  "payload" : {
+    "detector" : "EmptyDiffDetector",
+    "evidence" : "evolution ran this cycle and produced an empty diff",
+    "signalEmitted" : "STAGNATION"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:19.231204947+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:28.257270388+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 3927,
+    "completionTokens" : 220,
+    "totalTokens" : 4147,
+    "durationMs" : 8981
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:28.330591925+02:00",
+  "cycleId" : "cycle-1787665481278",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : false,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 0,
+    "sessionBuildMs" : 215818,
+    "cycleBuildCount" : 0,
+    "sessionBuildCount" : 77
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:28.521724201+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:28.610485428+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "REPLAN",
+    "signalAdjustments" : [ "REPLAN_REQUESTED=0.85", "DIVERGENCE_REQUEST=1.0", "ROLE_PLANNER=1.0" ],
+    "rationale" : "Sustained repetition (reinforced across ≥2 consecutive cycles) indicates a stuck pattern → request breakout via replanning and divergence."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:28.610840159+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "evolution",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 2.0,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "analysis",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.85,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.85,
+        "window" : 2.872,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:28.617943460+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 2.7,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "REPETITION_DETECTED" : 2.0,
+      "ROLE_MERGE" : 1.0,
+      "EVOLUTION_OCCURRED" : 1.0,
+      "REPLAN_REQUESTED" : 0.85,
+      "ROLE_PLANNER" : 2.872,
+      "STAGNATION" : 0.7,
+      "DIVERGENCE_REQUEST" : 1.7
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:29.747319998+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 3.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:56.542869322+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 3886,
+    "completionTokens" : 1691,
+    "totalTokens" : 5577,
+    "durationMs" : 26770
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:56.664221675+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "7c51285b9d952e3053d0f8b1ecd5d453064f18150436cd8cded1e700568892b9",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:45:57.743041383+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "analysis",
+    "fitness" : 2.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:01.550552244+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2396,
+    "completionTokens" : 18,
+    "totalTokens" : 2414,
+    "durationMs" : 3806
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:24.223067004+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2619,
+    "completionTokens" : 1070,
+    "totalTokens" : 3689,
+    "durationMs" : 21779
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:26.203581406+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:30.886562571+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1273,
+    "completionTokens" : 90,
+    "totalTokens" : 1363,
+    "durationMs" : 3712
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:31.932802540+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:39.047546887+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 3682,
+    "completionTokens" : 211,
+    "totalTokens" : 3893,
+    "durationMs" : 7054
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:39.083366512+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "REPETITION_DETECTED",
+    "emitCycle" : 29,
+    "endCycle" : 30,
+    "endReason" : "consumed",
+    "emittedBySource" : "EvolutionExecutionAgent"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:39.083662879+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "STAGNATION",
+    "emitCycle" : 29,
+    "endCycle" : 30,
+    "endReason" : "consumed",
+    "emittedBySource" : "pattern:empty-diff"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:39.094959832+02:00",
+  "cycleId" : "cycle-1787665528336",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : false,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 0,
+    "sessionBuildMs" : 215818,
+    "cycleBuildCount" : 0,
+    "sessionBuildCount" : 77
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:39.239322880+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:39.300007744+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ "ROLE_EVOLUTION=1.0" ],
+    "rationale" : "Analysis produced executable subgoals for the current scope → proceed with execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:39.300322678+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "analysis",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.8,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.8,
+        "window" : 2.872,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "evolution",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:39.300562484+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "EVOLUTION_OCCURRED" : 1.0,
+      "REPLAN_REQUESTED" : 0.8,
+      "ROLE_PLANNER" : 2.872,
+      "DIVERGENCE_REQUEST" : 0.7
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:40.288650707+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "analysis",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:46:43.684541535+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2395,
+    "completionTokens" : 18,
+    "totalTokens" : 2413,
+    "durationMs" : 3395
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:07.736130696+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2618,
+    "completionTokens" : 1260,
+    "totalTokens" : 3878,
+    "durationMs" : 23313
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:09.674579882+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:10.481849613+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 3.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:37.205355191+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 3862,
+    "completionTokens" : 1705,
+    "totalTokens" : 5567,
+    "durationMs" : 26707
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:37.304136480+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "4ee5d8d94946b6088e0547192d8a1cf9994f8cbf09fe3a620082fc26f8046fff",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:38.332910831+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 2.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:44.341172126+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "probe",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 5886
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:53.104837188+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evaluation",
+    "model" : "qwen3.8",
+    "promptTokens" : 5649,
+    "completionTokens" : 120,
+    "totalTokens" : 5769,
+    "durationMs" : 8763
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:53.105162015+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : "4ee5d8d94946b6088e0547192d8a1cf9994f8cbf09fe3a620082fc26f8046fff",
+    "llmScore" : 0.78,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:53.301323274+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "4ee5d8d94946b6088e0547192d8a1cf9994f8cbf09fe3a620082fc26f8046fff",
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.7787499999999999,
+    "state" : "ACCEPTED",
+    "weight" : 0.8245147429873579
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:53.301611199+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : "4ee5d8d94946b6088e0547192d8a1cf9994f8cbf09fe3a620082fc26f8046fff",
+    "finalScore" : 0.7794351136746384,
+    "finalState" : "ACCEPTED",
+    "overrides" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:47:54.481251957+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "merge",
+    "fitness" : 1.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:00.717764862+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "post-merge",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 5687
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:00.718506955+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:00.817304216+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "mutation_merged",
+  "payload" : {
+    "mutationId" : "4ee5d8d94946b6088e0547192d8a1cf9994f8cbf09fe3a620082fc26f8046fff",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml", "src/main/java/com/example/cli/reader/CsvReader.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:03.998770647+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1206,
+    "completionTokens" : 56,
+    "totalTokens" : 1262,
+    "durationMs" : 3177
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:08.581401713+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4351
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:08.841568794+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 259
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:08.866205643+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "SUBSUMED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:08.880018540+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "COMPLETED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:13.190160476+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4271
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:13.446790900+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 255
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:13.467101306+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "COMPLETED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:13.473702896+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:19.368374305+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 3707,
+    "completionTokens" : 88,
+    "totalTokens" : 3795,
+    "durationMs" : 5834
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:19.408157451+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "REPLAN_REQUESTED",
+    "emitCycle" : 30,
+    "endCycle" : 31,
+    "endReason" : "consumed",
+    "emittedBySource" : "interpretation"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:19.408318464+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "DIVERGENCE_REQUEST",
+    "emitCycle" : 26,
+    "endCycle" : 31,
+    "endReason" : "consumed",
+    "emittedBySource" : "interpretation"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:19.408870170+02:00",
+  "cycleId" : "cycle-1787665599105",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 14309,
+    "sessionBuildMs" : 236013,
+    "cycleBuildCount" : 3,
+    "sessionBuildCount" : 81
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:19.570376037+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:19.630600850+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ "ROLE_EVOLUTION=1.0" ],
+    "rationale" : "Analysis produced executable subgoals for the current scope → proceed with execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:19.630961789+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "evolution",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "analysis",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 2.872,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:19.631280477+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "ROLE_PLANNER" : 2.872,
+      "DIVERGENCE_REQUEST" : 0.7
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:20.630256468+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:47.044245615+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 3668,
+    "completionTokens" : 1724,
+    "totalTokens" : 5392,
+    "durationMs" : 26384
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:47.142258196+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "ba3ce13e5769945f06eeb44382e384c15ac9f9ea24004319c8166adcf1cade5f",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:48.265226293+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 4.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:48:54.013181245+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "probe",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 5568
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:04.647239069+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evaluation",
+    "model" : "qwen3.8",
+    "promptTokens" : 5653,
+    "completionTokens" : 184,
+    "totalTokens" : 5837,
+    "durationMs" : 10634
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:04.647586144+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : "ba3ce13e5769945f06eeb44382e384c15ac9f9ea24004319c8166adcf1cade5f",
+    "llmScore" : 0.78,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:04.831027290+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "ba3ce13e5769945f06eeb44382e384c15ac9f9ea24004319c8166adcf1cade5f",
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.7787499999999999,
+    "state" : "ACCEPTED",
+    "weight" : 0.9842509842514764
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:04.831207628+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : "ba3ce13e5769945f06eeb44382e384c15ac9f9ea24004319c8166adcf1cade5f",
+    "finalScore" : 0.779379960629941,
+    "finalState" : "ACCEPTED",
+    "overrides" : [ "DeterministicScoreHeuristic" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:05.901353493+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "analysis",
+    "fitness" : 3.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:09.440914406+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2396,
+    "completionTokens" : 18,
+    "totalTokens" : 2414,
+    "durationMs" : 3538
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:32.108875388+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2519,
+    "completionTokens" : 1176,
+    "totalTokens" : 3695,
+    "durationMs" : 21790
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:33.390158709+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "planner",
+    "fitness" : 2.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:48.777257370+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "planner",
+    "model" : "qwen3.8",
+    "promptTokens" : 6278,
+    "completionTokens" : 643,
+    "totalTokens" : 6921,
+    "durationMs" : 15386
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:48.931606983+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:51.603734442+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "planner",
+    "model" : "qwen3.8",
+    "promptTokens" : 642,
+    "completionTokens" : 30,
+    "totalTokens" : 672,
+    "durationMs" : 2337
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:53.311374913+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "planner",
+    "model" : "qwen3.8",
+    "promptTokens" : 681,
+    "completionTokens" : 67,
+    "totalTokens" : 748,
+    "durationMs" : 1607
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:53.436027905+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "planning_run",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "trigger" : "cycle-planning",
+    "injected" : 2,
+    "deduped" : 3
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:54.565582393+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "merge",
+    "fitness" : 1.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:59.311321289+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "post-merge",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4264
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:49:59.362593437+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "mutation_merged",
+  "payload" : {
+    "mutationId" : "ba3ce13e5769945f06eeb44382e384c15ac9f9ea24004319c8166adcf1cade5f",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml", "src/main/java/com/example/cli/reader/CsvReader.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:03.322050321+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1343,
+    "completionTokens" : 102,
+    "totalTokens" : 1445,
+    "durationMs" : 3956
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:03.469457421+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:12.818200983+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4537,
+    "completionTokens" : 201,
+    "totalTokens" : 4738,
+    "durationMs" : 9277
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:12.883064774+02:00",
+  "cycleId" : "cycle-1787665699420",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "STAGNATING",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 4264,
+    "sessionBuildMs" : 245845,
+    "cycleBuildCount" : 1,
+    "sessionBuildCount" : 83
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:13.198514818+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-45748ecc-0ab6-424f-aa60-648bce2dd638",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "Verify pom.xml configures maven-shade-plugin (or assembly) with Main-Class: com.example.cli.Main in the manifest so the packaged JAR is executable"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:13.292862344+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ ],
+    "rationale" : "No strong reason to deviate from the default execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:13.293573356+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "analysis",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 3.0,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 3.0,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "evolution",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:13.294081826+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "MISSING_SYMBOL" : 3.0,
+      "REPLAN_REQUESTED" : 1.0,
+      "ROLE_PLANNER" : 3.0,
+      "PLANNING_THROTTLED" : 0.6
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:15.891078496+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 120,
+    "completionTokens" : 4,
+    "totalTokens" : 124,
+    "durationMs" : 1403
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:15.906654618+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "analysis",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:18.897702137+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2391,
+    "completionTokens" : 18,
+    "totalTokens" : 2409,
+    "durationMs" : 2990
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:28.051135123+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2514,
+    "completionTokens" : 357,
+    "totalTokens" : 2871,
+    "durationMs" : 8286
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:30.442664428+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:31.475032437+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 3.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:58.409035438+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 4148,
+    "completionTokens" : 1751,
+    "totalTokens" : 5899,
+    "durationMs" : 26914
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:58.594132790+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "53422fe109c7feacbebf3d306cb1421f4ffbf417d58cc3468a6f3fa2487ff3d3",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:50:59.587514406+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 2.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:04.541193242+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "probe",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4780
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:13.456872538+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evaluation",
+    "model" : "qwen3.8",
+    "promptTokens" : 6232,
+    "completionTokens" : 117,
+    "totalTokens" : 6349,
+    "durationMs" : 8914
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:13.458117279+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : "53422fe109c7feacbebf3d306cb1421f4ffbf417d58cc3468a6f3fa2487ff3d3",
+    "llmScore" : 0.92,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ "[1] ✓ pom.xml contains a shade or assembly plugin configuration", "[2] ✓ The plugin configuration sets Main-Class to com.example.cli.Main" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:13.644488562+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "53422fe109c7feacbebf3d306cb1421f4ffbf417d58cc3468a6f3fa2487ff3d3",
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.7433333333333334,
+    "state" : "ACCEPTED",
+    "weight" : 0.65
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:13.644798850+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : "53422fe109c7feacbebf3d306cb1421f4ffbf417d58cc3468a6f3fa2487ff3d3",
+    "finalScore" : 0.8504040404040406,
+    "finalState" : "ACCEPTED",
+    "overrides" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:15.144782401+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "merge",
+    "fitness" : 1.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:21.067728413+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "post-merge",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 5194
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:21.128627375+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "mutation_merged",
+  "payload" : {
+    "mutationId" : "53422fe109c7feacbebf3d306cb1421f4ffbf417d58cc3468a6f3fa2487ff3d3",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml", "src/main/java/com/example/cli/reader/CsvReader.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:24.223710799+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1357,
+    "completionTokens" : 69,
+    "totalTokens" : 1426,
+    "durationMs" : 3086
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:24.435012322+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-45748ecc-0ab6-424f-aa60-648bce2dd638",
+    "from" : "ACTIVE",
+    "to" : "COMPLETED",
+    "reason" : "fulfilled (score=1.00): interpreter=FULFILLED"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:24.451091141+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "subgoal_promoted",
+  "payload" : {
+    "fromId" : "goal-45748ecc-0ab6-424f-aa60-648bce2dd638",
+    "toId" : "goal-759c90ee-6d58-408f-8c62-d3418da960e0"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:24.513133520+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:31.063352044+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4460,
+    "completionTokens" : 87,
+    "totalTokens" : 4547,
+    "durationMs" : 6472
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:31.122795182+02:00",
+  "cycleId" : "cycle-1787665812932",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 5194,
+    "sessionBuildMs" : 255819,
+    "cycleBuildCount" : 1,
+    "sessionBuildCount" : 85
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:31.289858143+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-759c90ee-6d58-408f-8c62-d3418da960e0",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "Implement column <file> <name> to print every value of the named column one per line in file order, exiting 0; when the column is absent, print \"no such column: <name>\" to stderr and exit 4"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:31.344299286+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ ],
+    "rationale" : "No strong reason to deviate from the default execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:31.344965456+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "analysis",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 3.0,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 3.0,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "evolution",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:31.345296352+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "MISSING_SYMBOL" : 3.0,
+      "ROLE_PLANNER" : 3.0,
+      "PLANNING_THROTTLED" : 0.6
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:33.458649560+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 136,
+    "completionTokens" : 4,
+    "totalTokens" : 140,
+    "durationMs" : 1215
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:34.430223834+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "analysis",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:36.259528253+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:37.237270954+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 3.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:41.016666168+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 3885,
+    "completionTokens" : 33,
+    "totalTokens" : 3918,
+    "durationMs" : 3760
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:42.452110632+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 2.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:52.123626550+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evaluation",
+    "model" : "qwen3.8",
+    "promptTokens" : 6216,
+    "completionTokens" : 167,
+    "totalTokens" : 6383,
+    "durationMs" : 9483
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:52.126186975+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : null,
+    "llmScore" : 0.92,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ "[1] ✓ For a file with header \"a,b,c\" and data rows, column <file> b prints each b value on its own line in file order and exits 0", "[2] ✓ For a column name not in the header, stderr contains \"no such column: <name>\" and exit code is 4" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:52.284264919+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : null,
+    "heuristic" : "RedundantOutputHeuristic",
+    "score" : 0.4,
+    "state" : "REJECTED",
+    "weight" : 0.75
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:52.284475980+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : null,
+    "heuristic" : "NoMeaningfulChangeHeuristic",
+    "score" : 0.92,
+    "state" : "ACCEPTED",
+    "weight" : 0.45
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:52.284585421+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : null,
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.7829999999999999,
+    "state" : "ACCEPTED",
+    "weight" : 0.746740127382925
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:52.284836884+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : null,
+    "finalScore" : 0.7529328762734542,
+    "finalState" : "REJECTED",
+    "overrides" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:52.284963274+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "mutation_rejected",
+  "payload" : {
+    "mutationId" : null,
+    "reason" : "The `runColumn` method correctly implements the required behavior: it identifies the column index, prints values in file order, handles missing columns with the correct stderr message and exit code 4, and exits 0 on success."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:54.829421126+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "merge",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:51:59.433605497+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:09.929255639+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4263,
+    "completionTokens" : 272,
+    "totalTokens" : 4535,
+    "durationMs" : 10436
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:10.010896787+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "STAGNATING",
+    "merged" : false,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 0,
+    "sessionBuildMs" : 255819,
+    "cycleBuildCount" : 0,
+    "sessionBuildCount" : 85
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:13.670765800+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 2132,
+    "completionTokens" : 67,
+    "totalTokens" : 2199,
+    "durationMs" : 3648
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:13.778761931+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-759c90ee-6d58-408f-8c62-d3418da960e0",
+    "from" : "ACTIVE",
+    "to" : "COMPLETED",
+    "reason" : "evolution #NoDiff — output already satisfies all criteria (T2-CC)"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:20.064934481+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 6263
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:20.323162345+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 257
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:20.345606885+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "SUBSUMED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:20.352338440+02:00",
+  "cycleId" : "cycle-1787665891130",
+  "event" : "subgoal_promoted",
+  "payload" : {
+    "fromId" : "goal-759c90ee-6d58-408f-8c62-d3418da960e0"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:20.574941149+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:20.666901806+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ ],
+    "rationale" : "No strong reason to deviate from the default execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:20.667571303+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "analysis",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 3.0,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 3.0,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "evolution",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:20.668093083+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "MISSING_SYMBOL" : 3.0,
+      "REPLAN_REQUESTED" : 1.0,
+      "ROLE_PLANNER" : 3.0,
+      "PLANNING_THROTTLED" : 0.6,
+      "DIVERGENCE_REQUEST" : 0.7
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:21.773976361+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "analysis",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:25.276502680+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2405,
+    "completionTokens" : 18,
+    "totalTokens" : 2423,
+    "durationMs" : 3502
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:46.191173258+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2528,
+    "completionTokens" : 1075,
+    "totalTokens" : 3603,
+    "durationMs" : 19925
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:48.318289390+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:52:49.357002803+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 3.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:16.928802382+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 4092,
+    "completionTokens" : 1758,
+    "totalTokens" : 5850,
+    "durationMs" : 27551
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:17.024160162+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "c2997e3bcf8ddda90ceaf25361b190452937c46d5461cd9875b7ff0dcbd8ceda",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:18.247481569+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 2.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:23.227627485+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "probe",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4845
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:32.496673328+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evaluation",
+    "model" : "qwen3.8",
+    "promptTokens" : 6089,
+    "completionTokens" : 100,
+    "totalTokens" : 6189,
+    "durationMs" : 9268
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:32.497392540+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : "c2997e3bcf8ddda90ceaf25361b190452937c46d5461cd9875b7ff0dcbd8ceda",
+    "llmScore" : 0.82,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:32.758968567+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "c2997e3bcf8ddda90ceaf25361b190452937c46d5461cd9875b7ff0dcbd8ceda",
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.7716666666666666,
+    "state" : "ACCEPTED",
+    "weight" : 0.8893267550790525
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:32.759640468+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : "c2997e3bcf8ddda90ceaf25361b190452937c46d5461cd9875b7ff0dcbd8ceda",
+    "finalScore" : 0.7972489716879656,
+    "finalState" : "ACCEPTED",
+    "overrides" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:34.068223841+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "merge",
+    "fitness" : 1.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:39.654740683+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "post-merge",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4956
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:39.655107466+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:39.755799333+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "mutation_merged",
+  "payload" : {
+    "mutationId" : "c2997e3bcf8ddda90ceaf25361b190452937c46d5461cd9875b7ff0dcbd8ceda",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml", "src/main/java/com/example/cli/reader/CsvReader.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:43.584052794+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1365,
+    "completionTokens" : 52,
+    "totalTokens" : 1417,
+    "durationMs" : 3817
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:48.200325491+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4407
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:48.458708698+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 257
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:48.472779115+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "SUBSUMED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:48.489046123+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "COMPLETED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:52.730870335+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4211
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:52.993010057+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 261
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:53.017807920+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "COMPLETED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:53.024981555+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:59.431548168+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4263,
+    "completionTokens" : 90,
+    "totalTokens" : 4353,
+    "durationMs" : 6345
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:59.526344460+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "EVOLUTION_NOOP",
+    "emitCycle" : 34,
+    "endCycle" : 35,
+    "endReason" : "consumed",
+    "emittedBySource" : "deferred-merge noOp"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:59.526593532+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "STAGNATION",
+    "emitCycle" : 34,
+    "endCycle" : 35,
+    "endReason" : "consumed",
+    "emittedBySource" : "evaluation"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:59.527293292+02:00",
+  "cycleId" : "cycle-1787665940426",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 13574,
+    "sessionBuildMs" : 280501,
+    "cycleBuildCount" : 3,
+    "sessionBuildCount" : 90
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:59.849247362+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:59.914886527+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ "ROLE_EVOLUTION=1.0" ],
+    "rationale" : "Analysis produced executable subgoals for the current scope → proceed with execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:59.915196535+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "analysis",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 3.0,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 3.0,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "evolution",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:53:59.915372710+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "MISSING_SYMBOL" : 3.0,
+      "ROLE_PLANNER" : 3.0,
+      "PLANNING_THROTTLED" : 0.6,
+      "DIVERGENCE_REQUEST" : 0.7
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:02.560611113+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "analysis",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:05.160385116+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:06.309263130+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 3.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:28.273169245+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 3802,
+    "completionTokens" : 1365,
+    "totalTokens" : 5167,
+    "durationMs" : 21935
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:28.351407934+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "fa7c1a2e55f9462034915f5b9ff376a8e904da7da1818eb477ff61afa94ea3e1",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:29.523857579+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 2.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:35.790538725+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "probe",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 6119
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:43.664800455+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evaluation",
+    "model" : "qwen3.8",
+    "promptTokens" : 5246,
+    "completionTokens" : 96,
+    "totalTokens" : 5342,
+    "durationMs" : 7873
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:43.666096179+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : "fa7c1a2e55f9462034915f5b9ff376a8e904da7da1818eb477ff61afa94ea3e1",
+    "llmScore" : 0.78,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:43.851017828+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "fa7c1a2e55f9462034915f5b9ff376a8e904da7da1818eb477ff61afa94ea3e1",
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.7575,
+    "state" : "ACCEPTED",
+    "weight" : 0.8827348295047496
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:43.851370657+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : "fa7c1a2e55f9462034915f5b9ff376a8e904da7da1818eb477ff61afa94ea3e1",
+    "finalScore" : 0.7694507004637071,
+    "finalState" : "ACCEPTED",
+    "overrides" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:45.465501064+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "merge",
+    "fitness" : 1.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:51.518905238+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "post-merge",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 5313
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:51.519395206+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:51.576326551+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "mutation_merged",
+  "payload" : {
+    "mutationId" : "fa7c1a2e55f9462034915f5b9ff376a8e904da7da1818eb477ff61afa94ea3e1",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "src/main/java/com/example/cli/reader/CsvReader.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:53.988870607+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1238,
+    "completionTokens" : 54,
+    "totalTokens" : 1292,
+    "durationMs" : 2395
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:58.085838806+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 3916
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:58.341614181+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 255
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:58.366010939+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "SUBSUMED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:54:58.372596625+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "COMPLETED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:03.582709214+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 5179
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:03.837067929+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 253
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:03.859404206+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "COMPLETED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:03.872245789+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:09.207268185+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4145,
+    "completionTokens" : 24,
+    "totalTokens" : 4169,
+    "durationMs" : 5262
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:09.273582848+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "MISSING_SYMBOL",
+    "emitCycle" : 32,
+    "endCycle" : 36,
+    "endReason" : "expired",
+    "emittedBySource" : "analysis-grounding:CheckCommand"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:09.273764562+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "PLANNING_THROTTLED",
+    "emitCycle" : 32,
+    "endCycle" : 36,
+    "endReason" : "expired",
+    "emittedBySource" : "planner-skip-ratio"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:09.274344621+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 14408,
+    "sessionBuildMs" : 301028,
+    "cycleBuildCount" : 3,
+    "sessionBuildCount" : 94
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:13.833423451+02:00",
+  "cycleId" : "cycle-1787666039544",
+  "event" : "artifact_preserved",
+  "payload" : {
+    "fromCycle" : "cycle-1787666039544",
+    "entryPointPresent" : true,
+    "entryPointRequired" : true,
+    "buildResult" : "COMPILE_OK",
+    "snapshotsConsidered" : 36
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:14.057831553+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:14.200698063+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ "ROLE_EVOLUTION=1.0" ],
+    "rationale" : "Analysis produced executable subgoals for the current scope → proceed with execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:14.202950917+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "evolution",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "analysis",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:14.203292204+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "ROLE_PLANNER" : 3.0,
+      "DIVERGENCE_REQUEST" : 0.7
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:15.411238125+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:42.471285423+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 3731,
+    "completionTokens" : 1707,
+    "totalTokens" : 5438,
+    "durationMs" : 27030
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:42.543197206+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "04e11a6135ef15de62e655bdd3aedc3749e05cb8f69ee5627e9ee139767f214c",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:43.620521067+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 4.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:50.235003920+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "probe",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 6414
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:58.838407959+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evaluation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4573,
+    "completionTokens" : 147,
+    "totalTokens" : 4720,
+    "durationMs" : 8603
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:58.838873552+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : "04e11a6135ef15de62e655bdd3aedc3749e05cb8f69ee5627e9ee139767f214c",
+    "llmScore" : 0.72,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:58.958535743+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "04e11a6135ef15de62e655bdd3aedc3749e05cb8f69ee5627e9ee139767f214c",
+    "heuristic" : "ProblemReductionHeuristic",
+    "score" : null,
+    "state" : "REJECTED",
+    "weight" : 0.85
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:58.958697589+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "04e11a6135ef15de62e655bdd3aedc3749e05cb8f69ee5627e9ee139767f214c",
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.715,
+    "state" : "REJECTED",
+    "weight" : 0.7352146220938078
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:55:58.959882330+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : "04e11a6135ef15de62e655bdd3aedc3749e05cb8f69ee5627e9ee139767f214c",
+    "finalScore" : 0.7178814879360379,
+    "finalState" : "ACCEPTED",
+    "overrides" : [ "OriginatingGateCheck" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:01.085095262+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "analysis",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:02.980193429+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:04.110818484+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "merge",
+    "fitness" : 1.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:09.046430158+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "post-merge",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4337
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:09.046797749+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:09.129800123+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "mutation_merged",
+  "payload" : {
+    "mutationId" : "04e11a6135ef15de62e655bdd3aedc3749e05cb8f69ee5627e9ee139767f214c",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml", "src/main/java/com/example/cli/reader/CsvReader.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:11.897786658+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1146,
+    "completionTokens" : 53,
+    "totalTokens" : 1199,
+    "durationMs" : 2755
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:16.605987792+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4431
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:16.873743489+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 266
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:16.897199471+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "SUBSUMED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:16.909975077+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:24.842502344+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4175,
+    "completionTokens" : 163,
+    "totalTokens" : 4338,
+    "durationMs" : 7865
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:24.932617705+02:00",
+  "cycleId" : "cycle-1787666113836",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 8768,
+    "sessionBuildMs" : 316210,
+    "cycleBuildCount" : 2,
+    "sessionBuildCount" : 97
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:25.111862095+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:25.191662105+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ "ROLE_EVOLUTION=1.0" ],
+    "rationale" : "Analysis produced executable subgoals for the current scope → proceed with execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:25.192007123+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "evolution",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "analysis",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:25.192206218+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "ROLE_PLANNER" : 3.0
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:26.371141443+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:53.007557070+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 4056,
+    "completionTokens" : 1700,
+    "totalTokens" : 5756,
+    "durationMs" : 26613
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:53.079467850+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "79a3a8e46a1f90c0224bce0d38f4d9f4879d17c26c28701cd0c798698f0d491e",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:54.125609405+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 4.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:56:58.451759613+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "probe",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4191
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:07.708990939+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evaluation",
+    "model" : "qwen3.8",
+    "promptTokens" : 5886,
+    "completionTokens" : 117,
+    "totalTokens" : 6003,
+    "durationMs" : 9256
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:07.709316871+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : "79a3a8e46a1f90c0224bce0d38f4d9f4879d17c26c28701cd0c798698f0d491e",
+    "llmScore" : 0.74,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:07.897817584+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "79a3a8e46a1f90c0224bce0d38f4d9f4879d17c26c28701cd0c798698f0d491e",
+    "heuristic" : "ProblemReductionHeuristic",
+    "score" : null,
+    "state" : "REJECTED",
+    "weight" : 0.85
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:07.897979423+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "79a3a8e46a1f90c0224bce0d38f4d9f4879d17c26c28701cd0c798698f0d491e",
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.7575,
+    "state" : "ACCEPTED",
+    "weight" : 0.7352146220938078
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:07.898208654+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : "79a3a8e46a1f90c0224bce0d38f4d9f4879d17c26c28701cd0c798698f0d491e",
+    "finalScore" : 0.7474147922238671,
+    "finalState" : "ACCEPTED",
+    "overrides" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:10.541929404+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "analysis",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:11.720071813+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "planner",
+    "fitness" : 2.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:24.046290563+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "planner",
+    "model" : "qwen3.8",
+    "promptTokens" : 6641,
+    "completionTokens" : 556,
+    "totalTokens" : 7197,
+    "durationMs" : 12325
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:24.117268856+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:27.670115508+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "planner",
+    "model" : "qwen3.8",
+    "promptTokens" : 732,
+    "completionTokens" : 120,
+    "totalTokens" : 852,
+    "durationMs" : 3247
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:30.044706380+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "planner",
+    "model" : "qwen3.8",
+    "promptTokens" : 729,
+    "completionTokens" : 117,
+    "totalTokens" : 846,
+    "durationMs" : 2260
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:30.068886389+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "planning_run",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "trigger" : "cycle-planning",
+    "injected" : 2,
+    "deduped" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:31.604043080+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "merge",
+    "fitness" : 1.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:37.288092422+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "post-merge",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4770
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:37.328419273+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "mutation_merged",
+  "payload" : {
+    "mutationId" : "79a3a8e46a1f90c0224bce0d38f4d9f4879d17c26c28701cd0c798698f0d491e",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml", "src/main/java/com/example/cli/reader/CsvReader.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:40.979878293+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1606,
+    "completionTokens" : 56,
+    "totalTokens" : 1662,
+    "durationMs" : 3633
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:41.244244718+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:50.396203102+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4453,
+    "completionTokens" : 215,
+    "totalTokens" : 4668,
+    "durationMs" : 9083
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:50.464686719+02:00",
+  "cycleId" : "cycle-1787666184940",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "STAGNATING",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 4770,
+    "sessionBuildMs" : 325171,
+    "cycleBuildCount" : 1,
+    "sessionBuildCount" : 99
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:50.675917117+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-becf7308-ab3b-4b3f-98ea-f90674720515",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "Implement the `check <file>` command logic in `src/main/java/com/example/cli/Main.java` to read the file, compare each data row's field count against the header's field count, and print malformed rows to stdout in the format \"line <n>: expected <h> fields, found <f>\" in ascending line order."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:50.759553863+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ ],
+    "rationale" : "No strong reason to deviate from the default execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:50.760508935+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "analysis",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.0,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.0,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "evolution",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:50.761066987+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "REPLAN_REQUESTED" : 1.0,
+      "ROLE_PLANNER" : 3.0,
+      "DIVERGENCE_REQUEST" : 0.7
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:51.865673363+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "analysis",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:57:55.141408440+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2413,
+    "completionTokens" : 18,
+    "totalTokens" : 2431,
+    "durationMs" : 3275
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:15.283067908+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2536,
+    "completionTokens" : 1138,
+    "totalTokens" : 3674,
+    "durationMs" : 19369
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:16.722069859+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "planner",
+    "fitness" : 4.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:33.695414868+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "planner",
+    "model" : "qwen3.8",
+    "promptTokens" : 6732,
+    "completionTokens" : 796,
+    "totalTokens" : 7528,
+    "durationMs" : 16973
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:33.851034527+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-becf7308-ab3b-4b3f-98ea-f90674720515",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "superseded by replanning"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:33.887123835+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-b180b371-6d07-4035-859f-905511148aef",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "superseded by replanning"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:34.003848805+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "planning_run",
+  "payload" : {
+    "goalId" : "goal-becf7308-ab3b-4b3f-98ea-f90674720515",
+    "trigger" : "cycle-planning",
+    "injected" : 0,
+    "deduped" : 4
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:40.153932627+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4975
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:40.417004203+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 261
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:40.436811401+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-0ea62b08-837e-41b7-beb4-f420830571ab",
+    "from" : "SUBSUMED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:41.728256408+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "evolution",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:44.255730959+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "evaluation",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:46.783310658+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "merge",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:52.029650801+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:52.099943662+02:00",
+  "cycleId" : "cycle-1787666270489",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "STAGNATING",
+    "merged" : false,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 4975,
+    "sessionBuildMs" : 330146,
+    "cycleBuildCount" : 1,
+    "sessionBuildCount" : 100
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:52.335075908+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-0ea62b08-837e-41b7-beb4-f420830571ab",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 5) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:52.416227659+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ ],
+    "rationale" : "No strong reason to deviate from the default execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:52.416582262+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "evaluation",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.4,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "analysis",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.4,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.4,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "evolution",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:52.416862257+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "REPLAN_REQUESTED" : 1.0,
+      "ROLE_PLANNER" : 3.0,
+      "PLANNING_THROTTLED" : 0.6,
+      "LOW_CONFIDENCE" : 1.4
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:54.660270366+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "evaluation",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:55.709682737+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "analysis",
+    "fitness" : 4.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:58:59.314139242+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2392,
+    "completionTokens" : 18,
+    "totalTokens" : 2410,
+    "durationMs" : 3604
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:59:21.061230513+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "analysis",
+    "model" : "qwen3.8",
+    "promptTokens" : 2515,
+    "completionTokens" : 1064,
+    "totalTokens" : 3579,
+    "durationMs" : 20991
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:59:23.290926184+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:59:24.401662281+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 2.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:59:51.147707775+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 3850,
+    "completionTokens" : 1692,
+    "totalTokens" : 5542,
+    "durationMs" : 26728
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:59:51.236369505+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "a17b024d0ad083ef9177a1815efa7aeb98f89bf4f5b2b2795dd52ca974a92de9",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:59:53.876685889+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "merge",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T15:59:55.329904555+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 0.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:00.805667585+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "probe",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 5283
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:09.836143427+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 5887,
+    "completionTokens" : 108,
+    "totalTokens" : 5995,
+    "durationMs" : 9030
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:09.837255428+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : "a17b024d0ad083ef9177a1815efa7aeb98f89bf4f5b2b2795dd52ca974a92de9",
+    "llmScore" : 0.78,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:10.022372542+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "a17b024d0ad083ef9177a1815efa7aeb98f89bf4f5b2b2795dd52ca974a92de9",
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.7575,
+    "state" : "ACCEPTED",
+    "weight" : 1.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:10.022588864+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : "a17b024d0ad083ef9177a1815efa7aeb98f89bf4f5b2b2795dd52ca974a92de9",
+    "finalScore" : 0.76875,
+    "finalState" : "ACCEPTED",
+    "overrides" : [ "DeterministicScoreHeuristic" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:12.588635825+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "merge",
+    "fitness" : 0.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:17.364795594+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "post-merge",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4121
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:17.365768088+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-0ea62b08-837e-41b7-beb4-f420830571ab",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:17.469147563+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "mutation_merged",
+  "payload" : {
+    "mutationId" : "a17b024d0ad083ef9177a1815efa7aeb98f89bf4f5b2b2795dd52ca974a92de9",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml", "src/main/java/com/example/cli/reader/CsvReader.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:20.885204279+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1353,
+    "completionTokens" : 57,
+    "totalTokens" : 1410,
+    "durationMs" : 3380
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:25.422891274+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4313
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:25.688138113+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 265
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:25.714762301+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "SUBSUMED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:25.744589976+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-0ea62b08-837e-41b7-beb4-f420830571ab",
+    "from" : "SUBSUMED",
+    "to" : "COMPLETED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:25.794908863+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:34.543902231+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4313,
+    "completionTokens" : 216,
+    "totalTokens" : 4529,
+    "durationMs" : 8658
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:34.653986705+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "DIVERGENCE_REQUEST",
+    "emitCycle" : 38,
+    "endCycle" : 40,
+    "endReason" : "consumed",
+    "emittedBySource" : "interpretation"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:34.654898903+02:00",
+  "cycleId" : "cycle-1787666332141",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 8434,
+    "sessionBuildMs" : 343863,
+    "cycleBuildCount" : 2,
+    "sessionBuildCount" : 103
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:34.893738048+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:34.949561427+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ ],
+    "rationale" : "No strong reason to deviate from the default execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:34.949977078+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "analysis",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.6,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.6,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "evolution",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:34.950290455+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "ROLE_PLANNER" : 3.0,
+      "PLANNING_THROTTLED" : 0.6
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:37.438290178+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "analysis",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:40.140365035+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:00:41.293122225+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 3.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:07.807984269+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 4114,
+    "completionTokens" : 1692,
+    "totalTokens" : 5806,
+    "durationMs" : 26493
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:07.883848205+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "a17b024d0ad083ef9177a1815efa7aeb98f89bf4f5b2b2795dd52ca974a92de9",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:08.948076034+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 2.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:11.418720299+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "merge",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:14.734271361+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "pattern_detected",
+  "payload" : {
+    "detector" : "EmptyDiffDetector",
+    "evidence" : "evolution ran this cycle and produced an empty diff",
+    "signalEmitted" : "STAGNATION"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:15.961749874+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:23.874120228+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4218,
+    "completionTokens" : 184,
+    "totalTokens" : 4402,
+    "durationMs" : 7838
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:23.958519386+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "LOW_CONFIDENCE",
+    "emitCycle" : 40,
+    "endCycle" : 41,
+    "endReason" : "consumed",
+    "emittedBySource" : "interpretation"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:23.976860920+02:00",
+  "cycleId" : "cycle-1787666434673",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : false,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 0,
+    "sessionBuildMs" : 343863,
+    "cycleBuildCount" : 0,
+    "sessionBuildCount" : 103
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:24.229855581+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:24.315771829+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ ],
+    "rationale" : "No strong reason to deviate from the default execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:24.316248087+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "evolution",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.7,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.0,
+        "window" : 2.7,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "analysis",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:24.316595198+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 2.7,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "REPETITION_DETECTED" : 1.0,
+      "ROLE_MERGE" : 1.0,
+      "EVOLUTION_OCCURRED" : 1.0,
+      "ROLE_PLANNER" : 3.0,
+      "PLANNING_THROTTLED" : 0.6,
+      "DIVERGENCE_REQUEST" : 1.7,
+      "STAGNATION" : 0.7
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:25.768750488+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:52.894962227+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 4295,
+    "completionTokens" : 1702,
+    "totalTokens" : 5997,
+    "durationMs" : 27104
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:52.976925477+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "4a7c9e85e463082068aeccf07868a2de71b828b3ef787b0a0660392cbe420b95",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:53.990232519+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 4.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:01:58.959727434+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "probe",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4865
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:08.350770300+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evaluation",
+    "model" : "qwen3.8",
+    "promptTokens" : 5914,
+    "completionTokens" : 112,
+    "totalTokens" : 6026,
+    "durationMs" : 9390
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:08.351127300+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : "4a7c9e85e463082068aeccf07868a2de71b828b3ef787b0a0660392cbe420b95",
+    "llmScore" : 0.78,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:08.569086732+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "4a7c9e85e463082068aeccf07868a2de71b828b3ef787b0a0660392cbe420b95",
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.7787499999999999,
+    "state" : "ACCEPTED",
+    "weight" : 0.8245147429873579
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:08.569395963+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : "4a7c9e85e463082068aeccf07868a2de71b828b3ef787b0a0660392cbe420b95",
+    "finalScore" : 0.7794351136746384,
+    "finalState" : "ACCEPTED",
+    "overrides" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:11.544173420+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "analysis",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:14.419173859+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:15.619722762+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "merge",
+    "fitness" : 1.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:21.051678269+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "post-merge",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4886
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:21.052040170+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:21.170836253+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "mutation_merged",
+  "payload" : {
+    "mutationId" : "4a7c9e85e463082068aeccf07868a2de71b828b3ef787b0a0660392cbe420b95",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml", "src/main/java/com/example/cli/reader/CsvReader.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:25.044517708+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1413,
+    "completionTokens" : 57,
+    "totalTokens" : 1470,
+    "durationMs" : 3868
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:30.290849453+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 5055
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:30.553556326+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 261
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:30.596858963+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "SUBSUMED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:30.613988238+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "COMPLETED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:34.887575684+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4223
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:35.153146937+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 265
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:35.190575998+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "COMPLETED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:35.196426544+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:41.207977488+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 3896,
+    "completionTokens" : 74,
+    "totalTokens" : 3970,
+    "durationMs" : 5895
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:41.268255499+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "REPETITION_DETECTED",
+    "emitCycle" : 41,
+    "endCycle" : 42,
+    "endReason" : "consumed",
+    "emittedBySource" : "EvolutionExecutionAgent"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:41.268412179+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "STAGNATION",
+    "emitCycle" : 41,
+    "endCycle" : 42,
+    "endReason" : "consumed",
+    "emittedBySource" : "pattern:empty-diff"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:41.268453697+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "DIVERGENCE_REQUEST",
+    "emitCycle" : 41,
+    "endCycle" : 42,
+    "endReason" : "consumed",
+    "emittedBySource" : "repetition"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:41.268983496+02:00",
+  "cycleId" : "cycle-1787666483988",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 14164,
+    "sessionBuildMs" : 362892,
+    "cycleBuildCount" : 3,
+    "sessionBuildCount" : 107
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:41.492190854+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:41.586830272+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ ],
+    "rationale" : "No strong reason to deviate from the default execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:41.587302730+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "evolution",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.7,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "analysis",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.7,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:41.587664872+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "REPETITION_DETECTED" : 1.0,
+      "ROLE_MERGE" : 1.0,
+      "ROLE_PLANNER" : 3.0,
+      "PLANNING_THROTTLED" : 0.6,
+      "DIVERGENCE_REQUEST" : 1.7,
+      "STAGNATION" : 0.7
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:02:42.875571804+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:09.889729697+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 3907,
+    "completionTokens" : 1768,
+    "totalTokens" : 5675,
+    "durationMs" : 26986
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:09.941538884+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "39464ccd656fc995659726fbba4a83240bc3623b3e6094fb9a9bb78515e73a76",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:11.026686674+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 4.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:15.808317430+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "probe",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4649
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:26.067284474+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evaluation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4677,
+    "completionTokens" : 222,
+    "totalTokens" : 4899,
+    "durationMs" : 10259
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:26.067714363+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : "39464ccd656fc995659726fbba4a83240bc3623b3e6094fb9a9bb78515e73a76",
+    "llmScore" : 0.72,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:26.250810541+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "39464ccd656fc995659726fbba4a83240bc3623b3e6094fb9a9bb78515e73a76",
+    "heuristic" : "ProblemReductionHeuristic",
+    "score" : null,
+    "state" : "REJECTED",
+    "weight" : 0.85
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:26.251004507+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "39464ccd656fc995659726fbba4a83240bc3623b3e6094fb9a9bb78515e73a76",
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.715,
+    "state" : "REJECTED",
+    "weight" : 0.6629935441317959
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:26.252455968+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : "39464ccd656fc995659726fbba4a83240bc3623b3e6094fb9a9bb78515e73a76",
+    "finalScore" : 0.7180066262239222,
+    "finalState" : "ACCEPTED",
+    "overrides" : [ "OriginatingGateCheck" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:29.199178911+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "analysis",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:31.997663041+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:33.327271867+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "merge",
+    "fitness" : 1.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:39.658701228+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "post-merge",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 5580
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:39.659008369+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:39.728023716+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "mutation_merged",
+  "payload" : {
+    "mutationId" : "39464ccd656fc995659726fbba4a83240bc3623b3e6094fb9a9bb78515e73a76",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml", "src/main/java/com/example/cli/reader/CsvReader.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:42.426890025+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1217,
+    "completionTokens" : 54,
+    "totalTokens" : 1271,
+    "durationMs" : 2694
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:47.216529457+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4599
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:47.472182862+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 254
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:47.509465207+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "SUBSUMED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:47.523919259+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:55.815059806+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4498,
+    "completionTokens" : 175,
+    "totalTokens" : 4673,
+    "durationMs" : 8201
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:55.862931862+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "PLANNING_THROTTLED",
+    "emitCycle" : 39,
+    "endCycle" : 43,
+    "endReason" : "expired",
+    "emittedBySource" : "planner-skip-ratio"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:03:55.882374885+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 10179,
+    "sessionBuildMs" : 377720,
+    "cycleBuildCount" : 2,
+    "sessionBuildCount" : 110
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:00.065570280+02:00",
+  "cycleId" : "cycle-1787666561274",
+  "event" : "artifact_preserved",
+  "payload" : {
+    "fromCycle" : "cycle-1787666561274",
+    "entryPointPresent" : true,
+    "entryPointRequired" : true,
+    "buildResult" : "COMPILE_OK",
+    "snapshotsConsidered" : 43
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:00.280616210+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:00.340865916+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ ],
+    "rationale" : "No strong reason to deviate from the default execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:00.341409452+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "evolution",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "analysis",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:00.341621138+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "ROLE_MERGE" : 1.0,
+      "ROLE_PLANNER" : 3.0
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:01.440051532+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:28.923402113+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 4143,
+    "completionTokens" : 1758,
+    "totalTokens" : 5901,
+    "durationMs" : 27464
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:29.068290783+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "c2997e3bcf8ddda90ceaf25361b190452937c46d5461cd9875b7ff0dcbd8ceda",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:30.347380993+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 4.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:34.521836698+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "probe",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4059
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:42.830084438+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evaluation",
+    "model" : "qwen3.8",
+    "promptTokens" : 5494,
+    "completionTokens" : 94,
+    "totalTokens" : 5588,
+    "durationMs" : 8307
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:42.830481035+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "mutation_scored",
+  "payload" : {
+    "mutationId" : "c2997e3bcf8ddda90ceaf25361b190452937c46d5461cd9875b7ff0dcbd8ceda",
+    "llmScore" : 0.74,
+    "llmState" : "ACCEPTED",
+    "criteriaAssessments" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:43.013905484+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "heuristic_result",
+  "payload" : {
+    "mutationId" : "c2997e3bcf8ddda90ceaf25361b190452937c46d5461cd9875b7ff0dcbd8ceda",
+    "heuristic" : "DeterministicScoreHeuristic",
+    "score" : 0.7575,
+    "state" : "ACCEPTED",
+    "weight" : 0.7352146220938078
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:43.014175535+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "mutation_negotiated",
+  "payload" : {
+    "mutationId" : "c2997e3bcf8ddda90ceaf25361b190452937c46d5461cd9875b7ff0dcbd8ceda",
+    "finalScore" : 0.7474147922238671,
+    "finalState" : "ACCEPTED",
+    "overrides" : [ ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:45.847904843+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "analysis",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:48.799765293+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "agent_skipped",
+  "payload" : {
+    "role" : "planner",
+    "reason" : "can_execute_false"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:50.282800623+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "merge",
+    "fitness" : 1.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:56.036143968+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "post-merge",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4995
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:56.036785690+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "ACTIVE",
+    "to" : "SUBSUMED",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:56.122692775+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "mutation_merged",
+  "payload" : {
+    "mutationId" : "c2997e3bcf8ddda90ceaf25361b190452937c46d5461cd9875b7ff0dcbd8ceda",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml", "src/main/java/com/example/cli/reader/CsvReader.java" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:04:59.419780012+02:00",
+  "cycleId" : null,
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "unknown",
+    "model" : "qwen3.8",
+    "promptTokens" : 1309,
+    "completionTokens" : 67,
+    "totalTokens" : 1376,
+    "durationMs" : 3284
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:04.539229750+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "package-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "COMPILE_OK",
+    "durationMs" : 4853
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:04.804449080+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "boot-gate",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "BLOCKED",
+    "durationMs" : 264
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:04.831037667+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "goal_status_changed",
+  "payload" : {
+    "goalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "from" : "SUBSUMED",
+    "to" : "ACTIVE",
+    "reason" : "Build fixed — BUILD_FIX subgoal no longer needed"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:04.846573074+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "build_fix_attempt",
+  "payload" : {
+    "source" : "behavioural-self-check",
+    "attemptNumber" : 0,
+    "mutatedFiles" : [ ],
+    "outcome" : "ABSTAIN",
+    "durationMs" : 0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:13.930457400+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "interpretation",
+    "model" : "qwen3.8",
+    "promptTokens" : 4566,
+    "completionTokens" : 197,
+    "totalTokens" : 4763,
+    "durationMs" : 9014
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:13.961878388+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "signal_lifetime_observed",
+  "payload" : {
+    "signalType" : "LOW_CONFIDENCE",
+    "emitCycle" : 44,
+    "endCycle" : 44,
+    "endReason" : "expired",
+    "emittedBySource" : "evaluation"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:13.972161707+02:00",
+  "cycleId" : "cycle-1787666640067",
+  "event" : "cycle_end",
+  "payload" : {
+    "resultState" : "CONTINUE",
+    "merged" : true,
+    "buildOutcome" : "COMPILE_OK",
+    "cycleBuildMs" : 9848,
+    "sessionBuildMs" : 391627,
+    "cycleBuildCount" : 2,
+    "sessionBuildCount" : 113
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:14.140944577+02:00",
+  "cycleId" : "cycle-1787666713984",
+  "event" : "cycle_start",
+  "payload" : {
+    "currentGoalId" : "goal-46b413ae-057d-414a-aae4-65197b0b6f0a",
+    "currentSubGoalId" : "goal-f1726624-60e6-4760-87a4-fa0a0ce3a317",
+    "goalDescription" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order. Exit 0 when every row is\n  well formed, exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order.\n  Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Exit 5 when the wrong number of arguments is given\n  for a known command. The first line of a file is always its header. Fields are separated by\n  commas. No quoting or escaping is required.\n",
+    "subGoalDescription" : "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — the application exits at startup (exit 3) — the process logged nothing diagnostic before the observation ended"
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:14.201560168+02:00",
+  "cycleId" : "cycle-1787666713984",
+  "event" : "deliberation_outcome",
+  "payload" : {
+    "mode" : "UNDIRECTED",
+    "signalAdjustments" : [ ],
+    "rationale" : "No strong reason to deviate from the default execution flow."
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:14.201921984+02:00",
+  "cycleId" : "cycle-1787666713984",
+  "event" : "agent_fitness_ranked",
+  "payload" : {
+    "rankings" : [ {
+      "role" : "evolution",
+      "score" : 5.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.0,
+        "window" : 3.0,
+        "priority" : 3.0,
+        "pipeline" : 2.0
+      }
+    }, {
+      "role" : "evaluation",
+      "score" : 4.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 1.0,
+        "window" : 3.0,
+        "priority" : 2.0,
+        "pipeline" : 3.0
+      }
+    }, {
+      "role" : "analysis",
+      "score" : 3.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 1.5,
+        "pipeline" : 1.0
+      }
+    }, {
+      "role" : "planner",
+      "score" : 2.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 3.0,
+        "priority" : 1.0,
+        "pipeline" : 0.0
+      }
+    }, {
+      "role" : "merge",
+      "score" : 1.0,
+      "breakdown" : {
+        "constraint" : 0.0,
+        "urgency" : 0.0,
+        "window" : 1.0,
+        "priority" : 4.0,
+        "pipeline" : 4.0
+      }
+    } ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:14.202144131+02:00",
+  "cycleId" : "cycle-1787666713984",
+  "event" : "signal_snapshot",
+  "payload" : {
+    "signals" : {
+      "ROLE_EVALUATION" : 3.0,
+      "ROLE_ANALYSIS" : 3.0,
+      "ROLE_EVOLUTION" : 3.0,
+      "REPETITION_DETECTED" : 1.0,
+      "ROLE_MERGE" : 1.0,
+      "ROLE_PLANNER" : 3.0,
+      "DIVERGENCE_REQUEST" : 1.0
+    }
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:15.399167553+02:00",
+  "cycleId" : "cycle-1787666713984",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evolution",
+    "fitness" : 5.0
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:42.679965124+02:00",
+  "cycleId" : "cycle-1787666713984",
+  "event" : "llm_call",
+  "payload" : {
+    "role" : "evolution",
+    "model" : "qwen3.8",
+    "promptTokens" : 4327,
+    "completionTokens" : 1657,
+    "totalTokens" : 5984,
+    "durationMs" : 27255
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:42.794154889+02:00",
+  "cycleId" : "cycle-1787666713984",
+  "event" : "mutation_proposed",
+  "payload" : {
+    "mutationId" : "918c6559da73f272bfba2dba2d3931e6b488a86f13bd63207f06996939dcc9ee",
+    "files" : [ "src/main/java/com/example/cli/Main.java", "src/main/java/com/example/cli/reader/CsvReader.java", "src/main/java/com/example/cli/reader/CsvReaderException.java", "pom.xml" ]
+  }
+}
+{
+  "timestamp" : "2026-08-25T16:05:44.107258132+02:00",
+  "cycleId" : "cycle-1787666713984",
+  "event" : "agent_selected",
+  "payload" : {
+    "role" : "evaluation",
+    "fitness" : 4.0
+  }
+}

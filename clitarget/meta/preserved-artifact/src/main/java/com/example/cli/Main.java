@@ -65,14 +65,13 @@ public final class Main {
 
         try {
             CsvReader reader = new CsvReader(path);
-            List<String> header = reader.header();
-            int expected = header.size();
+            int headerCount = reader.header().size();
             boolean malformed = false;
 
             for (int i = 0; i < reader.rows().size(); i++) {
                 List<String> row = reader.rows().get(i);
-                if (row.size() != expected) {
-                    System.out.println("line " + (i + 2) + ": expected " + expected + " fields, found " + row.size());
+                if (row.size() != headerCount) {
+                    System.out.println("line " + (i + 2) + ": expected " + headerCount + " fields, found " + row.size());
                     malformed = true;
                 }
             }

@@ -15,9 +15,7 @@ public class CsvReader {
         try {
             List<String> lines = Files.readAllLines(path);
             if (lines.isEmpty()) {
-                this.header = List.of();
-                this.rows = List.of();
-                return;
+                throw new CsvReaderException("empty file");
             }
 
             this.header = splitLine(lines.get(0));
@@ -26,7 +24,7 @@ public class CsvReader {
                 this.rows.add(splitLine(lines.get(i)));
             }
         } catch (IOException e) {
-            throw new CsvReaderException("Failed to read file: " + e.getMessage(), e);
+            throw new CsvReaderException("failed to read file: " + e.getMessage(), e);
         }
     }
 
@@ -39,7 +37,7 @@ public class CsvReader {
     }
 
     private static List<String> splitLine(String line) {
-        if (line == null || line.isEmpty()) {
+        if (line.isEmpty()) {
             return List.of();
         }
         String[] parts = line.split(",", -1);

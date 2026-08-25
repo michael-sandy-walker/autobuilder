@@ -209,3 +209,19 @@ them, and that is the next experiment rather than a conclusion to draw now.
 **Also unproven:** one CLI target, one run, one seed. The five-seam decomposition may still be right
 for a target kind that is neither a service nor a command (a library, a parser). This corrects the
 note from one shape seen twice to two shapes seen once each.
+
+## The deepest leak is an ASSUMED LIVENESS MODEL, not a string (same run)
+
+**41 closure blocks, every one *"the application exits at startup (exit 3)"*.** The artefact is a
+command-line tool — exiting is what it does, and exit 3 is its SPECIFIED answer for an unknown
+command. The boot gate ran it with no arguments, got the correct exit status, and called it a
+startup failure.
+
+**The framework assumes a correct artefact STARTS AND KEEPS RUNNING.** Right for a service,
+backwards for a command. This is not in a string and cannot be extracted by moving code — it is in
+what the gate ASKS. Any plug-in design that supplies "how to run the target" but leaves the
+question "did it stay up?" in the core has moved nothing.
+
+**Only a target that TERMINATES could have revealed this.** It is invisible to hit counts, invisible
+to code reading, and invisible to a second REST target. That is the argument for the non-REST target
+having been the right prerequisite all along.

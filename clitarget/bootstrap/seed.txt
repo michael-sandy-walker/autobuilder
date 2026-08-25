@@ -1,0 +1,26 @@
+  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited
+  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.
+  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit
+  status.
+
+  Invocation: java -jar app.jar <command> [arguments]
+
+  Commands:
+
+  check <file> — read the file and report malformed rows. A row is malformed when its field count
+  differs from the header's. Print one line per malformed row to stdout as
+  "line <n>: expected <h> fields, found <f>", in ascending line order. Exit 0 when every row is
+  well formed, exit 2 when at least one row is malformed.
+
+  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.
+  Exit 0.
+
+  column <file> <name> — print every value of the named column, one per line, in file order.
+  Exit 0. Exit 4 when the named column is not present in the header, printing
+  "no such column: <name>" to stderr.
+
+  Common rules: exit 1 when the file argument names a path that does not exist, printing
+  "no such file: <path>" to stderr. Exit 3 when the command word is not one of the three above,
+  printing "unknown command: <word>" to stderr. Exit 5 when the wrong number of arguments is given
+  for a known command. The first line of a file is always its header. Fields are separated by
+  commas. No quoting or escaping is required.

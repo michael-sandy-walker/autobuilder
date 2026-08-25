@@ -10,7 +10,7 @@
 
 **Census (457 tickets, 2026-08-24):** 31 open `[ ]` · 6 in-progress `[~]` · 32 deferred `[>]` · 392 closed, of which **365 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 2 retracted `[r]`**. So **93% of closed tickets delivered a capability; 14 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the roadmap, which is authoritative.
 
-**Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured evidence · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-evidence `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
+**Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured measurements · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-measurements `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
 ---
 
@@ -118,7 +118,7 @@
 - [x] `T1-DW` — Filesystem rollback on post-merge COMPILE_ERROR
 - [x] `T1-DX` — Rollback must unwind cycle state, and next cycle must see the rollback
 - [x] `T1-DY` — Defer persistent merge-state mutations until the build gate confirms the merge
-- [x] `T1-DZ` — Wire rollback evidence into Chain H gates
+- [x] `T1-DZ` — Wire rollback measurements into Chain H gates
 - [x] `T1-EA` — Allow `evaluation` under an active BUILD_FIX subgoal
 - [x] `T1-EB` — Build-blocked deadlock breaker
 - [x] `T1-EC` — Compile-first gate
@@ -172,7 +172,7 @@
 - [x] `T2-EU` — A retired goal blocked its own replacement, defeating the prescribed stuck-subgoal workflow (shipped + field-verified 2026-07-27)
 - [x] `T2-EV` — Coverage-injected endpoints now carry the spec's stated statuses, not just "a mapping exists" (shipped 2026-07-27)
 - [x] `T2-EW` — Unrequested test sources are not merged; they break packaging and can satisfy no gate (shipped 2026-07-27)
-- [ ] `T2-ER` — How far to trust PREVIOUS-lineage evidence: advisory, never binding (policy for what T4-CT consults)
+- [ ] `T2-ER` — How far to trust PREVIOUS-lineage measurements: advisory, never binding (policy for what T4-CT consults)
 - [x] `T2-EQ` — Runnable-entry-point precondition — SHIPPED 2026-07-27 (packaging verified per tree-change; PACKAGE_ERROR routed to the existing injector; no ecosystem knowledge added) only checked at the completion edge (5/5 ledger `artifact-build-failed` runs = `Unable to find main class`); filed 2026-07-26
 - [n] `T2-CR` — Criteria-preserving refinement when REPLAN fires from evaluator-repeat-cap
 - [x] `T2-EP` — Compact state encoding for remaining raw-payload prompt surfaces (all 3 surfaces shipped)
@@ -265,7 +265,7 @@
 - [x] `T2-DN` — Compile-rejection-driven multi-symbol batch
 - [x] `T2-DO` — Similarity dedup misses analysis-produced duplicate subgoals
 - [x] `T2-DQ` — Evaluation rejects a build-necessary cross-file fix for being off-subgoal
-- [x] `T2-DR` — Closure reads the evidence ledger, not the tree shape
+- [x] `T2-DR` — Closure reads the measurements ledger, not the tree shape
 - [x] `T2-DT` — Compile-diagnostic-aware evolution steering
 - [x] `T2-DU` — `EvolutionAgent` coverage-guard relaxation
 - [x] `T2-DV` — Compile-diagnostic prompt block
@@ -364,7 +364,7 @@
 - [>] `T4-CM` — Knowledge-base merge workbench (cross-run/seed graph merging)
 - [>] `T4-CN` — Cross-graph node-compatibility model (cross-run/seed)
 - [~] `T4-BA` — Package-fragmentation detection
-- [x] `T4-BP` — Positive-evidence gate for `#NoDiff`→FULFILLED promotion
+- [x] `T4-BP` — Positive-measurements gate for `#NoDiff`→FULFILLED promotion
 - [>] `T4-AQ` — Stub-body detection and automatic follow-up injection
 - [>] `T4-AV` — LLM coherence reviewer
 - [>] `T4-AW` — Output reviewer SPI
@@ -410,10 +410,10 @@
 - [x] `T4-BN-3` — Focused test-repair mode
 - [x] `T4-BO` — Signal-decay observability
 - [x] `T4-BR` — Graph-back the T4-BP-3 completion-verification verdicts
-- [x] `T4-BS` — Feed structural "wiring" evidence to the completion verifier
+- [x] `T4-BS` — Feed structural "wiring" measurements to the completion verifier
 - [x] `T4-BT` — Required-vs-extra subgoal classification by criteria-traceability to the root spec
 - [x] `T4-BU` — misplaced test sources make whole mutations un-mergeable
-- [x] `T4-BV` — execution-evidence boot gate at the completion edge
+- [x] `T4-BV` — execution-measurements boot gate at the completion edge
 - [x] `T4-BW` — Injection-wiring coherence
 - [x] `T4-BX` — When one agent rejects work, tell the next agent WHY
 - [o] `T4-BY` — No execution-count signal exists for the meta-plan dispatch path
@@ -465,7 +465,7 @@
 - [x] `T5-AD` — Extend T5-Y key/label preheat to cover `DeferredMutation.id` + null-readback `m.llmScore`
 - [x] `T5-AE` — Restore stable `autobuilder.log` / `behaviour.ndjson` live targets with per-run rollover…
 - [x] `T5-AF` — Fault-injection validation harness for the completion-edge + rollback safety gates
-- [x] `T5-AG` — "evidence" vocabulary sweep
+- [x] `T5-AG` — "measurements" vocabulary sweep
 - [x] `T5-AZ` — `EVOLUTION_OCCURRED` signal carry-over causes false-positive merge hook invocations
 - [x] `T5-BA` — `CyclePersistenceService.persistSnapshot()` creates empty mutation folders for evaluation…
 - [x] `T5-BB` — Signal and criteria editing in graph browser

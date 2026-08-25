@@ -4749,9 +4749,10 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
     | 1 | 23/23 | 19/23 | +4 |
     | 2 | 23/23 | 23/23 | 0 |
     | 3 | 23/23 | 23/23 | 0 |
-    | 4 | (record only) | 21/23 | — |
+    | 4 | 22/23 | 21/23 | +1 |
 
-    **1 of 3 complete pairs favoured A, mean +1.33.** The rule required ≥3 of 4 pairs favouring A AND mean ≥ 8; after pair 3 the maximum reachable was 2 of 4, so the condition became unreachable and the verdict was determined without pair 4. **Pair 1's 19/23 was the outlier, not the signal** — arm B then scored 23/23 three times.
+    **FINAL, all four pairs complete: 2 of 4 favoured A, mean(A−B) +1.25.** The rule required ≥3 of 4 AND mean ≥ 8; the first condition became unreachable after pair 3, so the verdict was determined early and pair 4 confirmed it. **Pair 1's 19/23 was the outlier, not the signal.**
+    - **Arm means: A 22.75 · B 21.50** over four runs each. **Across all 8 runs: mean 22.12, range 19–23, and 5 of 8 scored 23/23.**
   - **⚠ THE NULL IS NOT SAFETY, as written down before the runs.** At N=4 with sd ≈ 31 this screened for a LARGE regression only; a small one is invisible here. Recorded now that the result is convenient, which is the point of pre-registering it.
   - **The incidental finding is bigger than the verdict: 5 of the 6 arm runs scored 23/23**, and both arms halt the same way (`root-convergence-stall`/`deadline`, 30–50 merges). **The loop produces correct artifacts consistently and is told it has not** — the binding problem is the instruments (`T1-FU`/`T1-FV`/`T1-FW`/`T6-P`), not the loop's output.
   - **Method note worth keeping:** a pre-registered rule turned a single misleading pair into a decidable question, and its arithmetic allowed an early, honest stop. Fixing N and the threshold in advance is what made pair 1 interpretable instead of arguable.

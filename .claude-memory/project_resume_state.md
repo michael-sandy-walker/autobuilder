@@ -52,7 +52,7 @@ metadata:
 
 ## 2026-08-25 (Opus 5, autonomous) — THE CLOSURE GATE IS THREE-QUARTERS FALSE, AND AN A/B SERIES IS IN FLIGHT — START HERE
 
-- **✅ `T6-Q` ANSWERED: NO EVIDENCE THAT 2026-08-24's WORK REGRESSED THE LOOP.** Paired A/B, arms `8c375af` (A, pre-today) vs `9cef43a` (B, today), N and rule fixed BEFORE the runs. **Pairs: +4, 0, 0** — 1 of 3 favouring A, mean **+1.33**, against a rule needing ≥3 of 4 and mean ≥8. After pair 3 the condition was unreachable, so the verdict was **determined without pair 4** (which scored B 21/23, kept for the record).
+- **✅ `T6-Q` ANSWERED: NO EVIDENCE THAT 2026-08-24's WORK REGRESSED THE LOOP.** Paired A/B, arms `8c375af` (A, pre-today) vs `9cef43a` (B, today), N and rule fixed BEFORE the runs. **Pairs: +4, 0, 0, +1** — 2 of 4 favouring A, mean **+1.25**, against a rule needing ≥3 of 4 and mean ≥8. After pair 3 the first condition was already unreachable, so the verdict was determined early and pair 4 confirmed it. **Arm means A 22.75 · B 21.50; across all 8 runs mean 22.12, range 19–23, 5 of 8 at 23/23.**
   - **Pair 1's 19/23 was the outlier, not the signal.** Arm B then scored 23/23 three times. A single pair could not have told us this; the pre-registered rule is what made it decidable rather than arguable.
   - **⚠ THE NULL IS NOT SAFETY** — at sd ≈ 31 this screened for a LARGE regression only. Written down before the runs precisely so it could not be dropped once convenient.
   - **The incidental finding is bigger than the verdict: 5 of 6 arm runs scored 23/23**, both arms halting identically (30–50 merges). **The loop produces correct artifacts consistently and is told it has not.**

@@ -4730,7 +4730,7 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
     - **So the honest scale is: the closure-blocking set is mostly false, while the run-wide contradiction stream is mostly ordinary mid-run observation.** Two different populations, and only the first is evidence for these tickets.
   - **Tier note:** T1 — a correct application is reported as defective.
 
-- [~] **T6-Q: does 2026-08-24's work regress the loop? — a paired A/B screening series with N and the decision rule fixed BEFORE the runs** (`scripts/preflight.sh` from two fixed worktrees; ledger `ab_results.tsv`) — **opened 2026-08-25 at the user's request after a single pair went the wrong way.**
+- [x] **T6-Q: does 2026-08-24's work regress the loop? — a paired A/B screening series with N and the decision rule fixed BEFORE the runs** (`scripts/preflight.sh` from two fixed worktrees; ledger `ab_results.tsv`) — **opened 2026-08-25 at the user's request after a single pair went the wrong way.**
   - **Why it exists:** pair 1 gave **A (pre-today) 23/23 vs B (today) 19/23**. One pair cannot attribute — this project measures a per-attempt spread of **sd ≈ 31 points** — but the direction is the opposite of "today's commits are harmless", so it is worth N rather than an explanation ([[feedback-replay-over-batches]]: live batches only for strategic questions with N and a rule stated in advance).
   - **Arms, both FIXED worktrees so the main repo can keep evolving without touching the experiment:**
     - **A = `8c375af`** — last commit before 2026-08-24.
@@ -4742,6 +4742,19 @@ See [`tier_definitions.md`](tier_definitions.md) — canonical single source of 
     - A run lost to environment (`jvm-died`, contention) is VOID and re-run; it does not count toward N.
   - **⚠ WHAT THIS CAN AND CANNOT DO.** At N=4 with sd ≈ 31 this is a screening test for a LARGE regression only. A null result does not mean "no regression" — it means "none large enough to see at four pairs". Do not report it as safety.
   - **⚠ AND IT CANNOT VALIDATE THE PROBE FIXES.** `T1-FU`/`T1-FV`/`T1-FW` are verified by `scripts/probe_truth.sh` against a booted artifact, not by run scores — the runs are far too noisy, and pointing at a score after shipping them would be exactly the inference this ticket exists to avoid.
+  - **✅ VERDICT 2026-08-25: NO EVIDENCE OF REGRESSION — and the rule decided it before the last pair ran.**
+
+    | pair | A `8c375af` | B `9cef43a` | A−B |
+    |---|---|---|---|
+    | 1 | 23/23 | 19/23 | +4 |
+    | 2 | 23/23 | 23/23 | 0 |
+    | 3 | 23/23 | 23/23 | 0 |
+    | 4 | (record only) | 21/23 | — |
+
+    **1 of 3 complete pairs favoured A, mean +1.33.** The rule required ≥3 of 4 pairs favouring A AND mean ≥ 8; after pair 3 the maximum reachable was 2 of 4, so the condition became unreachable and the verdict was determined without pair 4. **Pair 1's 19/23 was the outlier, not the signal** — arm B then scored 23/23 three times.
+  - **⚠ THE NULL IS NOT SAFETY, as written down before the runs.** At N=4 with sd ≈ 31 this screened for a LARGE regression only; a small one is invisible here. Recorded now that the result is convenient, which is the point of pre-registering it.
+  - **The incidental finding is bigger than the verdict: 5 of the 6 arm runs scored 23/23**, and both arms halt the same way (`root-convergence-stall`/`deadline`, 30–50 merges). **The loop produces correct artifacts consistently and is told it has not** — the binding problem is the instruments (`T1-FU`/`T1-FV`/`T1-FW`/`T6-P`), not the loop's output.
+  - **Method note worth keeping:** a pre-registered rule turned a single misleading pair into a decidable question, and its arithmetic allowed an early, honest stop. Fixing N and the threshold in advance is what made pair 1 interpretable instead of arguable.
   - **Tier note:** T6 — the subject is the measurement apparatus around the loop, not the loop.
 
 - [ ] **T1-FU: a probe sequence longer than the request budget is TRUNCATED and then judged, so the setup that establishes the precondition is silently dropped and correct code is accused** (`core/build/CriterionProbeSynthesizer` model-fallback path, `core/build/BootGate` sequence execution, `goal/GoalPlannerService` T4-BV closure gate) — **filed 2026-08-24; mechanism PINNED the same night from the model's own logged answer plus the code, after two wrong guesses that are kept below.**

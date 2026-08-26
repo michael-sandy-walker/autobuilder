@@ -150,7 +150,7 @@ public class CriterionProbeSynthesizer {
         if (deterministic.isPresent()) {
             log.debug("T4-CY: probe for [{}] synthesized deterministically as {}",
                     assertion.describe(), deterministic.get());
-            return deterministic;
+            return carryStatedInput(deterministic.get(), assertion);
         }
         if (!llmFallbackEnabled && !allowModelFallback) {
             log.debug("T4-CY: no deterministic probe for [{}] and the model fallback is off — not probed",
@@ -166,8 +166,61 @@ public class CriterionProbeSynthesizer {
         log.info("T4-DB: model fallback for [{}] -> {} ({} ms)", assertion.describe(),
                 viaModel.map(seq -> seq.size() + " request(s)").orElse("no usable probe"),
                 System.currentTimeMillis() - t0);
-        return viaModel;
+        return viaModel.flatMap(seq -> carryStatedInput(seq, assertion));
     }
+
+    /**
+     * T1-FW: put back the input the requirement named and identity normalization dropped.
+     *
+     * <p>Applied HERE, at the single entry point and AFTER {@code isUsable} has already accepted
+     * the sequence, so identity comparison never sees the component and neither
+     * {@link #isUsable} nor {@link #pathMatches} changes. The ticket expected this to force a
+     * second field on the assertion and a change to the comparison; reading the order of
+     * operations showed the cheaper form — carry it on the EXERCISE, not on the identity.
+     *
+     * <p>Only the request the criterion is ABOUT gets it. Earlier requests are setup, and their
+     * job is to create state, not to exercise the requirement.
+     */
+    private static Optional<List<ProbeRequest>> carryStatedInput(List<ProbeRequest> sequence,
+                                                                 BehaviouralCriterionParser.Assertion assertion) {
+        Optional<String> stated = BehaviouralCriterionParser.statedInput(assertion.criterionText());
+        if (stated.isEmpty() || sequence.isEmpty()) return Optional.of(sequence);
+
+        String component = stated.get();
+        if (component.contains("{")) {
+            // A PATTERN, and it is NOT probed whatever status it asserts.
+            //
+            // Grounding it where the requirement asserts the reference RESOLVES needs a resource
+            // created first, and knowing which collection to create it in means reading the
+            // handler's own parameter declaration — the capability T1-FV names and this project
+            // does not have.
+            //
+            // ⚠ Grounding it where the requirement asserts the reference resolves to NOTHING looks
+            // safe and was built, then withdrawn on measurement. Of the archive's 37 pattern
+            // criteria, 10 assert 404 for an absent member — and THE SPECIFICATION NEVER SAYS
+            // THAT: it states only "list all loans for a member", while the 404 belongs to a
+            // different endpoint. The artifact answers 200 with an empty array and is right to;
+            // one of those criteria even hedges, "returns HTTP 404 or empty array (per spec: 404
+            // if member not found)". Probing them would report a correct artifact as defective on
+            // the strength of a criterion the loop invented — the very failure this ticket is
+            // about. The disagreement is real and worth surfacing, but as a criterion that does
+            // not follow from the seed (T4-DA), never as an artifact defect.
+            log.debug("T1-FW: [{}] names an input pattern that cannot be grounded — not probed",
+                    assertion.describe());
+            return Optional.empty();
+        }
+        List<ProbeRequest> out = new ArrayList<>(sequence);
+        ProbeRequest last = out.get(out.size() - 1);
+        if (last.path().contains("?")) return Optional.of(sequence);   // already carries it
+        out.set(out.size() - 1, new ProbeRequest(last.method(), last.path() + "?" + component, last.body()));
+        return Optional.of(List.copyOf(out));
+    }
+
+    /** The status a requirement uses to say a named reference resolves to nothing. */
+    private static final int ABSENT_REFERENCE_STATUS = 404;
+
+    /** An id no resource is created with, matching the value the path-variable builder uses. */
+    private static final String UNUSED_REFERENCE = "999999999";
 
     /**
      * The model-driven path: asks for an input, never a verdict, and rejects any answer whose final

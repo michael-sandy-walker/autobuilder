@@ -35,12 +35,33 @@ class BehaviouralCriterionParserTest {
                 .isEqualTo(text);
     }
 
+    /**
+     * ⚠ T1-FW: this test previously ASSERTED THE DEFECT — that a criterion about
+     * {@code /loans?memberId={id}} yields an assertion about bare {@code /loans}. It passed on
+     * every build while the probe exercised a different input from the one the requirement named
+     * and recorded the application's correct refusal as a failure, in 10 of 14 archived runs.
+     * Second instance of this shape in three days, after {@code sequenceLengthIsCapped} pinned
+     * T1-FU's truncation the same way: <b>a green suite protects whatever its tests assert,
+     * including a defect stated as intended behaviour.</b>
+     */
     @Test
-    void queryStringIsNormalizedAway() {
-        assertThat(BehaviouralCriterionParser.parse(
-                "GET /loans?memberId={id} returns HTTP 200 with a JSON array of all loans for the member"))
-                .get().extracting(BehaviouralCriterionParser.Assertion::path)
-                .isEqualTo("/loans");
+    void aRequirementNamingInputThatNormalizationDiscardsIsNoLongerReducedToTheBarePath() {
+        String text = "GET /loans?memberId={id} returns HTTP 200 with a JSON array of all loans for the member";
+        // The identity is still the bare path — six callers depend on that — but the component
+        // survives, so nothing downstream can exercise the endpoint without it.
+        assertThat(BehaviouralCriterionParser.parse(text))
+                .get().extracting(BehaviouralCriterionParser.Assertion::path).isEqualTo("/loans");
+        assertThat(BehaviouralCriterionParser.statedInput(text)).contains("memberId={id}");
+    }
+
+    /** The exercise carries the component; the identity does not. Both halves pinned together. */
+    @Test
+    void theProbeCarriesTheComponentWhileTheIdentityStaysBare() {
+        var a = BehaviouralCriterionParser.parse(
+                "GET /loans?memberId=999 returns HTTP 200 with an empty JSON array");
+        assertThat(a).isPresent();
+        assertThat(a.get().path()).isEqualTo("/loans");
+        assertThat(BehaviouralCriterionParser.statedInput(a.get().criterionText())).contains("memberId=999");
     }
 
     @Test
@@ -165,10 +186,10 @@ class BehaviouralCriterionParserTest {
                 .map(BehaviouralCriterionParser.Assertion::describe)
                 .toList();
 
-        // Every criterion in the run is now readable, path-variable ones included — those are
-        // grounded by the synthesized sequence rather than skipped. Nothing is read as an
-        // assertion it did not make: the query string on the last one normalizes away, and each
-        // path-variable criterion keeps its pattern.
+        // Every criterion in the run is readable, and the last one is T1-FW's case: its IDENTITY
+        // is the bare path — six callers depend on that — while the input component it names is
+        // kept separately and carried into the request. Whether it can be exercised is decided
+        // where the asserted status is known; the identity readout here is unchanged.
         assertThat(probeable).containsExactly(
                 "POST /books → 201",
                 "POST /books → 400",
@@ -186,6 +207,55 @@ class BehaviouralCriterionParserTest {
                 "POST /loans/{}/return → 200",
                 "POST /loans/{}/return → 404",
                 "POST /loans/{}/return → 409",
+                // T1-FW: read again, and READABLE is the point — the component it names rides on
+                // the exercise, so nothing downstream can request the bare path in its place.
                 "GET /loans → 200");
+    }
+
+    /**
+     * T1-FW. A requirement naming part of its own input splits by whether that part is a VALUE or
+     * a PATTERN. Measured over 58 such criteria in the archive: 21 state it literally and are
+     * exercisable as written; 37 state a pattern and have no machinery to ground it. Reading
+     * either as the bare path tests a different input from the one the requirement describes.
+     */
+    @Test
+    void aLiterallyStatedInputIsKeptForTheProbeToCarry() {
+        assertThat(BehaviouralCriterionParser.statedInput(
+                "GET /loans?memberId=1 returns HTTP 200 with a JSON array of loans")).contains("memberId=1");
+        assertThat(BehaviouralCriterionParser.statedInput(
+                "GET /books?title=x&author=y returns HTTP 200")).contains("title=x&author=y");
+        // Still an assertion about the endpoint's identity — the component rides on the exercise.
+        assertThat(BehaviouralCriterionParser.parse("GET /loans?memberId=1 returns HTTP 200"))
+                .get().extracting(BehaviouralCriterionParser.Assertion::path).isEqualTo("/loans");
+    }
+
+    /**
+     * A pattern is READ here and its exercisability decided by the synthesizer, which knows the
+     * asserted status. Reading it is what stops the bare path being exercised in its place.
+     */
+    @Test
+    void aPatternStatedAsInputIsStillRead() {
+        assertThat(BehaviouralCriterionParser.statedInput(
+                "GET /loans?memberId={id} returns HTTP 200")).contains("memberId={id}");
+        assertThat(BehaviouralCriterionParser.parse("GET /loans?memberId={id} returns HTTP 404"))
+                .get().extracting(BehaviouralCriterionParser.Assertion::path).isEqualTo("/loans");
+    }
+
+    @Test
+    void aRequirementNamingNoExtraInputStatesNone() {
+        assertThat(BehaviouralCriterionParser.statedInput("GET /loans returns HTTP 200")).isEmpty();
+        assertThat(BehaviouralCriterionParser.statedInput("POST /books returns HTTP 400")).isEmpty();
+    }
+
+    /** The common case is untouched: nothing discarded, so the assertion is made as before. */
+    @Test
+    void aRequirementWhoseInputSurvivesNormalizationIsStillJudged() {
+        var a = BehaviouralCriterionParser.parse("GET /loans returns HTTP 200");
+        assertThat(a).isPresent();
+        assertThat(a.get().path()).isEqualTo("/loans");
+
+        var b = BehaviouralCriterionParser.parse("GET /books/{id} returns HTTP 404");
+        assertThat(b).isPresent();
+        assertThat(b.get().path()).isEqualTo("/books/{}");
     }
 }

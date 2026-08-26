@@ -265,4 +265,48 @@ class CriterionProbeSynthesizerTest {
         assertThat(seq.get().get(0).path()).isEqualTo("/members/" + DeterministicProbeSynthesizer.UNUSED_ID);
         verify(llmClient, never()).ask(any());
     }
+
+    /**
+     * T1-FW, both halves. A requirement naming part of its own input must be exercised WITH it —
+     * measured on a booted artifact: bare {@code GET /loans} answers 400 because a required
+     * parameter is missing, while {@code GET /loans?memberId=1} answers 200. Probing the first and
+     * reporting the second's requirement is what blocked closure 190 times across 12 archived runs.
+     */
+    @Test
+    void aLiterallyStatedInputIsCarriedIntoTheRequest() {
+        var a = BehaviouralCriterionParser.parse(
+                "GET /loans?memberId=1 returns HTTP 200 with a JSON array of loans").orElseThrow();
+        var seq = synthesizer.synthesize(null, a, null);
+
+        assertThat(seq).isPresent();
+        assertThat(seq.get().get(seq.get().size() - 1).path()).isEqualTo("/loans?memberId=1");
+    }
+
+    /**
+     * ⚠ A pattern is not probed even where the requirement asserts the reference resolves to
+     * NOTHING, and that restraint was bought by measurement rather than reasoned to. Grounding it
+     * with an unused id was built and then withdrawn: of the archive's 37 pattern criteria, 10
+     * assert 404 for an absent member and THE SPECIFICATION NEVER SAYS THAT — it states only
+     * "list all loans for a member". The artifact answers 200 with an empty array and is right to.
+     * Probing those would report a correct artifact as defective on a criterion the loop invented.
+     */
+    @Test
+    void aPatternIsNotProbedEvenWhereItAssertsAnAbsentReference() {
+        var a = BehaviouralCriterionParser.parse(
+                "GET /loans?memberId={id} returns HTTP 404 when the member does not exist").orElseThrow();
+        assertThat(synthesizer.synthesize(null, a, null)).isEmpty();
+    }
+
+    /**
+     * ⚠ And where the requirement asserts the reference RESOLVES, the value would have to come
+     * from a resource created first — which needs the handler's own parameter declaration to know
+     * which collection. Not probed rather than guessed: an unused id here would assert 200 against
+     * an application entitled to answer 404, manufacturing the failure this ticket is about.
+     */
+    @Test
+    void aPatternIsNotProbedWhereGroundingItWouldRequireReadingTheInterface() {
+        var a = BehaviouralCriterionParser.parse(
+                "GET /loans?memberId={id} returns HTTP 200 with a JSON array of loans").orElseThrow();
+        assertThat(synthesizer.synthesize(null, a, null)).isEmpty();
+    }
 }

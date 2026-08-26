@@ -273,6 +273,27 @@ public class EndpointSurfaceQuery {
      * lower-cases, replaces every path variable with {@code {}}, drops the trailing slash.
      * Returns null for blank/unusable input. Also consumed by T4-BT.
      */
+    /**
+     * The part of a stated input that {@link #normalizePath} discards — everything it drops in
+     * order to compare two mentions of the same endpoint for IDENTITY.
+     *
+     * <p>T1-FW: normalization for comparison is lossy BY DESIGN, and six callers want exactly that.
+     * The one caller that builds a REQUEST wants the opposite, and for want of this method it had
+     * no way to tell that it had been handed less than the requirement stated — a criterion about
+     * {@code /loans?memberId={id}} was exercised as bare {@code /loans}, the application correctly
+     * refused a missing required parameter, and the artifact was recorded as failing. Asking what
+     * was discarded is what lets a builder decline rather than exercise a different input.
+     *
+     * <p>Returns empty when nothing was discarded, so the common case stays silent.
+     */
+    public static Optional<String> discardedInput(String raw) {
+        if (raw == null) return Optional.empty();
+        int q = raw.indexOf('?');
+        if (q < 0 || q == raw.length() - 1) return Optional.empty();
+        String discarded = raw.substring(q + 1).trim();
+        return discarded.isBlank() ? Optional.empty() : Optional.of(discarded);
+    }
+
     public static String normalizePath(String raw) {
         if (raw == null) return null;
         String p = raw.trim();

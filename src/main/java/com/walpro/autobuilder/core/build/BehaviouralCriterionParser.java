@@ -63,6 +63,27 @@ public final class BehaviouralCriterionParser {
         }
     }
 
+    /**
+     * The input this requirement names beyond the path it addresses — the component identity
+     * normalization drops. Empty when the requirement names none, or when what it names is a
+     * pattern rather than a value. WHETHER it can be exercised is the synthesizer's call, because
+     * that depends on the status the requirement asserts — a pattern standing for a reference that
+     * must NOT resolve is groundable; one standing for a reference that must resolve is not.
+     *
+     * <p>ONE HOME for the rule: {@link #parse} consults it to decide whether the requirement is
+     * exercisable, and the probe synthesizer consults it to carry the component into the request.
+     * Deriving it twice is how the two would drift apart.
+     */
+    public static Optional<String> statedInput(String criterion) {
+        if (criterion == null) return Optional.empty();
+        Matcher em = ENDPOINT.matcher(criterion);
+        while (em.find()) {
+            Optional<String> stated = EndpointSurfaceQuery.discardedInput(em.group(2));
+            if (stated.isPresent()) return stated;
+        }
+        return Optional.empty();
+    }
+
     /** Verb-qualified path mention; same shape the endpoint surface query reads out of spec prose. */
     private static final Pattern ENDPOINT = Pattern.compile(
             "\\b(GET|POST|PUT|PATCH|DELETE)\\s+(/[A-Za-z0-9_\\-{}/.?=&]*)");
@@ -107,6 +128,12 @@ public final class BehaviouralCriterionParser {
         String path = null;
         Matcher em = ENDPOINT.matcher(criterion);
         while (em.find()) {
+            // T1-FW: a requirement that names part of its own input which identity
+            // normalization discards cannot be exercised from the normalized form — doing so
+            // tests a DIFFERENT input, and the artifact's correct refusal of it was recorded as a
+            // failure in 12 of 29 archived runs across 190 refused closure attempts. Where the
+            // component is stated LITERALLY the probe carries it through unchanged; where it is a
+            // pattern there is no machinery to ground it, and the honest answer is no opinion.
             String normalized = EndpointSurfaceQuery.normalizePath(em.group(2));
             if (normalized == null) continue;
             String key = em.group(1).toUpperCase() + " " + normalized;

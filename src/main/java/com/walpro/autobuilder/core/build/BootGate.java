@@ -33,6 +33,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 import java.util.stream.Stream;
 
 /**
@@ -554,15 +556,21 @@ public class BootGate {
     private Optional<String> groundedMessage(CommandExerciseSynthesizer.Exercise e, List<String> args) {
         if (e.expectedMessage().isEmpty()) return Optional.empty();
         String msg = e.expectedMessage().get();
-        int open = msg.indexOf('<');
-        int close = msg.indexOf('>', open + 1);
-        if (open < 0 || close < 0) return Optional.of(msg);
-        // The placeholder stands for the argument the exercise varied: the fixture path where
-        // there is one, otherwise the single argument the operation was given.
-        // The placeholder stands for whatever the exercise varied: the name where one was chosen,
-        // otherwise the last argument the operation was given.
+        Matcher pm = MESSAGE_PLACEHOLDER.matcher(msg);
+        List<int[]> spans = new ArrayList<>();
+        while (pm.find()) spans.add(new int[]{pm.start(), pm.end()});
+        if (spans.isEmpty()) return Optional.of(msg);
+        // ⚠ MORE THAN ONE PLACEHOLDER MEANS THE MESSAGE DESCRIBES VALUES THIS EXERCISE NEVER
+        // CHOSE, and substituting anyway manufactures a contradiction against a correct artifact.
+        // Field defect, run 2026-08-26_14-53-24: a criterion reading "prints \"line <n>: expected
+        // <h> fields, found <f>\"" had the FIXTURE PATH substituted into <n> — a line number —
+        // while <h> and <f> stayed literal, and the resulting nonsense blocked closure six times
+        // on an artifact that answered that criterion correctly. A single placeholder is the only
+        // case where the value the exercise varied is unambiguously the one the message names.
+        if (spans.size() != 1) return Optional.empty();
+        int[] span = spans.get(0);
         String value = args.get(args.size() - 1);
-        return Optional.of(msg.substring(0, open) + value + msg.substring(close + 1));
+        return Optional.of(msg.substring(0, span[0]) + value + msg.substring(span[1]));
     }
 
     private static void deleteRecursively(Path dir) {
@@ -1016,6 +1024,9 @@ public class BootGate {
                 .replace("{port}", String.valueOf(port));
         return Arrays.stream(rendered.trim().split("\\s+")).toList();
     }
+
+    /** A component a quoted message describes rather than gives. */
+    private static final Pattern MESSAGE_PLACEHOLDER = Pattern.compile("<[^>]+>");
 
     private static final int MAX_NAMED_FAILURES = 5;
     private static final int OUTPUT_TAIL_LINES = 50;

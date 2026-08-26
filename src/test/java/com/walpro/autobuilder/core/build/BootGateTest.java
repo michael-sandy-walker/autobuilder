@@ -234,6 +234,28 @@ class BootGateTest {
     }
 
     /**
+     * ⚠ FIELD DEFECT, run 2026-08-26_14-53-24, and it is this project's own recurring shape built
+     * fresh: a message describing values the exercise never chose had the FIXTURE PATH substituted
+     * into a LINE NUMBER, and the resulting nonsense blocked closure six times on an artifact that
+     * answered the criterion correctly. The criterion below is verbatim from that run. The exit
+     * status matches, so a message check that cannot ground itself must stay silent — an
+     * ungrounded message is compared against text the run never chose.
+     */
+    @Test
+    void terminatingArtifact_aMessageNamingValuesTheExerciseNeverChoseIsNotChecked() throws Exception {
+        Path target = tempDir.resolve("target");
+        Files.createDirectories(target);
+        // Exits 2 for check, as the criterion requires, and prints nothing.
+        Files.writeString(target.resolve("app.jar"), "#!/bin/sh\n[ \"$1\" = check ] || exit 3\nexit 2\n");
+
+        assertThat(gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC_WITH_EXAMPLE,
+                        List.of("check on a file with a malformed row prints "
+                                + "\"line <n>: expected <h> fields, found <f>\" to stdout and exits 2"),
+                        false)).isEmpty();
+    }
+
+    /**
      * A criterion about the CONTENT of an input abstains — building the fixture needs the format,
      * and a fixture that does not vary the property under test cannot detect anything.
      */

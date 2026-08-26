@@ -29,6 +29,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -40,8 +41,8 @@ import java.util.stream.Stream;
  * completion #2 (2026-07-02) shipped a jar that died at launch, and the two fulfilled runs of
  * 2026-07-02/03 shipped jars whose spec-named endpoints were formally present but unreachable at
  * runtime — every one of those defects was found only by a manual boot-and-probe after the run.
- * This gate mechanizes that ritual: launch the packaged artifact once, verify it starts and
- * serves, probe the spec-declared parameterless GET endpoints live, and exercise the
+ * This gate mechanizes that ritual: launch the packaged artifact once, verify it completes the
+ * way its specification asks, probe the spec-declared parameterless GET endpoints live, and exercise the
  * spec-declared path-variable-free POST endpoints with synthesized bodies (T4-CB — the fourth
  * false-completion sighting fulfilled with a POST crashing on an id cast that no gate had ever
  * exercised; only a 5xx or connection death on a write blocks, never a 4xx).
@@ -51,12 +52,21 @@ import java.util.stream.Stream;
  * port, chosen here and handed to the artifact via the configured command template and/or
  * environment variable (which mechanism the target ecosystem honours is config data, not code).
  *
- * <p>Blocks (returns a work-item summary) when the process exits at startup, when the spec names
- * endpoints and the process never serves HTTP, or when a spec-named probeable endpoint answers
- * 404/5xx at runtime. Abstains (empty) on: gate or build executor disabled, no packaged artifact
- * found, an artifact older than the sources (no fresh packaging observation — never judge old code),
- * and a spec that names no endpoints while the process runs cleanly — no observation is never
- * treated as failure.
+ * <p><b>Two completion models, and the gate does not assume one.</b> An artifact whose
+ * specification names a served surface completes by becoming ready and STAYING UP; we tear it
+ * down, so its exit status is ours rather than its own. An artifact whose specification names no
+ * served surface completes by RUNNING AND TERMINATING; its exit status is the channel it reports
+ * through. Which model applies is decided by what the specification asked for, before the exit
+ * status is read — a terminating artifact is not a crashed one, and this gate has no expectation
+ * to judge its status against (that expectation is a criterion, and criteria are still stated as
+ * a response status; see T4-DD item 2).
+ *
+ * <p>Blocks (returns a work-item summary) only where the specification named a served surface:
+ * when the process exits at startup, when it never serves HTTP, or when a spec-named probeable
+ * endpoint answers 404/5xx at runtime. Abstains (empty) on: gate or build executor disabled, no
+ * packaged artifact found, an artifact older than the sources (no fresh packaging observation —
+ * never judge old code), and any outcome of an artifact whose spec names no served surface — no
+ * observation is never treated as failure.
  */
 @Slf4j
 @Component
@@ -253,15 +263,40 @@ public class BootGate {
             if (!process.isAlive()) {
                 int exit = process.exitValue();
                 drainer.join(1000);
+                // T4-DD item 3: which COMPLETION MODEL applies is asked once, before the exit
+                // status is read at all. An artifact whose specification names a served surface
+                // is expected to become ready and stay up, so terminating — cleanly or not — is
+                // a failure to do the thing asked of it. An artifact whose specification names
+                // no served surface is expected to run and TERMINATE, so its exit status is the
+                // channel it reports through, not evidence that it failed to start. This gate
+                // holds no expectation to compare such a status against, so it has no opinion.
+                //
+                // Asking in the other order is the assumption this fixes: the clean-exit branch
+                // already asked the question and the non-zero branch never did, so an artifact
+                // that terminated by design was reported as one that crashed at startup. On the
+                // CLI target that misreading demanded repair 41 times at the closure edge and
+                // spent 25 of 37 merges churning an artifact that had been finished since
+                // merge 12. Note the asymmetry cost nothing on a served target — where the spec
+                // names endpoints, every branch below is exactly what it was.
+                if (declared.isEmpty()) {
+                    // T4-DD item 2: the artifact terminated and its specification asked for no
+                    // served surface, so THIS is the shape whose criteria state an exit status.
+                    // Ask them. Item 3 alone left the gate with nothing to ask a terminating
+                    // artifact — measured on run 2026-08-26_02-20-47, which fulfilled with
+                    // criteria_executable_pct=0: correct output, and nothing in the loop checking it.
+                    List<String> commandFailures = probeCommandCriteria(artifact, behaviouralCriteria);
+                    if (!commandFailures.isEmpty()) {
+                        return Optional.of("the tool runs, but acceptance criteria fail when exercised"
+                                + " against it: " + String.join("; ", commandFailures));
+                    }
+                    return Optional.empty();
+                }
                 if (exit != 0) {
                     return Optional.of("the application exits at startup (exit " + exit + ") — "
                             + summariseOutput(outputTail));
                 }
-                if (!declared.isEmpty()) {
-                    return Optional.of("the application exits immediately instead of staying up to serve"
-                            + " the endpoints the goal specification names — " + summariseOutput(outputTail));
-                }
-                return Optional.empty(); // ran and exited clean; spec asks for no served surface — no opinion
+                return Optional.of("the application exits immediately instead of staying up to serve"
+                        + " the endpoints the goal specification names — " + summariseOutput(outputTail));
             }
             if (!serving) {
                 if (!declared.isEmpty()) {
@@ -335,6 +370,85 @@ public class BootGate {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
+            }
+        }
+    }
+
+    /**
+     * T4-DD item 2: exercise the criteria that state an EXIT STATUS, the terminating artifact's
+     * equivalent of {@link #probeBehaviouralCriteria}. Same discipline throughout: a criterion
+     * that does not parse into one literal invocation and one expected status is not judged, and
+     * an invocation that cannot be run produces no observation rather than a failure.
+     *
+     * <p>Note what is NOT here: no surface discovery, and no model. The corpus showed the
+     * invocation is written into the criterion the same way an endpoint is
+     * ({@code Running `<launch> unknown` … exits with code 3}), so reading it is a parser's job.
+     */
+    private List<String> probeCommandCriteria(Path artifact, List<String> behaviouralCriteria) {
+        List<String> failures = new ArrayList<>();
+        if (!criterionProbeEnabled || behaviouralCriteria == null || behaviouralCriteria.isEmpty()) {
+            return failures;
+        }
+        List<String> launchTokens = CommandCriterionParser.launchTokensOf(commandTemplate);
+        if (launchTokens.isEmpty()) return failures;
+
+        int probed = 0;
+        int unparsed = 0;
+        int unobserved = 0;
+        for (String criterion : behaviouralCriteria) {
+            if (failures.size() >= MAX_NAMED_FAILURES) break;
+            Optional<CommandCriterionParser.CommandAssertion> parsed =
+                    CommandCriterionParser.parse(criterion, launchTokens);
+            if (parsed.isEmpty()) {
+                unparsed++;
+                continue;
+            }
+            CommandCriterionParser.CommandAssertion a = parsed.get();
+            OptionalInt observed = invokeOnce(artifact, a.args());
+            if (observed.isEmpty()) {
+                unobserved++;
+                continue;
+            }
+            probed++;
+            if (observed.getAsInt() != a.expectedExitStatus()) {
+                failures.add("\"" + a.criterionText() + "\" — " + a.describe()
+                        + ", but running it exited " + observed.getAsInt());
+            }
+        }
+        log.info("T4-DD: exit-status criteria probed={} skipped={} (unparsed={} unobserved={}) contradicted={}",
+                probed, unparsed + unobserved, unparsed, unobserved, failures.size());
+        return failures;
+    }
+
+    /**
+     * Run the artifact once with {@code args} and report the status it terminated with. Empty is
+     * "no observation": the invocation could not be started, or it did not terminate within the
+     * per-exercise bound — a tool that hangs has told us nothing about the criterion, and the
+     * process is destroyed rather than left behind.
+     */
+    private OptionalInt invokeOnce(Path artifact, List<String> args) {
+        List<String> command = new ArrayList<>(CommandCriterionParser.launchTokensOf(commandTemplate));
+        command.add(artifact.toString());
+        command.addAll(args);
+        Process process = null;
+        try {
+            process = new ProcessBuilder(command)
+                    .directory(artifact.getParent().getParent().toFile())
+                    .redirectErrorStream(true)
+                    .start();
+            if (!process.waitFor(requestTimeoutMs, TimeUnit.MILLISECONDS)) {
+                return OptionalInt.empty();
+            }
+            return OptionalInt.of(process.exitValue());
+        } catch (IOException e) {
+            log.info("T4-DD: could not invoke '{}' ({}) — no observation", String.join(" ", command), e.getMessage());
+            return OptionalInt.empty();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return OptionalInt.empty();
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
             }
         }
     }

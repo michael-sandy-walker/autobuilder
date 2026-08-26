@@ -5,22 +5,29 @@
 
   Invocation: java -jar app.jar <command> [arguments]
 
+  FIELD SYNTAX. Fields are separated by commas. A field MAY be wrapped in double quotes, and a
+  quoted field may contain commas and newlines, which are then part of the value and NOT
+  separators. Inside a quoted field, two consecutive double quotes mean one literal double quote.
+  Quotes are removed from the value. So the line  a,"b,c","d""e"  has THREE fields: a / b,c / d"e.
+  A naive split on commas is not a correct reader.
+
   Commands:
 
   check <file> — read the file and report malformed rows. A row is malformed when its field count
   differs from the header's. Print one line per malformed row to stdout as
-  "line <n>: expected <h> fields, found <f>", in ascending line order. Exit 0 when every row is
-  well formed, exit 2 when at least one row is malformed.
+  "line <n>: expected <h> fields, found <f>", in ascending line order, where <n> counts PHYSICAL
+  lines from 1 including any newlines inside quoted fields. Exit 0 when every row is well formed,
+  exit 2 when at least one row is malformed.
 
   count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.
-  Exit 0.
+  A row spanning several physical lines inside a quoted field counts as ONE row. Exit 0.
 
-  column <file> <name> — print every value of the named column, one per line, in file order.
-  Exit 0. Exit 4 when the named column is not present in the header, printing
+  column <file> <name> — print every value of the named column, one per line, in file order, with
+  quoting removed. Exit 0. Exit 4 when the named column is not present in the header, printing
   "no such column: <name>" to stderr.
 
   Common rules: exit 1 when the file argument names a path that does not exist, printing
   "no such file: <path>" to stderr. Exit 3 when the command word is not one of the three above,
-  printing "unknown command: <word>" to stderr. Exit 5 when the wrong number of arguments is given
-  for a known command. The first line of a file is always its header. Fields are separated by
-  commas. No quoting or escaping is required.
+  printing "unknown command: <word>" to stderr. Command words are case sensitive. Exit 5 when the
+  wrong number of arguments is given for a known command. The first line of a file is always its
+  header. An empty file (zero bytes) has no header: exit 2 for check, and print 0 for count.

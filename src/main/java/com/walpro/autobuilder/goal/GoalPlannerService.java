@@ -3105,7 +3105,12 @@ public class GoalPlannerService {
                         true);
                 if (bootFailure.isPresent()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
-                            "[BUILD_FIX] Make the packaged application start and serve the specified endpoints — "
+                            // T4-DD item 3: the imperative must not re-assert a completion model
+                            // the artifact may not have — the gate's own summary already says what
+                            // running it revealed, and on a target that terminates by design
+                            // "start and serve the specified endpoints" was an instruction to
+                            // build a network surface the specification never asked for.
+                            "[BUILD_FIX] Make the packaged application behave as the specification states when run — "
                                     + bootFailure.get()));
                     if (!injected.injected().isEmpty()) {
                         for (String id : injected.injectedIds()) {

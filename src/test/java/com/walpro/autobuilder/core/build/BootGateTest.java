@@ -125,6 +125,74 @@ class BootGateTest {
                 .verifyBootsAndServes("c", "Produce a batch data-cleanup tool.")).isEmpty();
     }
 
+    /**
+     * T4-DD item 3. The sibling of the test above, and its absence was the defect: the clean-exit
+     * branch asked whether the specification wanted a served surface and the non-zero branch did
+     * not, so an artifact that terminated BY DESIGN was reported as one that crashed at startup.
+     * A command-line tool signalling a malformed input through its exit status is doing exactly
+     * what its specification asks; the gate holds no expectation to judge that status against and
+     * must therefore hold no opinion.
+     */
+    /**
+     * T4-DD item 2, end to end: a terminating artifact's criteria state an exit status, and the
+     * gate now exercises them instead of having nothing to ask. The "artifact" is a script the
+     * test writes and the launch command is the shell, because what is under test is the gate's
+     * read-invoke-compare loop, not a packaging format.
+     */
+    private void terminatingArtifact() throws Exception {
+        Path target = tempDir.resolve("target");
+        Files.createDirectories(target);
+        // Exits 3 for the word this test's criteria name, and 9 for anything else — so one
+        // criterion is satisfied and one is contradicted by the SAME artifact.
+        Files.writeString(target.resolve("app.jar"),
+                "#!/bin/sh\nif [ \"$1\" = unknown ]; then exit 3; fi\nexit 9\n");
+    }
+
+    @Test
+    void terminatingArtifact_criterionContradictedByItsExitStatus_blocks() throws Exception {
+        terminatingArtifact();
+        Optional<String> blocker = gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", "Produce a delimited-text checking tool.",
+                        List.of("Running `sh app.jar frobnicate` prints an error and exits with code 3"),
+                        false);
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("acceptance criteria fail").contains("exited 9");
+    }
+
+    @Test
+    void terminatingArtifact_criterionSatisfiedByItsExitStatus_passes() throws Exception {
+        terminatingArtifact();
+        assertThat(gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", "Produce a delimited-text checking tool.",
+                        List.of("Running `sh app.jar unknown` prints an error and exits with code 3"),
+                        false)).isEmpty();
+    }
+
+    /** A criterion the parser declines is not judged — the artifact's exit 9 goes unremarked. */
+    @Test
+    void terminatingArtifact_unparseableCriterionIsNotJudged() throws Exception {
+        terminatingArtifact();
+        assertThat(gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", "Produce a delimited-text checking tool.",
+                        List.of("Running `sh app.jar <command>` exits with code 3",
+                                "Malformed rows are printed in ascending line number order"),
+                        false)).isEmpty();
+    }
+
+    @Test
+    void nonZeroExit_whenSpecNamesNoEndpoints_abstains() throws Exception {
+        // The exit code itself is immaterial here, which is the point: with no served surface
+        // asked for, a non-zero status is the tool's reporting channel and not a verdict this
+        // gate is entitled to read. Its counterpart is startupCrash_blocksWithExitCode, which
+        // sends the same command against a spec that DOES name endpoints and still blocks —
+        // together they pin the discriminator as the specification's surface, not the status.
+        packagedArtifact();
+        assertThat(gate(true, "false", "", 2000)
+                .verifyBootsAndServes("c", "Produce a delimited-text checking tool. "
+                        + "A malformed input file is reported through the exit status.")).isEmpty();
+    }
+
     @Test
     void neverServesHttp_whenSpecNamesEndpoints_blocks() throws Exception {
         packagedArtifact();
@@ -185,7 +253,9 @@ class BootGateTest {
                     buildExecutor, new EndpointSurfaceQuery());
             g.setFileBasePath(relBase.toString());
 
-            Optional<String> blocker = g.verifyBootsAndServes("c", "Produce a batch data-cleanup tool.");
+            // The spec names endpoints only so that a launch failure is still reported: this
+            // test is about the artifact PATH resolving, and it reads its answer off the block.
+            Optional<String> blocker = g.verifyBootsAndServes("c", SPEC_WITH_ENDPOINTS);
 
             // The jar has no Main-Class, so java still fails to launch it — but that failure must
             // be "no main manifest attribute" (proves the file was FOUND and OPENED), never

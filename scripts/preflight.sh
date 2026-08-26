@@ -138,10 +138,23 @@ build_boot_smoke() {
     local ajar
     ajar=$(ls "$tree"/target/*.jar 2>/dev/null | head -1)
     [ -n "$ajar" ] || { echo "no-jar"; return; }
+    # T4-DD item 3: the yardstick must ask the question the TARGET's completion model licenses.
+    # A tool that runs and terminates never prints a readiness banner and is never there to hold a
+    # port, so the serving path below scored every such artifact `boot-failed` — a FALSE ZERO in
+    # the ledger regardless of how correct it was (measured on the CLI target: 12/12 by hand,
+    # boot-failed in the record). The smoke script is handed the artifact itself and does its own
+    # invoking. Default is `serving`, so every existing target and every archived row is unchanged.
+    local mode="${PREFLIGHT_SMOKE_MODE:-serving}"
+    local result
+    if [ "$mode" = "terminating" ]; then
+        "$smoke_script" "$ajar" > "$run_dir/${tag}-smoke.txt" 2>"$run_dir/${tag}-boot.log"
+        result=$(tail -1 "$run_dir/${tag}-smoke.txt")
+        echo "${result:-smoke-failed}"
+        return
+    fi
     java -jar "$ajar" --server.port="$port" > "$run_dir/${tag}-boot.log" 2>&1 &
     local apid=$!
     sleep 14
-    local result
     if grep -q 'Started' "$run_dir/${tag}-boot.log"; then
         # T6-K: keep the per-check PASS/FAIL lines, not just the total. The standing rule is to
         # compare failing check SETS and never totals — the score is a stateful chain in which one

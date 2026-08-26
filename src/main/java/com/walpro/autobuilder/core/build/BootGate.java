@@ -28,6 +28,7 @@ import java.util.Comparator;
 import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -97,6 +98,15 @@ public class BootGate {
     @Setter
     @Autowired(required = false)
     private CriterionProbeSynthesizer criterionProbeSynthesizer;
+
+    /**
+     * T4-DD: the operations a specification declares. Stateless and defaulted rather than
+     * required, so the gate keeps working wherever it is constructed directly.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery commandSurfaceQuery =
+            new com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery();
 
     @Value("${autobuilder.build.boot-gate.criterion-probe-enabled:true}")
     @Setter
@@ -284,7 +294,7 @@ public class BootGate {
                     // Ask them. Item 3 alone left the gate with nothing to ask a terminating
                     // artifact — measured on run 2026-08-26_02-20-47, which fulfilled with
                     // criteria_executable_pct=0: correct output, and nothing in the loop checking it.
-                    List<String> commandFailures = probeCommandCriteria(artifact, behaviouralCriteria);
+                    List<String> commandFailures = probeCommandCriteria(artifact, specText, behaviouralCriteria);
                     if (!commandFailures.isEmpty()) {
                         return Optional.of("the tool runs, but acceptance criteria fail when exercised"
                                 + " against it: " + String.join("; ", commandFailures));
@@ -384,7 +394,8 @@ public class BootGate {
      * invocation is written into the criterion the same way an endpoint is
      * ({@code Running `<launch> unknown` … exits with code 3}), so reading it is a parser's job.
      */
-    private List<String> probeCommandCriteria(Path artifact, List<String> behaviouralCriteria) {
+    private List<String> probeCommandCriteria(Path artifact, String specText,
+                                              List<String> behaviouralCriteria) {
         List<String> failures = new ArrayList<>();
         if (!criterionProbeEnabled || behaviouralCriteria == null || behaviouralCriteria.isEmpty()) {
             return failures;
@@ -415,6 +426,55 @@ public class BootGate {
                         + ", but running it exited " + observed.getAsInt());
             }
         }
+
+        // T4-DD: criteria that name a DECLARED OPERATION rather than a literal invocation — the
+        // shape the field corpus is almost entirely made of. The surface supplies what the
+        // criterion leaves implicit; the synthesizer declines anything needing the input's format.
+        Map<String, com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery.Command> surface =
+                commandSurfaceQuery.declaredInSpec(specText);
+        Optional<String> unrecognised = commandSurfaceQuery.unrecognisedWord(specText);
+        Path fixtureDir = null;
+        try {
+            for (String criterion : behaviouralCriteria) {
+                if (failures.size() >= MAX_NAMED_FAILURES) break;
+                if (CommandCriterionParser.parse(criterion, launchTokens).isPresent()) continue;
+                Optional<CommandExerciseSynthesizer.Exercise> ex =
+                        CommandExerciseSynthesizer.synthesize(criterion, surface, unrecognised);
+                if (ex.isEmpty()) continue;
+                CommandExerciseSynthesizer.Exercise e = ex.get();
+                if (fixtureDir == null) fixtureDir = Files.createTempDirectory("boot-gate-fixture");
+                Optional<List<String>> grounded = ground(e, fixtureDir);
+                if (grounded.isEmpty()) {
+                    unobserved++;
+                    continue;
+                }
+                Optional<Invocation> observed = invoke(artifact, grounded.get());
+                if (observed.isEmpty()) {
+                    unobserved++;
+                    continue;
+                }
+                unparsed--;   // it did not parse as a literal invocation, but it WAS exercised
+                probed++;
+                if (observed.get().exitStatus() != e.expectedExitStatus()) {
+                    failures.add("\"" + e.criterionText() + "\" — " + e.describe()
+                            + ", but running it exited " + observed.get().exitStatus());
+                    continue;
+                }
+                // A right status with a wrong answer is the defect an exit code cannot see, so the
+                // message is checked too — but only when the criterion quoted one AND its
+                // placeholder can be grounded in the value actually passed.
+                Optional<String> want = groundedMessage(e, grounded.get());
+                if (want.isPresent() && !observed.get().output().contains(want.get())) {
+                    failures.add("\"" + e.criterionText() + "\" — " + e.describe()
+                            + ", and it exited " + observed.get().exitStatus()
+                            + " but never said \"" + want.get() + "\"");
+                }
+            }
+        } catch (IOException io) {
+            log.info("T4-DD: could not stage a fixture ({}) — those criteria are not judged", io.getMessage());
+        } finally {
+            deleteRecursively(fixtureDir);
+        }
         log.info("T4-DD: exit-status criteria probed={} skipped={} (unparsed={} unobserved={}) contradicted={}",
                 probed, unparsed + unobserved, unparsed, unobserved, failures.size());
         return failures;
@@ -426,7 +486,64 @@ public class BootGate {
      * per-exercise bound — a tool that hangs has told us nothing about the criterion, and the
      * process is destroyed rather than left behind.
      */
+    /**
+     * Put the exercise's fixture on disk and substitute its path. Empty when the fixture cannot be
+     * staged — no observation rather than an invented argument.
+     */
+    private Optional<List<String>> ground(CommandExerciseSynthesizer.Exercise e, Path dir) throws IOException {
+        List<String> out = new ArrayList<>();
+        for (String a : e.args()) {
+            if (a != null) { out.add(a); continue; }
+            switch (e.fixture()) {
+                case ABSENT_PATH -> out.add(dir.resolve("absent-" + System.nanoTime()).toString());
+                case EMPTY_FILE -> {
+                    Path f = Files.createFile(dir.resolve("empty-" + System.nanoTime()));
+                    out.add(f.toString());
+                }
+                case NONE -> {
+                    return Optional.empty();
+                }
+            }
+        }
+        return Optional.of(List.copyOf(out));
+    }
+
+    /**
+     * The message the criterion quoted, with its single placeholder replaced by the value actually
+     * passed. Empty when no message was quoted, or when the placeholder cannot be tied to an
+     * argument — an ungrounded message would be compared against text the run never chose.
+     */
+    private Optional<String> groundedMessage(CommandExerciseSynthesizer.Exercise e, List<String> args) {
+        if (e.expectedMessage().isEmpty()) return Optional.empty();
+        String msg = e.expectedMessage().get();
+        int open = msg.indexOf('<');
+        int close = msg.indexOf('>', open + 1);
+        if (open < 0 || close < 0) return Optional.of(msg);
+        // The placeholder stands for the argument the exercise varied: the fixture path where
+        // there is one, otherwise the single argument the operation was given.
+        String value = e.fixture() == CommandExerciseSynthesizer.Fixture.NONE
+                ? args.get(args.size() - 1)
+                : args.get(args.size() - 1);
+        return Optional.of(msg.substring(0, open) + value + msg.substring(close + 1));
+    }
+
+    private static void deleteRecursively(Path dir) {
+        if (dir == null) return;
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(java.io.File::delete);
+        } catch (IOException ignored) {
+            // a leftover temp directory is not worth failing a gate over
+        }
+    }
+
+    /** What one invocation reported: the status it terminated with, and everything it wrote. */
+    private record Invocation(int exitStatus, String output) {}
+
     private OptionalInt invokeOnce(Path artifact, List<String> args) {
+        return invoke(artifact, args).map(i -> OptionalInt.of(i.exitStatus())).orElse(OptionalInt.empty());
+    }
+
+    private Optional<Invocation> invoke(Path artifact, List<String> args) {
         List<String> command = new ArrayList<>(CommandCriterionParser.launchTokensOf(commandTemplate));
         command.add(artifact.toString());
         command.addAll(args);
@@ -436,16 +553,20 @@ public class BootGate {
                     .directory(artifact.getParent().getParent().toFile())
                     .redirectErrorStream(true)
                     .start();
+            Deque<String> tail = new ArrayDeque<>();
+            Thread drainer = drainerThread(process.getInputStream(), tail);
+            drainer.start();
             if (!process.waitFor(requestTimeoutMs, TimeUnit.MILLISECONDS)) {
-                return OptionalInt.empty();
+                return Optional.empty();
             }
-            return OptionalInt.of(process.exitValue());
+            drainer.join(1000);
+            return Optional.of(new Invocation(process.exitValue(), String.join("\n", tail)));
         } catch (IOException e) {
             log.info("T4-DD: could not invoke '{}' ({}) — no observation", String.join(" ", command), e.getMessage());
-            return OptionalInt.empty();
+            return Optional.empty();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return OptionalInt.empty();
+            return Optional.empty();
         } finally {
             if (process != null && process.isAlive()) {
                 process.destroyForcibly();

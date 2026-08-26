@@ -180,6 +180,72 @@ class BootGateTest {
                         false)).isEmpty();
     }
 
+    /** A specification that declares an operation surface, as the field runs' seeds do. */
+    private static final String CLI_SPEC = """
+            Produce a delimited-text checking tool.
+
+            Commands:
+
+            check <file> — read the file and report malformed rows. Exit 0 when well formed.
+            """;
+
+    /**
+     * T4-DD: a criterion naming a DECLARED OPERATION rather than a literal invocation — the shape
+     * run 2026-08-26_11-02-00 authored thirty of and executed none of. The surface supplies the
+     * operation and its arity; nothing about the input's format is needed.
+     */
+    @Test
+    void terminatingArtifact_criterionNamingADeclaredOperationIsExercised() throws Exception {
+        terminatingArtifact();   // exits 3 for "unknown", 9 otherwise
+        Optional<String> blocker = gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC,
+                        List.of("Running a known command with the wrong number of arguments exits 5"),
+                        false);
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("exited 9");
+    }
+
+    /** The same shape, satisfied: the artifact answers the status the criterion states. */
+    @Test
+    void terminatingArtifact_declaredOperationCriterionSatisfied_passes() throws Exception {
+        terminatingArtifact();
+        assertThat(gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC,
+                        List.of("Running a known command with the wrong number of arguments exits 9"),
+                        false)).isEmpty();
+    }
+
+    /**
+     * The defect an exit status cannot see: the artifact answers the RIGHT status and never says
+     * what the criterion requires. Without the message check this passes silently.
+     */
+    @Test
+    void terminatingArtifact_rightStatusButWrongMessage_blocks() throws Exception {
+        terminatingArtifact();
+        Optional<String> blocker = gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC,
+                        List.of("Running with a non-existent file path prints \"no such file: <path>\" "
+                                + "to stderr and exits 9"),
+                        false);
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("never said");
+    }
+
+    /**
+     * A criterion about the CONTENT of an input abstains — building the fixture needs the format,
+     * and a fixture that does not vary the property under test cannot detect anything.
+     */
+    @Test
+    void terminatingArtifact_criterionAboutInputContentIsNotJudged() throws Exception {
+        terminatingArtifact();
+        assertThat(gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC,
+                        List.of("check exits 0 when every row is well formed"),
+                        false)).isEmpty();
+    }
+
     @Test
     void nonZeroExit_whenSpecNamesNoEndpoints_abstains() throws Exception {
         // The exit code itself is immaterial here, which is the point: with no served surface

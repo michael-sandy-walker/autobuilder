@@ -495,6 +495,16 @@ except Exception:
         echo "criteria_executable_pct=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, [0-9]* executable (\([0-9]*\)%).*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         echo "criteria_executable_count=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, \([0-9]*\) executable.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         echo "criteria_authored=$(sed -n 's/.*criteria executability — \([0-9]*\) authored.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        # T4-DD: the exit-status channel, reported SEPARATELY rather than folded into the fields
+        # above. Those measure "how many criteria name an ENDPOINT", which is the web target's
+        # question and the basis of every comparison in the 79-run ledger — redefining them would
+        # silently change what past rows mean. Reporting zero while ten criteria were probed is how
+        # a working channel gets called dead (observed on run 2026-08-26_14-53-24), so it gets its
+        # own columns instead. Absent on a target with no command surface, which is correct: the
+        # channel abstained, it did not fail.
+        echo "exit_status_probe_runs=$(grep -c 'T4-DD: exit-status criteria' "$run_dir/autobuilder.log" 2>/dev/null)"
+        echo "exit_status_probed=$(sed -n 's/.*exit-status criteria probed=\([0-9]*\).*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        echo "exit_status_contradicted=$(sed -n 's/.*exit-status criteria .*contradicted=\([0-9]*\).*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         # T2-EY: how much of the run was the loop re-proposing what it had already been refused,
         # and how much of that the gate stopped before an evaluator call. Both, never just the
         # second: recording only what was saved would let the exposure vanish from the record.

@@ -246,6 +246,82 @@ class BootGateTest {
                         false)).isEmpty();
     }
 
+    /** A specification that declares a surface AND works an example of its input format. */
+    private static final String CLI_SPEC_WITH_EXAMPLE = """
+            Produce a delimited-text checking tool.
+
+            Commands:
+
+            check <file> — read the file and report malformed rows. Exit 0 when well formed.
+
+            A field may be wrapped in quotes and then carry a separator inside it.
+            So the line  a,"b,c","d""e"  has THREE fields: a / b,c / d"e.
+            """;
+
+    /** An artifact that divides each line naively — the defect run 2026-08-26_11-02-00 shipped. */
+    private void carelessReaderArtifact() throws Exception {
+        Path target = tempDir.resolve("target");
+        Files.createDirectories(target);
+        Files.writeString(target.resolve("app.jar"), """
+                #!/bin/sh
+                [ "$1" = check ] || exit 3
+                h=$(head -1 "$2" | awk -F, '{print NF}')
+                r=$(sed -n 2p "$2" | awk -F, '{print NF}')
+                [ "$h" = "$r" ] && exit 0
+                exit 2
+                """);
+    }
+
+    /**
+     * T4-DD, the case the whole seam exists for. The criterion is about the CONTENT of an input,
+     * so the fixture is built from the specification's own worked example: a header of the width
+     * the specification states, and the sample as its row. A careless reader divides the two
+     * differently and is caught. Verified against three real artifacts before being written here —
+     * a correct one contradicts nothing, this shape contradicts exactly this criterion.
+     */
+    @Test
+    void terminatingArtifact_carelessReaderCaughtByAFixtureTheSpecificationImplies_blocks() throws Exception {
+        carelessReaderArtifact();
+        Optional<String> blocker = gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC_WITH_EXAMPLE,
+                        List.of("check exits 0 when every row is well formed"), false);
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("acceptance criteria fail").contains("exited 2");
+    }
+
+    /**
+     * ⚠ The guard that keeps the fixture honest: with no worked example there is no way to know
+     * the format, so the same criterion against the same broken artifact is NOT judged. Silence,
+     * never a guess — a fixture built without the format cannot tell a correct reader from this one.
+     */
+    @Test
+    void terminatingArtifact_withoutAWorkedExample_aContentCriterionIsNotJudged() throws Exception {
+        carelessReaderArtifact();
+        String specWithoutExample = """
+                Produce a delimited-text checking tool.
+
+                Commands:
+
+                check <file> — read the file and report malformed rows. Exit 0 when well formed.
+                """;
+        assertThat(gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", specWithoutExample,
+                        List.of("check exits 0 when every row is well formed"), false)).isEmpty();
+    }
+
+    /** A reader that agrees with the specification's example is not contradicted. */
+    @Test
+    void terminatingArtifact_carefulReaderIsNotContradicted() throws Exception {
+        Path target = tempDir.resolve("target");
+        Files.createDirectories(target);
+        Files.writeString(target.resolve("app.jar"), "#!/bin/sh\n[ \"$1\" = check ] || exit 3\nexit 0\n");
+
+        assertThat(gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC_WITH_EXAMPLE,
+                        List.of("check exits 0 when every row is well formed"), false)).isEmpty();
+    }
+
     @Test
     void nonZeroExit_whenSpecNamesNoEndpoints_abstains() throws Exception {
         // The exit code itself is immaterial here, which is the point: with no served surface

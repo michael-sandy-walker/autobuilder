@@ -433,17 +433,21 @@ public class BootGate {
         Map<String, com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery.Command> surface =
                 commandSurfaceQuery.declaredInSpec(specText);
         Optional<String> unrecognised = commandSurfaceQuery.unrecognisedWord(specText);
+        // The specification's own worked example, which is what makes a fixture about an input's
+        // CONTENT possible at all. Absent means those criteria abstain, as they did before.
+        Optional<com.walpro.autobuilder.analysis.structure.InputFormatExample.Example> format =
+                com.walpro.autobuilder.analysis.structure.InputFormatExample.readFrom(specText);
         Path fixtureDir = null;
         try {
             for (String criterion : behaviouralCriteria) {
                 if (failures.size() >= MAX_NAMED_FAILURES) break;
                 if (CommandCriterionParser.parse(criterion, launchTokens).isPresent()) continue;
                 Optional<CommandExerciseSynthesizer.Exercise> ex =
-                        CommandExerciseSynthesizer.synthesize(criterion, surface, unrecognised);
+                        CommandExerciseSynthesizer.synthesize(criterion, surface, unrecognised, format);
                 if (ex.isEmpty()) continue;
                 CommandExerciseSynthesizer.Exercise e = ex.get();
                 if (fixtureDir == null) fixtureDir = Files.createTempDirectory("boot-gate-fixture");
-                Optional<List<String>> grounded = ground(e, fixtureDir);
+                Optional<List<String>> grounded = ground(e, fixtureDir, format);
                 if (grounded.isEmpty()) {
                     unobserved++;
                     continue;
@@ -490,22 +494,56 @@ public class BootGate {
      * Put the exercise's fixture on disk and substitute its path. Empty when the fixture cannot be
      * staged — no observation rather than an invented argument.
      */
-    private Optional<List<String>> ground(CommandExerciseSynthesizer.Exercise e, Path dir) throws IOException {
+    private Optional<List<String>> ground(CommandExerciseSynthesizer.Exercise e, Path dir,
+                                         Optional<com.walpro.autobuilder.analysis.structure
+                                                 .InputFormatExample.Example> format) throws IOException {
         List<String> out = new ArrayList<>();
         for (String a : e.args()) {
             if (a != null) { out.add(a); continue; }
             switch (e.fixture()) {
                 case ABSENT_PATH -> out.add(dir.resolve("absent-" + System.nanoTime()).toString());
-                case EMPTY_FILE -> {
-                    Path f = Files.createFile(dir.resolve("empty-" + System.nanoTime()));
-                    out.add(f.toString());
+                case EMPTY_FILE -> out.add(Files.createFile(dir.resolve("empty-" + System.nanoTime())).toString());
+                case WELL_FORMED_FILE -> {
+                    if (format.isEmpty()) return Optional.empty();
+                    var f = format.get();
+                    // The header carries the width the specification states and none of the syntax
+                    // the sample exercises: that disagreement is the whole detecting power, and a
+                    // fixture repeating the sample as its own header has none.
+                    out.add(write(dir, "wellformed", f.headerLine() + "\n" + f.sample() + "\n"));
+                }
+                case MALFORMED_FILE -> {
+                    if (format.isEmpty()) return Optional.empty();
+                    var f = format.get();
+                    String wide = String.join(String.valueOf(f.separator()),
+                            java.util.Collections.nCopies(f.trueParts() + 1, "x"));
+                    out.add(write(dir, "malformed", f.headerLine() + "\n" + wide + "\n"));
                 }
                 case NONE -> {
                     return Optional.empty();
                 }
             }
         }
+        if (e.column().isPresent()) {
+            if (format.isEmpty()) return Optional.empty();
+            var names = format.get().headerNames();
+            out.add(e.column().get() == CommandExerciseSynthesizer.ColumnChoice.PRESENT
+                    ? names.get(0)
+                    : absentName(names));
+        }
         return Optional.of(List.copyOf(out));
+    }
+
+    /** A name the header definitely does not carry, extended until it collides with nothing. */
+    private static String absentName(List<String> present) {
+        String candidate = present.isEmpty() ? "absent" : present.get(0) + "z";
+        while (present.contains(candidate)) candidate = candidate + "z";
+        return candidate;
+    }
+
+    private static String write(Path dir, String prefix, String content) throws IOException {
+        Path f = dir.resolve(prefix + "-" + System.nanoTime());
+        Files.writeString(f, content);
+        return f.toString();
     }
 
     /**
@@ -521,9 +559,9 @@ public class BootGate {
         if (open < 0 || close < 0) return Optional.of(msg);
         // The placeholder stands for the argument the exercise varied: the fixture path where
         // there is one, otherwise the single argument the operation was given.
-        String value = e.fixture() == CommandExerciseSynthesizer.Fixture.NONE
-                ? args.get(args.size() - 1)
-                : args.get(args.size() - 1);
+        // The placeholder stands for whatever the exercise varied: the name where one was chosen,
+        // otherwise the last argument the operation was given.
+        String value = args.get(args.size() - 1);
         return Optional.of(msg.substring(0, open) + value + msg.substring(close + 1));
     }
 

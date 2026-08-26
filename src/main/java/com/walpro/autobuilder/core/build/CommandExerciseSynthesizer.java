@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.build;
 
 import com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery;
+import com.walpro.autobuilder.analysis.structure.InputFormatExample;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +46,19 @@ public final class CommandExerciseSynthesizer {
         /** A path that must NOT exist. */
         ABSENT_PATH,
         /** A file of zero bytes. */
-        EMPTY_FILE
+        EMPTY_FILE,
+        /** A file every row of which is well formed, built so a careless reader disagrees with it. */
+        WELL_FORMED_FILE,
+        /** A file carrying one row that is definitely not well formed. */
+        MALFORMED_FILE
+    }
+
+    /** Which name to ask an operation for, when the criterion is about a named part of the input. */
+    public enum ColumnChoice {
+        /** A name the built fixture's header really carries. */
+        PRESENT,
+        /** A name it definitely does not. */
+        ABSENT
     }
 
     /**
@@ -54,10 +67,12 @@ public final class CommandExerciseSynthesizer {
      * created and nothing here has to invent one.
      */
     public record Exercise(String criterionText, List<String> args, Fixture fixture,
+                           Optional<ColumnChoice> column,
                            int expectedExitStatus, Optional<String> expectedMessage) {
         public String describe() {
             List<String> shown = new ArrayList<>();
             for (String a : args) shown.add(a == null ? "<" + fixture.name().toLowerCase() + ">" : a);
+            column.ifPresent(c -> shown.add("<" + c.name().toLowerCase() + "-name>"));
             return String.join(" ", shown) + " → exit " + expectedExitStatus
                     + expectedMessage.map(m -> " saying \"" + m + "\"").orElse("");
         }
@@ -85,6 +100,27 @@ public final class CommandExerciseSynthesizer {
     private static final Pattern EMPTY_FILE = Pattern.compile(
             "\\bempty\\b|\\bzero-?\\s?byte\\b", Pattern.CASE_INSENSITIVE);
 
+    /** Conditions about the CONTENT of an input, which need the format and therefore the example. */
+    private static final Pattern WELL_FORMED = Pattern.compile(
+            "\\bevery\\s+\\w+\\s+is\\s+well[-\\s]formed|\\ball\\s+\\w+\\s+are\\s+well[-\\s]formed"
+                    + "|\\bwell[-\\s]formed\\b(?!.*\\bmalformed\\b)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MALFORMED = Pattern.compile("\\bmalformed\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ABSENT_NAME = Pattern.compile(
+            "\\bnot\\s+(?:present\\s+)?in\\s+the\\s+\\w+|\\bnot\\s+present\\b|\\bunknown\\s+\\w+\\b",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern SUCCEEDS = Pattern.compile(
+            "\\bon\\s+success\\b|\\bsucceeds?\\b|\\bwhen\\s+the\\s+\\w+\\s+exists\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    private static Exercise fileExercise(String criterion, CommandSurfaceQuery.Command op,
+                                         Fixture fixture, Optional<ColumnChoice> column,
+                                         int expected, Optional<String> message) {
+        List<String> args = new ArrayList<>();
+        args.add(op.word());
+        args.add(null);   // the caller substitutes the staged fixture's path
+        return new Exercise(criterion.strip(), args, fixture, column, expected, message);
+    }
+
     /**
      * The exercise this criterion licenses, or empty when it names none this can build.
      *
@@ -94,6 +130,18 @@ public final class CommandExerciseSynthesizer {
     public static Optional<Exercise> synthesize(String criterion,
                                                 Map<String, CommandSurfaceQuery.Command> surface,
                                                 Optional<String> unrecognisedWord) {
+        return synthesize(criterion, surface, unrecognisedWord, Optional.empty());
+    }
+
+    /**
+     * @param format the specification's own worked example, when it works one. Absent means no
+     *               fixture about an input's CONTENT can be built, and those criteria abstain —
+     *               which is the state everything shipped before this parameter existed.
+     */
+    public static Optional<Exercise> synthesize(String criterion,
+                                                Map<String, CommandSurfaceQuery.Command> surface,
+                                                Optional<String> unrecognisedWord,
+                                                Optional<InputFormatExample.Example> format) {
         if (criterion == null || criterion.isBlank() || surface == null || surface.isEmpty()) {
             return Optional.empty();
         }
@@ -119,7 +167,7 @@ public final class CommandExerciseSynthesizer {
 
         if (UNRECOGNISED_OPERATION.matcher(criterion).find() && unrecognisedWord.isPresent()) {
             return Optional.of(new Exercise(criterion.strip(), List.of(unrecognisedWord.get()),
-                    Fixture.NONE, expected, message));
+                    Fixture.NONE, Optional.empty(), expected, message));
         }
         if (WRONG_ARITY.matcher(criterion).find()) {
             // An operation taking arguments, invoked with none — the smallest unambiguous way to
@@ -129,7 +177,7 @@ public final class CommandExerciseSynthesizer {
                     .or(() -> surface.values().stream().filter(c -> c.arity() > 0).findFirst());
             if (op.isEmpty()) return Optional.empty();
             return Optional.of(new Exercise(criterion.strip(), List.of(op.get().word()),
-                    Fixture.NONE, expected, message));
+                    Fixture.NONE, Optional.empty(), expected, message));
         }
         if (ABSENT_FILE.matcher(criterion).find()) {
             Optional<CommandSurfaceQuery.Command> op = named.map(surface::get)
@@ -139,7 +187,7 @@ public final class CommandExerciseSynthesizer {
             List<String> args = new ArrayList<>();
             args.add(op.get().word());
             args.add(null); // the caller substitutes the absent path
-            return Optional.of(new Exercise(criterion.strip(), args, Fixture.ABSENT_PATH, expected, message));
+            return Optional.of(new Exercise(criterion.strip(), args, Fixture.ABSENT_PATH, Optional.empty(), expected, message));
         }
         if (EMPTY_FILE.matcher(criterion).find()) {
             Optional<CommandSurfaceQuery.Command> op = named.map(surface::get).filter(c -> c.arity() == 1);
@@ -147,9 +195,33 @@ public final class CommandExerciseSynthesizer {
             List<String> args = new ArrayList<>();
             args.add(op.get().word());
             args.add(null);
-            return Optional.of(new Exercise(criterion.strip(), args, Fixture.EMPTY_FILE, expected, message));
+            return Optional.of(new Exercise(criterion.strip(), args, Fixture.EMPTY_FILE, Optional.empty(), expected, message));
         }
-        // Everything else is about the CONTENT of an input — see the class note.
+        // Criteria about the CONTENT of an input. Buildable only where the specification worked
+        // an example, because that is what pins the format; see the class note for why repeating
+        // a sample instead was measured to detect nothing.
+        if (format.isPresent()) {
+            Optional<CommandSurfaceQuery.Command> unary = named.map(surface::get).filter(c -> c.arity() == 1);
+            if (WELL_FORMED.matcher(criterion).find() && unary.isPresent()) {
+                return Optional.of(fileExercise(criterion, unary.get(), Fixture.WELL_FORMED_FILE,
+                        Optional.empty(), expected, message));
+            }
+            if (MALFORMED.matcher(criterion).find() && unary.isPresent()) {
+                return Optional.of(fileExercise(criterion, unary.get(), Fixture.MALFORMED_FILE,
+                        Optional.empty(), expected, message));
+            }
+            Optional<CommandSurfaceQuery.Command> binary = named.map(surface::get).filter(c -> c.arity() == 2);
+            if (binary.isPresent()) {
+                if (ABSENT_NAME.matcher(criterion).find()) {
+                    return Optional.of(fileExercise(criterion, binary.get(), Fixture.WELL_FORMED_FILE,
+                            Optional.of(ColumnChoice.ABSENT), expected, message));
+                }
+                if (SUCCEEDS.matcher(criterion).find()) {
+                    return Optional.of(fileExercise(criterion, binary.get(), Fixture.WELL_FORMED_FILE,
+                            Optional.of(ColumnChoice.PRESENT), expected, message));
+                }
+            }
+        }
         return Optional.empty();
     }
 }

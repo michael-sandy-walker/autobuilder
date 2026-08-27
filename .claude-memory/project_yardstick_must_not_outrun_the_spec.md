@@ -40,5 +40,19 @@ comparable with earlier runs on that axis. Say so when it happens
 ([[feedback-dont-evaluate-a-build-with-older-runs]]). The alternative is a permanent coin flip in
 the measurement.
 
+**✅ CONFIRMED END TO END 2026-08-27, by reading the field the GATE reads.** Stating the statuses in
+the seed flipped the stamp on the same criterion: run `2026-08-26_21-36-31` had *"POST /books
+returns HTTP 201…"* stamped **AUTHORED**; run `2026-08-27_12-40-17`, after the change, stamps it
+**SPEC**. The create was then genuinely probed rather than body-refused — the probe's own derived
+body `{"title":"value","isbn":"0000000000000"}` answers **201** on the new artifact and **200** on
+the old one, which is the contradiction the gate could not see before. Both runs scored 23/23; the
+difference is that the second one CHECKED it.
+
+**⚠ A METHOD TRAP THAT COST TWO WRONG READINGS IN ONE SITTING:** the goal stack carries the
+criteria in more than one place, and only `metadata.acceptanceCriteria` is the list
+`specBoundBehaviouralCriteria()` consumes — the other copy has no `criteriaBinding`, so a walk that
+matches any "criteria"-ish key reports every criterion as unstamped and therefore SPEC. That is
+what made a correct diagnosis look refuted. **Read the field the production code reads, by name.**
+
 Related: [[project-smoke-score-is-chained]] (compare failing SETS, never totals — this gap
 presents as five failures from one cause).

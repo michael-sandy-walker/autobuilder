@@ -30,9 +30,9 @@ target
 /test-root/meta/GoalStack.json
 /test-root/meta/run-identity.json
 /firestarter/meta/
+/firestarter/cache/
+/firestarter/responses/
+/firestarter/test/
+/firestarter/quarantine/
 /backup/
 __pycache__/
-/firestarter/quarantine/cycle-1784289307900/src/test/java/com/example/library/model/BookControllerTest.java
-/firestarter/quarantine/cycle-1784324684325/src/test/java/com/example/library/BookControllerUnitTest.java
-/firestarter/quarantine/cycle-1784324561366/src/test/java/com/example/library/BookRepositoryTest.java
-/firestarter/quarantine/cycle-1784289307900/src/test/java/com/example/library/model/MemberControllerTest.java

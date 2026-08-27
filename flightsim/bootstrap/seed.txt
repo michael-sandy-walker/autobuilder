@@ -1,0 +1,4 @@
+Create a Java 3D flight simulator with OpenGL.
+The application should include a start menu (including Start, Pause, Exit), the flight simulator itself
+(together with keyboard input for the controls) and a simple cockpit HUD, together with a simple (i.e., polygonic),
+randomly generated environment.

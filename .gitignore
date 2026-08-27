@@ -15,6 +15,15 @@ target
 /clitarget/output/
 /clitarget/logs/
 /clitarget/meta/
+/flightsim/output/
+/flightsim/logs/
+/flightsim/snapshots/
+/flightsim/mutations/
+/flightsim/meta/
+/flightsim/cache/
+/flightsim/responses/
+/flightsim/test/
+/flightsim/quarantine/
 /clitarget/cache/
 /clitarget/responses/
 /clitarget/test/

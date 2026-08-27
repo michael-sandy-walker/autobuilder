@@ -14,7 +14,11 @@ target
 /clitarget/mutations/
 /clitarget/output/
 /clitarget/logs/
-/clitarget/meta/bootstrap.done
+/clitarget/meta/
+/clitarget/cache/
+/clitarget/responses/
+/clitarget/test/
+/clitarget/quarantine/
 /.idea/compiler.xml
 /.idea/IntelliLang.xml
 /.idea/jarRepositories.xml

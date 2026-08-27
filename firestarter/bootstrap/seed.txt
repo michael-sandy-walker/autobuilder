@@ -11,4 +11,7 @@
    loan absent; 409 if already returned), GET /loans?memberId={id} (list all loans for a member, active and returned).
                                                                                                                     
   All data stored in in-memory collections (no database). Invalid input returns HTTP 400 with JSON body {"message":   
-  "<reason>"}. Business-rule violations use the codes above with the same JSON shape.
+  "<reason>"}. Business-rule violations use the codes above with the same JSON shape.                                 
+                                                                                                                      
+  Success statuses: a create returns HTTP 201 with the created object as the body; a successful read returns HTTP 200;
+  a successful return of a loan returns HTTP 200.

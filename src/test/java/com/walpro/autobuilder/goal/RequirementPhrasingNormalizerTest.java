@@ -90,4 +90,35 @@ class RequirementPhrasingNormalizerTest {
         assertThat(RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder(null)).isFalse();
         assertThat(RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder("  ")).isFalse();
     }
+
+    // ── T4-DJ: an invented file path is not a requirement ────────────────────
+
+    @Test
+    void anInventedFilePathIsStripped_theFileRequirementSurvives() {
+        // Verbatim from run 2026-08-28_05-27-49, where a CORRECT file was scored 0.42 and
+        // rejected for sitting where the loop's own package constraint had put it.
+        assertThat(RequirementPhrasingNormalizer.stripInventedFilePath(
+                "CockpitHUD.java exists at src/main/java/com/flightsim/ui/CockpitHUD.java"))
+                .isEqualTo("CockpitHUD.java exists");
+    }
+
+    @Test
+    void aBehaviouralPathIsNotAFileLayoutClaim() {
+        String behavioural = "The application writes its output to /var/log/app.log";
+        assertThat(RequirementPhrasingNormalizer.stripInventedFilePath(behavioural)).isEqualTo(behavioural);
+    }
+
+    @Test
+    void aPathNamingADifferentFileIsLeftAlone() {
+        // Conservative: only a path naming the SAME file the criterion is about is layout noise.
+        String other = "Config.java exists at src/main/java/com/other/Different.java";
+        assertThat(RequirementPhrasingNormalizer.stripInventedFilePath(other)).isEqualTo(other);
+    }
+
+    @Test
+    void criteriaThatSayNothingAboutFiles_areUntouched() {
+        String behaviour = "GET /books returns HTTP 200 with a JSON array";
+        assertThat(RequirementPhrasingNormalizer.stripInventedFilePath(behaviour)).isEqualTo(behaviour);
+        assertThat(RequirementPhrasingNormalizer.stripInventedFilePath(null)).isNull();
+    }
 }

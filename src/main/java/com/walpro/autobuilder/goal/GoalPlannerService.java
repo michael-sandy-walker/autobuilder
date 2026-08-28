@@ -1613,10 +1613,16 @@ public class GoalPlannerService {
         //    description-copying paths (consolidation merges, unconfirmed-criteria attachment);
         //    run 9 (2026-07-04) ended with two stale divergence instructions as the artifact's
         //    only closure wall.
+        // 3. T4-DJ: an invented FILE PATH inside an otherwise-fine criterion. The seed states
+        //    behaviour, not layout, so "X.java exists at <path>" asserts something nothing stated
+        //    and lets the loop contradict itself — a correct file rejected at 0.42 for sitting
+        //    where the loop's own package constraint put it. The file requirement survives; the
+        //    invented location does not.
         List<String> declared = criteria.stream()
                 .filter(c -> c != null && !c.isBlank())
                 .filter(c -> !RequirementPhrasingNormalizer.isStructuralCriterionPlaceholder(c))
                 .filter(c -> !com.walpro.autobuilder.core.build.BlockerTypes.isDiagnosticInstruction(c))
+                .map(RequirementPhrasingNormalizer::stripInventedFilePath)
                 .toList();
         if (declared.size() < criteria.size()) {
             log.info("setAcceptanceCriteria: dropped {} placeholder/instruction criterion(s) for goal {}",

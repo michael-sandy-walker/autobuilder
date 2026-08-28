@@ -91,6 +91,40 @@ public final class RequirementPhrasingNormalizer {
      * @return the description rewritten into requirement form, or the input unchanged when no
      * safe rewrite applies (also for {@code null}/blank input).
      */
+    /**
+     * T4-DJ: strips an invented FILE PATH from a criterion that is otherwise about a file existing.
+     *
+     * <p>The seed states behaviour, not layout. When the planner writes
+     * {@code "CockpitHUD.java exists at src/main/java/com/flightsim/ui/CockpitHUD.java"} it has
+     * invented the path, and the loop can then contradict itself: on run 2026-08-28_05-27-49 an
+     * analysis-authored constraint required every file under {@code .../model/}, the analysis agent
+     * flagged the conflict itself as HIGH PACKAGE_MISMATCH, and the mutation was scored 0.42 and
+     * REJECTED with {@code [1] ✓ Create CockpitHUD.java} / {@code [2] ✗ … File is located at
+     * src/main/java/com/flightsim/model/ui/CockpitHUD.java}. **The file was correct and was
+     * discarded for being where the loop's other rule required it to be.**
+     *
+     * <p>Keeping the file and dropping the path resolves the contradiction in the direction the
+     * specification supports: it still demands the file exist, and stops asserting a location
+     * nothing stated. Conservative — only a path that names the SAME file the criterion is about
+     * is removed, so "writes its output to /var/log/app.log" (a real behavioural path) is untouched.
+     */
+    public static String stripInventedFilePath(String criterion) {
+        if (criterion == null || criterion.isBlank()) return criterion;
+        Matcher m = FILE_AT_PATH.matcher(criterion);
+        if (!m.find()) return criterion;
+        String file = m.group(1);
+        String path = m.group(3);
+        // Only when the path names that same file — otherwise it is about something else entirely.
+        if (!path.endsWith("/" + file) && !path.equals(file)) return criterion;
+        return (criterion.substring(0, m.start()) + file + " " + m.group(2)
+                + criterion.substring(m.end())).replaceAll("\\s{2,}", " ").strip();
+    }
+
+    /** {@code <File>.java exists|is created|is located at <path>} — the shape the planner writes. */
+    private static final Pattern FILE_AT_PATH = Pattern.compile(
+            "([A-Za-z_$][\\w$]*\\.java)\\s+(exists|is created|is located|is present)\\s+(?:at|in|under)\\s+"
+                    + "([\\w./\\-]+\\.java)");
+
     public static String normalize(String description) {
         if (description == null || description.isBlank()) {
             return description;

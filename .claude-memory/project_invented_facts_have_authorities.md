@@ -43,6 +43,21 @@ two resolution wordings). Every claim from replaying the real artifact held; eve
 regexing its rendering needed correction. The assistant inventing a count has the same cure as the
 loop inventing a coordinate: **consult the producer, not the residue.**
 
+**🔴 THE AUTHORITY THE LOOP LACKS IS WEB-GATED, MEASURED 2026-08-28.** The mechanism that
+distinguishes a spec-derived requirement from an invented one — `SpecTraceability`, whose AUTHORED
+stamps correctly keep the completion gate from blocking on requirements the loop made up — is
+switched on by `hasTraceabilitySignal(spec)`, which is literally *"does this specification declare
+HTTP endpoints"*. **On any non-REST target the discrimination never runs**, so every invented
+criterion carries full weight, including an invented file path. Run 2026-08-28_05-27-49 carries zero
+binding stamps, and its false completion turns on exactly that: `com/flightsim/ui/CockpitHUD.java`
+and the `model/` constraint that contradicted it were BOTH inventions, and nothing could tell.
+
+**So the table's bottom three rows are one capability, not three tickets.** `T4-DJ` (which
+requirement wins), `T4-DL` (which API exists), and `T4-DK`'s open half (is the seed met) all need
+the same thing: **a domain-free way to ask what the specification actually states.** Today that
+question has a web-shaped answer or none. This is `T4-DD`'s requirement-extraction seam, reached
+from three directions at once — and per [[feedback-one-invariant-one-home]] it should be built once.
+
 **What this predicts (falsifiable):** new flightsim-class failures will keep arriving as long as
 repairs are per-invention-class — each run this session found a NEW class (members → coordinates →
 API surface → conventions → completion). The accumulating fix is not more resolvers; it is making

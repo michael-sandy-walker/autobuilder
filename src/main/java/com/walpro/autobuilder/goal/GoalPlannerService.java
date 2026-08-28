@@ -3278,8 +3278,22 @@ public class GoalPlannerService {
             // conservative — abstains on no observation, blocks only on a confirmed-unconfirmed criterion.
             if (criteriaVerificationService != null && !passingCriteria.isEmpty()) {
                 Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+                // T4-DK (open half): hand the SEED's own obligations to the same verifier. Closure
+                // used to check only the banked criteria of surviving subgoals, so a requirement
+                // whose subgoal was given up or subsumed left the ledger unchecked — which is how
+                // run 2026-08-28_05-27-49 completed a flight simulator with a placeholder renderer
+                // and no HUD. Requirements already covered by a banked criterion are skipped, so
+                // the verifier is not asked the same question twice.
+                List<String> toVerify = new ArrayList<>(passingCriteria);
+                List<String> uncoveredSeed = SeedRequirements.notAlreadyCovered(
+                        root.getDescription(), toVerify);
+                if (!uncoveredSeed.isEmpty()) {
+                    log.info("T4-DK: {} seed requirement(s) are covered by no banked criterion — "
+                            + "verifying them against the artifact too", uncoveredSeed.size());
+                    toVerify.addAll(uncoveredSeed);
+                }
                 var completionVerification = criteriaVerificationService.verifyCompletion(
-                        root.getDescription(), new ArrayList<>(passingCriteria), output);
+                        root.getDescription(), toVerify, output);
                 if (!completionVerification.answered()) {
                     log.warn("T4-BP-3: completion verification returned no answer (LLM failure) — deferring completion; an unanswered check must not complete the root");
                     return;

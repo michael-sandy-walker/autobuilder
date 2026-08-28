@@ -186,7 +186,7 @@ compiles() {
 run_quick() {
     guard_no_jvm
     say "stage scenarios + gate/closure/verification tests"
-    FILE_BASE_PATH=firestarter mvn -q test \
+    FILE_BASE_PATH=data/firestarter mvn -q test \
         -Dtest='PreservedRunRegressionScenarioTest,RootConvergenceTrackerTest,GiveUpEdgeScenarioTest,GoalPlannerServiceClosureTest,CriteriaGroundingServiceTest,CriteriaVerificationServiceTest,AutobuilderServiceTest,WiringFactsAnalyzerTest' \
         > /tmp/preflight_quick.log 2>&1
     if [ $? -ne 0 ]; then
@@ -200,7 +200,7 @@ run_quick() {
 run_full() {
     guard_no_jvm
     say "full suite"
-    FILE_BASE_PATH=firestarter mvn -q test > /tmp/preflight_full.log 2>&1
+    FILE_BASE_PATH=data/firestarter mvn -q test > /tmp/preflight_full.log 2>&1
     if [ $? -ne 0 ]; then
         grep -E '<<< (FAILURE|ERROR)' /tmp/preflight_full.log | head -5
         FAILURES+=("full-suite (log: /tmp/preflight_full.log)")
@@ -208,7 +208,7 @@ run_full() {
     fi
     if probe_model; then
         say "layer-2 verifier eval (live model)"
-        T5AF_VERIFIER_EVAL=1 FILE_BASE_PATH=firestarter mvn -q test \
+        T5AF_VERIFIER_EVAL=1 FILE_BASE_PATH=data/firestarter mvn -q test \
             -Dtest='CompletionVerifierPrecisionEvalTest' > /tmp/preflight_eval.log 2>&1 \
             || { FAILURES+=("layer2-eval (log: /tmp/preflight_eval.log)"); fail_out; }
         grep -E 'precision|recall' /tmp/preflight_eval.log | head -4
@@ -225,12 +225,16 @@ run_live() {
     # T4-CK: target selection. PREFLIGHT_TARGET names the target dir (the FILE_BASE_PATH the
     # app evolves); PREFLIGHT_SMOKE the matching behaviour-smoke script. Defaults preserve the
     # firestarter setup exactly; the unit-suite modes are target-independent and stay untouched.
-    local target="${PREFLIGHT_TARGET:-firestarter}"
+    # PREFLIGHT_TARGET names a target; targets live under data/. Keeping it a NAME rather than a
+    # path means every existing invocation, doc and archived target.txt row stays valid and
+    # comparable across the run corpus, which is T6-N's evidence base.
+    local target_name="${PREFLIGHT_TARGET:-firestarter}"
+    local target="data/$target_name"
     local smoke_script="${PREFLIGHT_SMOKE:-$REPO/scripts/smoke23.sh}"
     stamp=$(date +%Y-%m-%d_%H-%M-%S)
     run_dir="/tmp/preflight_runs/$stamp"
     mkdir -p "$run_dir"
-    echo "target=$target" > "$run_dir/target.txt"
+    echo "target=$target_name" > "$run_dir/target.txt"
 
     guard_no_jvm
     probe_model || fail_out

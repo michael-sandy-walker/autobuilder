@@ -74,15 +74,15 @@ curl -X POST http://localhost:8081/autobuilder/coverage-review
 HTML goal explorer:
 http://localhost:8081/goals.html
 
-Run tests (FILE_BASE_PATH is required):
-FILE_BASE_PATH=firestarter mvn test
-FILE_BASE_PATH=firestarter mvn test -Dtest=ClassName#method
+Run tests (no env var needed — the default base path is now relative):
+mvn test
+mvn test -Dtest=ClassName#method
 
 Verifier precision benchmark (T5-AF layer 2):
 Scores the completion verifier (T4-BP-3) on a labelled hollow/real corpus — baseline (flat file blob)
 vs with the T4-BS structural wiring evidence — and prints a precision/recall confusion matrix.
 Opt-in: needs the local model up, skipped in normal test runs. Measurement only (no pass/fail gate).
-T5AF_VERIFIER_EVAL=1 FILE_BASE_PATH=firestarter mvn test -Dtest=CompletionVerifierPrecisionEvalTest
+T5AF_VERIFIER_EVAL=1 mvn test -Dtest=CompletionVerifierPrecisionEvalTest
 Endpoint override (defaults to local Ollama qwen3-coder:30b): LLM_API_URL / LLM_API_MODEL / OPENAI_API_KEY
 
 Config flags worth knowing (application.yml):

@@ -134,7 +134,7 @@ def seed_of(run_dir):
     """The specification, preferring the run's own copy over the repo's current one."""
     for candidate in (os.path.join(run_dir, "seed.txt"),
                       os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                   "..", "firestarter", "bootstrap", "seed.txt")):
+                                   "..", "data", "firestarter", "bootstrap", "seed.txt")):
         if os.path.isfile(candidate):
             with open(candidate, errors="replace") as fh:
                 return fh.read()

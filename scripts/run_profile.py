@@ -34,7 +34,7 @@ DEFAULT_LABELS = os.path.join(_HERE, "run_labels.json")
 DEFAULT_FROZEN = os.path.join(_HERE, "run_health_baseline.json")
 # Where a labeled run's behaviour log survives after its /tmp run_dir is gone.
 DEFAULT_LOG_GLOBS = (os.path.join(os.path.dirname(_HERE), "backup", "*", "logs", "behaviour-*.ndjson"),
-                     os.path.join(os.path.dirname(_HERE), "firestarter", "logs", "behaviour-*.ndjson"))
+                     os.path.join(os.path.dirname(_HERE), "data", "firestarter", "logs", "behaviour-*.ndjson"))
 
 # ---------------------------------------------------------------- extraction
 

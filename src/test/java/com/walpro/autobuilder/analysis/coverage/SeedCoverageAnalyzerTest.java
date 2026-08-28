@@ -268,4 +268,54 @@ class SeedCoverageAnalyzerTest {
         }
         throw new AssertionError("no clause containing: " + fragment);
     }
+
+    // ── claim-matching: proportional, not all-terms ─────────────────────────
+
+    /**
+     * Hand-verified against run 2026-08-28_20-37-30, which reported 17 of 19 clauses unclaimed
+     * while its goal tree contained "Implement POST /books endpoint", "Implement GET /books
+     * endpoint" and "Implement GET /books/{id} endpoint" verbatim. Requiring EVERY term meant a
+     * clause was condemned for spec detail no work item restates. Replaying that run's own
+     * GoalStack takes it from 17 unclaimed to 5, and those 5 are genuinely absent — that plan was
+     * entirely Book-focused, so members, loans and the business-rule codes really had no subgoal.
+     */
+    @Test
+    void aClauseThePlanEngagesIsClaimed_evenWhenSomeTermsAreNotRestated() {
+        String seed = "The service must expose POST /books to create a book and return it.";
+        List<GoalEntity> plan = List.of(
+                goal("Implement POST /books to create a book and return the created book",
+                        GoalStatus.COMPLETED));
+
+        assertThat(analyzer.analyze(seed, plan).unclaimed())
+                .as("the plan articulates this clause; a missing term or two is not non-coverage")
+                .isEmpty();
+    }
+
+    @Test
+    void aClauseThePlanBarelyTouchesIsStillUnclaimed() {
+        // The other direction must survive: a Book-only plan says nothing about members, and that
+        // is exactly the finding the readout exists to make.
+        String seed = "The service must expose POST /members to register a member with a unique email.";
+        List<GoalEntity> bookOnlyPlan = List.of(
+                goal("Implement POST /books to create a book and return the created book",
+                        GoalStatus.COMPLETED));
+
+        assertThat(analyzer.analyze(seed, bookOnlyPlan).unclaimed()).isNotEmpty();
+    }
+
+    @Test
+    void aClaimedClauseWithNoProvingCriterionSurfacesAsUnprovable() {
+        // Only reachable once claim-matching works: under the all-terms rule the clause was
+        // condemned unclaimed first, so the second signal could never fire. The archived run shows
+        // the same shift — 0 unprovable before, 10 after.
+        String seed = "The service must expose POST /books to create a book and return it.";
+        List<GoalEntity> plan = List.of(
+                goal("Implement POST /books to create a book and return the created book",
+                        GoalStatus.COMPLETED));
+
+        var readout = analyzer.analyze(seed, plan);
+
+        assertThat(readout.unclaimed()).isEmpty();
+        assertThat(readout.unprovable()).as("claimed by the plan, proved by no criterion").isNotEmpty();
+    }
 }

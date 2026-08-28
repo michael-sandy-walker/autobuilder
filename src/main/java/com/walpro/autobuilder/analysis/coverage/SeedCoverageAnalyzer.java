@@ -98,9 +98,19 @@ public class SeedCoverageAnalyzer {
             String clause = clauses.get(i);
             Set<String> terms = new LinkedHashSet<>(termsOf(clause));
             List<String> missingFromPlan = absent(terms, planTerms);
-            if (!missingFromPlan.isEmpty()) {
+            double planEngagement = engagement(terms, missingFromPlan);
+            // A clause is unclaimed when the plan barely engages it — NOT when any single term is
+            // absent. Requiring every term meant one unrestated detail condemned the whole clause:
+            // hand-verified on run 2026-08-28_20-37-30, which reported 17 of 19 clauses unclaimed
+            // while its goal tree contained "Implement POST /books endpoint", "Implement GET /books
+            // endpoint" and "Implement GET /books/{id} endpoint" verbatim. The clause stating those
+            // was condemned for `120`, `chars` and `404` — spec detail no work item restates. At
+            // 17-of-19 false the readout is noise the planner cannot act on, which is the failure
+            // mode this class's own javadoc warns about ([[feedback-activity-not-progress]]).
+            // engagement() already computed the share; it was only ordering the list.
+            if (!missingFromPlan.isEmpty() && planEngagement < CLAIMED_ENGAGEMENT) {
                 unclaimed.add(new Ranked(new SeedCoverageReadout.Finding(clause, missingFromPlan),
-                        engagement(terms, missingFromPlan), i));
+                        planEngagement, i));
                 continue;
             }
             // Only a clause the plan DOES articulate can be unprovable — otherwise the absent
@@ -187,6 +197,25 @@ public class SeedCoverageAnalyzer {
         }
         return out;
     }
+
+    /**
+     * The share of a clause's terms the plan must mention before the clause counts as claimed.
+     *
+     * <p><b>Chosen by sweep, not by taste</b> (2026-08-28), against two independent checks at once:
+     * run 2026-08-28_20-37-30's archived GoalStack, and this class's own tests.
+     * <pre>
+     *   0.5 → 5 unclaimed · 1 test failing (loses the isbn-format finding a test exists to keep)
+     *   0.6 → 7 unclaimed · 0 failing        ← chosen
+     *   0.7 → 11 unclaimed · 2 failing
+     *   0.8 → 14 unclaimed · 2 failing (approaching the all-terms rule's 17-of-19 noise)
+     * </pre>
+     * 0.6 is the only value where the archived run's readout is defensible AND no existing
+     * assertion breaks. The tension is real and worth naming: the clause splitter sometimes glues
+     * two requirements together ("isbn must match \d{13}), GET /books (list all)"), so a plan that
+     * covers one of them engages half the clause. A lower bar loses the uncovered half; a higher
+     * bar re-condemns clauses the plan plainly articulates.
+     */
+    private static final double CLAIMED_ENGAGEMENT = 0.6;
 
     private List<String> absent(Set<String> terms, Set<String> vocabulary) {
         List<String> missing = new ArrayList<>();

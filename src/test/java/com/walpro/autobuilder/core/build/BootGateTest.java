@@ -7,7 +7,9 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.List;
 import java.util.Optional;
 import java.util.jar.Attributes;
@@ -749,5 +751,37 @@ class BootGateTest {
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jarPath), manifest)) {
             // empty archive besides the manifest — sufficient for path-resolution testing
         }
+    }
+
+    /**
+     * T4-DI regression, measured on run 2026-08-28_12-25-36. The bootstrapped pom no longer
+     * carries a packaging plugin (correctly — that was one ecosystem's answer), so the artifact
+     * built a plain jar and `java -jar` refused with "no main manifest attribute". The keyword
+     * filter dropped that line for containing no Exception/ERROR token, so 70 work items told the
+     * model "exits at startup (exit 1) — the process logged nothing diagnostic", and the run spent
+     * 74 minutes on a defect its own output named in seven words.
+     */
+    @Test
+    void aLauncherRefusalIsTheDiagnostic_evenWithoutAnErrorKeyword() {
+        Deque<String> tail = new ArrayDeque<>(List.of(
+                "no main manifest attribute, in /out/target/app-0.0.1-SNAPSHOT.jar"));
+
+        assertThat(BootGate.summariseOutput(tail, true))
+                .contains("no main manifest attribute");
+    }
+
+    @Test
+    void aRunningProcessesRoutineChatterIsStillNotTreatedAsADiagnostic() {
+        // The anti-chatter rule exists because boot logging was welded onto behavioural work items
+        // (1119 characters re-rendered 46 times). It must survive the fix above: only a process
+        // that never STARTED gets its keyword-free output promoted.
+        Deque<String> tail = new ArrayDeque<>(List.of(
+                "Initializing Spring DispatcherServlet 'dispatcherServlet'",
+                "Completed initialization in 12 ms"));
+
+        assertThat(BootGate.summariseOutput(tail, false))
+                .isEqualTo("the process logged nothing diagnostic before the observation ended");
+        assertThat(BootGate.summariseOutput(tail))
+                .isEqualTo("the process logged nothing diagnostic before the observation ended");
     }
 }

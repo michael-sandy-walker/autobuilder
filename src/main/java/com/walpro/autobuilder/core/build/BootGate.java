@@ -305,10 +305,10 @@ public class BootGate {
                 }
                 if (exit != 0) {
                     return Optional.of("the application exits at startup (exit " + exit + ") — "
-                            + summariseOutput(outputTail));
+                            + summariseOutput(outputTail, true));
                 }
                 return Optional.of("the application exits immediately instead of staying up to serve"
-                        + " the endpoints the goal specification names — " + summariseOutput(outputTail));
+                        + " the endpoints the goal specification names — " + summariseOutput(outputTail, true));
             }
             if (!serving) {
                 if (!declared.isEmpty()) {
@@ -1057,6 +1057,14 @@ public class BootGate {
      * tokens — feeds a subgoal description, so the same failure must yield the same text.
      */
     static String summariseOutput(Deque<String> outputTail) {
+        return summariseOutput(outputTail, false);
+    }
+
+    /**
+     * @param failedToStart the process never reached a running state — its output is the reason,
+     *                      not boot chatter, so keyword-free lines are still the best answer.
+     */
+    static String summariseOutput(Deque<String> outputTail, boolean failedToStart) {
         List<String> lines = outputTail.stream()
                 .map(l -> BuildErrorClassifier.ANSI_ESCAPE.matcher(l).replaceAll("").strip())
                 .map(l -> VOLATILE_LOG_TOKENS.matcher(l).replaceAll("").replaceAll("\\s{2,}", " ").strip())
@@ -1077,7 +1085,24 @@ public class BootGate {
         //
         // "The process logged nothing unusual" is itself information, and it is three tokens.
         // Absence of a diagnostic line must not be reported as if the last three lines were one.
-        if (diagnostic.isEmpty()) return "the process logged nothing diagnostic before the observation ended";
+        if (diagnostic.isEmpty()) {
+            // T4-DK follow-up, measured on run 2026-08-28_12-25-36: the launcher's own refusal to
+            // start carries none of those tokens. `java -jar` on a jar without a manifest entry
+            // prints exactly "no main manifest attribute, in <jar>" — the most diagnostic line
+            // obtainable — and the keyword filter dropped it, so 70 work items told the model
+            // "exits at startup (exit 1) — the process logged nothing diagnostic" and it never had
+            // the one fact that would have let it fix the packaging. The run spent 74 minutes and
+            // 62 cycles on a defect its own output named in seven words.
+            //
+            // The anti-chatter rule above is right for a process that STARTED and logged routine
+            // boot noise. It is wrong for one that never started: a process that failed to launch
+            // and printed something printed the REASON. Distinguish those two cases rather than
+            // treating all keyword-free output as noise.
+            if (failedToStart) {
+                return String.join(" | ", lines.subList(Math.max(0, lines.size() - SUMMARY_LINES), lines.size()));
+            }
+            return "the process logged nothing diagnostic before the observation ended";
+        }
         return String.join(" | ", diagnostic.subList(Math.max(0, diagnostic.size() - SUMMARY_LINES), diagnostic.size()));
     }
 

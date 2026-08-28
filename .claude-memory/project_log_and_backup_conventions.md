@@ -117,3 +117,12 @@ instruments, not a sweep.
 `~/.claude/projects/<slug>/*.jsonl` carries `message.usage` per turn — `scripts/session_usage.py`
 (M-C) turns it into current-window spend + burn rate. Read `full-rate`, not total: cache reads run
 ~50x larger and are billed at a fraction. The plan limit is NOT in the data.
+
+**Run-archive durability (user-corrected 2026-08-28):** `~/.autobuilder/run-archive` has no
+retention code pointed at it TODAY — `RetentionPolicy` prunes only the target dirs under
+`file.base-path` (7–14 active-day windows) — but it is unversioned and machine-local, and the
+measured survival record for unversioned evidence here is 4 of 28 runs (T6-M), with one recorded
+0-GB-free incident making ad-hoc cleanup of exactly such folders likely in week/month-long
+sessions. **Anything that must outlive the session (specimens, evidence a ticket cites) goes into
+git (`design/specimens/…`); the archive is working storage, not preservation.**
+

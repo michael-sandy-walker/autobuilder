@@ -1,0 +1,6 @@
+# T4-DG: the yardstick this target is scored by. One line: <script> [mode]
+# This seed is the QUOTED-FIELDS specification: it states that a quoted field may contain
+# commas and newlines. scripts/smoke_cli.sh (12 checks) does NOT test that and returns a full
+# mark on an artifact that fails it — measured 2026-08-28, when run 16-35-37 scored 12/12 on
+# the wrong suite and 18/19 on this one, making a correct closure refusal look over-tight.
+scripts/smoke_cli_quoted.sh terminating

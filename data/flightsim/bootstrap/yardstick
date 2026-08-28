@@ -1,0 +1,6 @@
+# T4-DG: this target deliberately has NO yardstick, and that is the interesting part.
+# A window, a render loop and real-time input have no scriptable observation channel; of 38
+# criterion results in its first run only 2 ever passed, and those were file-existence checks.
+# Writing one is the sharpest available test of T4-DD's observation seam. Do not fake one to
+# make the target scoreable — `smoke=boot-failed` on this target is expected and means nothing.
+(none)

@@ -230,7 +230,25 @@ run_live() {
     # comparable across the run corpus, which is T6-N's evidence base.
     local target_name="${PREFLIGHT_TARGET:-firestarter}"
     local target="data/$target_name"
-    local smoke_script="${PREFLIGHT_SMOKE:-$REPO/scripts/smoke23.sh}"
+    # T4-DG: a target declares its own yardstick in bootstrap/yardstick — "<script> [mode]".
+    # Passing it by hand is how run 2026-08-28_16-35-37 came to be scored with smoke_cli.sh (12
+    # checks) against the QUOTED-fields seed: a full 12/12 on a suite that never tests quoted
+    # fields, while the same artifact scores 18/19 on the right one. An explicit PREFLIGHT_SMOKE
+    # still wins, so nothing that already works changes.
+    local declared_smoke="" declared_mode=""
+    if [ -z "${PREFLIGHT_SMOKE:-}" ] && [ -f "$target/bootstrap/yardstick" ]; then
+        local decl
+        decl=$(grep -vE '^\s*#|^\s*$' "$target/bootstrap/yardstick" | head -1)
+        if [ -n "$decl" ] && [ "$decl" != "(none)" ]; then
+            declared_smoke="$REPO/$(echo "$decl" | awk '{print $1}')"
+            declared_mode=$(echo "$decl" | awk '{print $2}')
+            say "yardstick declared by target: $(basename "$declared_smoke") ${declared_mode:-serving}"
+        elif [ "$decl" = "(none)" ]; then
+            say "target declares NO yardstick — any smoke score for it is meaningless by design"
+        fi
+    fi
+    local smoke_script="${PREFLIGHT_SMOKE:-${declared_smoke:-$REPO/scripts/smoke23.sh}}"
+    [ -n "$declared_mode" ] && [ -z "${PREFLIGHT_SMOKE_MODE:-}" ] && export PREFLIGHT_SMOKE_MODE="$declared_mode"
     stamp=$(date +%Y-%m-%d_%H-%M-%S)
     run_dir="/tmp/preflight_runs/$stamp"
     mkdir -p "$run_dir"

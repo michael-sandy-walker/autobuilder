@@ -3285,7 +3285,7 @@ public class GoalPlannerService {
                 // and no HUD. Requirements already covered by a banked criterion are skipped, so
                 // the verifier is not asked the same question twice.
                 List<String> toVerify = new ArrayList<>(passingCriteria);
-                List<String> uncoveredSeed = SeedRequirements.notAlreadyCovered(
+                List<String> uncoveredSeed = SeedRequirements.notAlreadyCoveredVerifiable(
                         root.getDescription(), toVerify);
                 if (!uncoveredSeed.isEmpty()) {
                     log.info("T4-DK: {} seed requirement(s) are covered by no banked criterion — "

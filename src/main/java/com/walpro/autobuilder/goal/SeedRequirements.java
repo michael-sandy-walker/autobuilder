@@ -24,8 +24,34 @@ import java.util.regex.Pattern;
  */
 public final class SeedRequirements {
 
-    /** Sentence-ish split: terminators, semicolons and hard line breaks all end a clause. */
-    private static final Pattern SPLIT = Pattern.compile("(?<=[.;!?])\\s+|\\R{2,}");
+    /**
+     * Sentence boundaries, bracket- and quote-aware. A regex split at {@code [.;!?]} honoured the
+     * semicolons INSIDE the firestarter seed's parentheticals — "POST /books (create; title
+     * required...)" — splicing list items into dangling-paren fragments that then sat at the
+     * closure edge as unconfirmable requirements. Found by running the extractor over the three
+     * real seeds, not by reading it.
+     */
+    private static List<String> sentences(String text) {
+        List<String> out = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int depth = 0; boolean inQuote = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\n') inQuote = false;   // a quote never spans lines here; one odd quote must not desync the rest of the document
+            if (c == '"') inQuote = !inQuote;
+            else if (!inQuote && (c == '(' || c == '[' || c == '{')) depth++;
+            else if (!inQuote && (c == ')' || c == ']' || c == '}')) depth = Math.max(0, depth - 1);
+            current.append(c);
+            boolean terminator = !inQuote && depth == 0 && (c == '.' || c == ';' || c == '!' || c == '?');
+            boolean paragraph = c == '\n' && i + 1 < text.length() && text.charAt(i + 1) == '\n';
+            if (terminator || paragraph) {
+                out.add(current.toString());
+                current.setLength(0);
+            }
+        }
+        if (!current.isEmpty()) out.add(current.toString());
+        return out;
+    }
 
     /** The verbs a specification uses to place an obligation on the artifact. */
     private static final Pattern OBLIGATION = Pattern.compile(
@@ -61,16 +87,26 @@ public final class SeedRequirements {
         if (s.length() <= BUNDLED_LENGTH) return List.of(s);
         List<String> parts = new ArrayList<>();
         StringBuilder current = new StringBuilder();
-        int depth = 0;
+        int depth = 0; boolean inQuote = false;
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            if (c == '(' || c == '[') depth++;
-            else if (c == ')' || c == ']') depth = Math.max(0, depth - 1);
-            // A separator only separates OUTSIDE brackets: "(including Start, Pause, Exit)" is one
-            // parenthetical, and cutting it produced "a start menu (including Start" as a
-            // requirement while losing the HUD entirely.
-            boolean atComma = depth == 0 && c == ',';
-            boolean atAnd = depth == 0 && s.startsWith(" and ", i);
+            if (c == '"') inQuote = !inQuote;
+            else if (!inQuote && (c == '(' || c == '[')) depth++;
+            else if (!inQuote && (c == ')' || c == ']')) depth = Math.max(0, depth - 1);
+            // Separators only separate OUTSIDE brackets AND quotes: the clitarget seed's own
+            // format string — "line <n>: expected <h> fields, found <f>" — was being cut at its
+            // interior comma, leaving half a quotation as a requirement.
+            boolean atComma = depth == 0 && !inQuote && c == ',';
+            boolean atAnd = depth == 0 && !inQuote && s.startsWith(" and ", i);
+            // A comma directly after a closing parenthesis usually CONTINUES the same noun phrase
+            // — "a simple (i.e., polygonic), randomly generated environment" is one requirement —
+            // unless what follows starts a new item ("..., the flight simulator itself").
+            if (atComma && i > 0 && s.charAt(i - 1) == ')'
+                    && !s.substring(Math.min(i + 1, s.length())).stripLeading()
+                          .matches("(?is)(a|an|the|some)\\s.*")) {
+                current.append(c);
+                continue;
+            }
             if (atComma || atAnd) {
                 parts.add(current.toString());
                 current.setLength(0);
@@ -82,8 +118,19 @@ public final class SeedRequirements {
         parts.add(current.toString());
         List<String> kept = new ArrayList<>();
         for (String part : parts) {
-            String p = part.strip().replaceAll("^(?:and|together with|plus)\\s+", "");
-            if (p.length() >= MIN_CLAUSE_LENGTH) kept.add(p);
+            // Normalise BEFORE the stop-word check: a clause spanning a line break defeated the
+            // `.*` (which stops at newlines), so "where <n> counts…" slipped past the filter.
+            String p = part.strip().replaceAll("\\s+", " ")
+                    .replaceAll("^(?:and|together with|plus)\\s+", "");
+            if (p.length() < MIN_CLAUSE_LENGTH) continue;
+            // A fragment that OPENS with a conjunction, relative pronoun or preposition is the
+            // tail of another clause, not a requirement of its own — "which are then part of the
+            // value", "in ascending line order", "NOT separators" all reached the closure gate as
+            // unconfirmable text. Dropping them loses a little recall and cannot wall a run;
+            // keeping them can.
+            if (p.toLowerCase(Locale.ROOT).matches(
+                    "(?:which|that|where|when|while|whose|who|not|nor|or|but|so|then|than|if|unless|in|on|at|as|of|by|for|to|into|onto)\\b.*")) continue;
+            kept.add(p);
         }
         return kept.isEmpty() ? List.of(s) : kept;
     }
@@ -99,7 +146,7 @@ public final class SeedRequirements {
     public static List<String> statedIn(String specText) {
         if (specText == null || specText.isBlank()) return List.of();
         LinkedHashSet<String> out = new LinkedHashSet<>();
-        for (String sentence : SPLIT.split(specText)) {
+        for (String sentence : sentences(specText)) {
             // The obligation is a property of the SENTENCE. Its clauses inherit it — "together
             // with a simple cockpit HUD" states a requirement even though the verb sits earlier —
             // so requiring the verb per fragment dropped exactly the clause that mattered.
@@ -121,6 +168,33 @@ public final class SeedRequirements {
      * same question twice. Coverage is judged by distinctive-term overlap rather than equality —
      * a criterion rarely quotes the spec verbatim, and asking again costs a false block.
      */
+    /**
+     * The VERIFIABLE subset: only clauses that themselves carry an obligation verb. Two consumers,
+     * two risk profiles — the planner readout (T4-DA) wants recall and is advisory, so a verbless
+     * clause like "a simple cockpit HUD" belongs there; the CLOSURE edge (T4-DK) wants precision,
+     * because an unconfirmable shard ("NOT separators", "one per line" — real extractor output,
+     * found by running it over the three seeds) becomes a requirement the verifier can never
+     * confirm, and the walling direction is the one failure this class must not have.
+     */
+    public static List<String> statedVerifiableIn(String specText) {
+        List<String> strict = new ArrayList<>();
+        for (String r : statedIn(specText)) {
+            if (OBLIGATION.matcher(r).find()) strict.add(r);
+        }
+        return strict;
+    }
+
+    /** {@link #notAlreadyCovered} over the verifiable subset — the closure edge's entry point. */
+    public static List<String> notAlreadyCoveredVerifiable(String specText, List<String> bankedCriteria) {
+        List<String> stated = statedVerifiableIn(specText);
+        if (stated.isEmpty() || bankedCriteria == null || bankedCriteria.isEmpty()) return stated;
+        List<String> uncovered = new ArrayList<>();
+        for (String requirement : stated) {
+            if (bankedCriteria.stream().noneMatch(c -> overlaps(requirement, c))) uncovered.add(requirement);
+        }
+        return uncovered;
+    }
+
     public static List<String> notAlreadyCovered(String specText, List<String> bankedCriteria) {
         List<String> stated = statedIn(specText);
         if (stated.isEmpty() || bankedCriteria == null || bankedCriteria.isEmpty()) return stated;

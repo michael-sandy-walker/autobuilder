@@ -115,4 +115,70 @@ class SeedRequirementsTest {
         assertThat(stated).anySatisfy(r -> assertThat(r).contains("Start, Pause, Exit)"));
         assertThat(stated).noneSatisfy(r -> assertThat(r).endsWith("(including Start"));
     }
+
+    // ── found by running the extractor over the three REAL seeds, post-ship ──
+
+    @Test
+    void aSemicolonInsideAParentheticalDoesNotEndTheSentence() {
+        // The firestarter seed's own shape: splitting at the interior semicolons spliced list
+        // items into dangling-paren fragments that then sat at the closure edge.
+        String seed = "Books: POST /books (create; title required; isbn required), "
+                + "GET /books/{id} (single; 404 if absent) must be provided.";
+
+        assertThat(SeedRequirements.statedIn(seed)).allSatisfy(r -> {
+            long open = r.chars().filter(c -> c == '(').count();
+            long close = r.chars().filter(c -> c == ')').count();
+            assertThat(open).as("balanced parens in: %s", r).isEqualTo(close);
+        });
+    }
+
+    @Test
+    void aCommaInsideAQuotedFormatStringDoesNotSplitTheClause() {
+        String seed = "The tool must print one line per malformed row to stdout as "
+                + "\"line <n>: expected <h> fields, found <f>\" for every malformed row.";
+
+        assertThat(SeedRequirements.statedIn(seed))
+                .anySatisfy(r -> assertThat(r).contains("expected <h> fields, found <f>"));
+        assertThat(SeedRequirements.statedIn(seed))
+                .noneSatisfy(r -> assertThat(r).endsWith("expected <h> fields"));
+    }
+
+    @Test
+    void theClosureEdgeSubsetCarriesOnlyClausesWithTheirOwnObligation() {
+        // Two consumers, two risk profiles. The planner readout is advisory and wants recall —
+        // "a simple cockpit HUD" belongs there. The closure edge wants precision, because an
+        // unconfirmable shard becomes a requirement the verifier can never confirm, and walling
+        // is the one failure this class must not have.
+        List<String> closure = SeedRequirements.statedVerifiableIn(FLIGHTSIM_SEED);
+
+        assertThat(closure).allSatisfy(r ->
+                assertThat(r).matches("(?is).*\\b(should|include|includes|including|provide|provides"
+                        + "|support|supports|display|displays|print|prints|return|returns|generate"
+                        + "|generates|contain|contains|exit|exits|write|writes|must|shall|accept"
+                        + "|accepts|allow|allows|expose|exposes)\\b.*"));
+        // And the recall set still carries the HUD for the planner.
+        assertThat(SeedRequirements.statedIn(FLIGHTSIM_SEED))
+                .anySatisfy(r -> assertThat(r).contains("HUD"));
+    }
+
+    @Test
+    void tailFragmentsOfOtherClausesAreNotRequirements() {
+        String seed = "A quoted field may contain commas and newlines, which are then part of the "
+                + "value and NOT separators, in ascending line order.";
+
+        assertThat(SeedRequirements.statedIn(seed)).noneSatisfy(r ->
+                assertThat(r.toLowerCase()).matches("(?:which|not|in|where)\\b.*"));
+    }
+
+    @Test
+    void oneStrayQuoteDoesNotDesyncTheRestOfTheDocument() {
+        // Quote state resets per line: a single odd quote upstream silenced every later sentence
+        // terminator, gluing several sentences into one "requirement".
+        String seed = "An example: \"unterminated\nThe tool must exit 2 when a row is malformed. "
+                + "The tool must exit 0 otherwise.";
+
+        assertThat(SeedRequirements.statedIn(seed))
+                .anySatisfy(r -> assertThat(r).contains("exit 2"))
+                .anySatisfy(r -> assertThat(r).contains("exit 0"));
+    }
 }

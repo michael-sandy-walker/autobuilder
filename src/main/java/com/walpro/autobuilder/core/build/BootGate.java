@@ -1071,6 +1071,21 @@ public class BootGate {
                 .filter(l -> !l.isBlank())
                 .toList();
         if (lines.isEmpty()) return "no output before the observation ended";
+        // T4-DN, corrected 2026-08-28 by run 2026-08-28_13-58-46: keyword filtering is wrong for a
+        // process that never started, not merely insufficient. That run's artifact printed
+        //     Description: Failed to configure a DataSource: 'url' attribute is not specified…
+        //     Action: If you want an embedded database (H2, HSQL or Derby), please put it on the classpath.
+        // — the cause AND its remedy. Neither line contains Exception/ERROR/caused by, so both were
+        // dropped, while Spring's generic wrapper ("Exception encountered during context
+        // initialization - cancelling refresh attempt") matched and won. The loop was handed that
+        // wrapper 133 times and never learned what was wrong.
+        //
+        // A process that failed to start has no routine chatter to filter OUT — everything it
+        // printed is about the failure. So the whole tail is the diagnostic, and keyword selection
+        // only applies to a process that was running and logging normally.
+        if (failedToStart) {
+            return String.join(" | ", lines.subList(Math.max(0, lines.size() - SUMMARY_LINES), lines.size()));
+        }
         List<String> diagnostic = lines.stream()
                 .filter(l -> l.contains("Exception") || l.contains("ERROR") || l.contains("Error")
                         || l.toLowerCase(Locale.ROOT).contains("caused by"))
@@ -1085,24 +1100,10 @@ public class BootGate {
         //
         // "The process logged nothing unusual" is itself information, and it is three tokens.
         // Absence of a diagnostic line must not be reported as if the last three lines were one.
-        if (diagnostic.isEmpty()) {
-            // T4-DK follow-up, measured on run 2026-08-28_12-25-36: the launcher's own refusal to
-            // start carries none of those tokens. `java -jar` on a jar without a manifest entry
-            // prints exactly "no main manifest attribute, in <jar>" — the most diagnostic line
-            // obtainable — and the keyword filter dropped it, so 70 work items told the model
-            // "exits at startup (exit 1) — the process logged nothing diagnostic" and it never had
-            // the one fact that would have let it fix the packaging. The run spent 74 minutes and
-            // 62 cycles on a defect its own output named in seven words.
-            //
-            // The anti-chatter rule above is right for a process that STARTED and logged routine
-            // boot noise. It is wrong for one that never started: a process that failed to launch
-            // and printed something printed the REASON. Distinguish those two cases rather than
-            // treating all keyword-free output as noise.
-            if (failedToStart) {
-                return String.join(" | ", lines.subList(Math.max(0, lines.size() - SUMMARY_LINES), lines.size()));
-            }
-            return "the process logged nothing diagnostic before the observation ended";
-        }
+        // A RUNNING process that logged nothing diagnostic gets that stated plainly rather than
+        // having its boot chatter welded onto a behavioural work item (run 2026-07-30_21-25-43:
+        // 1119 characters of "Initializing Spring DispatcherServlet" re-rendered 46 times).
+        if (diagnostic.isEmpty()) return "the process logged nothing diagnostic before the observation ended";
         return String.join(" | ", diagnostic.subList(Math.max(0, diagnostic.size() - SUMMARY_LINES), diagnostic.size()));
     }
 

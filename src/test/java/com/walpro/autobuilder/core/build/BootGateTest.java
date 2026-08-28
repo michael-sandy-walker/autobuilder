@@ -761,6 +761,30 @@ class BootGateTest {
      * model "exits at startup (exit 1) — the process logged nothing diagnostic", and the run spent
      * 74 minutes on a defect its own output named in seven words.
      */
+    /**
+     * T4-DN correction, from run 2026-08-28_13-58-46. Keyword filtering is not merely insufficient
+     * for a process that never started — it actively prefers the wrong line. That artifact printed
+     * the cause AND its remedy, neither containing an Exception/ERROR token, while Spring's generic
+     * wrapper matched and won. The loop was handed the wrapper 133 times and never learned that a
+     * DataSource was unconfigured.
+     */
+    @Test
+    void aFailedStartupYieldsTheCause_notTheGenericWrapperThatHappensToSayException() {
+        Deque<String> tail = new ArrayDeque<>(List.of(
+                "WARN --- ConfigServletWebServerApplicationContext : Exception encountered during"
+                        + " context initialization - cancelling refresh attempt",
+                "Description:",
+                "Failed to configure a DataSource: 'url' attribute is not specified and no embedded"
+                        + " datasource could be configured.",
+                "Action:",
+                "If you want an embedded database (H2, HSQL or Derby), please put it on the classpath."));
+
+        String summary = BootGate.summariseOutput(tail, true);
+
+        assertThat(summary).contains("Failed to configure a DataSource");
+        assertThat(summary).doesNotContain("cancelling refresh attempt");
+    }
+
     @Test
     void aLauncherRefusalIsTheDiagnostic_evenWithoutAnErrorKeyword() {
         Deque<String> tail = new ArrayDeque<>(List.of(

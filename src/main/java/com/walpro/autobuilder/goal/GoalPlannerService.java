@@ -2817,6 +2817,35 @@ public class GoalPlannerService {
         return out;
     }
 
+
+    /**
+     * T4-DK: a closure gate detected a real failure and could not inject its repair, because the
+     * work item deduplicates against one already GIVEN_UP. **Exhausting the repair budget means
+     * the requirement is unmet and currently unfixable — not that it is met.**
+     *
+     * <p>Seven gates (endpoints, coverage, packaging, boot, startup wiring, tests, criteria
+     * re-verification) each drew the opposite conclusion and logged "proceeding with completion".
+     * One invariant living in seven places is a missing capability, not seven policies
+     * ([[feedback-one-invariant-one-home]]), and it produced the fourth false completion: on run
+     * 2026-08-28_05-27-49 the criteria re-verification DID find unconfirmed criteria at the final
+     * closure attempt, tried to block, hit this bypass, and the root completed on an artifact whose
+     * renderer was a placeholder comment and whose HUD did not exist.
+     *
+     * <p>Refusing closure here cannot deadlock into a false success: the root simply does not
+     * complete this cycle, and the existing exhaustion / convergence-stall machinery owns the
+     * terminal. A stall is an honest halt; a fulfilled claim over an unmet requirement is not.
+     *
+     * <p><b>Measured safe before it was written:</b> across all seven archived {@code
+     * GOAL_FULFILLED} runs, six used this bypass ZERO times — including both 23/23 runs and the
+     * 12/12 CLI run. Only the false completion used it, twice. Tightening it costs no archived
+     * success.
+     */
+    private void refuseClosureUnrepairable(String gate, String detail) {
+        log.warn("T4-DK: root closure REFUSED by {} — {}; the repair work item deduplicates against "
+                + "an already GIVEN_UP item, so the requirement is unmet and unfixable this cycle. "
+                + "Not completing; the exhaustion ladder owns the terminal.", gate, detail);
+    }
+
     public void autoCompleteRootIfSatisfied() {
         // Replan atomicity: while the planner is mid-execution (prune already applied, injection
         // not yet), the active set is transiently empty — completing the root here is the
@@ -2963,8 +2992,8 @@ public class GoalPlannerService {
                                 injected.injected().size(), injected.injected());
                         return;
                     }
-                    log.warn("T2-EI D2: {} missing endpoint(s) reported but all dropped as GIVEN_UP paraphrases — proceeding with closure checks (work was attempted to the retry limit)",
-                            missingEndpoints.size());
+                    refuseClosureUnrepairable("T2-EI D2", missingEndpoints.size() + " missing endpoint(s)");
+                    return;
                 }
             }
             // Coverage gate: "every loaded subgoal closed clean" is not "the root's named
@@ -3004,8 +3033,8 @@ public class GoalPlannerService {
                                 injected.injected().size(), injected.injected());
                         return;
                     }
-                    log.warn("T2-DR coverage gate: {} uncovered feature(s) reported but all dropped as GIVEN_UP paraphrases — proceeding with completion (work was attempted to the retry limit)",
-                            missing.size());
+                    refuseClosureUnrepairable("T2-DR coverage gate", missing.size() + " uncovered feature(s)");
+                    return;
                 }
             }
             // T4-AN-8: the compile-only probes never check that the artifact is a startable
@@ -3075,8 +3104,8 @@ public class GoalPlannerService {
                                 packagingFailure.get());
                         return;
                     }
-                    log.warn("T4-AN-8: packaging failure reported but the work item dropped as a GIVEN_UP paraphrase — proceeding with completion (packaging was attempted to the retry limit): {}",
-                            packagingFailure.get());
+                    refuseClosureUnrepairable("T4-AN-8", packagingFailure.get());
+                    return;
                 }
             }
             // T4-BV: execution observation. Packaging + compiling prove nothing about runtime — the
@@ -3120,8 +3149,8 @@ public class GoalPlannerService {
                         log.warn("T4-BV: root closure blocked — {}; work item injected", bootFailure.get());
                         return;
                     }
-                    log.warn("T4-BV: boot failure reported but the work item dropped as a GIVEN_UP paraphrase — proceeding with completion (repair was attempted to the retry limit): {}",
-                            bootFailure.get());
+                    refuseClosureUnrepairable("T4-BV", bootFailure.get());
+                    return;
                 }
             }
             // T4-CX: the static injection-wiring FORECAST, now that the gate which measures the
@@ -3145,8 +3174,8 @@ public class GoalPlannerService {
                         log.warn("T4-BW: root closure blocked — {}; work item injected", wiringFailure.get());
                         return;
                     }
-                    log.warn("T4-BW: startup-wiring failure reported but the work item dropped as a GIVEN_UP paraphrase — proceeding: {}",
-                            wiringFailure.get());
+                    refuseClosureUnrepairable("T4-BW", wiringFailure.get());
+                    return;
                 }
             }
             // T4-AN-2: tests compile under the package gate but are never executed — the first
@@ -3189,8 +3218,8 @@ public class GoalPlannerService {
                         log.warn("T4-AN-2: root closure blocked — {}; work item injected", testFailure.get());
                         return;
                     }
-                    log.warn("T4-AN-2: test failure reported but the work item dropped as a GIVEN_UP paraphrase — proceeding with completion (suite repair was attempted to the retry limit): {}",
-                            testFailure.get());
+                    refuseClosureUnrepairable("T4-AN-2", testFailure.get());
+                    return;
                 }
             }
             // T4-BP step 3: positive corroboration. The gates above prove the artifact compiles
@@ -3224,8 +3253,8 @@ public class GoalPlannerService {
                         log.warn("T4-BP-3: root closure blocked — {}; work item injected", unconfirmed.get());
                         return;
                     }
-                    log.warn("T4-BP-3: unconfirmed criteria reported but the work item dropped as a GIVEN_UP paraphrase — proceeding with completion (implementation was attempted to the retry limit): {}",
-                            unconfirmed.get());
+                    refuseClosureUnrepairable("T4-BP-3", unconfirmed.get());
+                    return;
                 }
             }
             String rationale = "closure ledger clear: " + passing + " subgoal(s) accounted for"

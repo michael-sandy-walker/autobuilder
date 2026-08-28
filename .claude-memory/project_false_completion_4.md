@@ -14,6 +14,15 @@ placeholder comment, no HUD file exists, the pom declares no GL dependency. Clos
 *"closure ledger clear: 21 subgoal(s) accounted for (13 subsumed)"*. Dispositions run-wide:
 **23 GIVEN_UP · 15 SUBSUMED · 1 COMPLETED**.
 
+**🔴 THE CAUSE, corrected 2026-08-28 after tracing the run rather than the ticket:** it is NOT that
+the ledger counts dispositions. **`T4-BP-3` DID detect the unconfirmed criteria at the final closure
+and tried to block** — the log reads *"unconfirmed criteria reported but the work item dropped as a
+GIVEN_UP paraphrase — proceeding with completion"*. **All SEVEN closure gates carry that identical
+bypass**, so once a requirement has been given up once, the gate guarding it permanently
+self-disables: T1-DE's dedup drops the repair, and each gate reads "cannot inject" as "may declare
+success". Fixed by one `refuseClosureUnrepairable` helper; measured safe first — 6 of the 7 archived
+fulfilled runs used the bypass ZERO times, including both 23/23 runs.
+
 **What makes it the fourth KIND, not a repeat:** [[project-false-completion-unmasked]],
 [[project-false-completion-2]] and [[project-false-completion-3]] were verification failures — a
 checker blind to a defect in work presented as done. Here nothing was mis-verified: **the

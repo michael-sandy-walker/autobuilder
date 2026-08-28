@@ -45,7 +45,9 @@ class CompletionEdgeFaultInjectionTest {
 
     private GoalPlannerService serviceWith(CriteriaVerificationService verifier, Map<String, String> output,
                                            GoalStatus subgoalStatus, List<String> criteria) throws IOException {
-        doNothing().when(fileService).writeFile(anyString(), anyString());
+        // lenient: the T4-DK case never completes the root, so the GoalStack write never happens —
+        // strict stubbing would report that absence as an unused stub rather than the point.
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
@@ -111,6 +113,46 @@ class CompletionEdgeFaultInjectionTest {
         ArgumentCaptor<Map<String, String>> outputArg = ArgumentCaptor.forClass(Map.class);
         verify(verifier).verifyCompletion(eq("root"), any(), outputArg.capture());
         assertThat(outputArg.getValue()).isEqualTo(hollow);
+    }
+
+    /**
+     * T4-DK: the gate detected a real failure AND could not inject its repair, because the work
+     * item deduplicates against one already GIVEN_UP. Before this ticket all seven closure gates
+     * concluded "proceeding with completion" here — and on run 2026-08-28_05-27-49 that produced
+     * the fourth false completion: the criteria re-verification found unconfirmed criteria at the
+     * final closure attempt, tried to block, hit the bypass, and the root completed over an
+     * artifact whose renderer was a placeholder comment and whose HUD did not exist.
+     *
+     * <p>Exhausting the repair budget means the requirement is unmet and unfixable, not met.
+     */
+    @Test
+    void unconfirmedCriteria_whoseRepairCannotBeInjected_mustNotCompleteTheRoot() throws IOException {
+        HollowVsRealFixtures.LabeledCase c = HollowVsRealFixtures.computedPricing();
+        Map<String, String> hollow = OutputFixtureBuilder.builder().files(c.hollow()).asMap();
+
+        CriteriaVerificationService verifier = mock(CriteriaVerificationService.class);
+        when(verifier.verifyCompletion(any(), any(), any()))
+                .thenReturn(CriteriaVerificationService.CompletionVerification.blocked(
+                        "1 acceptance criterion(s) not confirmed in the current code: " + c.criterion(),
+                        List.of(c.criterion())));
+
+        GoalPlannerService service = serviceWith(verifier, hollow, GoalStatus.SUBSUMED, List.of(c.criterion()));
+
+        // The real drop path: every candidate repair paraphrases something already given up, so
+        // T1-DE filters it and the injection comes back empty.
+        GoalSimilarityService similarity = mock(GoalSimilarityService.class);
+        when(similarity.countGivenUpMatches(anyString()))
+                .thenReturn((long) GoalSimilarityService.GIVEN_UP_RETRY_LIMIT);
+        ReflectionTestUtils.setField(service, "goalSimilarityService", similarity);
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus())
+                .as("a requirement that is unmet AND unrepairable must not be reported as fulfilled")
+                .isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getAllGoals())
+                .as("and nothing may be marked COMPLETED on the way out")
+                .noneMatch(g -> g.getStatus() == GoalStatus.COMPLETED);
     }
 
     @Test

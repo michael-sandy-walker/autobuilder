@@ -18,3 +18,6 @@ target
 /test-root/meta/run-identity.json
 /backup/
 __pycache__/
+
+# Claude Code: personal per-machine overrides (the project hook config is settings.json, which IS tracked)
+.claude/settings.local.json

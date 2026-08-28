@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/charset_guard.py\" --hook",
+            "statusMessage": "charset guard",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

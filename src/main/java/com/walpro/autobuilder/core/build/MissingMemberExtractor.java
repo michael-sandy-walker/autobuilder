@@ -39,7 +39,19 @@ public final class MissingMemberExtractor {
 
     public enum Kind { CONSTRUCTOR, METHOD }
 
-    public record Entry(Kind kind, String targetType, String memberName, String argTypes) {}
+    /**
+     * @param targetType    the owning type's simple name, as every existing consumer reads it
+     * @param targetTypeFqn the owning type as the diagnostic wrote it, package included, or null
+     *                      when javac named it by simple name alone. T4-DF: the package is what
+     *                      makes member-level classpath discovery possible, and {@code lastSegment}
+     *                      used to throw it away.
+     * @param bareType      whether the member was addressed on a TYPE ({@code location: class T})
+     *                      rather than on a value ({@code location: variable v of type T}). Only
+     *                      the bare-type shape can be repaired by naming a different type — a
+     *                      value already has the type it has.
+     */
+    public record Entry(Kind kind, String targetType, String targetTypeFqn, String memberName,
+                        String argTypes, boolean bareType) {}
 
     /**
      * T2-FD: a call that chained a container method onto a bare project type — the caller treated
@@ -154,7 +166,8 @@ public final class MissingMemberExtractor {
             String fqOrSimple = cm.group(1);
             String simple = lastSegment(fqOrSimple);
             String args = normaliseArgs(cm.group(2));
-            Entry entry = new Entry(Kind.CONSTRUCTOR, simple, simple, args);
+            Entry entry = new Entry(Kind.CONSTRUCTOR, simple, fqOrSimple.contains(".") ? fqOrSimple : null,
+                    simple, args, true);
             dedup.putIfAbsent(key(entry), entry);
         }
 
@@ -169,11 +182,14 @@ public final class MissingMemberExtractor {
             String methodName = sm.group(1);
             String args = normaliseArgs(sm.group(2));
             String target = null;
+            String targetFqn = null;
             boolean namedReceiver = false;
             for (int j = i + 1; j < Math.min(i + 4, lines.length); j++) {
                 Matcher lm = METHOD_LOCATION_LINE.matcher(lines[j]);
                 if (lm.find()) {
-                    target = lastSegment(lm.group(1));
+                    String written = lm.group(1);
+                    target = lastSegment(written);
+                    targetFqn = written.contains(".") ? written : null;
                     namedReceiver = LOCATION_NAMED_RECEIVER.matcher(lines[j]).find();
                     break;
                 }
@@ -186,7 +202,7 @@ public final class MissingMemberExtractor {
             // told the model not to touch the caller. A named receiver never showed this shape, so
             // the suppression is scoped to the bare-type case and leaves the common path alone.
             if (!namedReceiver && containerMembers().contains(methodName)) continue;
-            Entry entry = new Entry(Kind.METHOD, target, methodName, args);
+            Entry entry = new Entry(Kind.METHOD, target, targetFqn, methodName, args, !namedReceiver);
             dedup.putIfAbsent(key(entry), entry);
         }
 

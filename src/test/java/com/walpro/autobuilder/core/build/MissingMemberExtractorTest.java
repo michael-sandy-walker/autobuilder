@@ -62,8 +62,9 @@ class MissingMemberExtractorTest {
 
         assertThat(MissingMemberExtractor.extract(stderr))
                 .containsExactly(new MissingMemberExtractor.Entry(
-                        MissingMemberExtractor.Kind.METHOD, "BookService", "save",
-                        "com.example.library.model.Book"));
+                        MissingMemberExtractor.Kind.METHOD, "BookService",
+                        "com.example.library.model.BookService", "save",
+                        "com.example.library.model.Book", false));
     }
 
     @Test
@@ -80,8 +81,9 @@ class MissingMemberExtractorTest {
 
         assertThat(MissingMemberExtractor.extract(stderr))
                 .containsExactly(new MissingMemberExtractor.Entry(
-                        MissingMemberExtractor.Kind.METHOD, "LoanService", "createLoan",
-                        "@jakarta.validation.Valid com.example.demo.model.Loan"));
+                        MissingMemberExtractor.Kind.METHOD, "LoanService",
+                        "com.example.demo.service.LoanService", "createLoan",
+                        "@jakarta.validation.Valid com.example.demo.model.Loan", false));
     }
 
     @Test
@@ -144,7 +146,8 @@ class MissingMemberExtractorTest {
 
         assertThat(MissingMemberExtractor.extract(stderr))
                 .containsExactly(new MissingMemberExtractor.Entry(
-                        MissingMemberExtractor.Kind.METHOD, "Loan", "isReturned", ""));
+                        MissingMemberExtractor.Kind.METHOD, "Loan",
+                        "com.example.library.model.Loan", "isReturned", "", false));
     }
 
     @Test

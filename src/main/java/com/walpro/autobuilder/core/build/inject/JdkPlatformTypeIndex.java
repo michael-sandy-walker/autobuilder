@@ -32,7 +32,8 @@ import java.util.stream.Collectors;
 @Slf4j
 final class JdkPlatformTypeIndex {
 
-    private record Index(Map<String, Set<String>> all, Map<String, Set<String>> base) {}
+    private record Index(Map<String, Set<String>> all, Map<String, Set<String>> base,
+                         Map<String, Set<String>> byPackage) {}
 
     private static volatile Index index;
 
@@ -48,6 +49,16 @@ final class JdkPlatformTypeIndex {
     static Set<String> javaBaseTypes(String simpleName) {
         if (simpleName == null || simpleName.isBlank()) return Set.of();
         return index().base().getOrDefault(simpleName, Set.of());
+    }
+
+    /**
+     * T4-DF: FQNs of every exported top-level type in one platform package. The member-level
+     * lookup needs the package's whole membership, which the simple-name maps cannot answer;
+     * it comes from the same module walk rather than a second pass over the runtime image.
+     */
+    static Set<String> typesInPackage(String packageName) {
+        if (packageName == null || packageName.isBlank()) return Set.of();
+        return index().byPackage().getOrDefault(packageName, Set.of());
     }
 
     private static Index index() {
@@ -68,6 +79,7 @@ final class JdkPlatformTypeIndex {
         long start = System.currentTimeMillis();
         Map<String, Set<String>> all = new HashMap<>();
         Map<String, Set<String>> base = new HashMap<>();
+        Map<String, Set<String>> byPackage = new HashMap<>();
         for (ModuleReference ref : ModuleFinder.ofSystem().findAll()) {
             ModuleDescriptor descriptor = ref.descriptor();
             Set<String> exportedPackages = descriptor.exports().stream()
@@ -88,6 +100,7 @@ final class JdkPlatformTypeIndex {
                     if (!exportedPackages.contains(fqn.substring(0, lastDot))) return;
                     String simple = fqn.substring(lastDot + 1);
                     all.computeIfAbsent(simple, k -> new LinkedHashSet<>()).add(fqn);
+                    byPackage.computeIfAbsent(fqn.substring(0, lastDot), k -> new LinkedHashSet<>()).add(fqn);
                     if (isJavaBase) {
                         base.computeIfAbsent(simple, k -> new LinkedHashSet<>()).add(fqn);
                     }
@@ -98,8 +111,9 @@ final class JdkPlatformTypeIndex {
         }
         all.replaceAll((k, v) -> Set.copyOf(v));
         base.replaceAll((k, v) -> Set.copyOf(v));
+        byPackage.replaceAll((k, v) -> Set.copyOf(v));
         log.info("T4-BM: JDK platform type index built ({} simple names, {} in java.base, {}ms)",
                 all.size(), base.size(), System.currentTimeMillis() - start);
-        return new Index(Map.copyOf(all), Map.copyOf(base));
+        return new Index(Map.copyOf(all), Map.copyOf(base), Map.copyOf(byPackage));
     }
 }

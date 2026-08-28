@@ -820,6 +820,18 @@ public class BootGate {
                     && observed.status() != assertion.expectedStatus()
                     && observed.status() >= 400 && observed.status() < 500) {
                 Optional<String> minimal = minimalBodyFor(assertion.criterionText(), asserted.body());
+                // Say so when the opportunity was there and the reduction declined. Without this
+                // the mechanism is silent in BOTH the "never engaged" and "engaged, declined"
+                // cases, and run 2026-08-28_23-29-25 had to be told apart by reconstructing the
+                // contradiction text offline. Measured on that corpus, the decline is the COMMON
+                // path: criteria are usually phrased in summary ("if either not found") and name
+                // no field, so there is nothing to keep. That is a real limit on this rule's
+                // reach, and it should be visible in the run rather than rediscovered.
+                if (minimal.isEmpty()) {
+                    log.info("T1-FV: {} was refused with {} but the criterion names no field to "
+                                    + "reduce to — judging the original request",
+                            asserted, observed.status());
+                }
                 if (minimal.isPresent()) {
                     List<CriterionProbeSynthesizer.ProbeRequest> retry = new ArrayList<>(requests);
                     CriterionProbeSynthesizer.ProbeRequest reduced =

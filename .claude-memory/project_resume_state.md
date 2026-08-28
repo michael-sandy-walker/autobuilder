@@ -95,6 +95,23 @@ metadata:
   - **"Change the PACKAGE COHERENCE RULE"** → **`T2-FG` FILED, but the premise needed correcting.** The rule itself is already domain-neutral in both copies and **nothing prescribes a `model` sub-package anywhere**. What carries the domain is the evolution prompt's worked EXAMPLES — `package com.example.demo;`, a web-framework controller, a `spring-boot-starter-parent` pom — which on a `com.flightsim` LWJGL target is a worked answer to a different question.
 - **⚠ USER-STATED SEQUENCING: loadable / injectable / self-hosting are HORIZON items, not the next build.** They were named to point the direction. The near-term queue is `T4-DF` (member-level classpath discovery, the measured 12-of-16), then `T4-DG` / `T2-FG`.
 
+## 2026-08-28 (verification series A / A' / B) — REGRESSION CLOSED, T4-DN STILL UNPROVEN — START HERE
+
+- **THE SERIES, all firestarter from seed, 75-min cap, same measurements** (`scripts/packaging_regression_compare.sh`):
+
+| run | smoke | cycles | merges | pkg-plugin in pom | terminal |
+|---|---|---|---|---|---|
+| A `12-25-36` | boot-failed | 62 | 16 | **0** | deadline |
+| A' `13-58-46` | boot-failed | 45 | 4 | 1 | convergence stall |
+| B `15-19-51` | **23/23** | 27 | 13 | 1 | **GOAL_FULFILLED** |
+
+- **✅ THE `T4-DI` REGRESSION IS CLOSED.** B scored 23/23 / 23/23, both `_strict` identical, nothing discounted — matching firestarter's best archived runs. Neutralising the bootstrap does not cost the web target once packaging lands. `boot-failed` occurred in exactly the run whose pom lacked a packaging plugin.
+- **🔴 `T4-DN` IS UNPROVEN, NOT CONFIRMED — do not read B's 23/23 as evidence for it.** B's artifact never failed to start, so the relay was never exercised (`NAMED-CAUSE=0` in all three runs). The fix is proven OFFLINE against both real outputs; the field check needs a run that actually fails to start, which cannot be forced without re-introducing a defect.
+- **`T4-DO` (packaging guarantee) has three data points and stays open:** 2 of 3 runs wrote a plugin unprompted. The coin-flip is the ticket; two consecutive successes are the symptom being tolerated, not the guarantee.
+- **`T4-DK` did not over-tighten:** zero closure refusals across A/A'/B, and B closed cleanly (16 accounted for, 3 subsumed) at 23/23. Its firing correctness is still untested.
+- **⚠ TWO PROCESS ERRORS OF MINE, both recorded because they nearly produced false findings:** (1) a compound command starting with `cd .../memory` left the shell there, so a later `rm -rf data/...` and `scripts/preflight.sh` silently resolved against the wrong directory — **run B did not start and I reported that it had**, then read A''s leftover log as B's result for 25 minutes. **Launches now use absolute paths and the launch log is checked immediately.** (2) `mvn test` beside a finished run wrote `[main]` lines into the live log path twice, firing monitors with test output.
+- **Monitors: match EVENTS, not renderings.** Three separate re-render storms this session (`bootstrap-pom` echo, pom content, work-item text). The narrow form that worked: anchor on `CompileFixInjector:`/`^PREFLIGHT:` and read the artifact's own files for state.
+
 ## 2026-08-28 (last, user-directed "implement all of them") — THE T1-DJ SUSPICION IS REFUTED, T2-FG CLOSED, WATCHES ARMED — START HERE
 
 - **✅ `T4-DK` AUDIT DONE — AND IT REFUTES THE HYPOTHESIS I PUT IN MY OWN TICKET.** All **7 archived `GOAL_FULFILLED` runs** audited (logs intact for all 7). **4 of 7 arrived via the T1-DJ exhaustion→fulfilled relabel — and those 4 include BOTH 23/23 firestarter runs** (18 and 10 subsumptions), while a *direct* fulfilment with only 3 subsumptions scored 18/23. **The correlation runs backwards: being relabelled does not predict a worse artifact.** The ordering is identical in a good run and the false one (`T2-DR marked COMPLETED` → relabel ~1s later), so there is no variant to scope the flip back to. **T1-DJ is exonerated; the defect is entirely the ledger.** The [[project-goal-fulfilled-is-real-happy-path]] population is NOT tainted by arrival path. ⚠ N=7, only 5 scoreable (flightsim has no yardstick).

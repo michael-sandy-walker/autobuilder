@@ -104,8 +104,10 @@ class BootstrapPomResolverTest {
         String pom = resolver.resolve(cls(Kind.MISSING_POM), null, null, ctx(Map.of()))
                 .orElseThrow().mutations().get(0).content();
 
-        assertThat(pom).contains("<maven.compiler.release>" + Runtime.version().feature()
-                + "</maven.compiler.release>");
+        assertThat(pom).contains("<maven.compiler.source>" + Runtime.version().feature()
+                + "</maven.compiler.source>");
+        assertThat(pom).contains("<maven.compiler.target>" + Runtime.version().feature()
+                + "</maven.compiler.target>");
     }
 
     @Test

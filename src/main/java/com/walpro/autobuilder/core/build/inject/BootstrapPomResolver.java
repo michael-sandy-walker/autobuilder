@@ -72,7 +72,14 @@ public class BootstrapPomResolver implements CompileFixResolver {
         pom.append("    <version>0.0.1-SNAPSHOT</version>\n");
         pom.append("    <packaging>jar</packaging>\n\n");
         pom.append("    <properties>\n");
-        pom.append("        <maven.compiler.release>").append(release).append("</maven.compiler.release>\n");
+        // source/target rather than `release`: this box's Maven (3.8.7) binds compiler plugin 3.1
+        // from its super-POM, which predates `maven.compiler.release` (3.6) and fails with
+        // "Source option 5 is no longer supported". Measured 2026-08-28 by building a bootstrapped
+        // pom instead of reading it — the runs never caught it because the model rewrote the pom
+        // before compilation mattered. source/target are honoured by every plugin version, so this
+        // needs no pinned version and no assumption about which Maven is installed.
+        pom.append("        <maven.compiler.source>").append(release).append("</maven.compiler.source>\n");
+        pom.append("        <maven.compiler.target>").append(release).append("</maven.compiler.target>\n");
         pom.append("        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>\n");
         pom.append("    </properties>\n\n");
         pom.append("    <dependencies>\n");
@@ -117,7 +124,7 @@ public class BootstrapPomResolver implements CompileFixResolver {
     }
 
     /** The single class declaring an entry point, or null when there is not exactly one. */
-    static String soleMainClassOf(Map<String, String> sources) {
+    public static String soleMainClassOf(Map<String, String> sources) {
         if (sources == null) return null;
         List<String> found = new ArrayList<>();
         for (Map.Entry<String, String> e : sources.entrySet()) {

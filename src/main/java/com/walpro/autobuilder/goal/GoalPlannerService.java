@@ -2846,6 +2846,34 @@ public class GoalPlannerService {
                 + "Not completing; the exhaustion ladder owns the terminal.", gate, detail);
     }
 
+
+    /**
+     * T4-DO: makes the packaged artifact runnable when that is decidable without a model, and
+     * says so. Returns true when the pom was changed — the caller then blocks closure for this
+     * cycle, and the next package gate rebuilds against the repaired pom.
+     *
+     * <p>Writes through the same {@code output/} path the injector uses, so the change is an
+     * ordinary artifact mutation that the existing snapshot and rollback machinery already sees.
+     */
+    private boolean applyRunnablePackagingRepair() {
+        if (currentCycleContext == null || currentCycleContext.outputPath() == null) return false;
+        java.util.Map<String, String> sources = currentCycleContext.previousOutput();
+        if (sources == null || sources.isEmpty()) return false;
+        String pomPath = sources.containsKey("pom.xml") ? "pom.xml" : null;
+        if (pomPath == null) return false;
+        try {
+            Path root = Path.of(currentCycleContext.outputPath());
+            java.util.Optional<String> repaired = com.walpro.autobuilder.core.build.RunnableJarGuarantee
+                    .repairedPom(root, sources.get(pomPath), sources);
+            if (repaired.isEmpty()) return false;
+            java.nio.file.Files.writeString(root.resolve(pomPath), repaired.get());
+            return true;
+        } catch (Exception e) {
+            log.warn("T4-DO: could not apply the packaging repair — {}", e.toString());
+            return false;
+        }
+    }
+
     public void autoCompleteRootIfSatisfied() {
         // Replan atomicity: while the planner is mid-execution (prune already applied, injection
         // not yet), the active set is transiently empty — completing the root here is the
@@ -3133,6 +3161,18 @@ public class GoalPlannerService {
                         specBoundBehaviouralCriteria(),
                         true);
                 if (bootFailure.isPresent()) {
+                    // T4-DO: before asking the MODEL to make the artifact runnable, check whether
+                    // the answer is deterministic. A jar with no Main-Class cannot run and the
+                    // sources say what it should run; that repair needs no model and no ecosystem
+                    // table. Measured cause of the 2026-08-28 regression series, where packaging
+                    // appeared in 0 / 1 / 1 of three runs on one seed and `boot-failed` landed in
+                    // exactly the run that lacked it. Abstains whenever the project has already
+                    // answered — a jar declaring an entry point, or sources naming no single one.
+                    if (applyRunnablePackagingRepair()) {
+                        log.warn("T4-DO: root closure blocked — the packaged artifact could not run; "
+                                + "declared its entry point deterministically. Next cycle rebuilds.");
+                        return;
+                    }
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                             // T4-DD item 3: the imperative must not re-assert a completion model
                             // the artifact may not have — the gate's own summary already says what

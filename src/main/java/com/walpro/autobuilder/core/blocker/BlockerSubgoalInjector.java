@@ -38,6 +38,15 @@ public class BlockerSubgoalInjector {
     private final FileRoleClassifier fileRoleClassifier;
 
     /**
+     * T4-DL: optional so no existing construction site changes. Used only to ask whether ANY
+     * published artifact contains the missing class — the one question that decides whether
+     * "make the package available" is even achievable.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.build.inject.CoordinateSearchClient coordinateSearchClient;
+
+    /**
      * T1-DM: ensure exactly one active BUILD_FIX subgoal exists when the post-merge build fails.
      * Idempotent: no-op when an active BUILD_FIX subgoal is already present.
      * <p>
@@ -153,13 +162,28 @@ public class BlockerSubgoalInjector {
         // T2-CY: when a file is identified, prepend a per-file criterion so the evaluator and
         // evolver have a concrete repair target in addition to the generic mvn-compile criterion.
         java.util.List<String> criteria;
+        String missingSymbol = extractMissingSymbol(summary);
         if (divergence) {
-            String missingSymbol = extractMissingSymbol(summary);
             String namedSymbol = missingSymbol != null ? missingSymbol : "the missing symbol";
             // T2-DD: divergence criteria — accept EITHER resolution path.
             criteria = java.util.List.of(
                     namedSymbol + ".java exists and defines " + namedSymbol + " (creation path)",
                     namedSymbol + " no longer appears in " + failedPath + " (removal path)",
+                    "mvn compile exits 0 with no errors"
+            );
+        } else if (unobtainablePackageSymbol(classification, stderr, missingSymbol) != null) {
+            // T4-DL: the package is not merely absent from THIS project — no published artifact
+            // contains the class at all. "The missing package is available on the compile
+            // classpath" is then an unachievable criterion, and asking for it sends the loop
+            // hunting a dependency that does not exist (T4-DH's 26 invented coordinates are the
+            // same failure from the other side). Offer the achievable path instead, mirroring the
+            // creation/removal pair above.
+            String fqn = unobtainablePackageSymbol(classification, stderr, missingSymbol);
+            log.info("T4-DL: no published artifact contains {} — the import cannot be satisfied by "
+                    + "any dependency; steering to the removal path", fqn);
+            criteria = java.util.List.of(
+                    fqn + " is no longer imported or referenced (no published artifact provides it)",
+                    "the behaviour it was used for is provided by an API the project can obtain",
                     "mvn compile exits 0 with no errors"
             );
         } else {
@@ -376,4 +400,36 @@ public class BlockerSubgoalInjector {
     private static final Pattern FILE_COORD_PREFIX = Pattern.compile(
             "(\\S+\\.java):\\[\\d+,\\d+\\]"
     );
+
+    /**
+     * T4-DL: the fully-qualified class whose package cannot be obtained from ANY published
+     * artifact, or null. Tri-state by construction — only a positive ABSENT answer counts, so an
+     * unreachable repository leaves today's behaviour exactly as it was.
+     */
+    private String unobtainablePackageSymbol(
+            com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification classification,
+            String stderr, String symbolFromSummary) {
+        if (coordinateSearchClient == null || classification == null) return null;
+        if (classification.kind() != com.walpro.autobuilder.core.build.BuildErrorClassifier.Kind.PACKAGE_DOES_NOT_EXIST) {
+            return null;
+        }
+        // The package name comes from the stderr, not from Classification#missingArtifact — the
+        // pattern-fallback path leaves that field null and only the adaptive classifier fills it,
+        // so reading it here silently disabled the whole branch (caught by its own test).
+        String pkg = classification.missingArtifact() != null && !classification.missingArtifact().isBlank()
+                ? classification.missingArtifact()
+                : com.walpro.autobuilder.core.build.BuildErrorClassifier
+                        .extractToken(stderr, classification.kind()).orElse(null);
+        // The symbol comes from the FULL stderr, not the picked summary line: when the picker
+        // chooses the "package … does not exist" line, that line carries no symbol at all, and
+        // the branch silently never fired (its own test caught this).
+        String symbol = symbolFromSummary != null && !symbolFromSummary.isBlank()
+                ? symbolFromSummary
+                : extractMissingSymbol(stderr);
+        if (pkg == null || symbol == null || symbol.isBlank()) return null;
+        String fqn = pkg + "." + symbol;
+        return coordinateSearchClient.publishesClass(fqn)
+                == com.walpro.autobuilder.core.build.inject.CoordinateSearchClient.Availability.ABSENT
+                ? fqn : null;
+    }
 }

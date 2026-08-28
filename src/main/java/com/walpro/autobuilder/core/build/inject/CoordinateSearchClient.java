@@ -80,6 +80,7 @@ public class CoordinateSearchClient {
 
     private final Map<String, Optional<Coordinates>> cache = new ConcurrentHashMap<>();
     private final Map<String, ArtifactVersions> versionCache = new ConcurrentHashMap<>();
+    private final Map<String, Availability> publishedCache = new ConcurrentHashMap<>();
     private final AtomicInteger consecutiveFailures = new AtomicInteger();
 
     /**
@@ -148,6 +149,39 @@ public class CoordinateSearchClient {
         } catch (Exception e) {
             // A shape we cannot read is not evidence of absence.
             return ArtifactVersions.unknown();
+        }
+    }
+
+    /**
+     * T4-DL: does ANY published artifact contain this exact class? Tri-state for the same reason
+     * {@link #versionsOf} is — the consumer acts on ABSENT by telling the loop to remove an import,
+     * so a rate limit or a dropped network must never be read as "this API does not exist".
+     *
+     * <p>Measured need: run 2026-08-28_05-27-49 wrote {@code import com.sun.opengl.util.GLCapabilities}
+     * in nine responses. That is JOGL 1.x, unpublished under that name for over a decade. The loop
+     * already discovered as much — the coordinate search returned nothing — and then said nothing,
+     * so the model kept the invented API and the renderer stayed a placeholder comment.
+     */
+    public Availability publishesClass(String fqn) {
+        if (!enabled || fqn == null || fqn.isBlank() || !fqn.contains(".")) return Availability.UNKNOWN;
+        if (consecutiveFailures.get() >= FAILURE_BUDGET) return Availability.UNKNOWN;
+        Availability cached = publishedCache.get(fqn);
+        if (cached != null) return cached;
+        Availability result = queryBody("fc:" + fqn, 1, "")
+                .map(CoordinateSearchClient::parsePresence)
+                .orElse(Availability.UNKNOWN);
+        publishedCache.put(fqn, result);
+        return result;
+    }
+
+    static Availability parsePresence(String body) {
+        try {
+            JsonNode response = MAPPER.readTree(body).path("response");
+            int found = response.path("numFound").asInt(-1);
+            if (found < 0) return Availability.UNKNOWN;
+            return found == 0 ? Availability.ABSENT : Availability.PRESENT;
+        } catch (Exception e) {
+            return Availability.UNKNOWN;
         }
     }
 
@@ -230,6 +264,7 @@ public class CoordinateSearchClient {
     void __resetForTest() {
         cache.clear();
         versionCache.clear();
+        publishedCache.clear();
         consecutiveFailures.set(0);
     }
 }

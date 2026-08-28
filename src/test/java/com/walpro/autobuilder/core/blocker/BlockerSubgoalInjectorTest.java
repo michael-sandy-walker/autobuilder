@@ -466,4 +466,56 @@ class BlockerSubgoalInjectorTest {
         g.setMetadata(meta);
         return g;
     }
+
+    // ── T4-DL: an API no published artifact provides ─────────────────────────
+
+    /**
+     * Run 2026-08-28_05-27-49 wrote {@code import com.sun.opengl.util.GLCapabilities} in nine
+     * responses — JOGL 1.x, unpublished under that name for over a decade. Demanding that the
+     * package become "available on the compile classpath" is unachievable, and sends the loop
+     * hunting a dependency that does not exist; T4-DH's 26 invented coordinates are the same
+     * failure seen from the other side. The achievable path is removal.
+     */
+    @Test
+    void aPackageNoArtifactPublishes_steersToTheRemovalPath() {
+        var repo = org.mockito.Mockito.mock(
+                com.walpro.autobuilder.core.build.inject.CoordinateSearchClient.class);
+        when(repo.publishesClass(anyString())).thenReturn(
+                com.walpro.autobuilder.core.build.inject.CoordinateSearchClient.Availability.ABSENT);
+        injector.setCoordinateSearchClient(repo);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        injector.injectBuildFixSubgoalIfAbsent(buildOutcome(
+                "[ERROR] /src/main/java/A.java:[3,1] package com.sun.opengl.util does not exist\n"
+                        + "[ERROR]   symbol:   class GLCapabilities"), java.util.List.of());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(goalPlannerService).setAcceptanceCriteria(anyString(), captor.capture());
+        List<String> criteria = captor.getValue();
+        assertThat(criteria).anySatisfy(c ->
+                assertThat(c).contains("no longer imported").contains("no published artifact provides it"));
+        assertThat(criteria).noneSatisfy(c ->
+                assertThat(c).contains("available on the compile classpath"));
+    }
+
+    @Test
+    void aRepositoryThatCannotBeConsulted_leavesTodaysCriteriaUntouched() {
+        // The safety property: UNKNOWN must never read as "this API does not exist", or an
+        // offline box would steer the loop to delete imports it needs.
+        var repo = org.mockito.Mockito.mock(
+                com.walpro.autobuilder.core.build.inject.CoordinateSearchClient.class);
+        when(repo.publishesClass(anyString())).thenReturn(
+                com.walpro.autobuilder.core.build.inject.CoordinateSearchClient.Availability.UNKNOWN);
+        injector.setCoordinateSearchClient(repo);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        injector.injectBuildFixSubgoalIfAbsent(buildOutcome(
+                "[ERROR] /src/main/java/A.java:[3,1] package org.real.lib does not exist\n"
+                        + "[ERROR]   symbol:   class Thing"), java.util.List.of());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(goalPlannerService).setAcceptanceCriteria(anyString(), captor.capture());
+        assertThat((List<String>) captor.getValue()).anySatisfy(c ->
+                assertThat(c).contains("available on the compile classpath"));
+    }
 }

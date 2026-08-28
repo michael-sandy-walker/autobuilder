@@ -69,7 +69,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 ## Feedback
 - `feedback_no_per_run_memory_files.md`: no new memory file per field run — fold into `project_resume_state.md`; separate files only for durable cross-run insights.
-- `feedback_curly_quotes.md`: fix curly/smart quotes in Java immediately with sed, no confirmation.
+- `feedback_curly_quotes.md`: stray non-Latin characters and curly quotes in source — now ENFORCED by `scripts/charset_guard.py` as a PostToolUse hook (blocklist by inventory; em dashes/box-drawing/arrows are legitimate). `jq` is not installed; hooks use python3.
 - `feedback_no_heavy_mvn_beside_a_live_run.md`: the scratch-FILE_BASE_PATH unlock covers live LOGS, not resource contention — a full suite beside a live run starved the box (load 159, 0 GB free) and killed the run via Neo4j timeouts.
 - `feedback_run_without_asking.md`: run mvn/build/test commands with dangerouslyDisableSandbox — never prompt.
 - `feedback_no_auto_commit.md`: commit only with authorization (checkpoint commits OK in authorized autonomous runs); NEVER push.

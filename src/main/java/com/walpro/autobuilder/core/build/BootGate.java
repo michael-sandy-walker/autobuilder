@@ -805,11 +805,43 @@ public class BootGate {
                 unobserved.merge(Unobserved.BODY_REFUSED, 1, Integer::sum);
                 continue;
             }
+            // T1-FV: the guard above covers SUCCESS criteria only, and its reasoning — no
+            // derivation can be sure it satisfies validation it never discovered — holds just as
+            // well for a criterion asserting an error. Widening it outright would be wrong the
+            // other way: a criterion expecting 404 answered 400 is sometimes a genuine
+            // wrong-error-code finding, and blanket abstention would discard it. So ask instead
+            // of assuming — resend carrying only what the criterion itself names. If the artefact
+            // then answers as specified, the derived body was at fault and the criterion PASSES;
+            // if it still does not, the contradiction is real and is reported against the fairer
+            // request. Measured on run 2026-08-28_21-47-39, where this exact case cost a 23/23
+            // artefact its only closure attempt.
+            CriterionProbeSynthesizer.ProbeRequest judged = asserted;
+            if (asserted.body() != null
+                    && observed.status() != assertion.expectedStatus()
+                    && observed.status() >= 400 && observed.status() < 500) {
+                Optional<String> minimal = minimalBodyFor(assertion.criterionText(), asserted.body());
+                if (minimal.isPresent()) {
+                    List<CriterionProbeSynthesizer.ProbeRequest> retry = new ArrayList<>(requests);
+                    CriterionProbeSynthesizer.ProbeRequest reduced =
+                            new CriterionProbeSynthesizer.ProbeRequest(
+                                    asserted.method(), asserted.path(), minimal.get());
+                    retry.set(retry.size() - 1, reduced);
+                    SequenceOutcome second = executeSequence(client, port, retry);
+                    // An unobserved retry proves nothing, so the first answer stands.
+                    if (second.isObserved()) {
+                        log.info("T1-FV: {} was refused with {}; resent as {} and got {} — "
+                                        + "judging the reduced request",
+                                asserted, observed.status(), reduced, second.status());
+                        observed = second;
+                        judged = reduced;
+                    }
+                }
+            }
             probed++;
             if (observed.status() != assertion.expectedStatus()) {
                 failures.add("\"" + assertion.criterionText() + "\" — " + assertion.describe()
                         + ", but the running application answered " + observed.status()
-                        + " to " + sequence.get().get(sequence.get().size() - 1));
+                        + " to " + judged);
             }
         }
         int unobservedTotal = unobserved.values().stream().mapToInt(Integer::intValue).sum();
@@ -931,6 +963,61 @@ public class BootGate {
         }
         m.appendTail(out);
         return Optional.of(out.toString());
+    }
+
+    /**
+     * {@code body} reduced to the top-level fields the criterion's own text names.
+     *
+     * <p>Empty when the reduction would not settle anything: unparseable body, nothing named,
+     * or nothing dropped. Emptiness therefore means "no second opinion available", and the
+     * caller keeps the answer it already has.
+     *
+     * <p>Why this exists. A probe body is derived from the artefact's storage model, so it
+     * carries components the interface never accepts — the shape {@code T1-FV} describes. On
+     * run {@code 2026-08-28_21-47-39} the criterion was <em>"POST /loans with a non-existent
+     * bookId or memberId returns 404"</em>; the derived body added {@code "returned":true} from
+     * the {@code Loan} entity, the handler declared {@code Map<String, Long>}, the boolean could
+     * not bind, and the artefact answered 400. It was recorded as the artefact failing the
+     * requirement, and it alone cost a 23/23 run its only closure attempt. Sending
+     * {@code {"bookId":…,"memberId":…}} to that same artefact returns exactly the specified 404.
+     *
+     * <p>The rule carries no knowledge of HTTP or of any domain: it keeps what the requirement
+     * mentions and drops what only the storage model knows about. A field counts as named only
+     * on a whole-token match, so {@code id} is not claimed by the text "bookId" — matching a
+     * substring would keep the very components this is meant to drop.
+     */
+    static Optional<String> minimalBodyFor(String criterionText, String body) {
+        if (criterionText == null || body == null || body.isBlank()) return Optional.empty();
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper =
+                    new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(body);
+            if (!node.isObject()) return Optional.empty();
+            String haystack = criterionText.toLowerCase(Locale.ROOT);
+            com.fasterxml.jackson.databind.node.ObjectNode kept = mapper.createObjectNode();
+            int dropped = 0;
+            java.util.Iterator<String> names = node.fieldNames();
+            while (names.hasNext()) {
+                String field = names.next();
+                if (namedIn(haystack, field)) {
+                    kept.set(field, node.get(field));
+                } else {
+                    dropped++;
+                }
+            }
+            if (dropped == 0 || kept.isEmpty()) return Optional.empty();
+            return Optional.of(mapper.writeValueAsString(kept));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    /** Whether {@code field} appears in already-lowercased {@code haystack} as a whole token. */
+    private static boolean namedIn(String haystack, String field) {
+        if (field == null || field.isBlank()) return false;
+        Matcher m = Pattern.compile("(?<![a-z0-9])" + Pattern.quote(field.toLowerCase(Locale.ROOT))
+                + "(?![a-z0-9])").matcher(haystack);
+        return m.find();
     }
 
     /** A top-level field of a JSON object, as its raw text. Empty when absent or unparseable. */

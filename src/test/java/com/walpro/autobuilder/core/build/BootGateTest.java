@@ -808,4 +808,70 @@ class BootGateTest {
         assertThat(BootGate.summariseOutput(tail))
                 .isEqualTo("the process logged nothing diagnostic before the observation ended");
     }
+    // ---- T1-FV: a derived body carries components the interface never accepts ----
+
+    /**
+     * The verbatim case from run 2026-08-28_21-47-39. The derived body added `returned` from the
+     * Loan entity; the handler took Map<String, Long>; the boolean could not bind; the artefact
+     * answered 400 and was recorded as failing a requirement it in fact met. Reducing the body to
+     * what the criterion names is what separates the two.
+     */
+    @Test
+    void minimalBody_dropsAnEntityFieldTheCriterionNeverMentions() {
+        String criterion = "POST /loans with a non-existent bookId or memberId returns HTTP 404 "
+                + "with JSON body {\"message\": \"<reason>\"}.";
+        String derived = "{\"bookId\":999999999,\"memberId\":999999999,\"returned\":true}";
+
+        Optional<String> minimal = BootGate.minimalBodyFor(criterion, derived);
+
+        // Exact, not "contains": this string is the third link in a chain whose other two
+        // links were measured against the booted artefact — the derived body drew 400, and
+        // THIS body drew the specified 404. An approximate assertion would leave the join
+        // between them untested.
+        assertThat(minimal).contains("{\"bookId\":999999999,\"memberId\":999999999}");
+    }
+
+    /** Nothing dropped means the reduction settles nothing, so there is no second opinion to offer. */
+    @Test
+    void minimalBody_abstainsWhenTheCriterionNamesEveryField() {
+        Optional<String> minimal = BootGate.minimalBodyFor(
+                "POST /loans with a bookId and a memberId returns 404",
+                "{\"bookId\":1,\"memberId\":2}");
+
+        assertThat(minimal).isEmpty();
+    }
+
+    /** Dropping everything would send a body the criterion cannot vouch for either. */
+    @Test
+    void minimalBody_abstainsWhenTheCriterionNamesNoField() {
+        Optional<String> minimal = BootGate.minimalBodyFor(
+                "POST /loans returns 404 when the referenced records are absent",
+                "{\"bookId\":1,\"returned\":true}");
+
+        assertThat(minimal).isEmpty();
+    }
+
+    /**
+     * Whole-token matching, not substring. "bookId" in the text must not claim a separate `id`
+     * field — that would keep the server-assigned component this exists to drop.
+     */
+    @Test
+    void minimalBody_doesNotLetOneFieldNameClaimAnother() {
+        Optional<String> minimal = BootGate.minimalBodyFor(
+                "POST /loans with a non-existent bookId returns 404",
+                "{\"bookId\":1,\"id\":7}");
+
+        assertThat(minimal).isPresent();
+        assertThat(minimal.get()).contains("bookId").doesNotContain("\"id\"");
+    }
+
+    /** An unparseable or non-object body offers nothing to reduce. */
+    @Test
+    void minimalBody_abstainsOnAnythingItCannotRead() {
+        assertThat(BootGate.minimalBodyFor("names bookId", "not json at all")).isEmpty();
+        assertThat(BootGate.minimalBodyFor("names bookId", "[1,2,3]")).isEmpty();
+        assertThat(BootGate.minimalBodyFor("names bookId", "")).isEmpty();
+        assertThat(BootGate.minimalBodyFor(null, "{\"bookId\":1}")).isEmpty();
+    }
+
 }

@@ -1,192 +1,230 @@
 {
- "_doc": [
-  "T4-CE slice 1: machine-checked field-watch registry — the single home for watch definitions.",
-  "Each entry: id, ticket (owner), description, type, patterns. The evaluator (watch_report.py)",
-  "runs every entry against a preflight corpus and emits one result line per watch.",
-  "",
-  "type=watch results: FIRED(n) — the fired pattern matched n times (the check note says what",
-  "a session should confirm by eye); OPPORTUNITY-NO-FIRE(n) — the opportunity pattern matched",
-  "but the mechanism never fired (needs attention); NO-OPPORTUNITY — neither matched;",
-  "NOT-OBSERVED — no opportunity pattern is defined and the mechanism did not fire.",
-  "type=tally results: COUNT(n) — a metric, not a pass/fail.",
-  "",
-  "files: behaviour=behaviour.ndjson, applog=autobuilder.log, goalstack=GoalStack.json,",
-  "summary=summary.txt. Patterns are Python regexes matched against the raw file text",
-  "(tolerates both line-JSON and pretty-printed corpora).",
-  "",
-  "Lifecycle: a watch whose firing has been confirmed by a session gets REMOVED here and its",
-  "closure recorded on the owning ticket — the registry holds OPEN watches only."
- ],
- "watches": [
-  {
-   "id": "t1fl-system-resumed",
-   "ticket": "T1-FL",
-   "description": "first live system_resumed after a breaker episode",
-   "type": "watch",
-   "fired": {
-    "file": "behaviour",
-    "pattern": "\"event\"\\s*:\\s*\"system_resumed\""
-   },
-   "opportunity": {
-    "file": "behaviour",
-    "pattern": "llm-circuit-breaker"
-   },
-   "check": "the resume must follow a breaker episode and cycles must continue after it"
-  },
-  {
-   "id": "t4cc-decisive-accept",
-   "ticket": "T4-CC",
-   "description": "first decisive gate acceptance on a gate-refusal loop",
-   "type": "watch",
-   "fired": {
-    "file": "applog",
-    "pattern": "T4-CC: originating .* passed on the staged candidate"
-   },
-   "opportunity": {
-    "file": "goalstack",
-    "pattern": "originatingGate"
-   },
-   "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed — BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 run series + 07:18 run) — the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
-  },
-  {
-   "id": "t6a-preserved-reconstructed",
-   "ticket": "T6-A",
-   "description": "dual smoke: the offline preserved-artifact reconstruction fired on a time-limit/kill run (a genuine rescue is smoke_preserved > smoke in summary.txt — read both fields by eye)",
-   "type": "tally",
-   "fired": {
-    "file": "summary",
-    "pattern": "preserved_source=(reconstructed|loop-preserved)"
-   }
-  },
-  {
-   "id": "t5bh-replan-detector-liveness",
-   "ticket": "T5-BH",
-   "description": "which precondition keeps ReplanPatternDetector at 0/237 firings — each early-out names itself, so one live run decides recalibrate-vs-delete (read the dominant reason by eye)",
-   "type": "tally",
-   "fired": {
-    "file": "applog",
-    "pattern": "T5-BH liveness: ReplanPatternDetector abstained"
-   }
-  },
-  {
-   "id": "t2eo-stagnation-rescue",
-   "ticket": "T2-EO",
-   "description": "verify-before-pause at the stagnation-runaway edge promotes done-but-unbanked work instead of halting",
-   "type": "watch",
-   "fired": {
-    "file": "applog",
-    "pattern": "T2-EO: verify-before-pause broke the stagnation runaway"
-   },
-   "opportunity": {
-    "file": "applog",
-    "pattern": "Stagnation runaway: \\d+ consecutive"
-   },
-   "check": "after the rescue line, the run continues (new merges or planning) instead of pausing; an honest stall (rescue found nothing) still halts stagnation-runaway"
-  },
-  {
-   "id": "t6f-stale-loop-copy-ignored",
-   "ticket": "T6-F",
-   "description": "first field firing of the freshness gate: an inherited preserved copy was ignored and the score came from THIS run's snapshots (the reconstruction half could not be validated retrospectively — run 3's snapshots were gone)",
-   "type": "tally",
-   "fired": {
-    "file": "summary",
-    "pattern": "preserved_source=.*-after-stale-loop-copy"
-   }
-  },
-  {
-   "id": "t2eq-halt-edge-rescue",
-   "ticket": "T2-EQ",
-   "description": "halt edge finds an unpackageable artifact and hands the repair to the loop instead of dying",
-   "type": "watch",
-   "fired": {
-    "file": "app",
-    "pattern": "T2-EQ: the artifact does not package — repair work item injected at the"
-   },
-   "opportunity": {
-    "file": "app",
-    "pattern": "T2-EQ: halt edge reached with an artifact the build tool cannot package"
-   },
-   "check": "the run must continue past the halt (more cycles after the line) and the repair item must not be re-created while it is open"
-  },
-  {
-   "id": "t2eq-packaging-item-retired",
-   "ticket": "T2-EQ",
-   "description": "packaging repair item retired by the gate that raised it (unit-covered, never yet seen in the field)",
-   "type": "watch",
-   "fired": {
-    "file": "app",
-    "pattern": "packaging now succeeds — marking (current|remaining) BUILD_FIX subgoal"
-   },
-   "opportunity": {
-    "file": "app",
-    "pattern": "T2-EQ: halt edge reached with an artifact the build tool cannot package"
-   },
-   "check": "only the package gate may retire a package-gate item; a compile-OK cleanup must not"
-  },
-  {
-   "id": "t4cu-criterion-contradicted",
-   "ticket": "T4-CU",
-   "description": "a SPEC-bound acceptance criterion contradicted by the running artifact at the closure edge (unit-covered; the synthesis step has never met the local model in the field)",
-   "type": "watch",
-   "fired": {
-    "file": "app",
-    "pattern": "acceptance criteria fail when exercised against it"
-   },
-   "opportunity": {
-    "file": "app",
-    "pattern": "T4-CU: behavioural criteria probed=[1-9]"
-   },
-   "check": "probed>0 with contradicted=0 across a run whose smoke score is below 23 means the probes are too weak, not that the artifact is right — compare the contradicted set against that run's smoke failures"
-  },
-  {
-   "id": "t4cu-probe-synthesis-yield",
-   "ticket": "T4-CU",
-   "description": "how many parseable criteria actually get a usable probe out of the local model",
-   "type": "tally",
-   "fired": {
-    "file": "app",
-    "pattern": "T4-CU: behavioural criteria probed=\\d+ skipped=\\d+ contradicted=\\d+"
-   },
-   "check": "skipped >> probed means synthesis or the drift guard is rejecting nearly everything — read the per-criterion INFO lines before tuning the parser"
-  },
-  {
-   "id": "t4cy-twin-guard-exercised",
-   "why": "T4-CY's suppression guard (same finding not re-raised while open) has NEVER been exercised: across 4 field runs the loop always repaired a finding before it recurred. The volatile-token normaliser that makes the guard possible is therefore only unit-proven.",
-   "look_for": "a log line 'T4-CY: same finding as last observation' — or, as the failure signal, two behavioural-defect goals with IDENTICAL descriptions in one run",
-   "status": "open"
-  },
-  {
-   "id": "t3bx-constraints-flip-the-probe",
-   "why": "T3-BX's field half: the status-path facts reach the evolution prompt (6 renderings in one run, confirmed) but no run has yet had a model type GAIN constraints. T4-CU's probe is the verifier — it currently reports 'POST /books -> 400, but answered 201' with 0 constraint annotations on every model type.",
-   "look_for": "a model type gaining a constraint annotation AND the next observation reporting 400 instead of 201 for that endpoint",
-   "status": "open"
-  },
-  {
-   "id": "t4cz-stale-view-reraise",
-   "why": "KNOWN DEFECT, filed unfixed: requireEntryPointNow reads the cycle-start file map, so it re-raises the requirement one cycle after the loop satisfies it (observed in both runs; can reopen a just-closed goal). Bounded by idempotency.",
-   "look_for": "'gap contradicts recorded completion — reopening' immediately after an entry point is written; confirms the churn is still present until the stale-view fix lands",
-   "status": "open"
-  },
-  {
-   "id": "t4da-clause-claimed-after-readout",
-   "why": "T4-DA's remaining DoD half: does a work item appear for a specification clause BECAUSE the readout named it? A goal claiming a named clause proves nothing on its own — the planner reads the seed too. The control is the three frozen runs of 2026-07-30 (df2a907, no readout), in which 11 of the 16 seed clauses are NEVER fully articulated by any run's plan. Those 11 are the discriminating set.",
-   "look_for": "EVALUATE WITH: python3 scripts/clause_coverage.py --against-control scripts/clause_control_df2a907.txt <run_dir>. The control file holds the 11 clauses no run of the df2a907 frozen series articulates; the per-run baseline is 0 of 11 (verified: all three controls score 0). DECISION RULE, stated in advance: 3 or more readout-enabled runs averaging >=1 closed clause supports the mechanism; averaging 0 refutes it and T4-DA's readout should be re-read as inert prompt weight rather than defended. First observation 2026-07-30_18-39-00 closed 1 ('title required, max 120 chars'), n=1, nothing concluded. JUDGE NET EFFECT, NOT CLAUSE CLOSURE ALONE — the cost side is measured and non-trivial: scripts/prompt_block_report.py puts the SPECIFICATION COVERAGE block at ~665 est tokens per call, 23% of the evolution prompt (2.3% of a run's total prompt tokens), and the first readout-enabled run's median cycle was 162s against 130/135/140s for the three controls (+16-25%, n=1, confounded by ordinary model variance). A run that closes 1 clause and loses 8 cycles is not obviously a gain. Record median cycle time alongside closed clauses for each of the three runs. CORRECTION 2026-07-30: the +16-25% cycle-time figure was attributed to this block and the token accounting refutes that — the block is 2.3% of a run's prompt tokens (evaluation is 72%), so it cannot explain a 20% slowdown; the run stalled in LLMClient timeout retries minutes later with the model alive at 85% GPU. Still record median cycle time, but read it as generation variance unless a token-accounting delta backs it.",
-   "status": "open"
-  },
-  {
-   "id": "t3bz-placement-anomaly-moved-a-class",
-   "ticket": "T3-BZ",
-   "description": "the placement fact is a readout, and a readout without an actuator is a pattern this project has been bitten by. The opportunity is the fact reaching the evolution prompt; the firing is a type actually being written to the package its peers agree on. Slice 1 deliberately does NOT move the class, so a run that reports the anomaly for its whole length and never relocates the type is the outcome that decides whether the mover has to be built.",
-   "type": "watch",
-   "fired": {
-    "file": "applog",
-    "pattern": "Deleted Files: \\[[^\\]\\s]"
-   },
-   "opportunity": {
-    "file": "applog",
-    "pattern": "sits in [^\\n]*, but \\d+ of the \\d+ types named by the peers"
-   },
-   "check": "confirm BY EYE that the deleted file is the type the anomaly named and that a file of the same name now sits under the majority package the fact quoted — a relocation necessarily deletes the old file, but not every deletion is a relocation. Then confirm the anomaly stops being reported in later cycles. Control: run 2026-08-23_02-12-34 has 52 'Deleted Files: []' and no non-empty one, so this pattern is silent on a run where nothing moved. If the fact fires for a whole run and no move follows, record it on T3-BZ — the readout alone is not an actuator, and the relocation decision (package declaration, every import, the component-scan root) then has to be taken explicitly."
-  }
- ]
+  "_doc": [
+    "T4-CE slice 1: machine-checked field-watch registry — the single home for watch definitions.",
+    "Each entry: id, ticket (owner), description, type, patterns. The evaluator (watch_report.py)",
+    "runs every entry against a preflight corpus and emits one result line per watch.",
+    "",
+    "type=watch results: FIRED(n) — the fired pattern matched n times (the check note says what",
+    "a session should confirm by eye); OPPORTUNITY-NO-FIRE(n) — the opportunity pattern matched",
+    "but the mechanism never fired (needs attention); NO-OPPORTUNITY — neither matched;",
+    "NOT-OBSERVED — no opportunity pattern is defined and the mechanism did not fire.",
+    "type=tally results: COUNT(n) — a metric, not a pass/fail.",
+    "",
+    "files: behaviour=behaviour.ndjson, applog=autobuilder.log, goalstack=GoalStack.json,",
+    "summary=summary.txt. Patterns are Python regexes matched against the raw file text",
+    "(tolerates both line-JSON and pretty-printed corpora).",
+    "",
+    "Lifecycle: a watch whose firing has been confirmed by a session gets REMOVED here and its",
+    "closure recorded on the owning ticket — the registry holds OPEN watches only."
+  ],
+  "watches": [
+    {
+      "id": "t1fl-system-resumed",
+      "ticket": "T1-FL",
+      "description": "first live system_resumed after a breaker episode",
+      "type": "watch",
+      "fired": {
+        "file": "behaviour",
+        "pattern": "\"event\"\\s*:\\s*\"system_resumed\""
+      },
+      "opportunity": {
+        "file": "behaviour",
+        "pattern": "llm-circuit-breaker"
+      },
+      "check": "the resume must follow a breaker episode and cycles must continue after it"
+    },
+    {
+      "id": "t4cc-decisive-accept",
+      "ticket": "T4-CC",
+      "description": "first decisive gate acceptance on a gate-refusal loop",
+      "type": "watch",
+      "fired": {
+        "file": "applog",
+        "pattern": "T4-CC: originating .* passed on the staged candidate"
+      },
+      "opportunity": {
+        "file": "goalstack",
+        "pattern": "originatingGate"
+      },
+      "check": "OPPORTUNITY-NO-FIRE is BENIGN when every gate-stamped leaf resolved 'Build fixed — BUILD_FIX subgoal no longer needed' (build-OK path; seen 07-17 run series + 07:18 run) — the decisive path's real opportunity is a green-probe REJECT on the gate-born fix, which the presence pattern cannot see"
+    },
+    {
+      "id": "t6a-preserved-reconstructed",
+      "ticket": "T6-A",
+      "description": "dual smoke: the offline preserved-artifact reconstruction fired on a time-limit/kill run (a genuine rescue is smoke_preserved > smoke in summary.txt — read both fields by eye)",
+      "type": "tally",
+      "fired": {
+        "file": "summary",
+        "pattern": "preserved_source=(reconstructed|loop-preserved)"
+      }
+    },
+    {
+      "id": "t5bh-replan-detector-liveness",
+      "ticket": "T5-BH",
+      "description": "which precondition keeps ReplanPatternDetector at 0/237 firings — each early-out names itself, so one live run decides recalibrate-vs-delete (read the dominant reason by eye)",
+      "type": "tally",
+      "fired": {
+        "file": "applog",
+        "pattern": "T5-BH liveness: ReplanPatternDetector abstained"
+      }
+    },
+    {
+      "id": "t2eo-stagnation-rescue",
+      "ticket": "T2-EO",
+      "description": "verify-before-pause at the stagnation-runaway edge promotes done-but-unbanked work instead of halting",
+      "type": "watch",
+      "fired": {
+        "file": "applog",
+        "pattern": "T2-EO: verify-before-pause broke the stagnation runaway"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "Stagnation runaway: \\d+ consecutive"
+      },
+      "check": "after the rescue line, the run continues (new merges or planning) instead of pausing; an honest stall (rescue found nothing) still halts stagnation-runaway"
+    },
+    {
+      "id": "t6f-stale-loop-copy-ignored",
+      "ticket": "T6-F",
+      "description": "first field firing of the freshness gate: an inherited preserved copy was ignored and the score came from THIS run's snapshots (the reconstruction half could not be validated retrospectively — run 3's snapshots were gone)",
+      "type": "tally",
+      "fired": {
+        "file": "summary",
+        "pattern": "preserved_source=.*-after-stale-loop-copy"
+      }
+    },
+    {
+      "id": "t2eq-halt-edge-rescue",
+      "ticket": "T2-EQ",
+      "description": "halt edge finds an unpackageable artifact and hands the repair to the loop instead of dying",
+      "type": "watch",
+      "fired": {
+        "file": "app",
+        "pattern": "T2-EQ: the artifact does not package — repair work item injected at the"
+      },
+      "opportunity": {
+        "file": "app",
+        "pattern": "T2-EQ: halt edge reached with an artifact the build tool cannot package"
+      },
+      "check": "the run must continue past the halt (more cycles after the line) and the repair item must not be re-created while it is open"
+    },
+    {
+      "id": "t2eq-packaging-item-retired",
+      "ticket": "T2-EQ",
+      "description": "packaging repair item retired by the gate that raised it (unit-covered, never yet seen in the field)",
+      "type": "watch",
+      "fired": {
+        "file": "app",
+        "pattern": "packaging now succeeds — marking (current|remaining) BUILD_FIX subgoal"
+      },
+      "opportunity": {
+        "file": "app",
+        "pattern": "T2-EQ: halt edge reached with an artifact the build tool cannot package"
+      },
+      "check": "only the package gate may retire a package-gate item; a compile-OK cleanup must not"
+    },
+    {
+      "id": "t4cu-criterion-contradicted",
+      "ticket": "T4-CU",
+      "description": "a SPEC-bound acceptance criterion contradicted by the running artifact at the closure edge (unit-covered; the synthesis step has never met the local model in the field)",
+      "type": "watch",
+      "fired": {
+        "file": "app",
+        "pattern": "acceptance criteria fail when exercised against it"
+      },
+      "opportunity": {
+        "file": "app",
+        "pattern": "T4-CU: behavioural criteria probed=[1-9]"
+      },
+      "check": "probed>0 with contradicted=0 across a run whose smoke score is below 23 means the probes are too weak, not that the artifact is right — compare the contradicted set against that run's smoke failures"
+    },
+    {
+      "id": "t4cu-probe-synthesis-yield",
+      "ticket": "T4-CU",
+      "description": "how many parseable criteria actually get a usable probe out of the local model",
+      "type": "tally",
+      "fired": {
+        "file": "app",
+        "pattern": "T4-CU: behavioural criteria probed=\\d+ skipped=\\d+ contradicted=\\d+"
+      },
+      "check": "skipped >> probed means synthesis or the drift guard is rejecting nearly everything — read the per-criterion INFO lines before tuning the parser"
+    },
+    {
+      "id": "t4cy-twin-guard-exercised",
+      "why": "T4-CY's suppression guard (same finding not re-raised while open) has NEVER been exercised: across 4 field runs the loop always repaired a finding before it recurred. The volatile-token normaliser that makes the guard possible is therefore only unit-proven.",
+      "look_for": "a log line 'T4-CY: same finding as last observation' — or, as the failure signal, two behavioural-defect goals with IDENTICAL descriptions in one run",
+      "status": "open"
+    },
+    {
+      "id": "t3bx-constraints-flip-the-probe",
+      "why": "T3-BX's field half: the status-path facts reach the evolution prompt (6 renderings in one run, confirmed) but no run has yet had a model type GAIN constraints. T4-CU's probe is the verifier — it currently reports 'POST /books -> 400, but answered 201' with 0 constraint annotations on every model type.",
+      "look_for": "a model type gaining a constraint annotation AND the next observation reporting 400 instead of 201 for that endpoint",
+      "status": "open"
+    },
+    {
+      "id": "t4cz-stale-view-reraise",
+      "why": "KNOWN DEFECT, filed unfixed: requireEntryPointNow reads the cycle-start file map, so it re-raises the requirement one cycle after the loop satisfies it (observed in both runs; can reopen a just-closed goal). Bounded by idempotency.",
+      "look_for": "'gap contradicts recorded completion — reopening' immediately after an entry point is written; confirms the churn is still present until the stale-view fix lands",
+      "status": "open"
+    },
+    {
+      "id": "t4da-clause-claimed-after-readout",
+      "why": "T4-DA's remaining DoD half: does a work item appear for a specification clause BECAUSE the readout named it? A goal claiming a named clause proves nothing on its own — the planner reads the seed too. The control is the three frozen runs of 2026-07-30 (df2a907, no readout), in which 11 of the 16 seed clauses are NEVER fully articulated by any run's plan. Those 11 are the discriminating set.",
+      "look_for": "EVALUATE WITH: python3 scripts/clause_coverage.py --against-control scripts/clause_control_df2a907.txt <run_dir>. The control file holds the 11 clauses no run of the df2a907 frozen series articulates; the per-run baseline is 0 of 11 (verified: all three controls score 0). DECISION RULE, stated in advance: 3 or more readout-enabled runs averaging >=1 closed clause supports the mechanism; averaging 0 refutes it and T4-DA's readout should be re-read as inert prompt weight rather than defended. First observation 2026-07-30_18-39-00 closed 1 ('title required, max 120 chars'), n=1, nothing concluded. JUDGE NET EFFECT, NOT CLAUSE CLOSURE ALONE — the cost side is measured and non-trivial: scripts/prompt_block_report.py puts the SPECIFICATION COVERAGE block at ~665 est tokens per call, 23% of the evolution prompt (2.3% of a run's total prompt tokens), and the first readout-enabled run's median cycle was 162s against 130/135/140s for the three controls (+16-25%, n=1, confounded by ordinary model variance). A run that closes 1 clause and loses 8 cycles is not obviously a gain. Record median cycle time alongside closed clauses for each of the three runs. CORRECTION 2026-07-30: the +16-25% cycle-time figure was attributed to this block and the token accounting refutes that — the block is 2.3% of a run's prompt tokens (evaluation is 72%), so it cannot explain a 20% slowdown; the run stalled in LLMClient timeout retries minutes later with the model alive at 85% GPU. Still record median cycle time, but read it as generation variance unless a token-accounting delta backs it.",
+      "status": "open"
+    },
+    {
+      "id": "t3bz-placement-anomaly-moved-a-class",
+      "ticket": "T3-BZ",
+      "description": "the placement fact is a readout, and a readout without an actuator is a pattern this project has been bitten by. The opportunity is the fact reaching the evolution prompt; the firing is a type actually being written to the package its peers agree on. Slice 1 deliberately does NOT move the class, so a run that reports the anomaly for its whole length and never relocates the type is the outcome that decides whether the mover has to be built.",
+      "type": "watch",
+      "fired": {
+        "file": "applog",
+        "pattern": "Deleted Files: \\[[^\\]\\s]"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "sits in [^\\n]*, but \\d+ of the \\d+ types named by the peers"
+      },
+      "check": "confirm BY EYE that the deleted file is the type the anomaly named and that a file of the same name now sits under the majority package the fact quoted — a relocation necessarily deletes the old file, but not every deletion is a relocation. Then confirm the anomaly stops being reported in later cycles. Control: run 2026-08-23_02-12-34 has 52 'Deleted Files: []' and no non-empty one, so this pattern is silent on a run where nothing moved. If the fact fires for a whole run and no move follows, record it on T3-BZ — the readout alone is not an actuator, and the relocation decision (package declaration, every import, the component-scan root) then has to be taken explicitly."
+    },
+    {
+      "id": "t4df-misplaced-member-retargeted",
+      "ticket": "T4-DF",
+      "type": "watch",
+      "description": "Member-level classpath discovery. OPPORTUNITY is the service being consulted at all — it now logs every abstention at INFO precisely so a null result can be told apart from never being reached, which run 2026-08-28_00-33-32 could not do. FIRED is a call actually retargeted to the type the classpath declares. Proven offline (5 errors -> 0 on the run's own source, byte-identical to what the loop reached ~20 cycles later); the firing path has never occurred in the field.",
+      "opportunity": {
+        "file": "applog",
+        "pattern": "T4-DF: [\\w.]+#\\w+"
+      },
+      "fired": {
+        "file": "applog",
+        "pattern": "CompileFixInjector: misplaced-member"
+      }
+    },
+    {
+      "id": "t4dh-unresolvable-dependency-repaired",
+      "ticket": "T4-DH",
+      "type": "watch",
+      "description": "Repository interface for unresolvable declared dependencies. OPPORTUNITY is the classifier recognising the shape at all — before this ticket it classified UNKNOWN and the injector returned at its first gate, so the model guessed another version (26 coordinates, one re-proposed nine times running). FIRED is a declaration removed or re-pinned from what the repository actually publishes. Note the deliberate asymmetry: UNKNOWN abstains, so a run with no network shows opportunity and no fire, and that is correct rather than a miss.",
+      "opportunity": {
+        "file": "applog",
+        "pattern": "T4-DH: [\\w.\\-]+:[\\w.\\-]+"
+      },
+      "fired": {
+        "file": "applog",
+        "pattern": "CompileFixInjector: unresolvable-dependency"
+      }
+    },
+    {
+      "id": "t4dk-closure-by-dissolution",
+      "ticket": "T4-DK",
+      "type": "tally",
+      "description": "Fourth false completion's signature: a root closing on a ledger cleared largely by GIVEN_UP and SUBSUMED rather than by work. Counts closure lines that report subsumptions, so the share of dissolved-vs-completed subgoals is visible per run without re-reading the log. The 2026-08-28 audit showed arrival path (T1-DJ relabel) does NOT predict a bad artifact — both 23/23 runs came through it — so THIS is the signal to watch instead.",
+      "fired": {
+        "file": "applog",
+        "pattern": "closure ledger clear: \\d+ subgoal\\(s\\) accounted for \\(\\d+ subsumed\\)"
+      }
+    }
+  ]
 }

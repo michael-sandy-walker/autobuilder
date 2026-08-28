@@ -487,7 +487,12 @@ class EvolutionProtocolContractTest {
 
         assertThat(contractText).contains("CONFIG_FILES_WHEN_NEEDED");
         assertThat(contractText).contains("xml [pom.xml]");
-        assertThat(contractText).contains("spring-boot-starter-parent");
+        // T2-FG 2026-08-28: this line used to require "spring-boot-starter-parent", so the suite
+        // asserted the ecosystem leak as INTENDED and went green while the example put a Spring
+        // Boot parent into a 3D/OpenGL target's pom. The rule teaches the FORMAT — a fenced xml
+        // block with a bracketed path — and that is what is asserted now. Same shape as T1-FU,
+        // where a test asserting the truncation protected the defect it encoded.
+        assertThat(contractText).contains("<modelVersion>4.0.0</modelVersion>");
     }
 
     @Test

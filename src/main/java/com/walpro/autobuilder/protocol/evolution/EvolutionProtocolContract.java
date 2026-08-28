@@ -74,6 +74,19 @@ public class EvolutionProtocolContract {
         Do not include commentary outside code blocks (except when responding with #NoDiff).
         """;
 
+    /**
+     * T2-FG: the worked examples demonstrate FORMAT and must prescribe no ecosystem.
+     *
+     * <p>They used to render {@code package com.example.demo}, a web-framework controller and a
+     * {@code spring-boot-starter-parent} pom. On a target whose base package is {@code com.flightsim}
+     * and whose build has no such parent, that is not neutral scaffolding — it is a worked answer to
+     * a different question, and it was copied: run 2026-08-28_03-51-21's artifact carried
+     * {@code <artifactId>demo</artifactId>} straight from the pom example below.
+     *
+     * <p>The project's OWN package is not guessed here — {@code PACKAGE_COHERENCE} interpolates
+     * {@code establishedBasePackage()} further down, which is where that instruction belongs. These
+     * examples only show the fenced-block shape ([[feedback-no-ecosystem-jargon-in-framework-code]]).
+     */
     private static List<ContractRule> loadRules() {
         return List.of(
             new ContractRule("RETURN_CHANGED_FILES",
@@ -93,31 +106,15 @@ public class EvolutionProtocolContract {
                     <project xmlns="http://maven.apache.org/POM/4.0.0">
                         <modelVersion>4.0.0</modelVersion>
                         <groupId>com.example</groupId>
-                        <artifactId>demo</artifactId>
+                        <artifactId>example</artifactId>
                         <version>0.0.1-SNAPSHOT</version>
-                        <parent>
-                            <groupId>org.springframework.boot</groupId>
-                            <artifactId>spring-boot-starter-parent</artifactId>
-                            <version>3.3.0</version>
-                            <relativePath/>
-                        </parent>
                         <properties>
-                            <java.version>21</java.version>
+                            <maven.compiler.release>21</maven.compiler.release>
+                            <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
                         </properties>
                         <dependencies>
-                            <dependency>
-                                <groupId>org.springframework.boot</groupId>
-                                <artifactId>spring-boot-starter-web</artifactId>
-                            </dependency>
+                            <!-- Declare exactly the artifacts this project's own code imports. -->
                         </dependencies>
-                        <build>
-                            <plugins>
-                                <plugin>
-                                    <groupId>org.springframework.boot</groupId>
-                                    <artifactId>spring-boot-maven-plugin</artifactId>
-                                </plugin>
-                            </plugins>
-                        </build>
                     </project>
                     ```
                     """
@@ -150,18 +147,14 @@ public class EvolutionProtocolContract {
                     "PROBLEM_TARGETING",
                     "If a PROBLEM CONTEXT block is present and OpenProblemsInScope > 0, your mutation must target resolving those problems. Prefer edits in files referenced by keywords (path:...). Avoid unrelated refactors.",
                     """
-                    ```java [src/main/java/com/example/demo/HelloController.java]
-                    package com.example.demo;
+                    ```java [src/main/java/com/example/Example.java]
+                    package com.example;
         
-                    import org.springframework.web.bind.annotation.GetMapping;
-                    import org.springframework.web.bind.annotation.RestController;
+                    public class Example {
         
-                    @RestController
-                    public class HelloController {
-        
-                        @GetMapping("/hello")
-                        public String hello() {
-                            return "Hello, Autobuilder!";
+                        // Edit the file the problem keywords name, and only that.
+                        public String describe() {
+                            return "value";
                         }
                     }
                     ```
@@ -171,19 +164,14 @@ public class EvolutionProtocolContract {
                     "BLOCKERS_ONLY",
                     "If BlockingInScope > 0, focus exclusively on blocker-related changes. Do not introduce new features or cosmetic refactors unrelated to the blocker keywords.",
                     """
-                    ```java [src/main/java/com/example/demo/HelloController.java]
-                    package com.example.demo;
+                    ```java [src/main/java/com/example/Example.java]
+                    package com.example;
         
-                    import org.springframework.web.bind.annotation.GetMapping;
-                    import org.springframework.web.bind.annotation.RestController;
-        
-                    @RestController
-                    public class HelloController {
+                    public class Example {
         
                         // Focused change addressing blocker keyword(s) without unrelated edits
-                        @GetMapping("/hello")
-                        public String hello() {
-                            return "Hello, Autobuilder!";
+                        public String describe() {
+                            return "value";
                         }
                     }
                     ```
@@ -193,20 +181,17 @@ public class EvolutionProtocolContract {
                     "KEYWORD_ANCHORING",
                     "Explicitly align your code changes with at least one problem keyword by changing the structure that plausibly caused it (e.g., reduce redundancy for REDUNDANT_OUTPUT, introduce meaningful structural change for NO_MEANINGFUL_CHANGE). Do not repeat prior fingerprints.",
                     """
-                    ```java [src/main/java/com/example/demo/HelloController.java]
-                    package com.example.demo;
+                    ```java [src/main/java/com/example/Example.java]
+                    package com.example;
         
-                    import org.springframework.web.bind.annotation.GetMapping;
-                    import org.springframework.web.bind.annotation.RestController;
+                    public class Example {
         
-                    @RestController
-                    public class HelloController {
+                        // NO_MEANINGFUL_CHANGE answered with real structure: the repeated literal
+                        // becomes a single named constant.
+                        private static final String VALUE = "value";
         
-                        private static final String MESSAGE = "Hello, Autobuilder!";
-        
-                        @GetMapping("/hello")
-                        public String hello() {
-                            return MESSAGE;
+                        public String describe() {
+                            return VALUE;
                         }
                     }
                     ```

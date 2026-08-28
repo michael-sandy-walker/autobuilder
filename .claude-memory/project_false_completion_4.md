@@ -21,12 +21,16 @@ requirements were dissolved before anything checked them.** T4-BP-3 re-verifies 
 criteria; criteria on given-up/subsumed subgoals exit the ledger unchecked against the seed. The
 plan was reshaped (47 `SubGoalRemove` events) until what remained was satisfiable.
 
-**The exhausted/fulfilled flip is part of the defect surface** (user-raised): `CycleExecutor`
-T1-DJ returns `GOAL_FULFILLED` when a `GOAL_EXHAUSTED` signal coexists with a COMPLETED root. It
-was built for a narrative-ordering case (root completed before the signal was consumed); here the
-order was exhaustion → ledger-dissolution → relabel. Historical `GOAL_FULFILLED` terminals that
-arrived exhaustion-first belong to this population, which taints the
-[[project-goal-fulfilled-is-real-happy-path]] yardstick count until audited.
+**The exhausted/fulfilled flip was suspected and is EXONERATED** (user-raised, audited same day).
+`CycleExecutor` T1-DJ returns `GOAL_FULFILLED` when a `GOAL_EXHAUSTED` signal coexists with a
+COMPLETED root. Audit of all **7 archived fulfilled runs**: **4 arrived via the relabel, including
+BOTH 23/23 firestarter runs**, while a direct fulfilment scored 18/23 — the correlation runs
+backwards. The ordering is identical in a good run and this one (`T2-DR marked COMPLETED` then the
+relabel ~1s later), so there is no variant to scope it back to. **T1-DJ faithfully reports that the
+root is COMPLETED; whether COMPLETED was EARNED is the ledger's job.** The
+[[project-goal-fulfilled-is-real-happy-path]] population is therefore NOT tainted by arrival path —
+though it does contain this run, identifiable by dispositions + `criteria_executable_pct=0`.
+⚠ N=7, only 5 scoreable.
 
 **Specimen preserved IN GIT** (sources, pom, GoalStack, WHY.md):
 `design/specimens/false-completion-4/` — user-corrected 2026-08-28: the run archive has no

@@ -161,7 +161,7 @@
 
 ## Tier 2 — Steering quality (120)
 
-- [ ] `T2-FG` — The evolution prompt's worked examples name a package and a framework, so every target inherits one project's shape — the RULE itself is already domain-neutral; the examples carry the domain
+- [x] `T2-FG` — The evolution prompt's worked examples name a package and a framework, so every target inherits one project's shape — CLOSED 2026-08-28: examples now carry no ecosystem (rendered contract has 0 framework references, locked by 17 checks); a green test had asserted `spring-boot-starter-parent` as REQUIRED — the suite was protecting the leak
 - [>] `T2-FF` — A method whose branches return different shapes emits a diagnostic no extractor can read; the loop re-proposes the same edit — DEFERRED 2026-08-24 by its own gate: persisted into the last failing build in only 4 of 12 runs and NOT in the zero-run it was filed from
 - [~] `T2-FE` — A BUILD_FIX work item scoped to the file the compiler pointed at cannot be satisfied when the defect is in another file; correct steering loses to the subgoal's scope
 - [x] `T2-FD` — Suppressing the wrong advice about an unwrapped container left silence; new block states the two admissible repairs (70 diagnostics / 9 runs; field DoD open)

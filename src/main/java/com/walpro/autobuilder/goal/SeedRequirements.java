@@ -38,9 +38,58 @@ public final class SeedRequirements {
             "(?i)\\b(do not|don't|you are|your task|the goal of this|for example|e\\.g\\.|note that)\\b");
 
     private static final int MIN_LENGTH = 25;
+    /**
+     * A clause is a fragment of an obligation-bearing sentence, so it carries meaning at a length
+     * a standalone sentence would not. "a simple cockpit HUD" is twenty characters — under the
+     * sentence floor, and it is exactly the requirement the false completion dropped.
+     */
+    private static final int MIN_CLAUSE_LENGTH = 12;
     private static final int MAX_REQUIREMENTS = 12;
 
     private SeedRequirements() {}
+
+    /**
+     * A long sentence can bundle several obligations — the flight-simulator seed states a start
+     * menu, the simulator, keyboard input, a cockpit HUD and a generated environment in ONE
+     * sentence. Judged whole, covering any part marks all of it covered, and the HUD that no
+     * subgoal addressed read as satisfied. Long sentences are therefore also split at clause
+     * boundaries; short ones are left intact, since splitting them only manufactures fragments.
+     */
+    private static List<String> clauses(String sentence) {
+        if (sentence == null) return List.of();
+        String s = sentence.strip();
+        if (s.length() <= BUNDLED_LENGTH) return List.of(s);
+        List<String> parts = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int depth = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '(' || c == '[') depth++;
+            else if (c == ')' || c == ']') depth = Math.max(0, depth - 1);
+            // A separator only separates OUTSIDE brackets: "(including Start, Pause, Exit)" is one
+            // parenthetical, and cutting it produced "a start menu (including Start" as a
+            // requirement while losing the HUD entirely.
+            boolean atComma = depth == 0 && c == ',';
+            boolean atAnd = depth == 0 && s.startsWith(" and ", i);
+            if (atComma || atAnd) {
+                parts.add(current.toString());
+                current.setLength(0);
+                if (atAnd) i += 4;
+                continue;
+            }
+            current.append(c);
+        }
+        parts.add(current.toString());
+        List<String> kept = new ArrayList<>();
+        for (String part : parts) {
+            String p = part.strip().replaceAll("^(?:and|together with|plus)\\s+", "");
+            if (p.length() >= MIN_CLAUSE_LENGTH) kept.add(p);
+        }
+        return kept.isEmpty() ? List.of(s) : kept;
+    }
+
+    /** Above this, a sentence is treated as bundling several obligations rather than stating one. */
+    private static final int BUNDLED_LENGTH = 120;
 
     /**
      * The obligations the specification states, in its own words, newest-first order preserved.
@@ -50,12 +99,18 @@ public final class SeedRequirements {
     public static List<String> statedIn(String specText) {
         if (specText == null || specText.isBlank()) return List.of();
         LinkedHashSet<String> out = new LinkedHashSet<>();
-        for (String raw : SPLIT.split(specText)) {
+        for (String sentence : SPLIT.split(specText)) {
+            // The obligation is a property of the SENTENCE. Its clauses inherit it — "together
+            // with a simple cockpit HUD" states a requirement even though the verb sits earlier —
+            // so requiring the verb per fragment dropped exactly the clause that mattered.
+            if (!OBLIGATION.matcher(sentence).find()) continue;
+            for (String raw : clauses(sentence)) {
             String s = raw.replaceAll("\\s+", " ").strip();
-            if (s.length() < MIN_LENGTH) continue;
+            if (s.length() < MIN_CLAUSE_LENGTH) continue;
             if (META.matcher(s).find()) continue;
-            if (!OBLIGATION.matcher(s).find()) continue;
             out.add(s.endsWith(".") ? s.substring(0, s.length() - 1) : s);
+            if (out.size() >= MAX_REQUIREMENTS) break;
+            }
             if (out.size() >= MAX_REQUIREMENTS) break;
         }
         return new ArrayList<>(out);
@@ -84,7 +139,13 @@ public final class SeedRequirements {
         if (wordsA.isEmpty() || wordsB.isEmpty()) return false;
         int shared = 0;
         for (String w : wordsA) if (wordsB.contains(w)) shared++;
-        return shared >= Math.min(3, wordsA.size());
+        // Proportional, not absolute. A fixed threshold of three was written for whole sentences;
+        // against CLAUSES it demanded more distinctive words than a short clause contains, so a
+        // criterion that genuinely covered "a start menu (Start, Pause, Exit)" was judged not to.
+        // That direction WALLS — it manufactures uncovered requirements — so the bar is half the
+        // clause's distinctive terms, and never fewer than two, which keeps a single shared word
+        // from claiming coverage of a two-word requirement like "cockpit HUD".
+        return shared >= Math.min(2, wordsA.size()) && shared * 2 >= wordsA.size();
     }
 
     private static LinkedHashSet<String> distinctive(String text) {

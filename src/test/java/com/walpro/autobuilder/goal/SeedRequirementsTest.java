@@ -51,11 +51,16 @@ class SeedRequirementsTest {
     }
 
     @Test
-    void aRequirementAlreadyCoveredByABankedCriterionIsNotAskedTwice() {
+    void requirementsAlreadyCoveredByBankedCriteriaAreNotAskedTwice() {
         // The verifier costs a call and a false block; asking the same question twice buys neither.
+        // Each clause of the seed needs its own cover — a criterion that mentions the HUD says
+        // nothing about the simulator loop, and treating one as covering both is how a dropped
+        // requirement goes unnoticed.
         List<String> banked = List.of(
-                "The application displays a cockpit HUD with a start menu and keyboard controls "
-                        + "over a randomly generated polygonic environment");
+                "Start menu offering Start, Pause and Exit",
+                "The flight simulator loop with keyboard input for the controls",
+                "A cockpit HUD displaying altitude and heading",
+                "A randomly generated polygonic environment");
 
         assertThat(SeedRequirements.notAlreadyCovered(FLIGHTSIM_SEED, banked)).isEmpty();
     }
@@ -82,5 +87,32 @@ class SeedRequirementsTest {
         for (int i = 0; i < 40; i++) many.append("The tool must print value ").append(i).append(" to stdout. ");
 
         assertThat(SeedRequirements.statedIn(many.toString())).hasSizeLessThanOrEqualTo(12);
+    }
+
+    // ── T4-DA: the plan-versus-seed comparison ───────────────────────────────
+
+    /**
+     * The plan run 2026-08-28_05-27-49 actually ended with — menu, controls, environment. The HUD
+     * the seed states plainly was covered by no surviving subgoal, and nothing ever said so.
+     */
+    @Test
+    void aRequirementNoSubgoalCovers_isNamed() {
+        List<String> planTheRunEndedWith = List.of(
+                "Implement the start menu with Start, Pause and Exit",
+                "Implement keyboard input for the flight controls",
+                "Generate a randomly generated polygonic environment");
+
+        assertThat(SeedRequirements.notAlreadyCovered(FLIGHTSIM_SEED, planTheRunEndedWith))
+                .anySatisfy(r -> assertThat(r).contains("cockpit").contains("HUD"));
+    }
+
+    @Test
+    void aBundledSentenceIsSplitAtClauseBoundaries_withoutCuttingParentheses() {
+        // "(including Start, Pause, Exit)" is one parenthetical; cutting it produced "a start menu
+        // (including Start" as a requirement while losing the HUD entirely.
+        List<String> stated = SeedRequirements.statedIn(FLIGHTSIM_SEED);
+
+        assertThat(stated).anySatisfy(r -> assertThat(r).contains("Start, Pause, Exit)"));
+        assertThat(stated).noneSatisfy(r -> assertThat(r).endsWith("(including Start"));
     }
 }

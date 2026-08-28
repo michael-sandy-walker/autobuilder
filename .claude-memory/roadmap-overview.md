@@ -352,7 +352,7 @@
 - [ ] `T4-DD` — Target-domain knowledge behind a seam (deferred by user until stable); the seam has never been exercised — both targets ever run are REST
 - [ ] `T4-DC` — A controller catches exception types its service never throws, so the catches are dead and every domain error falls to the last resort (23/23 run had 8 matched types; 14/23 run zero overlap)
 - [x] `T4-DB` — The loop repairs what it can probe and fails exactly what it cannot: the 3 always-failing checks are the 3 shapes the probe synthesizer abstains on (the measured 18→23 gap)
-- [ ] `T4-DA` — Nothing asks whether the subgoals TOGETHER still solve the seed (incl. whether every requirement has a criterion), and the agents are never told — readout first, injection second
+- [x] `T4-DA` — Nothing asks whether the subgoals TOGETHER still solve the seed (incl. whether every requirement has a criterion), and the agents are never told — readout first, injection second
 - [n] `T4-CP` — Internal drift reflection (loop notices mid-run it's regressing from its best, acts to save later-stage tokens); introspection north-star — T6-B gate resolved NEGATIVE 2026-07-25, do not build as filed; re-entry on the ticket
 - [ ] `T4-A` — Implement alignment layer
 - [ ] `T4-E` — Dynamic heuristics

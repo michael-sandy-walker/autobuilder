@@ -404,6 +404,13 @@ Data must never be written to disk.
 
         int remainingCount = input.remainingGoals() == null ? 0 : input.remainingGoals().size();
         int completedCount = input.completedGoals() == null ? 0 : input.completedGoals().size();
+        // T4-DA: the plan-versus-seed comparison, rendered before the goal tree so the planner
+        // reads the gap alongside the goals it is about to edit. Absent when the plan covers the
+        // specification, so a healthy run pays nothing for it.
+        String seedCoverage = SeedCoveragePromptBlock.render(input);
+        if (seedCoverage != null) {
+            sb.append(seedCoverage).append("\n\n");
+        }
         sb.append("""
             --- GOALS ---
             Root Goal: %s

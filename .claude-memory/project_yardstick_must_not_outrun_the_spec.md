@@ -56,3 +56,14 @@ what made a correct diagnosis look refuted. **Read the field the production code
 
 Related: [[project-smoke-score-is-chained]] (compare failing SETS, never totals — this gap
 presents as five failures from one cause).
+
+**AND IT LAGS, TOO — 2026-08-28.** The same audit obligation runs in the other direction. Run
+`2026-08-28_16-35-37` was scored with `smoke_cli.sh` (12 checks) while its seed is the QUOTED-fields
+spec, which states that a quoted field may contain commas and newlines. The suite never asks that
+question, returned **12/12**, and made a CORRECT closure refusal look over-tight — the artifact
+rescored **18/19** on `smoke_cli_quoted.sh`, with the single failing check being exactly the
+requirement the loop had refused to call done. **A perfect score on the wrong suite is worse than a
+low score on the right one**, because it reads as evidence against a mechanism that was working.
+**Before quoting any score: check `PREFLIGHT_SMOKE` against that target's `bootstrap/seed.txt`.**
+The outcome ledger's row for that run says 12/12 and is misleading.
+

@@ -337,7 +337,7 @@
 
 ## Tier 4 — New systems (88)
 
-- [ ] `T4-DH` — A build that fails because a DECLARED dependency cannot be RESOLVED is classified UNKNOWN, so the only repair is the model guessing another version — measured 29 failures / 6 invented coordinates in one run, the same one re-proposed 9x; `CoordinateSearchClient` exists but can only answer "which artifact provides this class", not "does this GAV exist"
+- [x] `T4-DH` — A build that fails because a DECLARED dependency cannot be RESOLVED is classified UNKNOWN, so the only repair is the model guessing another version — measured 29 failures / 6 invented coordinates in one run, the same one re-proposed 9x; CLOSED 2026-08-28: repository interface (versionsOf -> PRESENT/ABSENT/UNKNOWN) + DEPENDENCY_NOT_RESOLVABLE classified ahead of the cascades + a resolver that removes or re-pins; UNKNOWN never deletes; true population was 26 coordinates across 22 artifacts, not 6 — Maven emits two wordings and the list form is the commoner
 - [ ] `T4-DG` — A target is a directory with a seed and a yardstick — make that a convention instead of an arrangement; three targets exist and the arrangement has already failed twice — `flightsim` deliberately has NO yardstick
 - [x] `T4-DF` — A member the classpath DOES declare is unresolvable, because discovery reads jar entry NAMES and never opens a class file — CLOSED 2026-08-28: member-level discovery + a retargeting resolver; disambiguated by the receiver being a SUPERTYPE of the declaring type; 5 errors → 0 on the run's own source
 - [ ] `T4-DE` — Parts of one graph as distinct identities with their own agent, narrative and voice, communicating with each other (PARKED, very far future)

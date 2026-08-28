@@ -47,6 +47,68 @@ public final class PomDependencyEditor {
         return false;
     }
 
+    /**
+     * T4-DH: removes every {@code <dependency>} block declaring {@code groupId:artifactId}.
+     *
+     * <p>Removes ALL matching blocks, not the first. One artifact is legitimately declared several
+     * times with different classifiers (a native-library main artifact plus its per-platform
+     * rows), and if the coordinate does not exist then none of those rows can resolve — leaving
+     * some behind would fail the next build identically.
+     */
+    public static String removeDependency(String pom, String groupId, String artifactId) {
+        if (pom == null) return null;
+        if (groupId == null || groupId.isBlank() || artifactId == null || artifactId.isBlank()) return pom;
+        String groupTag = "<groupId>" + groupId + "</groupId>";
+        String artifactTag = "<artifactId>" + artifactId + "</artifactId>";
+        StringBuilder out = new StringBuilder();
+        var matcher = DEPENDENCY_BLOCK.matcher(pom);
+        int last = 0;
+        while (matcher.find()) {
+            String block = matcher.group(1);
+            if (!block.contains(groupTag) || !block.contains(artifactTag)) continue;
+            out.append(pom, last, matcher.start());
+            last = matcher.end();
+            // Take the blank line the block sat on with it, so removals do not accumulate gaps.
+            while (last < pom.length() && (pom.charAt(last) == ' ' || pom.charAt(last) == '\t')) last++;
+            if (last < pom.length() && pom.charAt(last) == '\n') last++;
+            // And the indentation that preceded it.
+            int trimmed = out.length();
+            while (trimmed > 0 && (out.charAt(trimmed - 1) == ' ' || out.charAt(trimmed - 1) == '\t')) trimmed--;
+            out.setLength(trimmed);
+        }
+        if (last == 0) return pom;                       // nothing matched — unchanged
+        out.append(pom.substring(last));
+        return out.toString();
+    }
+
+    /**
+     * T4-DH: rewrites the {@code <version>} of every block declaring {@code groupId:artifactId}.
+     * A block that pins its version through a property is left alone — the property is the
+     * project's own indirection and editing the literal would not change what Maven resolves.
+     */
+    public static String setDependencyVersion(String pom, String groupId, String artifactId, String version) {
+        if (pom == null) return null;
+        if (groupId == null || groupId.isBlank() || artifactId == null || artifactId.isBlank()) return pom;
+        if (version == null || version.isBlank()) return pom;
+        String groupTag = "<groupId>" + groupId + "</groupId>";
+        String artifactTag = "<artifactId>" + artifactId + "</artifactId>";
+        StringBuilder out = new StringBuilder();
+        var matcher = DEPENDENCY_BLOCK.matcher(pom);
+        int last = 0;
+        while (matcher.find()) {
+            String block = matcher.group(1);
+            if (!block.contains(groupTag) || !block.contains(artifactTag)) continue;
+            var version_ = VERSION.matcher(block);
+            if (!version_.find() || version_.group(1).startsWith("${")) continue;
+            String rewritten = block.substring(0, version_.start(1)) + version + block.substring(version_.end(1));
+            out.append(pom, last, matcher.start()).append("<dependency>").append(rewritten).append("</dependency>");
+            last = matcher.end();
+        }
+        if (last == 0) return pom;
+        out.append(pom.substring(last));
+        return out.toString();
+    }
+
     private static final Pattern GROUP_ID = Pattern.compile("<groupId>\\s*([^<\\s]+)\\s*</groupId>");
     private static final Pattern ARTIFACT_ID = Pattern.compile("<artifactId>\\s*([^<\\s]+)\\s*</artifactId>");
     private static final Pattern VERSION = Pattern.compile("<version>\\s*([^<\\s]+)\\s*</version>");

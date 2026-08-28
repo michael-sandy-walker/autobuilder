@@ -14,6 +14,7 @@ public final class BuildErrorClassifier {
 
     public enum Kind {
         MISSING_POM,
+        DEPENDENCY_NOT_RESOLVABLE,
         CANNOT_FIND_SYMBOL,
         PACKAGE_DOES_NOT_EXIST,
         UNKNOWN
@@ -51,7 +52,7 @@ public final class BuildErrorClassifier {
 
     public static Category defaultCategoryFor(Kind kind) {
         return switch (kind) {
-            case MISSING_POM, PACKAGE_DOES_NOT_EXIST -> Category.CONFIG_FIXABLE;
+            case MISSING_POM, PACKAGE_DOES_NOT_EXIST, DEPENDENCY_NOT_RESOLVABLE -> Category.CONFIG_FIXABLE;
             case CANNOT_FIND_SYMBOL -> Category.SOURCE_FIXABLE;
             case UNKNOWN -> Category.UNKNOWN;
         };
@@ -64,6 +65,25 @@ public final class BuildErrorClassifier {
 
     private static final Pattern CANNOT_FIND_SYMBOL_PATTERN =
             Pattern.compile("symbol:\\s*(?:class|variable|method)\\s+(\\S+)", Pattern.CASE_INSENSITIVE);
+
+    // Maven reports an unresolvable dependency in TWO wordings, and both occur in the same run.
+    // The singular names one coordinate; the list names every failing coordinate on one line, and
+    // it is the MORE common of the two. Measured on run 2026-08-28_03-51-21: 29 singular against
+    // 31 list lines, one of which carried sixteen coordinates. Matching only the singular reads a
+    // fraction of the failure and would repair one artifact per build attempt while the rest stay
+    // broken — the same shape of mistake as reading only one of javac's two `location:` forms.
+    private static final Pattern DEPENDENCY_NOT_RESOLVABLE_PATTERN = Pattern.compile(
+            "Could not (?:find|resolve) artifact\\s+([\\w.\\-]+:[\\w.\\-]+:[\\w.\\-]+:[^\\s]+)",
+            Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern DEPENDENCY_LIST_PATTERN = Pattern.compile(
+            "(?:The following artifacts could not be resolved|Could not resolve dependencies for project)"
+                    + "[^\\n]*", Pattern.CASE_INSENSITIVE);
+
+    // groupId:artifactId:type[:classifier]:version, as Maven prints coordinates. Segment content
+    // is restricted so neighbouring prose, URLs and timestamps cannot be mistaken for a coordinate.
+    private static final Pattern COORDINATE = Pattern.compile(
+            "\\b([\\w.\\-]+:[\\w.\\-]+:[\\w.\\-]+(?::[\\w.\\-]+)?:[\\w.\\-]+)");
 
     private static final Pattern PACKAGE_DOES_NOT_EXIST_PATTERN =
             Pattern.compile("package\\s+(\\S+)\\s+does not exist", Pattern.CASE_INSENSITIVE);
@@ -98,6 +118,25 @@ public final class BuildErrorClassifier {
         // CONFIG_FIXABLE (the classpath/dependency path), CANNOT_FIND_SYMBOL is SOURCE_FIXABLE.
         // Stderr carrying only symbol errors is unaffected — this reorder only decides which wins
         // when both are present, and when both are present the package is the one to fix.
+        // CAUSE BEFORE CASCADE, one stage earlier than the package/symbol split below. A
+        // dependency that will not resolve fails the build before compilation, and every package
+        // and symbol error in the same output is downstream of it. Measured on run
+        // 2026-08-28_03-51-21: 29 resolution failures across six invented coordinates, the same
+        // one re-proposed nine times running, while the loop steered on compile-stage errors it
+        // had not reached — because this shape matched no pattern and classified UNKNOWN, which
+        // returns the injector at its first gate.
+        List<String> unresolvable = unresolvableCoordinates(plain);
+        if (!unresolvable.isEmpty()) {
+            String coordinate = unresolvable.get(0);
+            String subject = unresolvable.size() == 1
+                    ? "The declared dependency '" + coordinate + "'"
+                    : "Every declared dependency named in the failure, including '" + coordinate + "',";
+            return new Classification(Kind.DEPENDENCY_NOT_RESOLVABLE, List.of(
+                    subject + " resolves from the configured repositories",
+                    "mvn compile exits 0 with no errors"
+            ));
+        }
+
         Matcher packageMatcher = PACKAGE_DOES_NOT_EXIST_PATTERN.matcher(plain);
         if (packageMatcher.find()) {
             String pkg = packageMatcher.group(1);
@@ -127,7 +166,8 @@ public final class BuildErrorClassifier {
     }
 
     /**
-     * Extracts the offending token from stderr for kinds that name one (package or symbol).
+     * Extracts the offending token from stderr for kinds that name one (coordinate, package or
+     * symbol).
      * Returns empty for {@link Kind#MISSING_POM} and {@link Kind#UNKNOWN} since they carry no token.
      * Used by deterministic fix resolvers to decide which dependency to add.
      */
@@ -135,10 +175,40 @@ public final class BuildErrorClassifier {
         if (stderr == null || stderr.isBlank() || kind == null) return Optional.empty();
         String plain = ANSI_ESCAPE.matcher(stderr).replaceAll("");
         return switch (kind) {
+            case DEPENDENCY_NOT_RESOLVABLE -> unresolvableCoordinates(plain).stream().findFirst();
             case PACKAGE_DOES_NOT_EXIST -> firstMatch(PACKAGE_DOES_NOT_EXIST_PATTERN, plain);
             case CANNOT_FIND_SYMBOL -> firstMatch(CANNOT_FIND_SYMBOL_PATTERN, plain);
             case MISSING_POM, UNKNOWN -> Optional.empty();
         };
+    }
+
+    /**
+     * T4-DH: every distinct coordinate the build could not resolve, in order of first appearance.
+     * One build reports the same coordinate many times and {@link #extractToken} names only the
+     * first, so the resolver reads the whole set rather than repairing one per attempt.
+     */
+    public static List<String> unresolvableCoordinates(String stderr) {
+        if (stderr == null || stderr.isBlank()) return List.of();
+        String plain = ANSI_ESCAPE.matcher(stderr).replaceAll("");
+        java.util.LinkedHashSet<String> found = new java.util.LinkedHashSet<>();
+        Matcher singular = DEPENDENCY_NOT_RESOLVABLE_PATTERN.matcher(plain);
+        while (singular.find()) found.add(singular.group(1));
+        // The list wording carries every failing coordinate on one line; scan only that line so
+        // prose elsewhere in the build output cannot contribute a false coordinate.
+        Matcher list = DEPENDENCY_LIST_PATTERN.matcher(plain);
+        while (list.find()) {
+            String line = list.group();
+            // The line opens by naming the PROJECT being built —
+            // `Could not resolve dependencies for project com.x:x:jar:0.0.1-SNAPSHOT: The following
+            // artifacts could not be resolved: …` — so scanning the whole line would offer the
+            // project's own coordinate as something to delete from its own pom. Only what follows
+            // the list marker is a failing dependency.
+            int marker = line.toLowerCase().indexOf("could not be resolved:");
+            if (marker < 0) continue;
+            Matcher coordinate = COORDINATE.matcher(line.substring(marker));
+            while (coordinate.find()) found.add(coordinate.group(1));
+        }
+        return List.copyOf(found);
     }
 
     private static Optional<String> firstMatch(Pattern p, String text) {

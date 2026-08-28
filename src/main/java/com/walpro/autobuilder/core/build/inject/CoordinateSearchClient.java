@@ -14,6 +14,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,7 +58,28 @@ public class CoordinateSearchClient {
     /** Coordinates of an artifact that provides a queried class. */
     public record Coordinates(String groupId, String artifactId, String version) {}
 
+    /**
+     * T4-DH: what the repository says about a coordinate.
+     *
+     * <p>{@code UNKNOWN} is not a detail. The repair for {@code ABSENT} is deleting a declared
+     * dependency, so a failed query must never be read as absence — no network, a rate limit or a
+     * changed response shape would otherwise strip a dependency the project needs.
+     */
+    public enum Availability { PRESENT, ABSENT, UNKNOWN }
+
+    /** Published versions of one {@code groupId:artifactId}, newest first when known. */
+    public record ArtifactVersions(Availability availability, List<String> versions) {
+        public ArtifactVersions {
+            versions = versions == null ? List.of() : List.copyOf(versions);
+        }
+        static ArtifactVersions unknown() { return new ArtifactVersions(Availability.UNKNOWN, List.of()); }
+        static ArtifactVersions absent()  { return new ArtifactVersions(Availability.ABSENT, List.of()); }
+        public boolean declaresVersion(String v) { return v != null && versions.contains(v); }
+        public Optional<String> newest() { return versions.isEmpty() ? Optional.empty() : Optional.of(versions.get(0)); }
+    }
+
     private final Map<String, Optional<Coordinates>> cache = new ConcurrentHashMap<>();
+    private final Map<String, ArtifactVersions> versionCache = new ConcurrentHashMap<>();
     private final AtomicInteger consecutiveFailures = new AtomicInteger();
 
     /**
@@ -73,10 +97,69 @@ public class CoordinateSearchClient {
         return result;
     }
 
-    private Optional<Coordinates> query(String fqn) {
+    /**
+     * T4-DH: the versions the repository publishes for {@code groupId:artifactId}, newest first.
+     *
+     * <p>This is the question the loop could not ask. When a build fails because a DECLARED
+     * dependency will not resolve, the useful facts are whether the artifact exists at all and,
+     * if it does, which versions are real — both deterministic, neither needing a model. Measured
+     * on run {@code 2026-08-28_03-51-21}: one coordinate did not exist (18 of 29 failures) while
+     * another existed with the requested version invented, and those two need different repairs.
+     */
+    public ArtifactVersions versionsOf(String groupId, String artifactId) {
+        if (!enabled) return ArtifactVersions.unknown();
+        if (groupId == null || groupId.isBlank() || artifactId == null || artifactId.isBlank()) {
+            return ArtifactVersions.unknown();
+        }
+        if (consecutiveFailures.get() >= FAILURE_BUDGET) return ArtifactVersions.unknown();
+        String key = groupId + ":" + artifactId;
+        ArtifactVersions cached = versionCache.get(key);
+        if (cached != null) return cached;
+
+        String q = "g:\"" + groupId + "\" AND a:\"" + artifactId + "\"";
+        Optional<String> body = queryBody(q, 60, "&core=gav");
+        ArtifactVersions result = body.map(CoordinateSearchClient::parseVersions)
+                                      .orElseGet(ArtifactVersions::unknown);
+        versionCache.put(key, result);
+        return result;
+    }
+
+    /**
+     * Versions newest-first. Ordered by publish timestamp rather than by parsing the version
+     * strings: version ORDERING is ecosystem semantics that differs per project (qualifiers,
+     * date stamps, {@code -rc-} suffixes), while publish time is a fact the repository states.
+     */
+    static ArtifactVersions parseVersions(String body) {
         try {
-            String url = searchUrl + "?q=" + URLEncoder.encode("fc:" + fqn, StandardCharsets.UTF_8)
-                    + "&rows=5&wt=json";
+            JsonNode response = MAPPER.readTree(body).path("response");
+            JsonNode docs = response.path("docs");
+            if (!docs.isArray()) return ArtifactVersions.unknown();
+            if (response.path("numFound").asInt(-1) == 0 || docs.isEmpty()) return ArtifactVersions.absent();
+            List<JsonNode> ordered = new ArrayList<>();
+            docs.forEach(ordered::add);
+            ordered.sort(Comparator.comparingLong((JsonNode d) -> d.path("timestamp").asLong(0L)).reversed());
+            List<String> versions = new ArrayList<>();
+            for (JsonNode doc : ordered) {
+                String v = doc.path("v").asText(null);
+                if (v != null && !v.isBlank() && !versions.contains(v)) versions.add(v);
+            }
+            return versions.isEmpty() ? ArtifactVersions.absent()
+                                      : new ArtifactVersions(Availability.PRESENT, versions);
+        } catch (Exception e) {
+            // A shape we cannot read is not evidence of absence.
+            return ArtifactVersions.unknown();
+        }
+    }
+
+    private Optional<Coordinates> query(String fqn) {
+        return queryBody("fc:" + fqn, 5, "").flatMap(body -> parse(body, fqn));
+    }
+
+    /** Shared transport: one request, one failure-budget decision. Empty = could not be consulted. */
+    private Optional<String> queryBody(String q, int rows, String extraParams) {
+        try {
+            String url = searchUrl + "?q=" + URLEncoder.encode(q, StandardCharsets.UTF_8)
+                    + "&rows=" + rows + "&wt=json" + extraParams;
             HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofMillis(timeoutMs))
                     .build();
@@ -90,7 +173,7 @@ public class CoordinateSearchClient {
                 return Optional.empty();
             }
             consecutiveFailures.set(0);
-            return parse(response.body(), fqn);
+            return Optional.of(response.body());
         } catch (Exception e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             registerFailure(e.getMessage());
@@ -146,6 +229,7 @@ public class CoordinateSearchClient {
     /** Test-only — reset session state. */
     void __resetForTest() {
         cache.clear();
+        versionCache.clear();
         consecutiveFailures.set(0);
     }
 }

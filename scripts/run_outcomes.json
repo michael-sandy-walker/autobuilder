@@ -1745,7 +1745,49 @@
    "smoke_total": 23,
    "terminal": "GOAL_FULFILLED",
    "total_cycles": "13"
+  },
+  "2026-08-28_00-33-32": {
+   "clauses_closed_vs_control": "0",
+   "cost_readout": "sms-commit=2536341ms/8 boot-gate=180405ms/4 build=122446ms/44 package-gate=12046ms/5 sms-batch-build=1185ms/9 sms-lineage-stamp=71ms/8 sms-cycle-merge=45ms/8 sms-cycle-link=29ms/7",
+   "criteria_authored": "35",
+   "criteria_executable_count": "0",
+   "criteria_executable_pct": "0",
+   "drift_tail_cycles": "12",
+   "median_cycle_seconds": "63",
+   "merges": "5",
+   "peaked_at_cycle": "cycle-1787872051028 (27/39)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-08-28",
+   "repeat_proposals": "1",
+   "repeats_refused": "1",
+   "run_duration_min": "43.6",
+   "score_delta": "n/a (boot-failed vs boot-failed)",
+   "smoke": "boot-failed",
+   "smoke_preserved": "boot-failed",
+   "terminal": "deadline",
+   "total_cycles": "39"
+  },
+  "2026-08-28_03-51-21": {
+   "clauses_closed_vs_control": "0",
+   "cost_readout": "sms-commit=2057853ms/5 build=103926ms/29 package-gate=3831ms/1 sms-batch-build=1015ms/6 sms-lineage-stamp=57ms/5 sms-cycle-merge=31ms/5 sms-cycle-link=30ms/4",
+   "criteria_authored": "45",
+   "criteria_executable_count": "0",
+   "criteria_executable_pct": "0",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "81",
+   "merges": "5",
+   "peaked_at_cycle": "cycle-1787884236708 (29/29)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-08-28",
+   "repeat_proposals": "1",
+   "repeats_refused": "4",
+   "run_duration_min": "38.8",
+   "score_delta": "n/a (boot-failed vs boot-failed)",
+   "smoke": "boot-failed",
+   "smoke_preserved": "boot-failed",
+   "terminal": "honest-halt:root-convergence-stall",
+   "total_cycles": "29"
   }
  },
- "updated": "2026-08-27"
+ "updated": "2026-08-28"
 }

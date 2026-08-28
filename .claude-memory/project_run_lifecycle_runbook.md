@@ -7,7 +7,7 @@ metadata:
   originSessionId: e5ead51e-ff28-4bd5-8310-673469c4a385
 ---
 
-**Launch:** `FILE_BASE_PATH=firestarter setsid nohup java -jar target/autobuilder-1.0.1-SNAPSHOT.jar --spring.profiles.active=dev-auto > /tmp/autobuilder-stdout.log 2>&1 < /dev/null & disown`. Forgetting `FILE_BASE_PATH` → instant logback crash on `/data/firestarter`. Rebuild the jar (`mvn package -DskipTests`) after any framework change — the run uses the jar, not the source tree.
+**Launch:** `FILE_BASE_PATH=data/firestarter setsid nohup java -jar target/autobuilder-1.0.1-SNAPSHOT.jar --spring.profiles.active=dev-auto > /tmp/autobuilder-stdout.log 2>&1 < /dev/null & disown`. (2026-08-28: forgetting `FILE_BASE_PATH` no longer crashes — the default is the relative `data/firestarter` — but a run should still name its target explicitly so its logs land where the watcher looks.) Rebuild the jar (`mvn package -DskipTests`) after any framework change — the run uses the jar, not the source tree.
 
 **⚠ setsid is NOT optional (burned 2026-07-15):** launching `preflight.sh live` as a harness-tracked background task (run_in_background) looked safe — but when the harness stopped the task it killed the whole process GROUP, taking the nohup'd JVM down mid-run (~19 min in, no terminal, no corpus). nohup does not change the process group. Always `setsid nohup scripts/preflight.sh live 45 > <launchlog> 2>&1 < /dev/null & disown`, then watch for completion with a separate kill-safe loop that only greps the launch log for `PREFLIGHT:` — that watcher dying harms nothing.
 

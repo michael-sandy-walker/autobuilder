@@ -1,6 +1,6 @@
 # Autobuilder Roadmap — Full Ticket Index
 
-**Snapshot:** 2026-08-02 · Complete one-line-per-ticket index over `roadmap.md`, grouped by tier. Rebuilt from an append-only narrative log back to a thin index (M-A); reconciled line-by-line against `roadmap.md` on 2026-08-02 (5 stale markers, 6 absent tickets — the drift accrued over a week of ticket work, so re-run the diff whenever this file is touched).
+**Snapshot:** 2026-08-28 · Complete one-line-per-ticket index over `roadmap.md`, grouped by tier. Rebuilt from an append-only narrative log back to a thin index (M-A); reconciled line-by-line against `roadmap.md` on 2026-08-02 (5 stale markers, 6 absent tickets — the drift accrued over a week of ticket work, so re-run the diff whenever this file is touched).
 
 **Contract:** this file is a THIN INDEX — one status line per ticket (id + short title), pointing to the full body in `roadmap.md`. It is NOT a narrative log and holds no run history, plan, or reasoning.
 - **Recent-state narrative** (run history, current state, what's next / the active plan) lives in [[project-resume-state]], NOT here.
@@ -8,7 +8,7 @@
 - **Status is read from the roadmap.md checkbox, not from prose.** Each line carries that checkbox verbatim (e.g. `[x]` = closed); `roadmap.md` is authoritative for what a marker means. Prior narrative versions of this file are in git history.
 - **Ordering authority:** the roadmap is the queue ([[feedback-roadmap-is-the-queue]]); direction/process notes are rationale, never a parallel queue. Development-process (YOU+ME) items are the `M-` axis in `meta_process.md`.
 
-**Census (457 tickets, 2026-08-24):** 31 open `[ ]` · 6 in-progress `[~]` · 32 deferred `[>]` · 392 closed, of which **365 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 2 retracted `[r]`**. So **93% of closed tickets delivered a capability; 14 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the roadmap, which is authoritative.
+**Census (465 checkbox tickets, 2026-08-28):** 35 open `[ ]` · 4 in-progress `[~]` · 32 deferred `[>]` · 398 closed, of which **371 built `[x]` · 13 subsumed `[s]` · 8 declined `[n]` · 4 obsoleted `[o]` · 2 retracted `[r]`**. So **93% of closed tickets delivered a capability; 14 closed with none** (`[n]`/`[o]`/`[r]`). Regenerate with `python3 scripts/next_work.py` — it reads these markers from the roadmap, which is authoritative. **Four further closures (`T1-DV`, `T1-EZ`, `T1-FA`, `T1-FB`) are written in `roadmap.md` as struck-through headers with no checkbox, so the parser does not see them and they are absent from every census above; they are indexed here as `[x]`.** That makes 469 lines below. Reconciled against `roadmap.md` on 2026-08-28: 8 tickets filed after the previous snapshot were absent and 3 markers were stale (`T2-FA`, `T5-BJ`, `T6-N`, all closed since) — the drift accrued over three weeks, so re-run the diff whenever this file is touched.
 
 **Closure kinds (2026-07-25):** `[x]` means **built**, not merely "closed". `[n]` declined on measured measurements · `[o]` obsoleted (premise dissolved) · `[s]` subsumed (capability owned by another ticket) · `[r]` retracted (diagnosis was wrong). Marker meanings are defined in `roadmap.md`'s "Status markers" section, which is authoritative; every line here is generated from those markers, never hand-maintained. **RETROFIT COMPLETE:** all 360 closed tickets audited 2026-07-25 (15 hand-verified + 345 via delegated batch audit, every non-`built` call re-checked against the ticket body, and weak-measurements `built` calls confirmed by codebase presence). Within each tier, live tickets (`[ ]`/`[~]`/`[>]`) sort before closed.
 
@@ -16,6 +16,9 @@
 
 ## Tier 1 — Correctness (132)
 
+- [ ] `T1-FW` — A requirement loses part of itself between being READ and being EXERCISED — whatever the specification names as part of the request must survive into it; probe drops the query string, 10 of 14 archived runs — ⚠ the fix AS FILED adds a fifth HTTP field to the verb+path+status record T4-DD wants dissolved; re-derive before building
+- [ ] `T1-FV` — A probe's input is built from what the implementation STORES rather than from what the interface ACCEPTS — real but rare (5 of 145 contradictions) — ⚠ the filed fix is a handler-parameter reader, i.e. a new web subsystem in `core/build`
+- [ ] `T1-FU` — A probe sequence longer than the request budget is TRUNCATED and then judged, so the setup that establishes the precondition is silently dropped and correct code is accused — fix SHIPPED 2026-08-25 (over budget now abstains); ticket open on its field clause
 - [ ] `T1-FT` — The analysis contract's own response-format placeholder is admitted to the goal tree as a subgoal, worked, and marked COMPLETED — FIXED 2026-08-24; occurs in 3 of 12 retained runs and predicts no outcome; field clause open
 - [x] `T1-FS` — Every score read is unscoped: the evaluation prompt carries 9,216 scores from 71 runs (~60% of the context window) and 259 files that do not exist; manufactures the "severely fragmented" diagnosis. Regression from T1-D 2026-07-26 — CLOSED 2026-08-23: 6 Neo4j ITs + field-proven (block 269 paths/17,205 tok -> 2 paths/34 tok, 0 phantom); baseline re-measure handed to T6-L
 - [x] `T1-FR` — The model is told which MEMBERS to add but never which TYPES to create; missing types go to the injector and are stubbed silently (2346 diagnostics vs 905 member ones)
@@ -158,11 +161,12 @@
 
 ## Tier 2 — Steering quality (120)
 
+- [ ] `T2-FG` — The evolution prompt's worked examples name a package and a framework, so every target inherits one project's shape — the RULE itself is already domain-neutral; the examples carry the domain
 - [>] `T2-FF` — A method whose branches return different shapes emits a diagnostic no extractor can read; the loop re-proposes the same edit — DEFERRED 2026-08-24 by its own gate: persisted into the last failing build in only 4 of 12 runs and NOT in the zero-run it was filed from
 - [~] `T2-FE` — A BUILD_FIX work item scoped to the file the compiler pointed at cannot be satisfied when the defect is in another file; correct steering loses to the subgoal's scope
 - [x] `T2-FD` — Suppressing the wrong advice about an unwrapped container left silence; new block states the two admissible repairs (70 diagnostics / 9 runs; field DoD open)
 - [r] `T2-FC` — Later subjects reach evolution without their types planned; the raw 98%-vs-38% ladder gap is mostly RUN LENGTH (corrected same day) and the residual is 56%/67% vs 100% on n=9
-- [~] `T2-FA` — The injector's most-fired resolver path fails 77% of the time and burns the recurrence budget; the symbol path now defers to a package migration that can clear the build (field firing outstanding)
+- [x] `T2-FA` — The injector's most-fired resolver path fails 77% of the time and burns the recurrence budget; the symbol path now defers to a package migration that can clear the build (field firing outstanding)
 - [x] `T2-FB` — A banked-criteria early exit and a contradicted-criteria closure refusal livelocked; the refusal now clears the banked pass-map so the loop re-checks instead of re-declaring
 - [x] `T2-EZ` — injector skeletons are discarded exactly when the build is still red; `Loan` skeleton created 138x, present 0x; 8 of 9 smoke failures were the one file this blocked
 - [x] `T2-EY` — A correct rejection with a stated reason does not produce a different next proposal — BUILT 2026-07-31: a proposal already rejected this run, with nothing merged since, is refused before the probe and the evaluator (39 duplicates in 33 corpora, 38 safely blockable); field DoD MET 2026-08-01 — refused a repeat with no evaluator call, and the next proposal differed (n=1, uncontrolled)
@@ -333,6 +337,9 @@
 
 ## Tier 4 — New systems (88)
 
+- [ ] `T4-DH` — A build that fails because a DECLARED dependency cannot be RESOLVED is classified UNKNOWN, so the only repair is the model guessing another version — measured 29 failures / 6 invented coordinates in one run, the same one re-proposed 9x; `CoordinateSearchClient` exists but can only answer "which artifact provides this class", not "does this GAV exist"
+- [ ] `T4-DG` — A target is a directory with a seed and a yardstick — make that a convention instead of an arrangement; three targets exist and the arrangement has already failed twice — `flightsim` deliberately has NO yardstick
+- [x] `T4-DF` — A member the classpath DOES declare is unresolvable, because discovery reads jar entry NAMES and never opens a class file — CLOSED 2026-08-28: member-level discovery + a retargeting resolver; disambiguated by the receiver being a SUPERTYPE of the declaring type; 5 errors → 0 on the run's own source
 - [ ] `T4-DE` — Parts of one graph as distinct identities with their own agent, narrative and voice, communicating with each other (PARKED, very far future)
 - [x] `T4-CZ` — The self-check computes WHY the artifact cannot package seven times a run and throws the answer away
 - [ ] `T4-DD` — Target-domain knowledge behind a seam (deferred by user until stable); the seam has never been exercised — both targets ever run are REST
@@ -350,7 +357,7 @@
 - [ ] `T4-CT` — The loop CONSULTS accumulated cross-run knowledge before acting (the payoff layer; previously homeless across three tickets' slices)
 - [s] `T4-CU` — The loop EXECUTES its own acceptance criteria against the booted artifact instead of asking the model whether they hold (shipped 2026-07-27) — PLACEMENT GAP CLOSED 2026-07-31: criteria are now checked when the SUBGOAL closes, not only at the run's closure edge, via the `ClosureClaimVerifier` port (T4-DD's first exercise); field DoD needs a refused closure
 - [s] `T4-CV` — Forward-looking requirement for a runnable entry point (shipped + FIELD-VERIFIED 2026-07-27: gate fired at min 5, loop wrote the entry point in ~60s)
-- [ ] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals — MEASURED+BUILT 2026-08-24 (6,057 DbHits for 96 rows at 3,028 goals; T6-J's `goal_id_idx` indexed the wrong property); after-measurement pending a free box
+- [x] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals — MEASURED+BUILT 2026-08-24 (6,057 DbHits for 96 rows at 3,028 goals; T6-J's `goal_id_idx` indexed the wrong property); after-measurement pending a free box
 - [x] `T4-CX` — Startup-wiring forecast no longer precedes the gate that measures it (shipped 2026-07-28)
 - [x] `T4-CY` — Loop observes its own running behaviour mid-run: PROVEN, disabled on cost until probe synthesis is deterministic
 - [ ] `T4-CQ` — Import and continue an existing project (cold read; with or without a graph)
@@ -477,8 +484,10 @@
 
 ## Tier 6 — Harness & yardsticks (12)
 
+- [x] `T6-Q` — Does 2026-08-24's work regress the loop? — a paired A/B screening series with N and the decision rule fixed BEFORE the runs — ANSWERED 2026-08-25: no evidence of regression (pairs +4/0/0/+1 against a rule needing ≥3 of 4); ⚠ screened for a LARGE effect only
+- [x] `T6-P` — The yardstick fails a correct artifact for choosing UUID identifiers — nine of twenty-three checks, and the defect is in the suite's own JSON — CLOSED 2026-08-25, proven by booting the artifact
 - [~] `T6-M` — 86% of failing runs never reached a working artifact — only 4 of 28 still have data (rest lost with /tmp); `failure_family.py` + 16 tests; 3 of 4 are missing project-internal TYPES, 2 of those custom exceptions
-- [~] `T6-N` — Can a run's outcome be predicted from its first K cycles? Slice 1 SHIPPED 2026-08-22 (~1 MB/run archive + gz-reading prefix mode); needs ≥20 retained runs, has 5
+- [x] `T6-N` — Can a run's outcome be predicted from its first K cycles? Slice 1 SHIPPED 2026-08-22 (~1 MB/run archive + gz-reading prefix mode); needs ≥20 retained runs, has 5
 - [x] `T6-O` — Every accuracy claim rested on FIVE scenarios — CLOSED 2026-08-22: corpus 5→7 from observed field failures, saturation broken (qwen3.8 1.00→0.88 precision), and the model gap WIDENED (qwen3-coder recall 0.43, misses the field's own boot-failure shape)
 - [x] `T6-K` — Five of the 23 smoke checks can be passed by the endpoint being ABSENT; failing-check SETS now preserved, gating rule still open
 - [ ] `T6-L` — A stated outcome baseline (75% per RUN ATTEMPTED) and the check families that own the gap — 2026-08-02: the loans gap is measured as a COMPILE gap, not an attention gap

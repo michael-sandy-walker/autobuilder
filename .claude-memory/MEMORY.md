@@ -5,9 +5,9 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 ## Key facts
 - Build: `mvn clean install` | Test: `mvn test -Dtest=ClassName#method`
-- `FILE_BASE_PATH=firestarter` must be set when running tests
+- Targets live under `data/<name>/` (each owns a tracked `bootstrap/seed.txt`, everything else ignored by one glob). `mvn test` needs **no** `FILE_BASE_PATH` since 2026-08-28 — the default is relative (`data/firestarter`); the container keeps absolute `/data/firestarter`. Runs select a target by NAME: `PREFLIGHT_TARGET=flightsim`
 - Neo4j required for graph-backed features and integration tests
-- Goal stack: `meta/GoalStack.json` (relative to `file.base-path`, default `/data/firestarter`)
+- Goal stack: `meta/GoalStack.json` (relative to `file.base-path`, default `data/firestarter`)
 - Spring profiles: `test` (no scheduler/bootstrap), `dev-local` (bootstrap, no scheduler), `dev-auto` (full autonomous); add `fast` for ~10-15% faster runs
 - **`.claude-memory/` IS the loading memory** — `git checkout`/branch/cherry-pick that touches it mutates live memory; commit memory on the target branch before switching
 - Ticket IDs: T1=Correctness, T2=Steering, T3=Feature completion, T4=New systems, T5=Quality/observability, T6=Harness & yardsticks (added 2026-07-18)

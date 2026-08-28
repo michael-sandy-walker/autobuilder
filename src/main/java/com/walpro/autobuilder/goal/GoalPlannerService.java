@@ -3167,7 +3167,16 @@ public class GoalPlannerService {
                         specBoundBehaviouralCriteria(),
                         true);
                 if (bootFailure.isPresent()) {
-                    // T4-DO: before asking the MODEL to make the artifact runnable, check whether
+                    // T4-DO (reachability, 2026-08-28): this branch is NOT where the repair earns
+                    // its keep. Run 2026-08-28_20-37-30 produced `no main manifest attribute` — the
+                    // exact defect — and T4-DO fired zero times, because the run stalled at 29
+                    // cycles with 0 closure attempts and 0 boot-gate runs. **A run whose artifact
+                    // cannot run is precisely the run that stalls before closure**, so gating the
+                    // repair here makes it unreachable for the case it exists for. The packaging
+                    // check now also runs after the package gate (see applyRunnablePackagingRepair
+                    // call in the packaging branch above); this call remains as the closure-edge
+                    // backstop for the runs that DO get here, which is how clitarget exercised it.
+                    // Before asking the MODEL to make the artifact runnable, check whether
                     // the answer is deterministic. A jar with no Main-Class cannot run and the
                     // sources say what it should run; that repair needs no model and no ecosystem
                     // table. Measured cause of the 2026-08-28 regression series, where packaging
@@ -3198,6 +3207,14 @@ public class GoalPlannerService {
                     refuseClosureUnrepairable("T4-BV", bootFailure.get());
                     return;
                 }
+            }
+            // T4-DO: a jar exists as soon as packaging succeeds, which is many cycles before any
+            // closure attempt — and on a stalling run, before the only other chance. Repair here
+            // and block this cycle; the next package gate rebuilds against the repaired pom.
+            if (applyRunnablePackagingRepair()) {
+                log.warn("T4-DO: the packaged artifact could not run; declared its entry point "
+                        + "deterministically at the packaging edge. Next cycle rebuilds.");
+                return;
             }
             // T4-CX: the static injection-wiring FORECAST, now that the gate which measures the
             // same property by starting the artifact has had its turn. It used to be the last step

@@ -404,11 +404,15 @@ Data must never be written to disk.
 
         int remainingCount = input.remainingGoals() == null ? 0 : input.remainingGoals().size();
         int completedCount = input.completedGoals() == null ? 0 : input.completedGoals().size();
-        // T4-DA: the plan-versus-seed comparison, rendered before the goal tree so the planner
-        // reads the gap alongside the goals it is about to edit. Absent when the plan covers the
-        // specification, so a healthy run pays nothing for it.
-        String seedCoverage = SeedCoveragePromptBlock.render(input);
-        if (seedCoverage != null) {
+        // T4-DA consumer 1: the plan-versus-seed readout, from the SAME SeedCoverageAnalyzer the
+        // analysis prompt reads (2026-07-30). This block used to render a second comparator built
+        // on SeedRequirements — one invariant, two extraction methods, able to disagree inside one
+        // run's prompts. SeedRequirements now serves only the CLOSURE edge, where the question is
+        // artifact-versus-seed rather than plan-versus-seed.
+        String seedCoverage = com.walpro.autobuilder.protocol.coverage.SeedCoverageBlock.render(
+                input.seedCoverage(),
+                com.walpro.autobuilder.protocol.coverage.SeedCoverageBlock.Audience.PLANNER);
+        if (seedCoverage != null && !seedCoverage.isBlank()) {
             sb.append(seedCoverage).append("\n\n");
         }
         sb.append("""

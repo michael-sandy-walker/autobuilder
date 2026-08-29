@@ -40,8 +40,11 @@ import java.util.Set;
  *   <li><b>a GIVEN_UP leaf covered by ACTIVE or COMPLETED work</b> — a GIVEN_UP leaf with unmet criteria whose work
  *       an equivalent goal carried out elsewhere blocks T2-DR root closure forever (18:16 run:
  *       root GIVEN_UP with 13 such blockers despite 48 merges). Folding it to SUBSUMED lets the
- *       observation ledger see the work as covered; criteria are carried only onto ACTIVE kept goals
- *       (a COMPLETED goal already banked its criteria as the work that made it equivalent).</li>
+ *       observation ledger see the work as covered; criteria are carried onto the kept goal
+ *       whatever its status. They were once withheld from a COMPLETED kept goal on the grounds
+ *       that it had already banked its criteria as the work that made it equivalent — true when
+ *       the completion is real, and false exactly when the completion claim is the thing that is
+ *       wrong, which then deleted the evidence {@code reopenClosedButUnmetBlockers} needs.</li>
  * </ul>
  *
  * <p>Cost guard: candidates below a string-similarity floor never reach the LLM (relevance
@@ -210,8 +213,26 @@ public class GoalConsolidationService {
             if (match.isEmpty()) continue;
 
             GoalEntity keptGoal = match.get().goal();
-            boolean carryCriteria = keptGoal.getStatus() == GoalStatus.ACTIVE;
-            fold(cycleId, keptGoal, givenUp, match.get().confidence(), "given-up-covered", carryCriteria);
+            // Criteria are carried onto a COMPLETED kept goal too, not only an ACTIVE one. The
+            // old rule assumed a COMPLETED goal had already banked its criteria as the work that
+            // made it equivalent — sound when the completion is real, and false exactly when the
+            // completion claim is what is wrong. Measured on clitarget run 2026-08-28_16-35-37:
+            // the correct fix ("rewrite CsvParser as a character-level state machine") was folded
+            // into a COMPLETED goal whose own framing ("splits a physical line") could never
+            // satisfy it, the criteria were dropped here, and the run stalled with the closure
+            // gate refusing that same criterion 7 times over.
+            //
+            // Dropping them also starved the mechanism that exists to catch precisely this:
+            // reopenClosedButUnmetBlockers reopens a COMPLETED goal whose banked criteria contain
+            // an unmet entry, but checkSubgoalClosure passes a COMPLETED goal that declares NO
+            // criteria ("description was the requirement"). So the fold deleted the evidence the
+            // reopen needed, and the two correct mechanisms cancelled out.
+            //
+            // Carrying is self-correcting rather than a new judgement: if the kept goal really did
+            // the work, verification finds the carried criteria met and nothing reopens; if it did
+            // not, they are unmet against current code and the goal goes back to the ladder. The
+            // existing one-reopen-per-goal bound still limits oscillation.
+            fold(cycleId, keptGoal, givenUp, match.get().confidence(), "given-up-covered", true);
             foldParticipants.add(givenUp.getId());
             foldParticipants.add(keptGoal.getId());
         }

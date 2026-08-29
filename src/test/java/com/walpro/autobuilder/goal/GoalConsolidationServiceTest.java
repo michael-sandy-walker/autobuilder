@@ -18,6 +18,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -363,8 +364,17 @@ class GoalConsolidationServiceTest {
 
     // ── folding GIVEN_UP blockers covered by equivalent work ──
 
+    /**
+     * Previously asserted the opposite — that a COMPLETED kept goal receives NO criteria, on the
+     * premise that it had already banked its own. That premise holds when the completion is real
+     * and fails exactly when the completion claim is what is wrong, and the assertion protected
+     * the failure: on clitarget run 2026-08-28_16-35-37 the correct fix was folded into a
+     * COMPLETED goal that could never satisfy it, the criteria were dropped, and
+     * reopenClosedButUnmetBlockers could not fire because checkSubgoalClosure passes a COMPLETED
+     * goal declaring no criteria. Carrying them is what lets that reopen see the contradiction.
+     */
     @Test
-    void givenUpBlocker_coveredByCompletedEquivalent_subsumedWithoutCriteriaCarry() {
+    void givenUpBlocker_coveredByCompletedEquivalent_carriesCriteriaSoAFalseCompletionCanReopen() {
         GoalEntity givenUp = subgoal("gu", "Implement loan return handling in the service");
         givenUp.setStatus(GoalStatus.GIVEN_UP);
         givenUp.getMetadata().put("acceptanceCriteria", List.of("Loan return marks the loan returned"));
@@ -387,10 +397,12 @@ class GoalConsolidationServiceTest {
 
         verify(goalPlannerService).transitionGoal(eq("gu"), eq(GoalStatus.SUBSUMED),
                 anyString(), eq(SubsumptionReason.COVERED));
-        // a COMPLETED kept goal banked its own criteria — nothing is appended to it
-        verify(goalPlannerService, never()).setAcceptanceCriteria(anyString(), anyList());
+        // The criterion must land on the COMPLETED goal: that is the evidence
+        // reopenClosedButUnmetBlockers reads to reopen a completion its own bank contradicts.
+        verify(goalPlannerService).setAcceptanceCriteria(eq("done"),
+                argThat(cs -> cs.contains("Loan return marks the loan returned")));
         verify(behaviourLogger).goalConsolidation(anyString(), eq("done"), eq("gu"),
-                eq(0.88), eq("given-up-covered"), eq(0));
+                eq(0.88), eq("given-up-covered"), eq(1));
     }
 
     @Test

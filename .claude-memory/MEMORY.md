@@ -84,6 +84,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 - `feedback_no_target_domain_in_framework_strings.md`: never bake target-project class/package names into framework-level production strings.
 - `feedback_no_ecosystem_jargon_in_framework_code.md`: never name a specific framework/version in framework-level identifiers/comments/strings; ecosystem knowledge lives in data tables.
 - `feedback_no_hardcoded_ecosystem_data.md`: even data tables are debt — prefer discovery (pom → classpath → Maven Central); row-adds always file the discovery follow-up.
+- `feedback_dont_group_defects_by_vocabulary.md`: "N instances of the same pattern" is a claim about MECHANISM — verify each member's mechanism before grouping; a shared description is not a shared cause.
 - `feedback_count_events_not_log_lines.md`: count the EVENT, not log lines that mention it; re-rendered records inflated two ticket headlines 23x and 3x.
 - `feedback_dont_evaluate_a_build_with_older_runs.md`: a window is a rate only if the build is constant across it; this session's runs evaluate the PREVIOUS build — the fix's verdict belongs to the next session.
 - `feedback_verify_population_before_claim.md`: before "all/most/never" claims, scan the full corpus (incl. backups, .log.gz) and dedupe by timestamp.

@@ -180,9 +180,21 @@ public final class CommandExerciseSynthesizer {
                     Fixture.NONE, Optional.empty(), expected, message));
         }
         if (ABSENT_FILE.matcher(criterion).find()) {
-            Optional<CommandSurfaceQuery.Command> op = named.map(surface::get)
-                    .filter(c -> c.arity() == 1)
-                    .or(() -> surface.values().stream().filter(c -> c.arity() == 1).findFirst());
+            // When the criterion NAMES a command, that command is the exercise or there is no
+            // exercise. The unnamed fallback — first command of the right arity — exists for
+            // criteria that name none ("Running with a non-existent file path …"), and it used to
+            // fire here too whenever the named command merely had the wrong arity. Measured on
+            // clitarget run 2026-08-29_23-08-29: the criterion "column on a non-existent column
+            // name … exits 4" names `column`, whose arity is 2, so the filter discarded it and the
+            // fallback substituted `check` — a different command with a different contract. The
+            // tool answered exit 1 (correct for `check` on an absent path), the gate recorded it
+            // as the `column` criterion failing, and closure was refused 13 times against an
+            // artifact that scored 19/19 and answers this criterion exactly as specified.
+            // Substituting a command the requirement did not name cannot test that requirement,
+            // so a named-but-unfitting command abstains instead.
+            Optional<CommandSurfaceQuery.Command> op = named.isPresent()
+                    ? named.map(surface::get).filter(c -> c.arity() == 1)
+                    : surface.values().stream().filter(c -> c.arity() == 1).findFirst();
             if (op.isEmpty()) return Optional.empty();
             List<String> args = new ArrayList<>();
             args.add(op.get().word());

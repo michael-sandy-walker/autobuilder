@@ -97,4 +97,30 @@ class CommandExerciseSynthesizerTest {
         assertThat(CommandExerciseSynthesizer.synthesize(
                 "Running with an unrecognised command word exits 3", Map.of(), Optional.of("x"))).isEmpty();
     }
+    /**
+     * Field case, clitarget run 2026-08-29_23-08-29. The criterion names `column`, whose arity is
+     * 2, so the arity-1 filter discarded it and the unnamed fallback substituted `check` — a
+     * different command with a different contract. The tool answered exit 1, correct for `check`
+     * on an absent path, and the gate recorded it as the `column` criterion failing, refusing
+     * closure 13 times against an artifact that scored 19/19 and meets this criterion exactly.
+     */
+    @Test
+    void aNamedCommandOfTheWrongArityAbstainsRatherThanSubstitutingAnother() {
+        var e = synth("column on a non-existent column name prints \"no such column: <name>\" "
+                + "to stderr and exits 4");
+
+        assertThat(e).isEmpty();
+    }
+
+    /** The fallback still serves the case it was written for: a criterion naming no command. */
+    @Test
+    void anUnnamedAbsentPathCriterionStillUsesTheFallback() {
+        var e = synth("Running with a non-existent file path prints \"no such file: <path>\" "
+                + "to stderr and exits 1");
+
+        assertThat(e).isPresent();
+        assertThat(e.get().fixture()).isEqualTo(CommandExerciseSynthesizer.Fixture.ABSENT_PATH);
+        assertThat(e.get().args().get(0)).isEqualTo("check");
+    }
+
 }

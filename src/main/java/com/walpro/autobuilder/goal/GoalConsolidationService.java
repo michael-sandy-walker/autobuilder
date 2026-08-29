@@ -183,7 +183,7 @@ public class GoalConsolidationService {
             GoalEntity matched = match.get().goal();
             GoalEntity keptGoal = chooseGoalToKeep(subject, matched);
             GoalEntity duplicate = keptGoal == subject ? matched : subject;
-            fold(cycleId, keptGoal, duplicate, match.get().confidence(), "active-duplicate", true);
+            fold(cycleId, keptGoal, duplicate, match.get().confidence(), "active-duplicate");
             foldedIds.add(duplicate.getId());
             foldParticipants.add(duplicate.getId());
             foldParticipants.add(keptGoal.getId());
@@ -232,7 +232,7 @@ public class GoalConsolidationService {
             // the work, verification finds the carried criteria met and nothing reopens; if it did
             // not, they are unmet against current code and the goal goes back to the ladder. The
             // existing one-reopen-per-goal bound still limits oscillation.
-            fold(cycleId, keptGoal, givenUp, match.get().confidence(), "given-up-covered", true);
+            fold(cycleId, keptGoal, givenUp, match.get().confidence(), "given-up-covered");
             foldParticipants.add(givenUp.getId());
             foldParticipants.add(keptGoal.getId());
         }
@@ -292,8 +292,8 @@ public class GoalConsolidationService {
     }
 
     private void fold(String cycleId, GoalEntity keptGoal, GoalEntity subsumedGoal, double confidence,
-                      String kind, boolean carryCriteria) {
-        int criteriaCarried = carryCriteria ? carryCriteria(subsumedGoal, keptGoal) : 0;
+                      String kind) {
+        int criteriaCarried = carryCriteria(subsumedGoal, keptGoal);
         carryMergeCount(subsumedGoal, keptGoal);
         goalPlannerService.transitionGoal(
                 subsumedGoal.getId(),

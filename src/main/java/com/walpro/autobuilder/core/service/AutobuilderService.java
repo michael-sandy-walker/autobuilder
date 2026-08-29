@@ -155,7 +155,7 @@ public class AutobuilderService {
      * T1-EI: consecutive cycles where the planner emitted proposals that were all dedup-blocked
      * (skipped &gt; 0, injected == 0) without an intervening merge. When this reaches
      * {@link #plannerEmptyOutputLimit}, the loop emits GOAL_EXHAUSTED + SYSTEM_PAUSED to break
-     * the planner-output-amputation spiral. Reset on any merge or any successful injection.
+     * the planner-output-truncated spiral. Reset on any merge or any successful injection.
      */
     private int consecutivePlannerEmptyOutputCycles = 0;
 
@@ -1045,7 +1045,7 @@ public class AutobuilderService {
             consecutiveZeroWorkCycles = 0;
         }
 
-        // T1-EI: planner-output-amputation backstop. When the planner emitted proposals that
+        // T1-EI: planner-output-truncated backstop. When the planner emitted proposals that
         // were all dedup-blocked (skipped > 0, injected == 0) and no merge occurred, the
         // session is in the rehabilitation spiral. After N such cycles, pause for review.
         boolean plannerEmptyOutput = context.plannerOutcome() != null
@@ -1067,13 +1067,13 @@ public class AutobuilderService {
                             verify.rootCompleted(), verify.promoted());
                     consecutivePlannerEmptyOutputCycles = 0;
                 } else {
-                    log.error("T1-EI: planner-output amputation — {} consecutive empty-output cycles; verify-before-pause found nothing to promote. Pausing for review.",
+                    log.error("T1-EI: planner-output truncation — {} consecutive empty-output cycles; verify-before-pause found nothing to promote. Pausing for review.",
                             consecutivePlannerEmptyOutputCycles);
                     emitSystemPausedOnce(context.cycleName(),
-                            "planner-output-amputation", consecutivePlannerEmptyOutputCycles);
+                            "planner-output-truncated", consecutivePlannerEmptyOutputCycles);
                     context = context
-                            .withGoalExhaustedReason("planner-output-amputation")
-                            .withPausedReason("planner-output-amputation");
+                            .withGoalExhaustedReason("planner-output-truncated")
+                            .withPausedReason("planner-output-truncated");
                 }
             }
         } else if (context.merged() || (context.plannerOutcome() != null && context.skippedGoals() == null)) {

@@ -33,7 +33,7 @@ EVENT_FIELDS = ["reason", "resultState", "merged", "role", "kind", "rule", "symb
 
 HALT_MARKERS = re.compile(
     r"Exhaustion runaway|System is paused|root convergence|GOAL_EXHAUSTED|"
-    r"circuit breaker|Pausing|planner-output amputation|deadlock", re.I)
+    r"circuit breaker|Pausing|planner-output truncation|planner-output amputation|deadlock", re.I)
 
 
 def read(path, limit=None):

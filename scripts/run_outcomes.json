@@ -1618,7 +1618,7 @@
    "smoke_preserved": "SMOKE: 17/19",
    "smoke_strict": "17/23 discounted=none",
    "smoke_total": 19,
-   "terminal": "honest-halt:planner-output-amputation",
+   "terminal": "honest-halt:planner-output-truncated",
    "total_cycles": "11"
   },
   "2026-08-26_15-11-51": {

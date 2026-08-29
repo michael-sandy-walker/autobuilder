@@ -41,7 +41,7 @@ import com.walpro.autobuilder.protocol.abandoned.RelatedAbandonedWorkBlock;
 import com.walpro.autobuilder.protocol.planner.PlannerProtocolContract;
 
 /**
- * Replays the 2026-05-19 23:56 planner-amputation deadlock to validate the T2-DL +
+ * Replays the 2026-05-19 23:56 given-up cascade deadlock to validate the T2-DL +
  * T1-EI joint behaviour:
  *
  * <ul>
@@ -53,7 +53,7 @@ import com.walpro.autobuilder.protocol.planner.PlannerProtocolContract;
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
-class PlannerAmputationReplayTest {
+class GivenUpCascadeDeadlockReplayTest {
 
     @Mock private PlannerLLMAdapter plannerAdapter;
     @Mock private GoalPlannerService goalPlannerService;

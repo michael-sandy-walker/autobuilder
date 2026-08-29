@@ -36,15 +36,15 @@ import com.walpro.autobuilder.goal.GoalType;
 import com.walpro.autobuilder.goal.AbandonedGoalQueryService;
 
 /**
- * T1-EI: planner-output amputation rehabilitation regression tests.
+ * T1-EI: planner-output truncation goal-reactivation regression tests.
  *
- * <p>These tests focus on the rehabilitation-by-repeated-proposal mechanism:
+ * <p>These tests focus on the reactivation-by-repeated-proposal mechanism:
  * when the planner LLM keeps re-proposing work that's been GIVEN_UP, the matching
- * GIVEN_UP goal accumulates rehabilitation votes and is auto-reactivated once the
+ * GIVEN_UP goal accumulates reactivation votes and is auto-reactivated once the
  * vote threshold is crossed.</p>
  */
 @ExtendWith(MockitoExtension.class)
-class PlannerAgentRehabilitationTest {
+class PlannerAgentGoalReactivationTest {
 
     @Mock private PlannerLLMAdapter plannerAdapter;
     @Mock private GoalPlannerService goalPlannerService;

@@ -324,7 +324,7 @@ run_live() {
             # the end report, and that run was killed before the report was written. Reading the
             # halt EVENT rather than a downstream report is what makes the reason survive.
             hreason=${hreason/root convergence stall/root-convergence-stall}
-            # Prose token missing for this flavor (e.g. planner-output-amputation's "Pausing
+            # Prose token missing for this flavor (e.g. planner-output-truncated's "Pausing
             # for review") → the end-report line names the true reason for every flavor.
             if [ -z "$hreason" ]; then
                 hreason=$(grep -oE 'run end report written \([a-z][a-z-]*' "$applog" | tail -1 | sed 's/.*(//')

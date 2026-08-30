@@ -2150,6 +2150,31 @@
    "smoke_total": 23,
    "terminal": "GOAL_FULFILLED",
    "total_cycles": "35"
+  },
+  "2026-08-30_21-59-30": {
+   "clauses_closed_vs_control": "7",
+   "cost_readout": "sms-commit=5294280ms/17 build=266927ms/89 boot-gate=65075ms/15 package-gate=46586ms/15 sms-batch-build=1928ms/18 sms-lineage-stamp=126ms/17 sms-cycle-merge=83ms/17 sms-cycle-link=72ms/16",
+   "criteria_authored": "136",
+   "criteria_executable_count": "75",
+   "criteria_executable_pct": "55",
+   "drift_tail_cycles": "46",
+   "median_cycle_seconds": "50",
+   "merges": "12",
+   "peaked_at_cycle": "cycle-1788122837609 (46/92)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-08-30",
+   "repeat_proposals": "11",
+   "repeats_refused": "14",
+   "run_duration_min": "88.9",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 21/23",
+   "smoke_failed_checks": "20,21",
+   "smoke_pass": 21,
+   "smoke_preserved": "SMOKE: 21/23",
+   "smoke_strict": "20/23 discounted=22",
+   "smoke_total": 23,
+   "terminal": "deadline",
+   "total_cycles": "92"
   }
  },
  "updated": "2026-08-30"

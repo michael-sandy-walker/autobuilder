@@ -161,6 +161,7 @@
 
 ## Tier 2 — Steering quality (120)
 
+- [ ] `T2-FH` — The convergence brake halts on a fixed cycle count, so it cannot tell grinding from accelerating, and stops with most of the budget unspent — BOTH HALVES BUILT 2026-08-30 (merge-trend + declared budget); replay over all 13 recorded stalls divides 6 halt / 7 hold, and the 7 held runs scored up to 23/23; field DoD open (2026-08-30 run reached 19/20 and recovered - third near-miss, no evidence either way)
 - [x] `T2-FG` — The evolution prompt's worked examples name a package and a framework, so every target inherits one project's shape — CLOSED 2026-08-28: examples now carry no ecosystem (rendered contract has 0 framework references, locked by 17 checks); a green test had asserted `spring-boot-starter-parent` as REQUIRED — the suite was protecting the leak
 - [>] `T2-FF` — A method whose branches return different shapes emits a diagnostic no extractor can read; the loop re-proposes the same edit — DEFERRED 2026-08-24 by its own gate: persisted into the last failing build in only 4 of 12 runs and NOT in the zero-run it was filed from
 - [~] `T2-FE` — A BUILD_FIX work item scoped to the file the compiler pointed at cannot be satisfied when the defect is in another file; correct steering loses to the subgoal's scope
@@ -295,7 +296,7 @@
 ## Tier 3 — Feature completion (39)
 
 - [ ] `T3-CA` — A type that carries NO annotation at all is invisible to the odd-one-out rule, so the one defect that stops the application starting is the one nothing reports — BUILT+CALIBRATED 2026-08-24 (1 firing across 12 real trees, both false positives found by replay); field DoD open
-- [ ] `T3-BZ` — A type placed differently from its own structural peers is never noticed (Book in `domain`, Loan/Member in `domain.model`); derive the norm from the project's majority among code-established peers, never a convention table
+- [x] `T3-BZ` — A type placed differently from its own structural peers is never noticed (Book in `domain`, Loan/Member in `domain.model`); derive the norm from the project's majority among code-established peers, never a convention table — SHIPPED: slice 1 (the fact) 2026-08-23 + marker 08-24, slice 2 (the mover) 2026-08-30 on the watch (fired in 9 runs, zero relocations); proven on all 9 archived trees — 9/9 moved, 9/9 still compile, the booted one still scores 23/23; **FIELD DoD MET 2026-08-30** — moved Book in a live merge, build green 17 s later, no recurrence in 67 cycles
 - [x] `T3-BY` — A run killed from outside ships its LAST state, not its BEST — BUILT 2026-08-22 loop-side (`preserve.interval-cycles: 10`, 6 tests); field DoD open
 - [~] `T3-BX` — Validation layer is decorative (`@Valid` everywhere, zero constraints) → bad input 500s instead of 400
 - [x] `T3-BW` — Peer-consistency odd-one-out rule in `WiringFactsAnalyzer` — SHIPPED 2026-07-27; vocabulary-free, verified on the real run output, reaches the evolution prompt

@@ -219,6 +219,30 @@ public class WiringFactsAnalyzer {
     }
 
     /**
+     * The structured form of the placement fact, for the relocation that acts on it. The prose
+     * sentence is rendered FROM this record, so the calibrated conditions (three or more
+     * nominating peers, a strict majority, silence on a tie) have one home and the mover can
+     * never act on a case the report would not have made ([[feedback-one-invariant-one-home]]).
+     *
+     * @param typeName        the type sitting apart from its peers
+     * @param actualPackage   where it sits now ({@code ""} for the default package)
+     * @param majorityPackage where the strict majority of its peer group sits
+     * @param nominatedBy     the peer whose naming put this type in the group
+     * @param peerPackage     the package those nominating peers share
+     * @param agreeing        the peer-group members already in {@code majorityPackage}
+     * @param majorityCount   how many of the group sit in {@code majorityPackage}
+     * @param groupSize       how many types the group holds
+     */
+    public record PeerPlacementAnomaly(
+            String typeName, String actualPackage, String majorityPackage, String nominatedBy,
+            String peerPackage, List<String> agreeing, int majorityCount, int groupSize) {}
+
+    /** The same fact the prompt block reports, before it becomes a sentence. */
+    public List<PeerPlacementAnomaly> peerPlacementFindings(Map<String, String> outputFiles) {
+        return findPeerPlacementOutliers(parseAll(outputFiles));
+    }
+
+    /**
      * Both peer rules reached the evolution prompt and nowhere else, so whether either had ever
      * fired in the field could only be answered by reading a prompt — and prompts are not logged.
      * A watch calibrated against a proxy (a non-empty deleted-file list) scored NO-OPPORTUNITY on
@@ -235,12 +259,28 @@ public class WiringFactsAnalyzer {
     }
 
     private void collectPeerPlacementOutliers(List<CompilationUnit> units, List<String> out) {
+        for (PeerPlacementAnomaly f : findPeerPlacementOutliers(units)) {
+            out.add(String.format(
+                    "%s sits in %s, but %d of the %d types named by the peers in %s sit in %s (%s do) — "
+                            + "%s names %s the way its peers name theirs, so code written to that pattern "
+                            + "will look for %s in %s and not find it.",
+                    f.typeName(), f.actualPackage().isEmpty() ? "the default package" : f.actualPackage(),
+                    f.majorityCount(), f.groupSize(),
+                    f.peerPackage().isEmpty() ? "the default package" : f.peerPackage(),
+                    f.majorityPackage(), String.join(", ", f.agreeing()),
+                    f.nominatedBy(), f.typeName(), f.typeName(), f.majorityPackage()));
+            if (out.size() >= MAX_OBSERVATIONS) return;
+        }
+    }
+
+    private List<PeerPlacementAnomaly> findPeerPlacementOutliers(List<CompilationUnit> units) {
+        List<PeerPlacementAnomaly> found = new ArrayList<>();
         Map<String, String> packageByType = new LinkedHashMap<>();
         for (CompilationUnit cu : units) {
             String pkg = cu.getPackageDeclaration().map(d -> d.getNameAsString()).orElse("");
             for (TypeDeclaration<?> type : cu.getTypes()) packageByType.put(type.getNameAsString(), pkg);
         }
-        if (packageByType.size() <= PEER_GROUP_MIN_OTHERS) return;
+        if (packageByType.size() <= PEER_GROUP_MIN_OTHERS) return found;
 
         // Types sharing a package are peers by placement; each nominates the one project type it
         // is about. A unit naming several has no single subject and nominates nothing.
@@ -288,17 +328,12 @@ public class WiringFactsAnalyzer {
                 List<String> agreeing = new LinkedHashSet<>(nominations.values()).stream()
                         .filter(t -> norm.equals(packageByType.get(t)))
                         .toList();
-                out.add(String.format(
-                        "%s sits in %s, but %d of the %d types named by the peers in %s sit in %s (%s do) — "
-                                + "%s names %s the way its peers name theirs, so code written to that pattern "
-                                + "will look for %s in %s and not find it.",
-                        nominee, actual.isEmpty() ? "the default package" : actual,
-                        best, total, group.getKey().isEmpty() ? "the default package" : group.getKey(),
-                        majority, String.join(", ", agreeing),
-                        nomination.getKey(), nominee, nominee, majority));
-                if (out.size() >= MAX_OBSERVATIONS) return;
+                found.add(new PeerPlacementAnomaly(nominee, actual, majority, nomination.getKey(),
+                        group.getKey(), agreeing, (int) best, (int) total));
+                if (found.size() >= MAX_OBSERVATIONS) return found;
             }
         }
+        return found;
     }
 
     /**

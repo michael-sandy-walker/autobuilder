@@ -38,6 +38,29 @@ public final class BlockerTypes {
     public static final String GATE_TEST = "test-gate";
 
     /**
+     * The completion edge's acceptance-criteria check (T4-BP-3). Unlike the gates above, whose
+     * work items carry build-status facts, this one carries the SPECIFICATION's own unmet
+     * requirements, copied from the set the verifier just refused to confirm. It wears the
+     * {@link #BUILD_FIX} tag only because the injection templates share a description prefix, and
+     * three decisions read that tag as "build health, owned by a deterministic gate": the
+     * COMPILE_OK cleanup retired the item, the closure ledger skipped its criteria, and the
+     * grounding stamp marked them AUTHORED. In run {@code 2026-08-30_00-06-00} that retired the
+     * multi-line-row work item 48 seconds after it was raised, on a compile observation that
+     * says nothing about it, and the root completed at 17/19. Each of those three sites now
+     * discriminates on the originating gate rather than on the tag.
+     */
+    public static final String GATE_CRITERIA = "criteria-gate";
+
+    /**
+     * True when the goal's work item was raised by the completion edge's acceptance-criteria
+     * check, whose done-when is a requirement about the target application rather than a fact
+     * about the build.
+     */
+    public static boolean isFromCriteriaGate(java.util.Map<String, Object> metadata) {
+        return metadata != null && GATE_CRITERIA.equals(metadata.get(ORIGINATING_GATE_KEY));
+    }
+
+    /**
      * True when the text is a framework-generated diagnostic INSTRUCTION (a work order about the
      * build/loop state at the time it was written), as opposed to a requirement about the target
      * application. Instruction texts must never be persisted as acceptance criteria: they describe

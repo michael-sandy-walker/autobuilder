@@ -319,6 +319,43 @@ class BlockerSubgoalInjectorTest {
                 eq(com.walpro.autobuilder.goal.SubsumptionReason.COVERED));
     }
 
+    /**
+     * Run 2026-08-30_00-06-00: the completion edge raised a work item naming four unmet
+     * requirements at 00:15:12, a merge compiled at 00:16:00 and this cleanup retired it, and the
+     * root completed 17 seconds later with the multi-line-row requirement still unmet. Compiling
+     * says nothing about whether an acceptance criterion is met, so it cannot retire the item
+     * that carries one.
+     */
+    @Test
+    void clear_leavesCriteriaGateWorkItemAlone() {
+        GoalEntity current = activeBuildFixGoal();
+        current.setId("goal-criteria");
+        current.getMetadata().put(BlockerTypes.ORIGINATING_GATE_KEY, BlockerTypes.GATE_CRITERIA);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(current);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        injector.clearActiveBuildFixSubgoals();
+
+        verify(goalPlannerService, never()).transitionGoal(anyString(),
+                eq(com.walpro.autobuilder.goal.GoalStatus.SUBSUMED), anyString(), any());
+    }
+
+    /** Same reasoning, and the same reading error the package-gate carve-out already corrected:
+     *  a boot failure is not answered by the sources compiling. */
+    @Test
+    void clear_leavesBootGateWorkItemAlone() {
+        GoalEntity remaining = activeBuildFixGoal();
+        remaining.setId("goal-boot");
+        remaining.getMetadata().put(BlockerTypes.ORIGINATING_GATE_KEY, BlockerTypes.GATE_BOOT);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(remaining));
+
+        injector.clearActiveBuildFixSubgoals();
+
+        verify(goalPlannerService, never()).transitionGoal(anyString(),
+                eq(com.walpro.autobuilder.goal.GoalStatus.SUBSUMED), anyString(), any());
+    }
+
     @Test
     void clear_noOpWhenNoBuildFixGoalsExist() {
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);

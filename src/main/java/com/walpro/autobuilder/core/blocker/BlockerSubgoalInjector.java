@@ -331,9 +331,19 @@ public class BlockerSubgoalInjector {
      * 2026-07-27: three identical leaves in three minutes, each announced to the evolution agent
      * as "already resolved" while the failure was live). {@link #clearPackagingBuildFixSubgoals()}
      * is the observation that CAN retire them.
+     *
+     * <p>That carve-out was written for one gate and the reasoning holds for all of them: an
+     * observation may only retire the work items raised by the check that made the same
+     * observation. The boot, test and acceptance-criteria gates each stamp their items too, and
+     * compile-OK attests to none of them. Run {@code 2026-08-30_00-06-00}: the criteria gate
+     * raised a work item naming four unmet requirements at 00:15:12, a merge compiled at 00:16:00
+     * and retired it, and the root completed 17 seconds later with those requirements still
+     * unmet. So this now retires only items carrying NO gate stamp — plain compile fixes, which
+     * are exactly what a compile observation can speak for. A gate-stamped item is retired by its
+     * own gate, or worked and fulfilled like any other subgoal.
      */
     public void clearActiveBuildFixSubgoals() {
-        retireActiveBuildFixSubgoals("build now COMPILE_OK", g -> !isFromPackageGate(g));
+        retireActiveBuildFixSubgoals("build now COMPILE_OK", g -> !hasOriginatingGate(g));
     }
 
     /**
@@ -361,6 +371,12 @@ public class BlockerSubgoalInjector {
                         com.walpro.autobuilder.goal.SubsumptionReason.COVERED);
             }
         }
+    }
+
+    /** True when the work item names the completion-edge check that raised it. */
+    private boolean hasOriginatingGate(GoalEntity g) {
+        return g != null && g.getMetadata() != null
+                && g.getMetadata().get(BlockerTypes.ORIGINATING_GATE_KEY) != null;
     }
 
     private boolean isFromPackageGate(GoalEntity g) {

@@ -1656,7 +1656,10 @@ public class GoalPlannerService {
         if (goalPlannerConfig == null || !goalPlannerConfig.isCriteriaGroundingEnabled()) return;
         boolean gateOwned = g.getMetadata() != null
                 && com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX.equals(
-                        g.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY));
+                        g.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY))
+                // The criteria gate's item carries seed requirements verbatim; stamping them
+                // AUTHORED demoted the specification's own words to advisory.
+                && !com.walpro.autobuilder.core.build.BlockerTypes.isFromCriteriaGate(g.getMetadata());
         Map<String, String> binding = new HashMap<>();
         if (gateOwned) {
             for (int i = 1; i <= declared.size(); i++) binding.put(String.valueOf(i), "AUTHORED");
@@ -2927,7 +2930,11 @@ public class GoalPlannerService {
                 // them to T4-BP-3 adds only false-block risk, never information.
                 boolean gateOwned = sg.getMetadata() != null
                         && com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX.equals(
-                                sg.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY));
+                                sg.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY))
+                        // ...except the completion edge's own criteria item, whose criteria are
+                        // the requirements this verification exists to check. Skipping them let a
+                        // subsumed criteria item take the unmet requirement out of the set.
+                        && !com.walpro.autobuilder.core.build.BlockerTypes.isFromCriteriaGate(sg.getMetadata());
                 if (gateOwned) continue;
                 // Root completion is gated on the SPEC: when the spec offers a traceability
                 // signal, only criteria of POSITIVELY spec-bound goals count toward root completion.
@@ -3326,6 +3333,14 @@ public class GoalPlannerService {
                         // (run 4, 2026-07-03: verification #4 blocked on verification #1's work item).
                         for (String id : injected.injectedIds()) {
                             setAcceptanceCriteria(id, completionVerification.unconfirmedCriteria());
+                            // The criteria on this item are the SPECIFICATION's unmet requirements,
+                            // not build-status facts — stamped so the three sites that read the
+                            // [BUILD_FIX] tag as "gate-owned build health" can tell them apart.
+                            // Unstamped, a COMPILE_OK observation retired this item 48 seconds
+                            // after it was raised (run 2026-08-30_00-06-00) and the root completed
+                            // with the multi-line-row requirement still unmet.
+                            setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                                    com.walpro.autobuilder.core.build.BlockerTypes.GATE_CRITERIA);
                         }
                         log.warn("T4-BP-3: root closure blocked — {}; work item injected", unconfirmed.get());
                         return;

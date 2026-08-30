@@ -274,6 +274,7 @@ run_live() {
         --autobuilder.goal.subgoal-retry-enabled=true \
         --autobuilder.goal.divide-on-exhaustion=true \
         --autobuilder.goal.structure-query-enabled=true \
+        --autobuilder.run.budget-minutes="$minutes" \
         ${PREFLIGHT_EXTRA_FLAGS:-} \
         > "$run_dir/console.log" 2>&1 &
     pid=$!

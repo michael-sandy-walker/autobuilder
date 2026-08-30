@@ -92,6 +92,35 @@ against recorded outcomes.**
 2. **Temporal.** A pattern is a trajectory over a window of cycles, not a predicate on one instant.
    "Peaked then slid", "fix-then-revert loop", "K cycles on this subgoal without promotion",
    "injections re-firing the same token".
+2b. **Self-relative over time — the third reference frame, and the only one available from cycle 1.**
+   Property 1 opposes fixed constants to a POPULATION envelope, and P2 builds the population half. But the
+   comparison that actually separated two runs on 2026-08-30 was neither: it was **the run against its own
+   earlier period**. Same target, same build, same seed, ~23 minutes elapsed each:
+
+   | | run `18-44-37` | run `19-42-35` |
+   |---|---|---|
+   | merges | 4 | 16 |
+   | subgoals fulfilled | 4 | 11 |
+   | fulfilled : subsumed | 0.24 | 0.50 |
+   | boot gate | BLOCKED, never cleared | OK |
+
+   The first stalled; the second was improving period over period (6/13 -> 2/4 -> 3/5 fulfilled:subsumed).
+   **A fixed threshold cannot tell these apart and a population envelope is not needed to** — the run's own
+   trajectory does it. This frame needs no baseline file and no warm-up, which is exactly what killed
+   `PlanningThrashSignalAnalyzer` (6 hours of history required, 0% of runs reach it). **Order the frames:
+   self-relative first (free, immediate), population envelope second (P2), fixed constants only for
+   measurable environmental facts** ([[feedback-relative-thresholds]]).
+
+2c. **A window is only valid if it is longer than the granularity of what it counts.**
+   Learned by committing the error on 2026-08-30: reporting on run `19-42-35`, I measured a **3-minute**
+   window over cycles that take 60-90s, read "0 fulfilled, 5 subsumed", and called a run that was
+   accelerating a probable stall. Widening to 8 minutes showed the opposite, and the fulfilments had simply
+   landed just outside the slice. **The rule: express a window in units of the event being counted, and
+   refuse to report a rate until the window contains at least N of them** — a rate over a window that can
+   hold zero events by construction manufactures false trends. This sharpens property 2 (temporal) with a
+   validity precondition, and it applies to every P3 feature: `merge_drought_share` and friends must each
+   declare the minimum event count below which they abstain rather than report zero.
+
 3. **Outcome-linked.** A pattern is only worth recognizing if it PREDICTS something. Ground truth exists
    at scale: terminal, smoke, `score_delta`, drift tail, per-run labels. Every detector must show that
    firing predicts a worse outcome — otherwise it is decoration.

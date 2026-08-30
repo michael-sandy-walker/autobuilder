@@ -78,6 +78,14 @@ public class MergeAgent implements ExecutionAgent {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /**
+     * The structural facts about how types are supplied to one another. Optional so existing
+     * constructions keep working; when absent the registration repair below simply does not run.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer wiringFactsAnalyzer;
+
     /** T2-EW: keep test sources out of the artifact on goals whose spec never asked for tests. */
     @Setter
     @org.springframework.beans.factory.annotation.Value("${autobuilder.build.skip-unrequested-tests:true}")
@@ -385,6 +393,16 @@ public class MergeAgent implements ExecutionAgent {
                 // T1-DR: build is fixed — clean up any stale BUILD_FIX subgoals
                 blockerSubgoalInjector.clearActiveBuildFixSubgoals();
 
+                // A type that is injected but registered nowhere compiles perfectly and cannot
+                // start. The fact was already detected — run 2026-08-30_18-44-37 named
+                // BookRepository twenty times — and its only consumer was a paragraph in a
+                // prompt, so the run ended unstartable with the diagnosis in hand. This is that
+                // fact's actuator. Unlike the packaging check T2-EQ removed from this branch, it
+                // is not an end-stage property: it needs two annotated peers in the type's own
+                // package, so a partial skeleton produces nothing and a project that annotates
+                // nothing produces nothing.
+                applyInjectedTypeRegistrationRepair(context, outputPath);
+
                 // T2-EQ (revised 2026-07-27, user call): packaging is NOT verified here. A merge
                 // mid-run leaves a partial skeleton, and "the classes compile" is the right bar
                 // for one — "the whole project packages" is an end-stage property. Demanding it
@@ -647,5 +665,39 @@ public class MergeAgent implements ExecutionAgent {
     @Override
     public Set<SignalType> getSupportedSignals() {
         return BasicSignals.MERGE_SIGNALS;
+    }
+
+    /**
+     * Gives an injected-but-unregistered type the registration its own package peers share.
+     *
+     * <p>The plan is plotted against the cycle's source map but every write is produced from the
+     * file's CURRENT content, so a plan made one merge stale cannot overwrite fresher text: the
+     * repair returns empty when the declaration has moved or the annotation is already there.
+     * Best-effort throughout — a failure here must never fail a merge that has already landed.
+     */
+    private void applyInjectedTypeRegistrationRepair(CycleContextData context, String outputPath) {
+        if (wiringFactsAnalyzer == null || outputPath == null) return;
+        java.util.Map<String, String> sources = context.previousOutput();
+        if (sources == null || sources.isEmpty()) return;
+        try {
+            var findings = wiringFactsAnalyzer.unregisteredInjectedTypes(sources);
+            if (findings.isEmpty()) return;
+            java.nio.file.Path root = java.nio.file.Path.of(outputPath);
+            for (var repair : com.walpro.autobuilder.core.build.InjectedTypeRegistrationRepair
+                    .plan(sources, findings)) {
+                java.nio.file.Path file = root.resolve(repair.path());
+                if (!java.nio.file.Files.isRegularFile(file)) continue;
+                String current = java.nio.file.Files.readString(file);
+                var repaired = com.walpro.autobuilder.core.build.InjectedTypeRegistrationRepair
+                        .apply(current, repair);
+                if (repaired.isEmpty()) continue;
+                java.nio.file.Files.writeString(file, repaired.get());
+                log.warn("T3-CA: {} is injected but registered nowhere — added @{}, the registration "
+                                + "its package peers all carry. {}",
+                        repair.typeName(), repair.annotation(), repair.path());
+            }
+        } catch (Exception e) {
+            log.warn("T3-CA: registration repair could not be applied — {}", e.toString());
+        }
     }
 }

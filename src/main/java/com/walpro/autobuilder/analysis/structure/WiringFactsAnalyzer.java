@@ -354,7 +354,35 @@ public class WiringFactsAnalyzer {
      * ([[feedback-no-ecosystem-jargon-in-framework-code]]); a project that annotates nothing
      * produces no fact.
      */
+    /**
+     * The structured form of the {@link #collectUnregisteredInjectedTypes} fact, for the repair
+     * that acts on it. The prose sentence below is rendered FROM this record, so the calibrated
+     * conditions (factory-supplied types, interfaces, peer unanimity) have one home and the
+     * repair can never act on a case the report would not have made.
+     */
+    public record UnregisteredInjectedType(
+            String typeName, String missingAnnotation, String injectedBy, List<String> peers) {}
+
+    /** The same fact the prompt block reports, before it becomes a sentence. */
+    public List<UnregisteredInjectedType> unregisteredInjectedTypes(Map<String, String> outputFiles) {
+        return findUnregisteredInjectedTypes(parseAll(outputFiles));
+    }
+
     private void collectUnregisteredInjectedTypes(List<CompilationUnit> units, List<String> out) {
+        for (UnregisteredInjectedType f : findUnregisteredInjectedTypes(units)) {
+            out.add(String.format(
+                    "%s is a constructor parameter of %s, which is annotated, but %s itself carries no "
+                            + "annotation at all — while all %d other types in its package carry @%s (%s). "
+                            + "If @%s is what makes a type available for injection, %s cannot be supplied "
+                            + "and %s cannot be constructed.",
+                    f.typeName(), f.injectedBy(), f.typeName(), f.peers().size(), f.missingAnnotation(),
+                    String.join(", ", f.peers()), f.missingAnnotation(), f.typeName(), f.injectedBy()));
+            if (out.size() >= MAX_OBSERVATIONS) return;
+        }
+    }
+
+    private List<UnregisteredInjectedType> findUnregisteredInjectedTypes(List<CompilationUnit> units) {
+        List<UnregisteredInjectedType> found = new ArrayList<>();
         Map<String, Set<String>> annotationsByType = new LinkedHashMap<>();
         Map<String, String> packageByType = new LinkedHashMap<>();
         Set<String> interfaces = new LinkedHashSet<>();
@@ -429,15 +457,11 @@ public class WiringFactsAnalyzer {
             if (unanimous.isEmpty()) continue;
 
             String shared = unanimous.iterator().next();
-            out.add(String.format(
-                    "%s is a constructor parameter of %s, which is annotated, but %s itself carries no "
-                            + "annotation at all — while all %d other types in its package carry @%s (%s). "
-                            + "If @%s is what makes a type available for injection, %s cannot be supplied "
-                            + "and %s cannot be constructed.",
-                    candidate, injectedBy.get(candidate), candidate, peers.size(), shared,
-                    String.join(", ", peers), shared, candidate, injectedBy.get(candidate)));
-            if (out.size() >= MAX_OBSERVATIONS) return;
+            found.add(new UnregisteredInjectedType(
+                    candidate, shared, injectedBy.get(candidate), peers));
+            if (found.size() >= MAX_OBSERVATIONS) return found;
         }
+        return found;
     }
 
     private void collectPeerAnnotationOutliers(List<CompilationUnit> units, List<String> out) {

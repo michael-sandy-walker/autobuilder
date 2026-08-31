@@ -2175,7 +2175,35 @@
    "smoke_total": 23,
    "terminal": "deadline",
    "total_cycles": "92"
+  },
+  "2026-08-31_05-47-22": {
+   "clauses_closed_vs_control": "3",
+   "cost_readout": "sms-commit=4737706ms/8 build=216726ms/35 package-gate=8139ms/1 boot-gate=5671ms/1 sms-batch-build=2207ms/9 sms-lineage-stamp=102ms/8 sms-cycle-link=72ms/7 sms-cycle-merge=63ms/8",
+   "criteria_authored": "83",
+   "criteria_executable_count": "18",
+   "criteria_executable_pct": "22",
+   "drift_tail_cycles": "0",
+   "injector_files_created": "0",
+   "injector_files_kept": "0",
+   "injector_fixes_rederived": "1",
+   "median_cycle_seconds": "77",
+   "merges": "3",
+   "peaked_at_cycle": "cycle-1788153082738 (65/65)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-08-31",
+   "repeat_proposals": "3",
+   "repeats_refused": "4",
+   "run_duration_min": "82.8",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 5/23",
+   "smoke_failed_checks": "1,2,3,4,5,6,8,9,10,11,13,16,17,18,19,20,21,23",
+   "smoke_pass": 5,
+   "smoke_preserved": "SMOKE: 5/23",
+   "smoke_strict": "0/23 discounted=7,12,14,15,22",
+   "smoke_total": 23,
+   "terminal": "honest-halt:exhaustion-runaway",
+   "total_cycles": "65"
   }
  },
- "updated": "2026-08-30"
+ "updated": "2026-08-31"
 }

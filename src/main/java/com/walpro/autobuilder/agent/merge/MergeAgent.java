@@ -723,6 +723,12 @@ public class MergeAgent implements ExecutionAgent {
                     java.nio.file.Files.writeString(file, write.getValue());
                 }
                 java.nio.file.Files.deleteIfExists(root.resolve(applied.get().vacatedPath()));
+                // The tree is now consistent, but the loop's own bookkeeping still points at the
+                // file's old home. Measured in the field: a banked criterion reading "A Java class
+                // `Book` exists at .../domain/Book.java" outlived the move that falsified it, and
+                // the three runs in which the mover acted all scored below the ceiling while ten
+                // of eleven without a move were perfect. Repairing the tree is only half a move.
+                goalPlannerService.rewriteRelocatedFileReferences(relocation.fromPath(), relocation.toPath());
                 sources = fileService.readFolderContentsResolved(root);
                 log.warn("T3-BZ: {} sat in {} while the peers that name it sit in {} — moved it there, "
                                 + "rewriting {} file(s). {} -> {}",

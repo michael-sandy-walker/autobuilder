@@ -108,6 +108,51 @@ public final class RequirementPhrasingNormalizer {
      * nothing stated. Conservative — only a path that names the SAME file the criterion is about
      * is removed, so "writes its output to /var/log/app.log" (a real behavioural path) is untouched.
      */
+    /**
+     * T3-BZ: rewrites references to a file the loop has just RELOCATED.
+     *
+     * <p>WHY THIS EXISTS. The placement mover relocates a type and repairs the source tree, but
+     * the loop's own bookkeeping keeps pointing at where the type used to be. Measured in the
+     * field: a banked criterion reading <i>"A Java class `Book` exists at
+     * `src/main/java/com/example/library/domain/Book.java`"</i> survived the move that made it
+     * false, so the loop was then steered by, and checked against, a statement its own repair had
+     * invalidated. Three of three runs in which the mover acted scored below the ceiling; ten of
+     * eleven in which it did not were perfect.
+     *
+     * <p>Rewrites the file path and the fully-qualified type name, both of which the move makes
+     * false and neither of which is ambiguous. Nothing else is touched: prose about a package may
+     * legitimately describe several types, and guessing there would trade one false statement for
+     * another.
+     */
+    public static String rewriteRelocatedReferences(String text, String oldPath, String newPath) {
+        if (text == null || text.isBlank() || oldPath == null || newPath == null) return text;
+        if (oldPath.equals(newPath)) return text;
+        String out = text.replace(oldPath, newPath);
+        String oldFqn = fullyQualifiedName(oldPath);
+        String newFqn = fullyQualifiedName(newPath);
+        if (oldFqn != null && newFqn != null && !oldFqn.equals(newFqn)) {
+            // The trailing boundary matters for the same reason it does in source: without it
+            // a.b.Book also matches the front of a.b.BookRepository and renames a type nobody
+            // asked about.
+            out = out.replaceAll(Pattern.quote(oldFqn) + "(?![\\w$])", Matcher.quoteReplacement(newFqn));
+        }
+        return out;
+    }
+
+    /** {@code src/main/java/a/b/Book.java} -> {@code a.b.Book}; null when the path is not a source file. */
+    private static String fullyQualifiedName(String path) {
+        if (path == null || !path.endsWith(".java")) return null;
+        String p = path.substring(0, path.length() - ".java".length());
+        for (String root : java.util.List.of("src/main/java/", "src/test/java/")) {
+            int i = p.indexOf(root);
+            if (i >= 0) {
+                p = p.substring(i + root.length());
+                return p.replace('/', '.');
+            }
+        }
+        return null;
+    }
+
     public static String stripInventedFilePath(String criterion) {
         if (criterion == null || criterion.isBlank()) return criterion;
         Matcher m = FILE_AT_PATH.matcher(criterion);

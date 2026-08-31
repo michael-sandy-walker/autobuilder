@@ -403,6 +403,12 @@ public class MergeAgent implements ExecutionAgent {
                 // nothing produces nothing.
                 applyInjectedTypeRegistrationRepair(context, outputPath);
 
+                // T3-BZ slice 2: a type sitting apart from the peers that named it. The fact was
+                // stated for the whole life of nine archived runs and moved nothing, because its
+                // only consumer was a paragraph in a prompt. Runs after the move, so a type this
+                // cycle just repaired is relocated with the repair already in it.
+                applyPeerPlacementRelocation(outputPath);
+
                 // T2-EQ (revised 2026-07-27, user call): packaging is NOT verified here. A merge
                 // mid-run leaves a partial skeleton, and "the classes compile" is the right bar
                 // for one — "the whole project packages" is an end-stage property. Demanding it
@@ -675,6 +681,67 @@ public class MergeAgent implements ExecutionAgent {
      * repair returns empty when the declaration has moved or the annotation is already there.
      * Best-effort throughout — a failure here must never fail a merge that has already landed.
      */
+    /**
+     * Moves a type to the package its own peers established, and repairs every reference to it.
+     *
+     * <p>Reads the tree from DISK rather than the cycle's source map: the map is a cycle-start
+     * snapshot, and a move rewrites files this merge (and the registration repair above) may have
+     * just changed. Best-effort throughout — a failure here must never fail a merge that has
+     * already landed.
+     */
+    private void applyPeerPlacementRelocation(String outputPath) {
+        if (wiringFactsAnalyzer == null || outputPath == null) return;
+        try {
+            java.nio.file.Path root = java.nio.file.Path.of(outputPath);
+            java.util.Map<String, String> sources = fileService.readFolderContentsResolved(root);
+            if (sources == null || sources.isEmpty()) return;
+            var findings = wiringFactsAnalyzer.peerPlacementFindings(sources);
+            if (findings.isEmpty()) return;
+            var plan = com.walpro.autobuilder.core.build.PeerPlacementRelocation.plan(sources, findings);
+            // A refusal must be as visible as a move. The structured path does not go through the
+            // analyzer's own announce line (that one serves the prompt), so without this a finding
+            // that is made and then declined leaves no trace at all — indistinguishable from a
+            // rule that never fired, which is precisely what cost slice 1 its first watch reading.
+            for (var finding : findings) {
+                boolean planned = plan.stream().anyMatch(r -> r.typeName().equals(finding.typeName()));
+                if (!planned) {
+                    log.info("T3-BZ: {} sits in {} while its peers sit in {}, but the move was refused "
+                                    + "(no entry point declared, a destination outside the entry point's own "
+                                    + "subtree, an occupied destination, or no declaring file) — reporting only.",
+                            finding.typeName(),
+                            finding.actualPackage().isEmpty() ? "the default package" : finding.actualPackage(),
+                            finding.majorityPackage());
+                }
+            }
+            for (var relocation : plan) {
+                var applied = com.walpro.autobuilder.core.build.PeerPlacementRelocation
+                        .apply(sources, relocation);
+                if (applied.isEmpty()) continue;
+                for (var write : applied.get().writes().entrySet()) {
+                    java.nio.file.Path file = root.resolve(write.getKey());
+                    java.nio.file.Files.createDirectories(file.getParent());
+                    java.nio.file.Files.writeString(file, write.getValue());
+                }
+                java.nio.file.Files.deleteIfExists(root.resolve(applied.get().vacatedPath()));
+                // The tree is now consistent, but the loop's own bookkeeping still points at the
+                // file's old home. Measured in the field: a banked criterion reading "A Java class
+                // `Book` exists at .../domain/Book.java" outlived the move that falsified it, and
+                // the three runs in which the mover acted all scored below the ceiling while ten
+                // of eleven without a move were perfect. Repairing the tree is only half a move.
+                goalPlannerService.rewriteRelocatedFileReferences(relocation.fromPath(), relocation.toPath());
+                sources = fileService.readFolderContentsResolved(root);
+                log.warn("T3-BZ: {} sat in {} while the peers that name it sit in {} — moved it there, "
+                                + "rewriting {} file(s). {} -> {}",
+                        relocation.typeName(), relocation.fromPackage().isEmpty()
+                                ? "the default package" : relocation.fromPackage(),
+                        relocation.toPackage(), applied.get().writes().size(),
+                        relocation.fromPath(), relocation.toPath());
+            }
+        } catch (Exception e) {
+            log.warn("T3-BZ: placement relocation could not be applied — {}", e.toString());
+        }
+    }
+
     private void applyInjectedTypeRegistrationRepair(CycleContextData context, String outputPath) {
         if (wiringFactsAnalyzer == null || outputPath == null) return;
         java.util.Map<String, String> sources = context.previousOutput();

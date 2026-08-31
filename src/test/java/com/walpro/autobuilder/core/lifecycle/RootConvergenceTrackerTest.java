@@ -65,9 +65,12 @@ class RootConvergenceTrackerTest {
     }
 
     @Test
-    void mergeAlone_doesNotResetTheCounter() {
-        // The defining difference from the activity-based brakes: merged cycles still count as
-        // stall when no new completed-with-merge subgoal appears.
+    void mergeAlone_doesNotResetTheCounter_butWorkStillLandingBuysAnotherWindow() {
+        // The defining difference from the activity-based brakes is unchanged: merged cycles are
+        // still stall cycles, so the counter climbs to the limit. T2-FH changes only what happens
+        // THERE — a window in which work kept landing buys another window instead of a halt.
+        // Before T2-FH this same sequence halted, which is the run 2026-08-30_19-42-35 shape:
+        // 14 of 20 cycles into a drought, still merging, and twenty cycles later a full score.
         when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(1);
         when(goalPlannerService.verifyAndPromoteBeforePause(any()))
                 .thenReturn(new VerifyBeforePauseResult(false, 0));
@@ -78,7 +81,49 @@ class RootConvergenceTrackerTest {
             result = tracker.track(ctx(true));
         }
 
-        assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(result)).isTrue();
+        assertThat(DerivedFacts.systemPaused(result)).isFalse();
+        assertThat(DerivedFacts.goalExhausted(result)).isFalse();
+    }
+
+    @Test
+    void aWindowInWhichNothingLanded_stillHalts() {
+        // The other half of the same decision: the counter reaches the limit with no merge in the
+        // window at all, which is run 2026-08-30_18-44-37 — 21 consecutive cycles proposing and
+        // being rejected. That run deserved its halt and still gets it.
+        when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(1);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new VerifyBeforePauseResult(false, 0));
+        tracker.track(ctx(false));
+
+        CycleContextData result = null;
+        for (int i = 0; i < 3; i++) {
+            result = tracker.track(ctx(false));
+        }
+
+        assertThat(DerivedFacts.systemPaused(result)).isTrue();
+        assertThat(result.pausedReason()).isEqualTo("root-convergence-stall");
+    }
+
+    @Test
+    void aBudgetWithNoRoomForAnotherWindow_haltsEvenWhileWorkIsLanding() {
+        // The two halves ship together for this reason: loosening the brake without the budget
+        // half would spend the run's remaining minutes on a drought it cannot finish. A budget
+        // already exhausted cannot fund another window, so the halt stands.
+        when(goalPlannerService.countCompletedSubgoalsWithMerges()).thenReturn(1);
+        when(goalPlannerService.verifyAndPromoteBeforePause(any()))
+                .thenReturn(new VerifyBeforePauseResult(false, 0));
+        tracker.setBudgetMinutes(1);
+        // Four cycles at one minute each: the budget is gone before the window that would follow.
+        java.util.concurrent.atomic.AtomicLong now = new java.util.concurrent.atomic.AtomicLong(0);
+        tracker.setClock(() -> now.getAndAdd(60_000L));
+        tracker.track(ctx(false));
+
+        CycleContextData result = null;
+        for (int i = 0; i < 3; i++) {
+            result = tracker.track(ctx(true));
+        }
+
+        assertThat(DerivedFacts.systemPaused(result)).isTrue();
     }
 
     @Test

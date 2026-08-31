@@ -1,4 +1,10 @@
 autobuilder:
+  run:
+    # T2-FH: the wall-clock budget the harness gives this run, in minutes. The convergence brake
+    # reads it to tell "stop this waste" from "stop this run with 63 of its 90 minutes unspent".
+    # 0 = undeclared, which is what a run started by hand has: the brake then makes no claim
+    # about time and decides on the trend alone. scripts/preflight.sh passes its own cap.
+    budget-minutes: 0
   diff:
     exclude-folders:
       - logs

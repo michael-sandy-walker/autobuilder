@@ -46,15 +46,35 @@ public class RootConvergenceTracker {
     @Value("${autobuilder.deadlock.root-convergence-cycle-limit:20}")
     private int cycleLimit = 20;
 
+    /**
+     * T2-FH: the run's declared time budget in minutes, so the brake can tell "stop this waste"
+     * from "stop this run with most of its budget unspent". Zero means no budget was declared and
+     * the brake makes no claim about time — the trend test still applies.
+     */
+    @Setter
+    @Value("${autobuilder.run.budget-minutes:0}")
+    private int budgetMinutes = 0;
+
     private int lastProgressCount = 0;
     private int lastInjectionCount = 0;
     private int cyclesSinceProgress = 0;
+
+    /** T2-FH: merges per cycle, the one measure that still varies inside a root-progress drought. */
+    private final java.util.List<Integer> mergesPerCycle = new java.util.ArrayList<>();
+
+    /** Wall clock, overridable so a test can spend a budget without spending the time. */
+    @Setter
+    private java.util.function.LongSupplier clock = System::currentTimeMillis;
+    private long firstCycleAt = 0L;
+    private int extensionsGranted = 0;
 
     /**
      * Post-cycle hook. Returns the context unchanged while the root is progressing; returns it
      * with {@code GOAL_EXHAUSTED + SYSTEM_PAUSED} once the stall limit is reached.
      */
     public CycleContextData track(CycleContextData context) {
+        if (firstCycleAt == 0L) firstCycleAt = clock.getAsLong();
+        mergesPerCycle.add(context.merged() ? 1 : 0);
         int progressNow = goalPlannerService.countCompletedSubgoalsWithMerges();
         int injectionsNow = goalPlannerService.countClosureEdgeInjections();
 
@@ -136,8 +156,23 @@ public class RootConvergenceTracker {
                 cyclesSinceProgress = 0;
                 return context;
             }
-            log.error("T4-I: root convergence stall — {} consecutive cycles without a new completed-with-merge subgoal (count frozen at {}); verify-before-pause found nothing to promote. Pausing for review.",
-                    cyclesSinceProgress, progressNow);
+            // T2-FH: the drought is real, but is the run grinding or still working? Root progress
+            // is zero here by construction, so the question is asked of the measure that still
+            // varies: merges landing in the window just elapsed, against the run's own history.
+            ConvergenceTrend.Assessment trend = ConvergenceTrend.assess(mergesPerCycle, cycleLimit);
+            if (trend.stillLandingWork() && budgetAllowsAnotherWindow()) {
+                extensionsGranted++;
+                log.warn("T2-FH: root progress is stalled at {} for {} cycles, but work is still landing — {} merge(s) in the window ({} per cycle, against {} per cycle earlier). Granting another window (extension {}); not halting.",
+                        progressNow, cyclesSinceProgress, trend.windowMerges(),
+                        String.format("%.2f", trend.windowRate()), String.format("%.2f", trend.earlierRate()),
+                        extensionsGranted);
+                cyclesSinceProgress = 0;
+                return context;
+            }
+            log.error("T4-I: root convergence stall — {} consecutive cycles without a new completed-with-merge subgoal (count frozen at {}); verify-before-pause found nothing to promote. T2-FH: {} merge(s) landed in that window ({} per cycle, against {} per cycle earlier){}. Pausing for review.",
+                    cyclesSinceProgress, progressNow, trend.windowMerges(),
+                    String.format("%.2f", trend.windowRate()), String.format("%.2f", trend.earlierRate()),
+                    trend.stillLandingWork() ? " — work was still landing, but the budget cannot fund another window" : "");
             // T5-BF follow-up: the system_paused behaviour event is emitted at the single
             // AutobuilderService home (post-cycle, same tick) off the pausedReason below.
             return context
@@ -149,5 +184,27 @@ public class RootConvergenceTracker {
                     cyclesSinceProgress, cycleLimit, progressNow);
         }
         return context;
+    }
+
+    /**
+     * T2-FH: whether the run can still pay for another window, measured in its OWN cycle
+     * durations rather than a fixed number of minutes — a slow run's window costs more wall time
+     * than a fast one's, and the brake must not pretend otherwise
+     * ([[feedback-relative-thresholds]]).
+     *
+     * <p>An undeclared budget grants the window: the loop was given no deadline to respect, and
+     * inventing one here would be the fixed constant this ticket exists to remove.
+     */
+    private boolean budgetAllowsAnotherWindow() {
+        if (budgetMinutes <= 0) return true;
+        if (mergesPerCycle.isEmpty()) return false;
+        long elapsedMs = clock.getAsLong() - firstCycleAt;
+        long remainingMs = budgetMinutes * 60_000L - elapsedMs;
+        long meanCycleMs = elapsedMs / mergesPerCycle.size();
+        long windowCostMs = meanCycleMs * cycleLimit;
+        if (remainingMs > windowCostMs) return true;
+        log.info("T2-FH: work is still landing, but {} min of budget leaves no room for another {}-cycle window at this run's own pace ({} s per cycle).",
+                remainingMs / 60_000L, cycleLimit, meanCycleMs / 1000);
+        return false;
     }
 }

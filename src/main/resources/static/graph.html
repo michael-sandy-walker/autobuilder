@@ -2086,6 +2086,15 @@ window.MissionControl = (function () {
   // T5-BF: session start (epoch ms) for the runtime row — seeded from the hello envelope's
   // sessionStartTimestamp, falling back to the first live event's timestamp on old backends.
   let sessionStartMs = null;
+  // The runtime row used to tick off Date.now() forever, so a closed tab left open after a run
+  // showed the BROWSER's uptime rather than the run's: a finished 90-minute run kept climbing
+  // past 4h. It now freezes on the two states that definitely mean nothing is running any more
+  // — the event stream is down (the JVM is gone) or the loop reported a halt — and freezes at
+  // the last event's OWN timestamp, so the frozen value is the run's duration, not the moment
+  // the browser noticed.
+  let lastEventMs = null;
+  let streamLive = false;
+  let loopHalted = false;
   // T5-BF: the plot line + failure-reaction state. lastSubGoal is seeded from hello (so a
   // reconnect doesn't re-announce); fixFailStreak counts consecutive failed fix attempts so the
   // moment the build goes green again can be told as "repaired after N attempts".
@@ -2121,6 +2130,8 @@ window.MissionControl = (function () {
 
   // ---- HUD ----
   function setConn(live) {
+    streamLive = !!live;
+    refreshRuntime(); // freeze or resume immediately rather than up to a second later
     const el = $('mc-conn'); if (!el) return;
     el.className = 'mc-conn ' + (live ? 'live' : 'disconnected');
     el.textContent = live ? 'live' : 'offline';
@@ -2535,9 +2546,13 @@ window.MissionControl = (function () {
   // T5-BF: HUD runtime — total wall-clock since the loop's first behaviour event, ticking.
   function refreshRuntime() {
     if (sessionStartMs == null) return;
-    const s = Math.max(0, Math.floor((Date.now() - sessionStartMs) / 1000));
+    const running = streamLive && !loopHalted;
+    // Frozen runs report up to their last event; a run still going reports up to now.
+    const until = running ? Date.now() : (lastEventMs != null ? lastEventMs : Date.now());
+    const s = Math.max(0, Math.floor((until - sessionStartMs) / 1000));
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-    hudSet('mc-runtime', h > 0 ? (h + 'h ' + m + 'm') : (m + 'm ' + String(sec).padStart(2, '0') + 's'));
+    const text = h > 0 ? (h + 'h ' + m + 'm') : (m + 'm ' + String(sec).padStart(2, '0') + 's');
+    hudSet('mc-runtime', running ? text : text + ' (ended)');
   }
   function noteSessionStart(iso) {
     if (sessionStartMs != null || !iso) return;
@@ -2559,6 +2574,10 @@ window.MissionControl = (function () {
     if (!env || !env.event) return;
     const p = env.payload || {};
     noteSessionStart(env.timestamp); // fallback when hello carried no session start
+    const evMs = env.timestamp ? Date.parse(env.timestamp) : NaN;
+    lastEventMs = Number.isNaN(evMs) ? Date.now() : evMs;
+    if (FAMILY[env.event] === 'halt') loopHalted = true;
+    else if (env.event === 'system_resumed') loopHalted = false;
     // per-event story flags (consumed by the ghost chain + narrationText below)
     subgoalSwitched = false;
     repairedAfter = 0;

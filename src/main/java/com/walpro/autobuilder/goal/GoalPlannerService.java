@@ -504,6 +504,64 @@ public class GoalPlannerService {
     }
 
     /**
+     * T3-BZ: re-points every banked criterion and goal description at a file the loop has just
+     * relocated, so a repair cannot leave the goal tree asserting something it made false.
+     *
+     * <p>Walks every goal, not only the active one: a criterion banked on a COMPLETED goal is
+     * still read at the closure edge, and a description on a queued goal still steers the
+     * planner. Returns the number of goals changed, for the caller's log.
+     */
+    public int rewriteRelocatedFileReferences(String oldPath, String newPath) {
+        if (oldPath == null || newPath == null || oldPath.equals(newPath)) return 0;
+        int changed = 0;
+        for (GoalEntity g : goalMap.values()) {
+            if (g == null) continue;
+            boolean touched = false;
+
+            String description = g.getDescription();
+            if (description != null) {
+                String rewritten = RequirementPhrasingNormalizer
+                        .rewriteRelocatedReferences(description, oldPath, newPath);
+                if (!rewritten.equals(description)) {
+                    g.setDescription(rewritten);
+                    touched = true;
+                }
+            }
+
+            Object raw = g.getMetadata() != null ? g.getMetadata().get("acceptanceCriteria") : null;
+            if (raw instanceof List<?> list && !list.isEmpty()) {
+                List<String> rewritten = new ArrayList<>(list.size());
+                boolean criteriaChanged = false;
+                for (Object o : list) {
+                    String c = o == null ? null : o.toString();
+                    String r = RequirementPhrasingNormalizer.rewriteRelocatedReferences(c, oldPath, newPath);
+                    rewritten.add(r);
+                    if (r != null && !r.equals(c)) criteriaChanged = true;
+                }
+                if (criteriaChanged) {
+                    g.getMetadata().put("acceptanceCriteria", rewritten);
+                    touched = true;
+                }
+            }
+
+            if (touched) {
+                changed++;
+                try {
+                    goalGraphService.save(g);
+                } catch (Exception e) {
+                    log.debug("T3-BZ: graph update failed for goal {} (ignoring): {}", g.getId(), e.toString());
+                }
+            }
+        }
+        if (changed > 0) {
+            persist();
+            log.info("T3-BZ: {} relocated to {} — re-pointed {} goal(s) whose criteria or description "
+                    + "named the vacated path.", oldPath, newPath, changed);
+        }
+        return changed;
+    }
+
+    /**
      * T2-BW: Returns the count of unmet acceptance criteria for the given subgoal.
      * A criterion is unmet when it is absent from the pass-status map or explicitly false.
      * Returns 1 (minimum budget floor) when the goal is unknown or has no criteria.

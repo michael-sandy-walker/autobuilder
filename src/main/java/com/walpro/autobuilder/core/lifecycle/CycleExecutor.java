@@ -408,13 +408,13 @@ public class CycleExecutor {
             livelockConsecutiveCount = 1;
         }
         if (livelockConsecutiveCount >= LIVELOCK_THRESHOLD) {
-            log.warn("T1-ET: livelock-suspected (subGoalId={},n={})", subId, livelockConsecutiveCount);
+            log.warn("T1-ET: livelock-signature (subGoalId={},n={})", subId, livelockConsecutiveCount);
             if (behaviourLogger != null) {
                 behaviourLogger.guardViolated(ctx.cycleName(), "T1-ET",
-                        "livelock-suspected: mut=null && promoted=true && merged=false on subGoalId="
+                        "livelock-signature: mut=null && promoted=true && merged=false on subGoalId="
                                 + subId + " for " + livelockConsecutiveCount + " consecutive cycles");
             }
-            ctx = ctx.issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "T1-ET-livelock-suspected", ChannelRequest.horizonFromDecay(1.0, 0.5)));
+            ctx = ctx.issueRequest(ChannelRequest.of(BasicSignals.REPLAN_REQUESTED, 1.0, "T1-ET-livelock-signature", ChannelRequest.horizonFromDecay(1.0, 0.5)));
             livelockTrackingSubGoalId = null;
             livelockConsecutiveCount = 0;
         }

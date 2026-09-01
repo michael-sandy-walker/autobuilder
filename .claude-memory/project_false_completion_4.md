@@ -30,7 +30,7 @@ requirements were dissolved before anything checked them.** T4-BP-3 re-verifies 
 criteria; criteria on given-up/subsumed subgoals exit the ledger unchecked against the seed. The
 plan was reshaped (47 `SubGoalRemove` events) until what remained was satisfiable.
 
-**The exhausted/fulfilled flip was suspected and is EXONERATED** (user-raised, audited same day).
+**The exhausted/fulfilled flip was questioned and is CLEARED by the audit** (user-raised, audited same day).
 `CycleExecutor` T1-DJ returns `GOAL_FULFILLED` when a `GOAL_EXHAUSTED` signal coexists with a
 COMPLETED root. Audit of all **7 archived fulfilled runs**: **4 arrived via the relabel, including
 BOTH 23/23 firestarter runs**, while a direct fulfilment scored 18/23 — the correlation runs

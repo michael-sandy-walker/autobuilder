@@ -271,7 +271,7 @@ these at window parameters.
 | B9 | `AutobuilderService:605` | REPLAN_REQUESTED | 1.0/0.20 | exhaustion recovery (guarded: only if <0.50 present) |
 | B10 | `AutobuilderService:661` | REPLAN_REQUESTED | 1.0/0.20 | stagnation recovery (same guard) |
 | B11 | `BuildFixEscalator:70` | REPLAN_REQUESTED | 1.0/0.10 | buildFixStuck stage 1 |
-| B12 | `CycleExecutor:339` | REPLAN_REQUESTED | 1.0/0.5 | T1-ET livelock suspected |
+| B12 | `CycleExecutor:339` | REPLAN_REQUESTED | 1.0/0.5 | T1-ET livelock signature |
 | B13 | `InterpretationResponseParser:42` | REPLAN_REQUESTED | 0.8/0.05 | LLM-emitted (I7 channel — parser enqueues) |
 | B14 | `RuleBasedDeliberationProposer:89` | REPLAN_REQUESTED | 0.80/0.10 | thrash pre-emption |
 | B15 | `RuleBasedDeliberationProposer:112` | REPLAN_REQUESTED | 0.85/0.10 | repetition breakout |

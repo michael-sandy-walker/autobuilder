@@ -35,7 +35,7 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
 
     /**
      * The check only ever refutes, so switching it off can only restore false closures — but a
-     * switch is what let T4-DA's suspected cost be settled by measurement instead of argument, and
+     * switch is what let T4-DA's unconfirmed cost be settled by measurement instead of argument, and
      * every mechanism this project ships now carries one.
      */
     @Value("${autobuilder.goal.verify-closure-claims:true}")

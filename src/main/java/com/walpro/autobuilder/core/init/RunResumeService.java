@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.init;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
 import com.walpro.autobuilder.core.build.BuildOutcome;
@@ -62,10 +65,16 @@ import java.util.stream.Stream;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "the prior-run end report block is derived once at boot")
 public class RunResumeService {
 
     private static final long VERIFY_TIMEOUT_MS = 120_000L;
-    private static final List<String> RUN_SCOPED_DIRS = List.of("mutations", "snapshots");
+    // T4-DQ: "checkpoints" joins the run-scoped clear. A checkpoint is mostly REFERENCES into
+    // snapshots/ and mutations/, so keeping checkpoints while clearing those would leave points
+    // that look returnable and are not.
+    private static final List<String> RUN_SCOPED_DIRS =
+            List.of("mutations", "snapshots", "checkpoints", "llm-recordings");
 
     private final AutobuilderConfigProperties config;
     private final FileService fileService;

@@ -40,6 +40,15 @@ public class LLMClient {
     @lombok.Setter
     private com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
 
+    /**
+     * T4-DQ slice 2: records what the model said, and answers from the recording during a replay.
+     * Optional so unit tests constructing LLMClient by hand are unaffected; absent means the client
+     * behaves exactly as it always has.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private LlmExchangeRecorder exchangeRecorder;
+
     @Value("${llm.api.url}")
     private String apiUrl;
 
@@ -95,6 +104,25 @@ public class LLMClient {
             log.warn("LLM call rejected — circuit open ({}). Failing fast.", reason);
             throw new ResourceAccessException("LLM circuit open — failing fast: " + reason);
         }
+        // T4-DQ slice 2: during a replay the recording answers, and the endpoint is never called.
+        // ONE chokepoint — every agent's call comes through here, so recording and replay need no
+        // per-agent plumbing and cannot miss a caller.
+        String promptDigest = exchangeRecorder != null ? LlmExchangeRecorder.promptDigest(conversation) : null;
+        if (exchangeRecorder != null && exchangeRecorder.replaying()) {
+            java.util.Optional<ChatResponse> recorded = exchangeRecorder.replay(
+                    LlmCallContext.currentRole(), LlmCallContext.currentCycleId(), promptDigest);
+            if (recorded.isPresent()) {
+                return ResponseEntity.ok(recorded.get());
+            }
+            if (exchangeRecorder.strict()) {
+                // Strict replay stops AT the divergence: the loop asked something the recorded run
+                // never asked, which is the finding, and continuing would measure the fallback
+                // rather than the state.
+                throw new ResourceAccessException(
+                        "T4-DQ strict replay: no recorded answer for prompt " + promptDigest);
+            }
+        }
+
         ChatRequest request = new ChatRequest(model, conversation, 0.0,
                 reasoningEffort == null || reasoningEffort.isBlank() ? null : reasoningEffort.trim());
 
@@ -140,6 +168,10 @@ public class LLMClient {
 
                 circuitBreaker.recordSuccess();
                 recordUsage(response.getBody(), durationMs);
+                if (exchangeRecorder != null) {
+                    exchangeRecorder.record(LlmCallContext.currentRole(),
+                            LlmCallContext.currentCycleId(), promptDigest, response.getBody());
+                }
 
                 if (response.getBody() != null && response.getBody().getFirstContent() != null) {
                     log.info("[LLM RESPONSE]\n{}\n{}", "-----", response.getBody().getFirstContent());

@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.client;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -20,6 +23,9 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "live endpoint health — a rewind says nothing about whether the model is answering "
+                + "now")
 public class LlmCircuitBreaker {
 
     private static final int CONSECUTIVE_FAILURE_THRESHOLD = 5;

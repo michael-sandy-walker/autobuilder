@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.controller;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,6 +36,8 @@ import jakarta.annotation.PostConstruct;
  * only user-visible action is `mvn spring-boot:run`.
  */
 @Service
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "an environment readiness probe")
 public class TtsService {
 
     private static final Logger log = LoggerFactory.getLogger(TtsService.class);

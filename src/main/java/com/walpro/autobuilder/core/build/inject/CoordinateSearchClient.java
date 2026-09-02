@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.build.inject;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Setter;
@@ -38,6 +41,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @Slf4j
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "memo of external registry answers plus live failure backoff")
 public class CoordinateSearchClient {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();

@@ -1,6 +1,6 @@
 ---
 name: project-state-time-travel-design-note
-description: "T4-DQ design note (2026-09-02, user-directed) — checkpoint/restore/rewind as REAL FUNCTIONALITY, not a test script: the full state surface inventoried with evidence, the two structural blockers (goal status mutated in place, decision-bearing trackers never persisted), the event-log-plus-snapshot decision and why the user's challenge to snapshot-only was right, the three-bucket state manifest (capture / already-persisted / derived-do-not-restore), two cache modes whose difference is itself diagnostic, and differential replay as the falsifiable completeness test. Read before any checkpoint, rewind, backtracking, or T4-CR work."
+description: "T4-DQ design note and BUILD RECORD (2026-09-02, user-directed; slices 1-3 SHIPPED the same day) — checkpoint/restore/rewind as REAL FUNCTIONALITY, not a test script: the full state surface inventoried with evidence, the two structural blockers (goal status mutated in place, decision-bearing trackers never persisted), the event-log-plus-snapshot decision and why the user's challenge to snapshot-only was right, the three-bucket state manifest (capture / already-persisted / derived-do-not-restore), two cache modes whose difference is itself diagnostic, and differential replay as the falsifiable completeness test. Read before any checkpoint, rewind, backtracking, or T4-CR work."
 metadata:
   node_type: memory
   type: project
@@ -8,9 +8,11 @@ metadata:
 
 # State time travel — design note (T4-DQ)
 
-**Status: DESIGN, no code.** Written 2026-09-02 after a user-directed exchange that corrected two
-of my positions. This is rationale, never a queue ([[feedback-roadmap-is-the-queue]]); `T4-DQ` in
-`roadmap.md` is the ticket.
+**Status: SLICES 1-3 SHIPPED 2026-09-02** (design written the same day, after a user-directed
+exchange that corrected two of my positions). This is rationale, never a queue
+([[feedback-roadmap-is-the-queue]]); `T4-DQ` in `roadmap.md` is the ticket and carries the
+as-built record. What follows is the design as reasoned, with a build section at the end recording
+where reality differed.
 
 ## What this is
 
@@ -126,3 +128,43 @@ deterministic replay of live runs on its own, which is worth having regardless
 - How does a rewind interact with the run budget and the convergence brake — is rewound time spent?
 - What does the loop consult to DECIDE to rewind? That is slice 3's real content and it is a
   self-model question, not a plumbing one.
+
+## What building it changed — recorded 2026-09-02
+
+- **The state surface was 40 holders, not 5.** A reflection scan over the compiled beans (Spring
+  stereotype + mutable non-injected instance field) found 40 singletons carrying run state; 13 are
+  decision-bearing. `AutobuilderService` alone holds eleven brake counters plus the pause flags —
+  **more decision-bearing state than the five named trackers combined**, and nothing had ever
+  persisted any of it. The design's list was a starting point, not an inventory; that is exactly
+  why the registration contract, not the list, is the deliverable.
+- **The three buckets held, but one needed widening.** No fourth bucket was required (the cache is
+  handled by `CacheMode` over the on-disk `cache/`; in-memory memos are DERIVED). But
+  `DERIVED_DO_NOT_RESTORE` had to be widened from "derived per cycle" to also cover **state a
+  rewind may not REFUND** — wall clock, the run budget, and the rewind budget itself. Found by
+  `RewindPolicy` contradicting itself: declared CAPTURE, with a `restoreState` that deliberately
+  did nothing, which the fingerprint then correctly reported as a divergence on every rewind.
+  **State can be real, durable and decision-bearing and still belong in the do-not-restore bucket.**
+- **Decision 4 came out stronger than designed.** Instead of a one-off round-trip harness, the
+  per-component `StateFingerprint` is recorded in every checkpoint and **recompared at every
+  restore**, so completeness is exercised continuously in production rather than at a test's
+  convenience. Both halves were proved falsifiable by breaking them on purpose: removing one
+  `@StateHolder` annotation turns the contract test red, and a holder that captures but does not
+  restore is caught as `state diverged after restore: holder:<key>`.
+- **Blocker 1 needed a half the design did not name: EXISTENCE.** Restoring statuses is not enough
+  — a goal the planner thought of after the cut point had not been thought of yet. It is rewound
+  OUT (`Kind.REMOVED`, graph tombstone, excluded from `findAll`), never deleted.
+- **A plain rewind would deterministically repeat itself.** Prompts go out at temperature 0, so the
+  same restored state asks the same question and gets the same answer. What breaks the repeat is
+  that rewound-out goals leave the live tree but stay in the graph's description corpus, which is
+  what the planner's duplicate check reads — the plan that led into the grind stays known and stays
+  refused. Worth remembering before slice 4: **backtracking needs something to differ, and state
+  restoration alone guarantees the opposite.**
+- **Slice 3 needed no new constant.** The convergence brake already computes the relative judgement
+  (`ConvergenceTrend`, merges in the window against the run's own earlier rate) and had exactly one
+  response available. Rewind-on-grind is a second response taken before the terminal one.
+- **The ticket's own figures were wrong and are corrected on it.** Run `2026-09-01_23-11-25`:
+  5 merges and ZERO rollback events, not "25 rollbacks, 3 merges". The real shape is starker —
+  42 of 53 cycles (79%) landing nothing, and 60 of 65 (92%) in `2026-08-31_05-47-22`.
+- **Still unanswered, and now ASKABLE:** whether the resolution cache is decision-bearing. Both
+  modes are implemented; nobody has yet run the same rewind `FAITHFUL` and `FRESH` and compared.
+  That experiment is the design's decision 3 and it has not been done.

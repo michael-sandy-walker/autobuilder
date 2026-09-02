@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.core.service;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +41,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AutobuilderService {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "stagnation, zero-work, exhaustion and fingerprint-repeat counters plus the pause "
+                + "flag decide promotion, division and halting")
+public class AutobuilderService implements CheckpointableState {
 
     private final SeedCoordinator seedCoordinator;
     private final BuildSystemBootstrap buildSystemBootstrap;
@@ -259,10 +266,97 @@ public class AutobuilderService {
     /** T4-CD slice 2: guards the end report write — one end report per pause episode. */
     private boolean endReportWrittenThisEpisode = false;
 
+    /**
+     * T4-DQ: takes the per-cycle checkpoint. Optional so the unit tests that construct this
+     * service by hand need no stub; without it the loop simply cannot rewind.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.checkpoint.CheckpointService checkpointService;
+
+    /**
+     * T4-DQ slice 3: consulted when the convergence brake decides the run is grinding, so it backs
+     * out to its last point that landed work instead of dying there. Optional for the same reason;
+     * absent means the halt behaves exactly as it always has.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.checkpoint.RewindPolicy rewindPolicy;
+
     /** T4-BP step 1: criteria verification on the #NoDiff route — optional, wired by Spring if present. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     @lombok.Setter
     private com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService criteriaVerificationService;
+
+    // ---------------------------------------------------------------------------------
+    // T4-DQ: checkpoint / rewind
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * The run-level brakes: every counter that decides promotion, division, escalation or halting,
+     * plus the pause flags. This is the largest single block of decision-bearing state in the
+     * loop and none of it was ever persisted — a run that was three zero-work cycles from a
+     * deadlock escalation and one from a stagnation promotion would, without this, come back from
+     * a rewind at zero on both.
+     *
+     * <p>{@code context} is absent: the cycle context has its own durable home
+     * ({@code mutations/<cycleId>/meta.json}), which the checkpoint references rather than copies.
+     * {@code preserveIntervalCycles} and the limit fields are configuration.
+     */
+    public record Snapshot(int cyclesSincePreserve,
+                           int consecutiveSubgoalExhaustionsWithoutMerge,
+                           int consecutiveStagnatingCyclesWithoutMerge,
+                           double lastEvaluatedScore,
+                           int consecutiveSameFingerprintCycles,
+                           int consecutiveZeroWorkCycles,
+                           int consecutivePlannerEmptyOutputCycles,
+                           java.util.Map<String, Integer> subgoalRetryCount,
+                           boolean systemPaused,
+                           boolean pauseEventEmitted,
+                           boolean endReportWrittenThisEpisode) {}
+
+    @Override
+    public String stateKey() {
+        return "runBrakes";
+    }
+
+    @Override
+    public Object captureState() {
+        return new Snapshot(cyclesSincePreserve, consecutiveSubgoalExhaustionsWithoutMerge,
+                consecutiveStagnatingCyclesWithoutMerge, lastEvaluatedScore,
+                consecutiveSameFingerprintCycles, consecutiveZeroWorkCycles,
+                consecutivePlannerEmptyOutputCycles, new java.util.TreeMap<>(subgoalRetryCount),
+                systemPaused, pauseEventEmitted, endReportWrittenThisEpisode);
+    }
+
+    @Override
+    public void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                             com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        cyclesSincePreserve = 0;
+        consecutiveSubgoalExhaustionsWithoutMerge = 0;
+        consecutiveStagnatingCyclesWithoutMerge = 0;
+        lastEvaluatedScore = Double.NaN;
+        consecutiveSameFingerprintCycles = 0;
+        consecutiveZeroWorkCycles = 0;
+        consecutivePlannerEmptyOutputCycles = 0;
+        subgoalRetryCount.clear();
+        systemPaused = false;
+        pauseEventEmitted = false;
+        endReportWrittenThisEpisode = false;
+        if (state == null || state.isNull()) return;
+        Snapshot snapshot = mapper.convertValue(state, Snapshot.class);
+        cyclesSincePreserve = snapshot.cyclesSincePreserve();
+        consecutiveSubgoalExhaustionsWithoutMerge = snapshot.consecutiveSubgoalExhaustionsWithoutMerge();
+        consecutiveStagnatingCyclesWithoutMerge = snapshot.consecutiveStagnatingCyclesWithoutMerge();
+        lastEvaluatedScore = snapshot.lastEvaluatedScore();
+        consecutiveSameFingerprintCycles = snapshot.consecutiveSameFingerprintCycles();
+        consecutiveZeroWorkCycles = snapshot.consecutiveZeroWorkCycles();
+        consecutivePlannerEmptyOutputCycles = snapshot.consecutivePlannerEmptyOutputCycles();
+        if (snapshot.subgoalRetryCount() != null) subgoalRetryCount.putAll(snapshot.subgoalRetryCount());
+        systemPaused = snapshot.systemPaused();
+        pauseEventEmitted = snapshot.pauseEventEmitted();
+        endReportWrittenThisEpisode = snapshot.endReportWrittenThisEpisode();
+    }
 
     public Optional<CycleContextData> getContext() {
         return Optional.ofNullable(context);
@@ -1085,6 +1179,35 @@ public class AutobuilderService {
         // subgoal (root progress the planner can't fake by re-decomposing) does.
         context = rootConvergenceTracker.track(context);
 
+        // T4-DQ slice 3: the brake has judged that this run is grinding and its only answer, until
+        // now, was to end the run. Ending it is the LAST answer, not the only one — a point where
+        // work was still landing is on disk, because the loop snapshots the tree every cycle. Back
+        // out to it and take a different path instead.
+        //
+        // Sited HERE rather than inside the brake on purpose: the brake's job is to judge whether
+        // the run is still landing work, and what to do about a halt belongs to the thing that
+        // owns the cycle. The rest of the post-cycle tail describes the path just abandoned —
+        // stagnation counters, plateau tracking, consolidation over a tree that has moved — so the
+        // cycle ends here and the next tick rebuilds its context from the restored state.
+        //
+        // Measured on the runs this exists for: 2026-09-01_23-11-25 landed nothing for 42 of its
+        // 53 cycles and 2026-08-31_05-47-22 for 60 of 65; both shipped 5/23.
+        if (rewindPolicy != null && com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker.HALT_SOURCE.equals(context.pausedReason())) {
+            var rewound = rewindPolicy.considerRewindInsteadOfHalting(
+                    context.cycleName(), rootConvergenceTracker.cyclesSinceProgress());
+            if (rewound.isPresent()) {
+                rootConvergenceTracker.resyncAfterRewind();
+                // Clear the halt this cycle raised: the run is continuing, from further back.
+                // `context` is the service's own field, which the next tick reads.
+                context = context
+                        .withPausedReason(null)
+                        .withGoalExhaustedReason(null);
+                log.warn("T4-DQ: cycle {} ends at the rewind — the remainder of its post-cycle work "
+                        + "describes the path that was just backed out of.", context.cycleName());
+                return;
+            }
+        }
+
         // T4-AJ Part B: catch-up consolidation of equivalent goals. Triggers well before the
         // brake (stagnation streak / ACTIVE-leaf bloat), so folding duplicates gets a chance to
         // restore convergence; no-ops when the cycle already carries a halt signal.
@@ -1159,6 +1282,14 @@ public class AutobuilderService {
         }
 
         context = cyclePersistenceService.persistSnapshot(context);
+
+        // T4-DQ: take the checkpoint HERE, immediately after the tree snapshot the checkpoint
+        // references — a checkpoint whose snapshot does not yet exist is a point that cannot be
+        // returned to. Every cycle, matching the snapshot cadence, and bounded by retention.
+        if (checkpointService != null) {
+            checkpointService.write(context);
+        }
+
         cycleLoggingService.logCycleSummary(context);
 
         smsCycleIngestor.ingestCycle(context);

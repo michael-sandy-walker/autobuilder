@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.service;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.FileSystems;
@@ -30,6 +33,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "a queue of live filesystem events")
 public class FileWatcherService {
 
     private final Path rootDir;

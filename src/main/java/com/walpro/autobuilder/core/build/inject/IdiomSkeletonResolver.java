@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.build.inject;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -64,6 +67,8 @@ import java.util.stream.Stream;
  */
 @Slf4j
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "compiled patterns, constant for the lifetime of the process")
 public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
 
     /** T3-BV: matches the diagnostic detail line naming a missing <i>class</i> (vs method/variable). */

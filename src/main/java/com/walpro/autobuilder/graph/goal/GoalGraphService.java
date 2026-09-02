@@ -43,6 +43,27 @@ public interface GoalGraphService {
         return Optional.empty();
     }
 
+    /**
+     * T4-DQ blocker 1: append one goal-status transition as history. A PROJECTION — the
+     * authoritative log is {@code meta/goal-transitions.ndjson}, which the fold reads, so the
+     * loop can still rewind with the database unavailable. Default no-op so non-Neo4j test
+     * doubles need no change.
+     */
+    default void recordStatusTransition(com.walpro.autobuilder.goal.GoalTransition transition) {
+        // no-op: the file log is authoritative
+    }
+
+    /**
+     * T4-DQ: tombstone goals a rewind put back out of existence — they were planned after the
+     * checkpoint, so as of the restored state they had not been thought of. Deliberately NOT a
+     * delete: the graph is history, and "this was once planned and then rewound away" is worth
+     * keeping. {@link #findAll()} excludes tombstoned nodes so a JVM restart does not reload
+     * them into the live tree. Default no-op for non-Neo4j doubles.
+     */
+    default void markRewoundOut(java.util.List<String> goalIds, String cycleId) {
+        // no-op
+    }
+
     Optional<GoalGraphState> getState();
 
     void setState(String rootGoalId, String currentSubGoalId);

@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +33,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Slf4j
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "a one-shot environment probe flag")
 public class BuildExecutor {
 
     private final boolean enabled;

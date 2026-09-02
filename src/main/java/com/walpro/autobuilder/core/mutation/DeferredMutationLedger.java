@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.core.mutation;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.mutation.DeferredMutationGraphService;
@@ -34,7 +38,10 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class DeferredMutationLedger {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "the cycle clock keys deferral TTL and clearance recency; the records themselves live "
+                + "in the graph")
+public class DeferredMutationLedger implements CheckpointableState {
 
     private final DeferredMutationGraphService graph;
 
@@ -45,6 +52,35 @@ public class DeferredMutationLedger {
 
     /** Monotonic cycle counter — used for TTL / recency. Survives the lifetime of the JVM. */
     private final AtomicLong cycleClock = new AtomicLong();
+
+    // ---------------------------------------------------------------------------------
+    // T4-DQ: checkpoint / rewind
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * Only the cycle clock. The deferral records live in the graph, which is append-only and
+     * cycle-tagged, so they are {@link com.walpro.autobuilder.core.checkpoint.StateBucket}
+     * ALREADY_PERSISTED — but the clock they are read RELATIVE to is not, and a TTL measured
+     * against a clock that ran on while the tree went back is a TTL measured against nothing.
+     */
+    public record Snapshot(long cycleClock) {}
+
+    @Override
+    public String stateKey() {
+        return "deferredMutationClock";
+    }
+
+    @Override
+    public Object captureState() {
+        return new Snapshot(cycleClock.get());
+    }
+
+    @Override
+    public void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                             com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        cycleClock.set(state == null || state.isNull()
+                ? 0L : mapper.convertValue(state, Snapshot.class).cycleClock());
+    }
 
     /** Bump on every cycle_start so deferredAtCycleIndex / clearance recency are comparable. */
     public long tick() {

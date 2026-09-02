@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.build.inject;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.core.build.ProjectClasspathService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +44,8 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "memo of the build manifest's managed versions")
 public class BomManagedVersionsService {
 
     private static final int MAX_POM_CHAIN_DEPTH = 8;

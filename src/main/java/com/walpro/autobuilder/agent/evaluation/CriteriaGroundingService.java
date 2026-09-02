@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.agent.evaluation;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
@@ -40,6 +43,9 @@ import java.util.regex.Pattern;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "memo of a structural check against the current tree — a restored tree must re-derive "
+                + "it")
 public class CriteriaGroundingService {
 
     private static final Pattern ANSWER_LINE = Pattern.compile("(?m)^\\s*(\\d+)\\.\\s*([✓✗])");

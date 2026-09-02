@@ -160,7 +160,9 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 // said. Field-caught: a prior lineage's goals were loaded at boot and crashed
                 // GoalPlannerService.init(). The graph BROWSER reads history through
                 // OrchestrationGraphExplorerService, which is deliberately not scoped.
-                WHERE g.lineageId = $lineageId
+                // T4-DQ: a goal a rewind put back out of existence stays in the graph as
+                // history but must not reload into the live tree on the next boot.
+                WHERE g.lineageId = $lineageId AND g.rewoundOutInCycle IS NULL
                 OPTIONAL MATCH (g)-[:SUBGOAL_OF]->(parent:Goal)
                 RETURN g, parent.id AS parentId
                 """)
@@ -210,6 +212,52 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 .bind(id).to("id")
                 .bind(Instant.now().toString()).to("completed")
                 .bind(resolution).to("resolution")
+                .run();
+    }
+
+    /**
+     * T4-DQ blocker 1: the append-only projection of the goal-status history. Goal status is
+     * still SET in place on the {@code (:Goal)} node — that is the CURRENT value and consumers
+     * read it directly — but every move now also leaves a {@code (:GoalStatusTransition)} node
+     * so the graph browser can see what a goal has been, not only what it is. The rewind fold
+     * reads the file log, never this.
+     */
+    @Override
+    public void recordStatusTransition(com.walpro.autobuilder.goal.GoalTransition t) {
+        if (t == null || t.goalId() == null) return;
+        neo4jClient.query("""
+                MATCH (g:Goal {id: $goalId})
+                CREATE (tr:GoalStatusTransition {
+                    seq: $seq, goalId: $goalId, fromStatus: $fromStatus, toStatus: $toStatus,
+                    kind: $kind, cycleId: $cycleId, resolution: $resolution, at: $at,
+                    lineageId: $lineageId, runId: $runId
+                })
+                CREATE (tr)-[:TRANSITION_OF]->(g)
+                """)
+                .bind(t.goalId()).to("goalId")
+                .bind(t.seq()).to("seq")
+                .bind(t.from()).to("fromStatus")
+                .bind(t.to()).to("toStatus")
+                .bind(t.kind() != null ? t.kind().name() : null).to("kind")
+                .bind(t.cycleId()).to("cycleId")
+                .bind(t.resolution()).to("resolution")
+                .bind(t.at() != null ? t.at().toString() : null).to("at")
+                .bind(runIdentity.lineageId()).to("lineageId")
+                .bind(runIdentity.runId()).to("runId")
+                .run();
+    }
+
+    @Override
+    public void markRewoundOut(java.util.List<String> goalIds, String cycleId) {
+        if (goalIds == null || goalIds.isEmpty()) return;
+        neo4jClient.query("""
+                MATCH (g:Goal)
+                WHERE g.id IN $goalIds
+                SET g.rewoundOutInCycle = $cycleId, g.rewoundOutAt = $at
+                """)
+                .bind(goalIds).to("goalIds")
+                .bind(cycleId).to("cycleId")
+                .bind(Instant.now().toString()).to("at")
                 .run();
     }
 

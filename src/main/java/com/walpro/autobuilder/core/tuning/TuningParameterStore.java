@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.tuning;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
@@ -32,6 +35,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "memo over the Spring environment, constant for a run")
 public class TuningParameterStore {
 
     public static final String PREFIX = "autobuilder.tuning.";

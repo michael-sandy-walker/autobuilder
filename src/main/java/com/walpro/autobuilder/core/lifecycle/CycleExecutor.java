@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.core.lifecycle;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.EmptyDiffDetector;
 import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
@@ -29,7 +33,9 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class CycleExecutor {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "the livelock detector's per-subgoal streak decides when a replan is forced")
+public class CycleExecutor implements CheckpointableState {
 
     private final AdaptiveExecutionEngine adaptiveExecutionEngine;
     private final GoalPlannerService goalPlannerService;
@@ -107,6 +113,34 @@ public class CycleExecutor {
     /** Threshold above which the livelock invariant fires. Mirrors the 3-cycle pattern from
      *  the {@code behaviour-2026-05-25_00-31-18.ndjson} 16-cycle zero-work loop. */
     private static final int LIVELOCK_THRESHOLD = 3;
+
+    // ---------------------------------------------------------------------------------
+    // T4-DQ: checkpoint / rewind
+    // ---------------------------------------------------------------------------------
+
+    /** The T1-ET livelock detector's per-subgoal streak. */
+    public record Snapshot(String livelockTrackingSubGoalId, int livelockConsecutiveCount) {}
+
+    @Override
+    public String stateKey() {
+        return "livelockDetector";
+    }
+
+    @Override
+    public Object captureState() {
+        return new Snapshot(livelockTrackingSubGoalId, livelockConsecutiveCount);
+    }
+
+    @Override
+    public void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                             com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        livelockTrackingSubGoalId = null;
+        livelockConsecutiveCount = 0;
+        if (state == null || state.isNull()) return;
+        Snapshot snapshot = mapper.convertValue(state, Snapshot.class);
+        livelockTrackingSubGoalId = snapshot.livelockTrackingSubGoalId();
+        livelockConsecutiveCount = snapshot.livelockConsecutiveCount();
+    }
 
     public CycleContextData runCycle(CycleContextData context) {
 

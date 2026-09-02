@@ -26,6 +26,14 @@ public class SystemResetConfig {
     private final RunIdentityService runIdentityService;
 
     /**
+     * T4-DQ: the goal-transition log carries an in-memory sequence counter mirroring its file.
+     * A reset in a LIVE JVM (the graph browser's Reset button) deletes {@code meta/} underneath
+     * it, so the counter must be dropped too or the next append resumes numbering above a file
+     * that starts empty.
+     */
+    private final com.walpro.autobuilder.goal.GoalTransitionLog goalTransitionLog;
+
+    /**
      * Startup-time entry point: only resets when {@code autobuilder.service.reset-on-start=true}.
      * Other call sites that need to force a reset (e.g. the manual "Reset" button in the graph
      * browser) should invoke {@link #resetSystemForce()} directly.
@@ -75,7 +83,10 @@ public class SystemResetConfig {
         // domain-type NONE rows, stale version pins) are each closed by later mechanisms —
         // member-token gate at write, BOM-managed version omission at the pom-write home,
         // discovery-first ordering (precondition analysis on the T4-CD ticket, 2026-07-17).
-        for (String dir : List.of("output", "mutations", "snapshots", "meta")) {
+        // T4-DQ: "checkpoints" is cleared with the rest — a reset severs the lineage, and points
+        // belonging to the severed one are not points this run can return to. The goal-transition
+        // log lives under meta/ and goes with it, so the fold restarts empty alongside the tree.
+        for (String dir : List.of("output", "mutations", "snapshots", "meta", "checkpoints", "llm-recordings")) {
             Path dirPath = fileService.resolveSecurePath(dir);
             if (dirPath.toFile().exists()) {
                 deleteRecursive(dirPath);
@@ -84,13 +95,14 @@ public class SystemResetConfig {
         }
         
         // Recreate base folders after clean reset
-        for (String dir : List.of("output", "mutations", "snapshots", "meta", "responses/bootstrap")) {
+        for (String dir : List.of("output", "mutations", "snapshots", "meta", "checkpoints", "responses/bootstrap")) {
             fileService.ensureFolderExists(dir);
             log.info("Created folder: {}", dir);
         }
 
         // T4-CJ: a reset severs the lineage — renew BEFORE the root goal is re-seeded so the
         // seed goals' graph writes already carry the new lineage id.
+        goalTransitionLog.forgetCachedSeq();
         runIdentityService.renewLineage();
 
         String goalId = "goal-" + java.util.UUID.randomUUID();

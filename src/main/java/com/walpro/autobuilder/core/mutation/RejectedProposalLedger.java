@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.core.mutation;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -46,7 +50,9 @@ import java.util.Set;
  */
 @Slf4j
 @Component
-public class RejectedProposalLedger {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "a standing rejection refuses a repeat proposal before the evaluator sees it")
+public class RejectedProposalLedger implements CheckpointableState {
 
     private final Map<String, Entry> entries = new LinkedHashMap<>();
 
@@ -140,6 +146,54 @@ public class RejectedProposalLedger {
      */
     public record Readout(int distinctRejected, int repeatedProposals, int refusals, int worstRepeatCount) {
         public boolean isEmpty() { return distinctRejected == 0; }
+    }
+
+    // ---------------------------------------------------------------------------------
+    // T4-DQ: checkpoint / rewind
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * The standing verdicts and how many repeats they have refused. Each verdict carries the tree
+     * state it was reached against and expires when the tree moves — which a rewind also moves, so
+     * restoring the verdicts alongside the tree keeps the pairing that makes them meaningful.
+     */
+    public record Snapshot(java.util.Map<String, EntryState> entries, int refusals) {}
+
+    /** One proposal's standing rejection. */
+    public record EntryState(int rejections, String treeState, String reason,
+                             java.util.Set<String> subgoalIds) {}
+
+    @Override
+    public String stateKey() {
+        return "rejectedProposals";
+    }
+
+    @Override
+    public synchronized Object captureState() {
+        java.util.Map<String, EntryState> flat = new java.util.LinkedHashMap<>();
+        entries.forEach((k, e) -> flat.put(k, new EntryState(
+                e.rejections, e.treeState, e.reason, new java.util.LinkedHashSet<>(e.subgoalIds))));
+        return new Snapshot(flat, refusals);
+    }
+
+    @Override
+    public synchronized void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                                          com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        entries.clear();
+        refusals = 0;
+        if (state == null || state.isNull()) return;
+        Snapshot snapshot = mapper.convertValue(state, Snapshot.class);
+        if (snapshot.entries() != null) {
+            snapshot.entries().forEach((k, v) -> {
+                Entry e = new Entry();
+                e.rejections = v.rejections();
+                e.treeState = v.treeState();
+                e.reason = v.reason();
+                if (v.subgoalIds() != null) e.subgoalIds.addAll(v.subgoalIds());
+                entries.put(k, e);
+            });
+        }
+        refusals = snapshot.refusals();
     }
 
     private static final class Entry {

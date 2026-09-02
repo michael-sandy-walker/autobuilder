@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +28,8 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Slf4j
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "memo of the resolved classpath; a restored tree re-resolves it")
 public class ProjectClasspathService {
 
     private static final long CLASSPATH_RESOLVE_TIMEOUT_MS = 60_000L;

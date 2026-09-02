@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.graph.query;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
@@ -18,6 +21,8 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "a bounded scan history kept for observability")
 public class GraphQueryService {
 
     private static final int MAX_LIMIT = 30;

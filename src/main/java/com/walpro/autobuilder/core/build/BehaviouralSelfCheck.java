@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +49,9 @@ import java.util.function.Supplier;
  */
 @Slf4j
 @Component
-public class BehaviouralSelfCheck {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "the interval counter decides which cycle observes the running artifact")
+public class BehaviouralSelfCheck implements CheckpointableState {
 
 
     /**
@@ -89,6 +95,32 @@ public class BehaviouralSelfCheck {
 
     private int cyclesSinceCheck = 0;
     private String lastFinding = null;
+
+    // T4-DQ: the interval counter decides which cycle looks at the running artifact, and the
+    // last finding suppresses a repeat of the same one. Both are relative to the tree a rewind
+    // replaces.
+    public record Snapshot(int cyclesSinceCheck, String lastFinding) {}
+
+    @Override
+    public String stateKey() {
+        return "behaviouralSelfCheck";
+    }
+
+    @Override
+    public Object captureState() {
+        return new Snapshot(cyclesSinceCheck, lastFinding);
+    }
+
+    @Override
+    public void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                             com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        cyclesSinceCheck = 0;
+        lastFinding = null;
+        if (state == null || state.isNull()) return;
+        Snapshot snapshot = mapper.convertValue(state, Snapshot.class);
+        cyclesSinceCheck = snapshot.cyclesSinceCheck();
+        lastFinding = snapshot.lastFinding();
+    }
 
     @Autowired
     public BehaviouralSelfCheck(PackageGate packageGate, BootGate bootGate) {

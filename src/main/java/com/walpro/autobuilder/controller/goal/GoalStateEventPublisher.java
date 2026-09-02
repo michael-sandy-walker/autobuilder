@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.controller.goal;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.SignalReadout;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -29,6 +32,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "live SSE subscriber list")
 public class GoalStateEventPublisher {
 
     /** Never time out — the client controls lifetime by closing the connection. */

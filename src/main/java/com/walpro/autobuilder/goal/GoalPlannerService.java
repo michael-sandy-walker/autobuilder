@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.goal;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.walpro.autobuilder.analysis.coverage.CoverageRetrospectiveService;
@@ -32,6 +35,9 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.ALREADY_PERSISTED,
+        note = "the goal tree persists to meta/GoalStack.json and the graph, and its status history "
+                + "to the T4-DQ transition log")
 public class GoalPlannerService {
 
     private static final String GOAL_PATH = "meta/GoalStack.json";
@@ -134,6 +140,21 @@ public class GoalPlannerService {
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
+
+    /**
+     * T4-DQ blocker 1: the append-only goal-status history. Optional so the many unit tests that
+     * construct this service by hand need no stub; without it goal state is exactly as
+     * un-rewindable as it was before, which is the honest degradation.
+     */
+    @Setter
+    @Autowired(required = false)
+    private GoalTransitionLog goalTransitionLog;
+
+    /**
+     * T4-DQ: true only while {@link #restoreGoalStateAsOf} is writing, so the chokepoint's own
+     * diff does not double-append the same reversion the rewind already recorded as REWOUND.
+     */
+    private boolean rewindInProgress;
 
     private Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
 
@@ -2030,8 +2051,37 @@ public class GoalPlannerService {
                 behaviourLogger.goalStatusChanged(cycleId, g.getId(),
                         prev.name(), g.getStatus().name(), g.getResolution());
             }
+            appendGoalTransition(cycleId, g, prev);
         }
         lastObservedStatus.keySet().retainAll(goalMap.keySet());
+    }
+
+    /**
+     * T4-DQ blocker 1: the same chokepoint now also APPENDS the change to the goal-transition log,
+     * which is what makes goal state rewindable — it used to be overwritten in place, and an
+     * overwritten value has nothing to return to.
+     *
+     * <p>The behaviour event above and this append answer different questions and so have
+     * different seeding rules. The event answers "what changed during this run", and seeding a
+     * first sighting silently is right there: a startup load is not news. The log answers "what
+     * did the tree look like at sequence N", which needs to know a goal EXISTED — so a goal the
+     * log has never seen gets a CREATED event, and a goal it already knows (a resumed lineage
+     * reloading its own tree) gets nothing, because re-stamping it would misdate the history the
+     * fold reads.
+     */
+    private void appendGoalTransition(String cycleId, GoalEntity g, GoalStatus prev) {
+        if (goalTransitionLog == null || g.getStatus() == null || rewindInProgress) return;
+        try {
+            if (!goalTransitionLog.knowsGoal(g.getId())) {
+                goalTransitionLog.append(g.getId(), null, g.getStatus().name(),
+                        GoalTransition.Kind.CREATED, cycleId, g.getResolution());
+            } else if (prev != null && prev != g.getStatus()) {
+                goalTransitionLog.append(g.getId(), prev.name(), g.getStatus().name(),
+                        GoalTransition.Kind.CHANGED, cycleId, g.getResolution());
+            }
+        } catch (Exception e) {
+            log.warn("T4-DQ: goal-transition append failed for {}: {}", g.getId(), e.getMessage());
+        }
     }
 
     private void attachChildrenRecursive(GoalEntity parent) {
@@ -2705,6 +2755,105 @@ public class GoalPlannerService {
         }
         persistPointersToGraph();
         log.info("Migration completed. {} goals written to graph database.", migrated);
+    }
+
+    /**
+     * T4-DQ blocker 1: put the goal tree back the way it was at a fold cut point.
+     *
+     * <p>Two things move, and they are different. STATUS comes back from the fold — the log
+     * remembers what each goal was before it was overwritten, which is precisely what mutating in
+     * place destroyed. EXISTENCE is the other half and the easier one to miss: a goal the planner
+     * thought of after the cut point had not been thought of yet in the restored state, so it is
+     * rewound OUT — recorded as {@link GoalTransition.Kind#REMOVED} in the log and tombstoned in
+     * the graph rather than deleted, because the history stays append-only and the graph browser
+     * should still be able to see that the goal was once planned.
+     *
+     * <p>The rewind's own writes are themselves appended, tagged {@link GoalTransition.Kind#REWOUND}
+     * so the log distinguishes "the loop decided this" from "a rewind put this back". Nothing here
+     * rewrites an earlier line.
+     *
+     * @param statuses         the fold's status per goal at the cut point
+     * @param existing         the goals that existed at the cut point
+     * @param restoredSubGoalId the pointer as of the checkpoint, re-resolved if it is no longer valid
+     * @return how many goals were restored, and how many were rewound out
+     */
+    public synchronized RewindResult restoreGoalStateAsOf(Map<String, GoalStatus> statuses,
+                                                          java.util.Set<String> existing,
+                                                          String restoredSubGoalId) {
+        int restored = 0;
+        int removed = 0;
+        rewindInProgress = true;
+        try {
+            java.util.List<String> toRemove = new java.util.ArrayList<>();
+            for (String id : goalMap.keySet()) {
+                if (existing != null && !existing.isEmpty() && !existing.contains(id)) toRemove.add(id);
+            }
+            for (String id : toRemove) {
+                GoalEntity g = goalMap.remove(id);
+                if (g != null && goalTransitionLog != null) {
+                    goalTransitionLog.append(id, g.getStatus() != null ? g.getStatus().name() : null,
+                            g.getStatus() != null ? g.getStatus().name() : GoalStatus.ACTIVE.name(),
+                            GoalTransition.Kind.REMOVED, currentCycleName(), "rewound out — planned after the cut point");
+                }
+                removed++;
+            }
+            if (!toRemove.isEmpty() && goalGraphService != null) {
+                try {
+                    goalGraphService.markRewoundOut(toRemove, currentCycleName());
+                } catch (Exception e) {
+                    log.warn("T4-DQ: could not tombstone {} rewound-out goals in the graph: {}",
+                            toRemove.size(), e.getMessage());
+                }
+            }
+
+            if (statuses != null) {
+                for (Map.Entry<String, GoalStatus> entry : statuses.entrySet()) {
+                    GoalEntity g = goalMap.get(entry.getKey());
+                    if (g == null || entry.getValue() == null) continue;
+                    GoalStatus before = g.getStatus();
+                    if (before == entry.getValue()) continue;
+                    g.setStatus(entry.getValue());
+                    if (entry.getValue() != GoalStatus.COMPLETED) g.setCompleted(null);
+                    if (entry.getValue() != GoalStatus.GIVEN_UP) g.setGivenUp(null);
+                    if (goalTransitionLog != null) {
+                        goalTransitionLog.append(g.getId(), before != null ? before.name() : null,
+                                entry.getValue().name(), GoalTransition.Kind.REWOUND,
+                                currentCycleName(), "rewound to the checkpoint's fold");
+                    }
+                    if (goalGraphService != null) {
+                        try {
+                            goalGraphService.save(g);
+                        } catch (Exception e) {
+                            log.debug("T4-DQ: graph save during rewind failed for {}: {}", g.getId(), e.getMessage());
+                        }
+                    }
+                    restored++;
+                }
+            }
+
+            this.currentSubGoalId = restoredSubGoalId != null
+                    && goalMap.containsKey(restoredSubGoalId)
+                    && goalMap.get(restoredSubGoalId).getStatus() == GoalStatus.ACTIVE
+                    ? restoredSubGoalId
+                    : resolveNextActiveLeaf(rootGoalId);
+        } finally {
+            rewindInProgress = false;
+        }
+
+        lastObservedStatus.clear();
+        for (GoalEntity g : goalMap.values()) lastObservedStatus.put(g.getId(), g.getStatus());
+        persistPointersToGraph();
+        persist();
+        log.info("T4-DQ: goal state rewound — {} statuses restored, {} goals rewound out, currentSubGoalId={}",
+                restored, removed, currentSubGoalId);
+        return new RewindResult(restored, removed, currentSubGoalId);
+    }
+
+    /** What {@link #restoreGoalStateAsOf} did. */
+    public record RewindResult(int statusesRestored, int goalsRewoundOut, String currentSubGoalId) {}
+
+    private String currentCycleName() {
+        return currentCycleContext != null ? currentCycleContext.cycleName() : null;
     }
 
     public void syncFromGraph() {

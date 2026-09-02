@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -29,6 +32,8 @@ import org.springframework.stereotype.Component;
  * second tracker so "what did this run spend its wall-clock on" has a single answer.
  */
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "session build accounting; rewound builds were still run")
 public class BuildCostTracker {
 
     /** Bound the per-cycle map so a long-lived session cannot grow it without limit; only the

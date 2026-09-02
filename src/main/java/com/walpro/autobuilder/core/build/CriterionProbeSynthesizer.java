@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
@@ -55,6 +58,8 @@ import java.util.regex.Pattern;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "memo of synthesised probes, re-derivable from the criterion")
 public class CriterionProbeSynthesizer {
 
     /** One request in a probe sequence. {@code body} is null for methods sent without one. */

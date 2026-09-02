@@ -791,4 +791,66 @@ public sealed interface BehaviourEvent {
     ) implements BehaviourEvent {
         public String event() { return "pattern_detected"; }
     }
+
+    // ---------------------------------------------------------------------------------
+    // T4-DQ: checkpoint, rewind, replay
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * T4-DQ: a checkpoint was taken at the end of a cycle. {@code restorable} is false when the
+     * cycle wrote no tree snapshot, so the point exists but cannot be returned to;
+     * {@code captureFailures} is non-zero when a registered holder refused capture, which makes
+     * the checkpoint knowingly incomplete rather than quietly so.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record CheckpointWritten(
+            Instant timestamp,
+            String cycleId,
+            int holders,
+            long goalTransitionSeq,
+            boolean restorable,
+            int captureFailures
+    ) implements BehaviourEvent {
+        public String event() { return "checkpoint_written"; }
+    }
+
+    /**
+     * T4-DQ: the loop returned to an earlier state. {@code trigger} names what asked for it
+     * (a policy id, or "operator"), {@code goalTransitionsUndone} is how much goal history the
+     * fold rolled back, and {@code cacheMode} records whether the resolution cache came back with
+     * the checkpoint — a difference in outcome between the two modes is what tells us whether the
+     * cache is decision-bearing at all.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record RewindPerformed(
+            Instant timestamp,
+            String cycleId,
+            String toCycleId,
+            String trigger,
+            String cacheMode,
+            int holdersRestored,
+            int holdersReset,
+            int goalsRestored,
+            int goalTransitionsUndone,
+            boolean treeRestored,
+            List<String> failures
+    ) implements BehaviourEvent {
+        public String event() { return "rewind_performed"; }
+    }
+
+    /**
+     * T4-DQ slice 2: during a replay the loop produced a prompt the recording does not contain,
+     * so state at this point differs from the recorded run. This is the falsifiable half of the
+     * round-trip proof — uncaptured state that MATTERS shows up here and nowhere else.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record ReplayDivergence(
+            Instant timestamp,
+            String cycleId,
+            String role,
+            String promptDigest,
+            String resolution
+    ) implements BehaviourEvent {
+        public String event() { return "replay_divergence"; }
+    }
 }

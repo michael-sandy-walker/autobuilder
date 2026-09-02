@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.core.mutation;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FileService;
@@ -40,7 +44,9 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class DeferredRestageScheduler {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "the last scope-promotion index is the restage cooldown gate")
+public class DeferredRestageScheduler implements CheckpointableState {
 
     private final DeferredMutationLedger ledger;
     private final DeferredMutationRestager restager;
@@ -209,6 +215,26 @@ public class DeferredRestageScheduler {
     }
 
     /** Test seam. */
+    // T4-DQ: the cooldown index, read relative to the ledger's cycle clock (also captured).
+    public record Snapshot(long lastScopePromotionCycleIndex) {}
+
+    @Override
+    public String stateKey() {
+        return "deferredRestageCooldown";
+    }
+
+    @Override
+    public Object captureState() {
+        return new Snapshot(lastScopePromotionCycleIndex);
+    }
+
+    @Override
+    public void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                             com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        lastScopePromotionCycleIndex = state == null || state.isNull()
+                ? -1L : mapper.convertValue(state, Snapshot.class).lastScopePromotionCycleIndex();
+    }
+
     public void __resetCooldownForTest() { lastScopePromotionCycleIndex = -1; }
 
     /**

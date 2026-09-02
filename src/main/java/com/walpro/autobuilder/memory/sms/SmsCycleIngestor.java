@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.memory.sms;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.memory.ingest.GraphWriter;
@@ -20,6 +23,8 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "a dropped-ingestion counter")
 public class SmsCycleIngestor {
 
     private final GraphWriter graphWriter;

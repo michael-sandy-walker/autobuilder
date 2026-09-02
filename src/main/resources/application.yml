@@ -5,6 +5,38 @@ autobuilder:
     # 0 = undeclared, which is what a run started by hand has: the brake then makes no claim
     # about time and decides on the trend alone. scripts/preflight.sh passes its own cap.
     budget-minutes: 0
+  # T4-DQ: checkpoint, rewind and backtracking. The expensive half already ran before this
+  # existed — the output tree is copied to snapshots/<cycleId>/ every cycle and the whole cycle
+  # context is serialised to mutations/<cycleId>/meta.json — so what a checkpoint adds is the
+  # decision-bearing in-memory state and a cut point in the goal-status history.
+  checkpoint:
+    enabled: true
+    # Points kept on disk, pruned oldest-first. The JSON is small; the bound is there because an
+    # unbounded per-cycle directory is how snapshots/ reached hundreds of megabytes.
+    retain: 40
+    # Copy cache/ into each checkpoint (a few kilobytes) so a FAITHFUL rewind has one to restore.
+    capture-cache: true
+  rewind:
+    # Back out to the last point that landed work instead of halting, when the convergence brake
+    # judges the run to be grinding. One switch, in case dying turns out to be better.
+    on-grind-enabled: true
+    # Two: a run that has ground twice from two different points is saying something a third
+    # rewind will not fix, and each one discards wall clock the budget still charges for.
+    max-per-run: 2
+    # FAITHFUL restores cache/ with the state; FRESH clears it. The DIFFERENCE between the two is
+    # itself the instrument — if outcomes differ, the resolution cache is decision-bearing rather
+    # than a pure optimisation, which nobody currently knows.
+    cache-mode: FAITHFUL
+  replay:
+    # OFF | RECORD | REPLAY. RECORD writes every LLM answer to llm-recordings/exchanges.ndjson;
+    # REPLAY answers from it, which is what makes a rewind's round trip provable (an uncaptured
+    # piece of state shows up as the loop asking a question the recording does not contain) and
+    # what makes a recorded run replayable against a changed build.
+    mode: OFF
+    # In REPLAY, whether an unrecorded prompt stops the replay (true) or falls through to the live
+    # model (false). Strict is right for the round-trip proof; lenient for replaying against a
+    # changed build, where some divergence is the thing being measured.
+    strict: false
   diff:
     exclude-folders:
       - logs

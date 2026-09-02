@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.observability;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import org.springframework.stereotype.Component;
@@ -43,6 +46,8 @@ import java.util.Map;
  * for the full algorithmic reasoning (verified against {@code Signal.tick()}'s actual semantics).
  */
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "signal-lifetime observation; measuring the run, not steering it")
 public class SignalLifetimeTracker {
 
     /** One completed lifetime episode: how and when an entry left its carrier. */

@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.client.LLMClient;
@@ -45,6 +48,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 @Service
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "memo keyed by diagnostic text")
 public class BuildErrorClassifierAgent {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();

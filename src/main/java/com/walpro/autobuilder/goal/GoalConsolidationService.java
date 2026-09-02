@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.goal;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -60,7 +64,9 @@ import java.util.Set;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class GoalConsolidationService {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "the stagnation streak and merge-seen flag decide when goals get folded together")
+public class GoalConsolidationService implements CheckpointableState {
 
     private final GoalPlannerService goalPlannerService;
     private final GoalAdoptionService goalAdoptionService;
@@ -110,6 +116,48 @@ public class GoalConsolidationService {
      * run stops both the cascade and the grab-bag growth structurally.
      */
     private final Set<String> foldParticipants = new HashSet<>();
+
+    // ---------------------------------------------------------------------------------
+    // T4-DQ: checkpoint / rewind
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * When a fold pass is due, and which goals are frozen out of one. The refusal set and the
+     * fold-participant set are both "already spent this run" facts; a rewind that dropped them
+     * would re-offer folds the reviewer has already refused and re-open the runaway the
+     * one-fold-per-goal rule exists to stop.
+     */
+    public record Snapshot(int stagnatingStreak, int cyclesObserved, boolean mergeSeenThisRun,
+                           Set<String> unconfirmedPairs, Set<String> foldParticipants) {}
+
+    @Override
+    public String stateKey() {
+        return "goalConsolidation";
+    }
+
+    @Override
+    public Object captureState() {
+        return new Snapshot(stagnatingStreak, cyclesObserved, mergeSeenThisRun,
+                new java.util.LinkedHashSet<>(unconfirmedPairs),
+                new java.util.LinkedHashSet<>(foldParticipants));
+    }
+
+    @Override
+    public void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                             com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        stagnatingStreak = 0;
+        cyclesObserved = 0;
+        mergeSeenThisRun = false;
+        unconfirmedPairs.clear();
+        foldParticipants.clear();
+        if (state == null || state.isNull()) return;
+        Snapshot snapshot = mapper.convertValue(state, Snapshot.class);
+        stagnatingStreak = snapshot.stagnatingStreak();
+        cyclesObserved = snapshot.cyclesObserved();
+        mergeSeenThisRun = snapshot.mergeSeenThisRun();
+        if (snapshot.unconfirmedPairs() != null) unconfirmedPairs.addAll(snapshot.unconfirmedPairs());
+        if (snapshot.foldParticipants() != null) foldParticipants.addAll(snapshot.foldParticipants());
+    }
 
     /**
      * Post-cycle hook. Cheap unless a trigger fires; never throws.

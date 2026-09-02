@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.core.lifecycle;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -30,9 +34,12 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class RootConvergenceTracker {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "the progress counters and cycle/minute budgets decide when the run gives up")
+public class RootConvergenceTracker implements CheckpointableState {
 
-    static final String HALT_SOURCE = "root-convergence-stall";
+    /** Public so the cycle owner can recognise this brake's halt and offer the T4-DQ rewind. */
+    public static final String HALT_SOURCE = "root-convergence-stall";
 
     private final GoalPlannerService goalPlannerService;
 
@@ -67,6 +74,65 @@ public class RootConvergenceTracker {
     private java.util.function.LongSupplier clock = System::currentTimeMillis;
     private long firstCycleAt = 0L;
     private int extensionsGranted = 0;
+
+    /**
+     * T4-DQ slice 3: the drought belonged to a path the run has just backed out of, so the
+     * counters resync against the state it returned to rather than carrying the abandoned stretch
+     * forward. Called by the cycle owner after a rewind — this class judges whether the run is
+     * grinding and says so; what to DO about a halt is not its decision.
+     */
+    /** How long the run has been stalled — read by the halt-edge rewind decision for its trace. */
+    public int cyclesSinceProgress() {
+        return cyclesSinceProgress;
+    }
+
+    public void resyncAfterRewind() {
+        lastProgressCount = goalPlannerService.countCompletedSubgoalsWithMerges();
+        lastInjectionCount = goalPlannerService.countClosureEdgeInjections();
+        cyclesSinceProgress = 0;
+        mergesPerCycle.clear();
+    }
+
+    // ---------------------------------------------------------------------------------
+    // T4-DQ: checkpoint / rewind
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * The brake's own accounting. {@code cycleLimit}, {@code budgetMinutes} and {@code clock} are
+     * absent: the first two are configuration and identical either side of a rewind, and the third
+     * is wall clock, which a rewind does not turn back — rewound time IS spent, and a brake that
+     * forgot it would let a stuck run buy itself unlimited extensions by rewinding.
+     */
+    public record Snapshot(int lastProgressCount, int lastInjectionCount, int cyclesSinceProgress,
+                           java.util.List<Integer> mergesPerCycle, int extensionsGranted) {}
+
+    @Override
+    public String stateKey() {
+        return "rootConvergence";
+    }
+
+    @Override
+    public Object captureState() {
+        return new Snapshot(lastProgressCount, lastInjectionCount, cyclesSinceProgress,
+                java.util.List.copyOf(mergesPerCycle), extensionsGranted);
+    }
+
+    @Override
+    public void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                             com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        lastProgressCount = 0;
+        lastInjectionCount = 0;
+        cyclesSinceProgress = 0;
+        mergesPerCycle.clear();
+        extensionsGranted = 0;
+        if (state == null || state.isNull()) return;
+        Snapshot snapshot = mapper.convertValue(state, Snapshot.class);
+        lastProgressCount = snapshot.lastProgressCount();
+        lastInjectionCount = snapshot.lastInjectionCount();
+        cyclesSinceProgress = snapshot.cyclesSinceProgress();
+        if (snapshot.mergesPerCycle() != null) mergesPerCycle.addAll(snapshot.mergesPerCycle());
+        extensionsGranted = snapshot.extensionsGranted();
+    }
 
     /**
      * Post-cycle hook. Returns the context unchanged while the root is progressing; returns it

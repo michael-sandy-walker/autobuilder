@@ -106,6 +106,54 @@ class Neo4jGoalGraphServiceIT {
     }
 
     @Test
+    void recordStatusTransition_appendsHistoryBesideTheCurrentStatus() {
+        // T4-DQ blocker 1: the current status is still SET in place — that is what consumers read —
+        // but the move now also leaves an appended (:GoalStatusTransition) node, so the graph can
+        // say what a goal HAS BEEN and not only what it is.
+        GoalEntity g = new GoalEntity("moved", "Moved goal", "planner", GoalType.GOAL,
+                GoalStatus.ACTIVE, Instant.now(), null, Map.of());
+        goalGraph.save(g);
+
+        goalGraph.recordStatusTransition(new com.walpro.autobuilder.goal.GoalTransition(
+                7L, "cycle-3", "moved", "ACTIVE", "COMPLETED",
+                com.walpro.autobuilder.goal.GoalTransition.Kind.CHANGED, "done", Instant.now()));
+
+        try (Session s = driver.session()) {
+            var record = s.run("""
+                    MATCH (t:GoalStatusTransition)-[:TRANSITION_OF]->(:Goal {id:$id})
+                    RETURN t.seq AS seq, t.fromStatus AS from, t.toStatus AS to, t.kind AS kind
+                    """, Values.parameters("id", "moved")).single();
+            assertThat(record.get("seq").asLong()).isEqualTo(7L);
+            assertThat(record.get("from").asString()).isEqualTo("ACTIVE");
+            assertThat(record.get("to").asString()).isEqualTo("COMPLETED");
+            assertThat(record.get("kind").asString()).isEqualTo("CHANGED");
+        }
+    }
+
+    @Test
+    void markRewoundOut_removesTheGoalFromTheLiveTreeButKeepsItKnownToTheDedupCheck() {
+        // T4-DQ slice 3: this pairing is what makes a rewind take a DIFFERENT path rather than
+        // deterministically repeating the one that ground. A goal rewound out is gone from the
+        // live tree findAll() loads at boot — so the loop is not still working it — but it stays
+        // in the description corpus the planner's duplicate check reads, so the plan that led into
+        // the grind is still known and still refused. Neither half is incidental; assert both.
+        GoalEntity rewound = new GoalEntity("rewound", "Add the doomed endpoint", "planner",
+                GoalType.SUBGOAL, GoalStatus.ACTIVE, Instant.now(), null, Map.of());
+        GoalEntity kept = new GoalEntity("kept", "Add the good endpoint", "planner",
+                GoalType.SUBGOAL, GoalStatus.ACTIVE, Instant.now(), null, Map.of());
+        goalGraph.save(rewound);
+        goalGraph.save(kept);
+
+        goalGraph.markRewoundOut(List.of("rewound"), "cycle-9");
+
+        assertThat(goalGraph.findAll()).extracting(GoalEntity::getId)
+                .contains("kept")
+                .doesNotContain("rewound");
+        assertThat(goalGraph.findAllDescriptions(200))
+                .contains("Add the doomed endpoint", "Add the good endpoint");
+    }
+
+    @Test
     void save_stampsRunAndLineageIdentity() {
         // T4-CJ slice 1: every graph write carries the run/lineage identity (write-only —
         // no read path consults it yet; the stamps make dumps distinguishable across runs).

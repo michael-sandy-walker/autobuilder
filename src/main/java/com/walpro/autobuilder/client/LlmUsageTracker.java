@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.client;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,6 +18,8 @@ import org.springframework.stereotype.Component;
  * (see project_local_first_constraint), so tokens are the honest unit; a pricing map is not modelled.
  */
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "session token accounting; rewound time was still spent")
 public class LlmUsageTracker {
 
     /** Per-role running totals. Keyed by {@link LlmCallContext} role (incl. {@code "unknown"}). */

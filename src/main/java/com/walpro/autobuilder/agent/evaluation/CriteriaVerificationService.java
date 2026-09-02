@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.agent.evaluation;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
@@ -44,6 +47,9 @@ import java.util.regex.Pattern;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "the field held here is a per-run cost counter; the criterion results themselves go "
+                + "to the graph")
 public class CriteriaVerificationService {
 
     static final int MAX_FILES = 25;

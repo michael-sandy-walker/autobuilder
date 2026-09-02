@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.config;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -15,6 +18,8 @@ import java.util.List;
  * or agent-wiring code.
  */
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "rebuilt from configuration at startup")
 public class SystemCapabilityManifest {
 
     private final List<String> can = List.of(

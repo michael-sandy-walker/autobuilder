@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,7 +53,9 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Component
-public class BrokenTestQuarantine {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "the per-root blocked-visit tally decides when a failing test stops blocking merges")
+public class BrokenTestQuarantine implements CheckpointableState {
 
     /** A source path under src/test as it appears in build diagnostics (absolute or relative). */
     private static final Pattern TEST_SOURCE_PATH = Pattern.compile("(\\S*?src[/\\\\]test[/\\\\]\\S+?\\.java)");
@@ -62,6 +68,30 @@ public class BrokenTestQuarantine {
     private String fileBasePath;
 
     /** Consecutive closure visits blocked by test-confined compile errors, per root goal. */
+    // T4-DQ: the per-root blocked-visit tally, which decides when a failing test stops
+    // blocking merges. A rewind that kept a later tally would release the quarantine on visits
+    // the restored tree has not had.
+    public record Snapshot(Map<String, Integer> blockedVisitsByRoot) {}
+
+    @Override
+    public String stateKey() {
+        return "brokenTestQuarantine";
+    }
+
+    @Override
+    public Object captureState() {
+        return new Snapshot(new java.util.TreeMap<>(blockedVisitsByRoot));
+    }
+
+    @Override
+    public void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                             com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        blockedVisitsByRoot.clear();
+        if (state == null || state.isNull()) return;
+        Snapshot snapshot = mapper.convertValue(state, Snapshot.class);
+        if (snapshot.blockedVisitsByRoot() != null) blockedVisitsByRoot.putAll(snapshot.blockedVisitsByRoot());
+    }
+
     private final Map<String, Integer> blockedVisitsByRoot = new ConcurrentHashMap<>();
 
     @Autowired

@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.observability.behaviour;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +36,8 @@ import java.util.Map;
  */
 @Slf4j
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "session event tallies for the SSE hello envelope")
 public class BehaviourLogger {
 
     /** SLF4J logger writing the NDJSON file appender (configured in logback-spring.xml). */
@@ -260,6 +265,28 @@ public class BehaviourLogger {
                            int regroundedGoals, boolean endReportLoaded) {
         emit(new BehaviourEvent.RunResumed(Instant.now(), null, fromCycle, verifiedBuildResult,
                 rootReactivated, regroundedGoals, endReportLoaded));
+    }
+
+    /** T4-DQ: a checkpoint was taken at the end of a cycle. */
+    public void checkpointWritten(String cycleId, int holders, long goalTransitionSeq,
+                                  boolean restorable, int captureFailures) {
+        emit(new BehaviourEvent.CheckpointWritten(Instant.now(), cycleId, holders,
+                goalTransitionSeq, restorable, captureFailures));
+    }
+
+    /** T4-DQ: the loop returned to an earlier state. */
+    public void rewindPerformed(String cycleId, String toCycleId, String trigger, String cacheMode,
+                                int holdersRestored, int holdersReset, int goalsRestored,
+                                int goalTransitionsUndone, boolean treeRestored,
+                                java.util.List<String> failures) {
+        emit(new BehaviourEvent.RewindPerformed(Instant.now(), cycleId, toCycleId, trigger, cacheMode,
+                holdersRestored, holdersReset, goalsRestored, goalTransitionsUndone, treeRestored,
+                failures));
+    }
+
+    /** T4-DQ slice 2: a replayed cycle asked something the recording does not contain. */
+    public void replayDivergence(String cycleId, String role, String promptDigest, String resolution) {
+        emit(new BehaviourEvent.ReplayDivergence(Instant.now(), cycleId, role, promptDigest, resolution));
     }
 
     public void currentSubgoalRepaired(String cycleId, String oldId, String newId, String reason) {

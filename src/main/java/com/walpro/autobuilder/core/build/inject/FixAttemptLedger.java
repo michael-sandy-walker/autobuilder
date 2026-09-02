@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.core.build.inject;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.service.FileService;
@@ -56,7 +60,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class FixAttemptLedger {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "blacklists and the run-level re-fire cap decide whether an injector fix is allowed "
+                + "to run at all")
+public class FixAttemptLedger implements CheckpointableState {
 
     /** Number of consecutive COMPILE_ERROR re-probes before a proposal is blacklisted. */
     static final int BLACKLIST_AFTER_FAILURES = 2;
@@ -422,6 +429,84 @@ public class FixAttemptLedger {
             if (!prior.equals(entry.getValue())) return true;
         }
         return false;
+    }
+
+    // ---------------------------------------------------------------------------------
+    // T4-DQ: checkpoint / rewind
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * The two gates plus the cycle counter their arithmetic is relative to.
+     *
+     * <p>{@code injectorFilesCreated}/{@code injectorFilesPreserved} are deliberately absent: they
+     * are the T2-EZ run-level MEASUREMENT of what the injector did, and a rewind does not un-write
+     * the files it counted. Restoring them would make a run under-report its own work.
+     */
+    public record Snapshot(Map<String, RunLevelState> runLevelFires,
+                           Map<String, EntryState> ledger,
+                           int cycleCounter) {}
+
+    /** T2-EN run-level re-fire accounting for one (rule, token). */
+    public record RunLevelState(int fires, String lastCycleId) {}
+
+    /** One per-proposal blacklist entry. */
+    public record EntryState(int firstAttemptCycle, int lastAttemptCycle, int attempts,
+                             String lastReProbeResult, Map<String, String> lastSeenDigests,
+                             boolean blacklistedUntilFileMutation) {}
+
+    @Override
+    public String stateKey() {
+        return "fixAttempts";
+    }
+
+    @Override
+    public Object captureState() {
+        Map<String, RunLevelState> runLevel = new java.util.TreeMap<>();
+        runLevelFires.forEach((k, e) -> {
+            synchronized (e) {
+                runLevel.put(k, new RunLevelState(e.fires, e.lastCycleId));
+            }
+        });
+        Map<String, EntryState> entries = new java.util.TreeMap<>();
+        ledger.forEach((k, e) -> entries.put(k, new EntryState(
+                e.firstAttemptCycle, e.lastAttemptCycle, e.attempts,
+                e.lastReProbeResult != null ? e.lastReProbeResult.name() : null,
+                new java.util.LinkedHashMap<>(e.lastSeenDigests),
+                e.blacklistedUntilFileMutation)));
+        return new Snapshot(runLevel, entries, cycleCounter.get());
+    }
+
+    @Override
+    public void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                             com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        runLevelFires.clear();
+        ledger.clear();
+        cycleCounter.set(0);
+        if (state == null || state.isNull()) return;
+        Snapshot snapshot = mapper.convertValue(state, Snapshot.class);
+        if (snapshot.runLevelFires() != null) {
+            snapshot.runLevelFires().forEach((k, v) -> {
+                RunLevelEntry e = new RunLevelEntry();
+                e.fires = v.fires();
+                e.lastCycleId = v.lastCycleId();
+                runLevelFires.put(k, e);
+            });
+        }
+        if (snapshot.ledger() != null) {
+            snapshot.ledger().forEach((k, v) -> {
+                Entry e = new Entry();
+                e.firstAttemptCycle = v.firstAttemptCycle();
+                e.lastAttemptCycle = v.lastAttemptCycle();
+                e.attempts = v.attempts();
+                e.lastReProbeResult = v.lastReProbeResult() == null
+                        ? null : BuildResult.valueOf(v.lastReProbeResult());
+                e.lastSeenDigests = v.lastSeenDigests() == null
+                        ? Map.of() : Map.copyOf(v.lastSeenDigests());
+                e.blacklistedUntilFileMutation = v.blacklistedUntilFileMutation();
+                ledger.put(k, e);
+            });
+        }
+        cycleCounter.set(snapshot.cycleCounter());
     }
 
     static final class Entry {

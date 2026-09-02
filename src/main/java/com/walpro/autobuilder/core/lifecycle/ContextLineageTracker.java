@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.lifecycle;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.model.MergeTrace;
 import org.springframework.stereotype.Component;
 
@@ -10,6 +13,9 @@ import java.util.Map;
 import java.util.Objects;
 
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "per-cycle derived-fact carriers, never carried forward — the case the bucket exists "
+                + "to make declarable")
 public class ContextLineageTracker {
 
     // T4-BZ-2: BUILD_BROKEN / TEST_REPAIR_FOCUS / BUILD_FIX_LOCUS_STUCK /

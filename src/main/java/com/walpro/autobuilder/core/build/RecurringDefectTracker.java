@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.core.build.inject.FixProposal;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +46,10 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Component
-public class RecurringDefectTracker {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "the run-level missing-type tally drives the BuildBlockGate redirection; a rewind "
+                + "that kept a later tally would redirect on defects the restored tree no longer has")
+public class RecurringDefectTracker implements CheckpointableState {
 
     /** Only {@code symbol: class|interface NAME} names a missing TYPE (the compiler's own grammar). */
     private static final Pattern MISSING_TYPE_SYMBOL =
@@ -238,6 +245,63 @@ public class RecurringDefectTracker {
             int i = key.indexOf('|');
             return i < 0 ? null : key.substring(i + 1);
         }
+    }
+
+    // ---------------------------------------------------------------------------------
+    // T4-DQ: checkpoint / rewind
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * The tally, without the per-cycle memo. {@code definedCache}/{@code definedCacheCycle} are
+     * deliberately absent: they memoize one walk of the output tree for the current cycle, and a
+     * rewind replaces that tree — carrying the memo across would answer "is this type declared?"
+     * about a tree that no longer exists.
+     */
+    public record Snapshot(List<ShapeState> shapes, long missingTypeTotal, long sequence) {}
+
+    /** One recurring missing-type shape, flattened for the checkpoint. */
+    public record ShapeState(String key, long count, long lastSeenSeq, boolean hadGreenFix,
+                             boolean injectionCapped, Set<String> subgoalIds) {}
+
+    @Override
+    public String stateKey() {
+        return "recurringDefects";
+    }
+
+    @Override
+    public synchronized Object captureState() {
+        List<ShapeState> flat = new java.util.ArrayList<>();
+        for (Shape s : shapes.values()) {
+            flat.add(new ShapeState(s.key, s.count, s.lastSeenSeq, s.hadGreenFix, s.injectionCapped,
+                    new java.util.LinkedHashSet<>(s.subgoalIds)));
+        }
+        flat.sort(java.util.Comparator.comparing(ShapeState::key));
+        return new Snapshot(flat, missingTypeTotal, sequence);
+    }
+
+    @Override
+    public synchronized void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                                          com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        shapes.clear();
+        missingTypeTotal = 0;
+        sequence = 0;
+        definedCacheCycle = null;
+        definedCache = Set.of();
+        if (state == null || state.isNull()) return;
+        Snapshot snapshot = mapper.convertValue(state, Snapshot.class);
+        if (snapshot.shapes() != null) {
+            for (ShapeState s : snapshot.shapes()) {
+                Shape shape = new Shape(s.key());
+                shape.count = s.count();
+                shape.lastSeenSeq = s.lastSeenSeq();
+                shape.hadGreenFix = s.hadGreenFix();
+                shape.injectionCapped = s.injectionCapped();
+                if (s.subgoalIds() != null) shape.subgoalIds.addAll(s.subgoalIds());
+                shapes.put(s.key(), shape);
+            }
+        }
+        missingTypeTotal = snapshot.missingTypeTotal();
+        sequence = snapshot.sequence();
     }
 
     private static final class Shape {

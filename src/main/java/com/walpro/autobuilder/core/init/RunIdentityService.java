@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.init;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.core.service.FileService;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +33,8 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
+@StateHolder(value = StateBucket.ALREADY_PERSISTED,
+        note = "run and lineage identity persist to meta/run-identity.json")
 public class RunIdentityService {
 
     public static final String IDENTITY_FILE = "meta/run-identity.json";

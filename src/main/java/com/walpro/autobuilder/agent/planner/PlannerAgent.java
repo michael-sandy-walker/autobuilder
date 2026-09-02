@@ -1,5 +1,9 @@
 package com.walpro.autobuilder.agent.planner;
 
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.core.engine.ExecutionAgent;
 import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
@@ -33,7 +37,9 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class PlannerAgent implements ExecutionAgent {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "the consecutive empty-backlog injection count is the planner's own brake")
+public class PlannerAgent implements ExecutionAgent, CheckpointableState {
 
     // throttle the planner when the active backlog exceeds this count.
     // Keeps the remaining-goal count bounded and prevents REPLAN_REQUESTED
@@ -52,6 +58,29 @@ public class PlannerAgent implements ExecutionAgent {
     // breaker was active when the planner injected new goals. Reset on any merged cycle or when
     // the circuit breaker is no longer active.
     private int consecutiveEmptyBacklogInjectionsWithoutMerge = 0;
+
+    // T4-DQ: the planner's own brake — how many consecutive empty-backlog injections have
+    // happened without a merge. Restored with the rest so a rewound run does not carry a brake
+    // earned on cycles it no longer has.
+    public record Snapshot(int consecutiveEmptyBacklogInjectionsWithoutMerge) {}
+
+    @Override
+    public String stateKey() {
+        return "plannerEmptyBacklogBrake";
+    }
+
+    @Override
+    public Object captureState() {
+        return new Snapshot(consecutiveEmptyBacklogInjectionsWithoutMerge);
+    }
+
+    @Override
+    public void restoreState(com.fasterxml.jackson.databind.JsonNode state,
+                             com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        consecutiveEmptyBacklogInjectionsWithoutMerge = state == null || state.isNull()
+                ? 0
+                : mapper.convertValue(state, Snapshot.class).consecutiveEmptyBacklogInjectionsWithoutMerge();
+    }
 
     // T1-EI: number of distinct cycles in which a dedup-blocked proposal triggers a rehabilitation
     // vote before the matched GIVEN_UP goal is auto-reactivated. Mirrors the "2 within 3 cycles"

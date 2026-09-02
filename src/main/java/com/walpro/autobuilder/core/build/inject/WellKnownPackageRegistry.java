@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.build.inject;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.walpro.autobuilder.core.service.FileService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +48,8 @@ import java.util.regex.Pattern;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "a negative memo over static tables — re-deriving it reaches the same answer")
 public class WellKnownPackageRegistry {
 
     /** Build coordinates that provide a registry-covered package. */

@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.observability.behaviour;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -17,6 +20,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 @Slf4j
 @Component
+@StateHolder(value = StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "live SSE subscriber list")
 public class BehaviourEventPublisher {
 
     /** Never time out — the client controls lifetime by closing the connection. */

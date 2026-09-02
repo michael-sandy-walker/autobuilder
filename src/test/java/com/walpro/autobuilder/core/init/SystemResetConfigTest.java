@@ -36,7 +36,8 @@ class SystemResetConfigTest {
                 fileService,
                 mock(GoalPlannerService.class),
                 mock(CriteriaVerificationService.class),
-                runIdentityService);
+                runIdentityService,
+                new com.walpro.autobuilder.goal.GoalTransitionLog(fileService, new ObjectMapper().findAndRegisterModules()));
     }
 
     @Test

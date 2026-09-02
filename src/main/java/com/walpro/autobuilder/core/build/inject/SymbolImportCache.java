@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.build.inject;
 
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -55,6 +58,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@StateHolder(value = StateBucket.ALREADY_PERSISTED,
+        note = "its own store file under cache/, keyed by dependency fingerprint")
 public class SymbolImportCache {
 
     private static final ObjectMapper MAPPER = new ObjectMapper()

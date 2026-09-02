@@ -2333,6 +2333,31 @@
    "smoke_total": 23,
    "terminal": "deadline",
    "total_cycles": "53"
+  },
+  "2026-09-02_22-49-53": {
+   "clauses_closed_vs_control": "1",
+   "cost_readout": "sms-commit=1013593ms/1 build=55299ms/17 boot-gate=3349ms/1 package-gate=2699ms/1 sms-batch-build=287ms/2 sms-lineage-stamp=56ms/1 sms-cycle-merge=6ms/1",
+   "criteria_authored": "12",
+   "criteria_executable_count": "11",
+   "criteria_executable_pct": "92",
+   "drift_tail_cycles": "4",
+   "injector_files_created": "4",
+   "injector_files_kept": "4",
+   "injector_fixes_rederived": "0",
+   "median_cycle_seconds": "44",
+   "merges": "3",
+   "peaked_at_cycle": "cycle-1788382364277 (5/9)",
+   "preserved_source": "reconstructed:cycle-1788382364277",
+   "recorded": "2026-09-02",
+   "repeat_proposals": "0",
+   "repeats_refused": "0",
+   "run_duration_min": "19.6",
+   "score_delta": "n/a (artifact-build-failed vs SMOKE: 5/23)",
+   "smoke": "artifact-build-failed",
+   "smoke_failed_checks": "1,2,3,4,5,6,8,9,10,11,13,16,17,18,19,20,21,23",
+   "smoke_preserved": "SMOKE: 5/23",
+   "terminal": "deadline",
+   "total_cycles": "9"
   }
  },
  "updated": "2026-09-02"

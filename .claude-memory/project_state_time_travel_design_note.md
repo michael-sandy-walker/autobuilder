@@ -1,6 +1,6 @@
 ---
 name: project-state-time-travel-design-note
-description: "T4-DQ design note and BUILD RECORD (2026-09-02, user-directed; slices 1-3 SHIPPED the same day) — checkpoint/restore/rewind as REAL FUNCTIONALITY, not a test script: the full state surface inventoried with evidence, the two structural blockers (goal status mutated in place, decision-bearing trackers never persisted), the event-log-plus-snapshot decision and why the user's challenge to snapshot-only was right, the three-bucket state manifest (capture / already-persisted / derived-do-not-restore), two cache modes whose difference is itself diagnostic, and differential replay as the falsifiable completeness test. Read before any checkpoint, rewind, backtracking, or T4-CR work."
+description: "T4-DQ design note and BUILD RECORD (2026-09-02, user-directed; ALL FOUR SLICES SHIPPED the same day) — checkpoint/restore/rewind as REAL FUNCTIONALITY, not a test script: the full state surface inventoried with evidence, the two structural blockers (goal status mutated in place, decision-bearing trackers never persisted), the event-log-plus-snapshot decision and why the user's challenge to snapshot-only was right, the three-bucket state manifest (capture / already-persisted / derived-do-not-restore), two cache modes whose difference is itself diagnostic, and differential replay as the falsifiable completeness test. Read before any checkpoint, rewind, backtracking, or T4-CR work."
 metadata:
   node_type: memory
   type: project
@@ -8,7 +8,7 @@ metadata:
 
 # State time travel — design note (T4-DQ)
 
-**Status: SLICES 1-3 SHIPPED 2026-09-02** (design written the same day, after a user-directed
+**Status: ALL FOUR SLICES SHIPPED 2026-09-02** (design written the same day, after a user-directed
 exchange that corrected two of my positions). This is rationale, never a queue
 ([[feedback-roadmap-is-the-queue]]); `T4-DQ` in `roadmap.md` is the ticket and carries the
 as-built record. What follows is the design as reasoned, with a build section at the end recording
@@ -168,3 +168,22 @@ deterministic replay of live runs on its own, which is worth having regardless
 - **Still unanswered, and now ASKABLE:** whether the resolution cache is decision-bearing. Both
   modes are implemented; nobody has yet run the same rewind `FAITHFUL` and `FRESH` and compared.
   That experiment is the design's decision 3 and it has not been done.
+
+## Slice 4 as built — branching, and the two questions it settled
+
+- **A branch is a CYCLE RANGE.** Ids are monotonic and a branch is contiguous in them, so every
+  checkpoint, snapshot and behaviour event already records membership. No new identity column.
+- **A rewind does NOT fork a lineage** — the design left this open and building it settled it.
+  `T4-CJ`'s lineageId means "which evolutionary line is this target on" across runs; within-run
+  exploration is a different question, and overloading the id would multiply lineages and break
+  `T1-FM`'s resume ownership check.
+- **The ranking rule was fixed before measurement**: subgoals completed WITH a merge, then merges,
+  then a compiling tip, then recency. Merge RATE is recorded and never ranked on — a two-cycle
+  branch that merged once would outrank a thirty-cycle branch that merged ten times.
+- **The actuator is "end on the best path", and it is NOT `T4-CA` again.** T4-CA picks the best
+  tree to ship. Nothing picked the best state to CARRY ON from, so a run that backed out of a good
+  path handed its `T4-CD` successor the worse one's goal state.
+- **A switch that reads as an absence is a trap.** Disabling branching first made "no fork point"
+  indistinguishable from "everything explored", silently removing slice 3's rewind instead of
+  slice 4's bookkeeping. **A component's off-switch must be asked about directly, never inferred
+  from its answers.**

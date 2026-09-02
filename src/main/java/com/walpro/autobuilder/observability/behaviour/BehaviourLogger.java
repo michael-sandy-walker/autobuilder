@@ -284,6 +284,25 @@ public class BehaviourLogger {
                 failures));
     }
 
+    /** T4-DQ slice 4: a new path was opened from an earlier checkpoint. */
+    public void branchForked(String cycleId, String branchId, String forkedFromCycleId, String label) {
+        emit(new BehaviourEvent.BranchForked(Instant.now(), cycleId, branchId, forkedFromCycleId, label));
+    }
+
+    /** T4-DQ slice 4: a path the loop has finished with, and what it achieved. */
+    public void branchSealed(String cycleId, String branchId, int cycles, int merges,
+                             int subgoalsCompletedWithMerge, String tipCycleId) {
+        emit(new BehaviourEvent.BranchSealed(Instant.now(), cycleId, branchId, cycles, merges,
+                subgoalsCompletedWithMerge, tipCycleId));
+    }
+
+    /** T4-DQ slice 4: the run returned to the branch that got furthest. */
+    public void branchAdopted(String cycleId, String adoptedBranchId, String leftBranchId,
+                              String tipCycleId, int subgoalsCompletedWithMerge, int merges) {
+        emit(new BehaviourEvent.BranchAdopted(Instant.now(), cycleId, adoptedBranchId, leftBranchId,
+                tipCycleId, subgoalsCompletedWithMerge, merges));
+    }
+
     /** T4-DQ slice 2: a replayed cycle asked something the recording does not contain. */
     public void replayDivergence(String cycleId, String role, String promptDigest, String resolution) {
         emit(new BehaviourEvent.ReplayDivergence(Instant.now(), cycleId, role, promptDigest, resolution));

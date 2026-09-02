@@ -74,7 +74,7 @@ public class RunResumeService {
     // snapshots/ and mutations/, so keeping checkpoints while clearing those would leave points
     // that look returnable and are not.
     private static final List<String> RUN_SCOPED_DIRS =
-            List.of("mutations", "snapshots", "checkpoints", "llm-recordings");
+            List.of("mutations", "snapshots", "checkpoints", "llm-recordings", "branches");
 
     private final AutobuilderConfigProperties config;
     private final FileService fileService;

@@ -283,6 +283,14 @@ public class AutobuilderService implements CheckpointableState {
     @lombok.Setter
     private com.walpro.autobuilder.core.checkpoint.RewindPolicy rewindPolicy;
 
+    /**
+     * T4-DQ slice 4: optional — at the run terminal, ends the run on the path that got furthest
+     * rather than the one it was last on. Absent leaves the terminal exactly as it was.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.checkpoint.BranchExplorer branchExplorer;
+
     /** T4-BP step 1: criteria verification on the #NoDiff route — optional, wired by Spring if present. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     @lombok.Setter
@@ -650,6 +658,18 @@ public class AutobuilderService implements CheckpointableState {
                     // recorded-state twins) — the guard suppresses it when a producer already
                     // emitted at raise time.
                     emitSystemPausedOnce(context.cycleName(), context.pausedReason(), 0);
+                    // T4-DQ slice 4: the run is ending. If it explored more than one path, end it
+                    // on the one that got FURTHEST rather than the one it happened to be on when
+                    // the brake fired. This runs before preserve deliberately, so the state left
+                    // on disk — which a T4-CD resume continues from — is the best explored one.
+                    // T4-CA already picks the best TREE to ship; nothing picked the best state to
+                    // carry on from, so a run that backed out of a good path and ground on a worse
+                    // one handed its successor the worse one.
+                    if (branchExplorer != null) {
+                        branchExplorer.sealCurrent(context.cycleName());
+                        log.info("T4-DQ: paths explored this run — {}", branchExplorer.readout());
+                        branchExplorer.adoptMostAdvanced(context.cycleName());
+                    }
                     // T4-CA: the run just reached an in-process terminal — preserve the best
                     // verified snapshot BEFORE the JVM idles (an external watcher may kill it).
                     if (preservedArtifactService != null) {

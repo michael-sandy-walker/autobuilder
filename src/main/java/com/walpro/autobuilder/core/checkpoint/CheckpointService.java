@@ -186,6 +186,27 @@ public class CheckpointService {
         }
     }
 
+    /**
+     * The T4-CA state stamp of a checkpoint's tree snapshot — what the tree was like at that
+     * point, as recorded when the snapshot was written. Read rather than re-derived: the stamp is
+     * a fact about the cycle, and re-probing it later would answer about a different moment.
+     */
+    public Optional<com.walpro.autobuilder.core.persistence.MutationSnapshotService.SnapshotState>
+            snapshotStateOf(String cycleId) {
+        return read(cycleId).flatMap(record -> {
+            String path = record.snapshotPath() + "/"
+                    + com.walpro.autobuilder.core.persistence.MutationSnapshotService.SNAPSHOT_STATE_FILE;
+            try {
+                if (!fileService.exists(path)) return Optional.empty();
+                return Optional.of(objectMapper.readValue(fileService.readString(path),
+                        com.walpro.autobuilder.core.persistence.MutationSnapshotService.SnapshotState.class));
+            } catch (IOException | RuntimeException e) {
+                log.debug("T4-DQ: snapshot state for {} unreadable: {}", cycleId, e.getMessage());
+                return Optional.empty();
+            }
+        });
+    }
+
     /** Where a checkpoint's captured {@code cache/} copy lives. */
     public String cacheCopyPath(String cycleId) {
         return CHECKPOINTS_DIR + "/" + cycleId + "/" + CACHE_DIR;

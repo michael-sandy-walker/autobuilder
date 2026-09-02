@@ -102,6 +102,54 @@ class RewindPolicyTest {
     }
 
     @Test
+    @DisplayName("with branching, the fork point is the newest UNTRIED one, not merely an older one")
+    void branchingChoosesByWhatHasBeenTriedNotByPosition() {
+        BranchExplorer explorer = mock(BranchExplorer.class);
+        when(explorer.enabled()).thenReturn(true);
+        policy.setBranchExplorer(explorer);
+        // A point NEWER than the previous target is still untried — the positional rule would skip
+        // it for no reason beyond its own arithmetic.
+        when(explorer.nextUntriedForkPoint()).thenReturn(Optional.of(checkpoint("cycle-40", true)));
+        when(rewindService.rewindTo(anyString(), any(), anyString(), anyString()))
+                .thenReturn(performed("cycle-40"));
+
+        assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 42)).isPresent();
+
+        verify(rewindService).rewindTo("cycle-40", CacheMode.FAITHFUL, RewindPolicy.TRIGGER, "cycle-50");
+        verify(rewindService, never()).lastMergedBefore(anyString());
+        verify(explorer).forkAt(any(), eq("cycle-50"), anyString());
+    }
+
+    @Test
+    @DisplayName("when every point that landed work has been explored, the run halts")
+    void exhaustedExplorationHalts() {
+        BranchExplorer explorer = mock(BranchExplorer.class);
+        when(explorer.enabled()).thenReturn(true);
+        policy.setBranchExplorer(explorer);
+        when(explorer.nextUntriedForkPoint()).thenReturn(Optional.empty());
+
+        assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 42)).isEmpty();
+        verify(rewindService, never()).rewindTo(anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("switching branching off falls back to the positional rule, it does not stop rewinding")
+    void disablingBranchingKeepsTheRewind() {
+        BranchExplorer explorer = mock(BranchExplorer.class);
+        when(explorer.enabled()).thenReturn(false);
+        policy.setBranchExplorer(explorer);
+        when(rewindService.lastMergedBefore(anyString())).thenReturn(Optional.of(checkpoint("cycle-5", true)));
+        when(rewindService.rewindTo(anyString(), any(), anyString(), anyString()))
+                .thenReturn(performed("cycle-5"));
+
+        assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 42))
+                .as("the branch switch removes slice 4's bookkeeping, not slice 3's rewind")
+                .isPresent();
+        verify(explorer, never()).nextUntriedForkPoint();
+        verify(explorer, never()).forkAt(any(), anyString(), anyString());
+    }
+
+    @Test
     @DisplayName("the switch turns it off and the halt edge behaves as before")
     void theSwitchTurnsItOff() {
         ReflectionTestUtils.setField(policy, "enabled", false);

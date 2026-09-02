@@ -86,7 +86,7 @@ public class SystemResetConfig {
         // T4-DQ: "checkpoints" is cleared with the rest — a reset severs the lineage, and points
         // belonging to the severed one are not points this run can return to. The goal-transition
         // log lives under meta/ and goes with it, so the fold restarts empty alongside the tree.
-        for (String dir : List.of("output", "mutations", "snapshots", "meta", "checkpoints", "llm-recordings")) {
+        for (String dir : List.of("output", "mutations", "snapshots", "meta", "checkpoints", "llm-recordings", "branches")) {
             Path dirPath = fileService.resolveSecurePath(dir);
             if (dirPath.toFile().exists()) {
                 deleteRecursive(dirPath);

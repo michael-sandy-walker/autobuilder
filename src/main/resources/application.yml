@@ -27,6 +27,15 @@ autobuilder:
     # itself the instrument — if outcomes differ, the resolution cache is decision-bearing rather
     # than a pure optimisation, which nobody currently knows.
     cache-mode: FAITHFUL
+  branch:
+    # T4-DQ slice 4. Each rewind seals the path being left and opens a branch from the fork point,
+    # so the run accumulates a record of what it has TRIED rather than only a position: the next
+    # fork picks the newest point that landed work and has not been explored, and at the terminal
+    # the run returns to whichever branch got furthest. That last part is the point of it —
+    # T4-CA already picks the best TREE to ship, but nothing picked the best state to carry on
+    # from, so a run that backed out of a good path handed its successor the worse one.
+    # Off leaves slice 3's behaviour exactly as it was.
+    enabled: true
   replay:
     # OFF | RECORD | REPLAY. RECORD writes every LLM answer to llm-recordings/exchanges.ndjson;
     # REPLAY answers from it, which is what makes a rewind's round trip provable (an uncaptured

@@ -57,6 +57,16 @@ public class RewindPolicy {
 
     private final RewindService rewindService;
 
+    /**
+     * T4-DQ slice 4: optional — when present, each rewind SEALS the path being abandoned and
+     * OPENS a branch from the fork point, so the run accumulates a comparable record of what it
+     * has tried instead of only a position. Absent (unit constructions) leaves slice 3's
+     * behaviour exactly as it was.
+     */
+    @Setter
+    @Autowired(required = false)
+    private BranchExplorer branchExplorer;
+
     @Setter
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
@@ -97,13 +107,21 @@ public class RewindPolicy {
                     atCycleId, rewindsUsed);
             return Optional.empty();
         }
-        // Strictly older than the last target, so a second rewind cannot re-walk the same stretch
-        // from the same place.
-        String before = lastTargetCycleId != null ? lastTargetCycleId : atCycleId;
-        Optional<CheckpointRecord> target = rewindService.lastMergedBefore(before);
+        // WHERE TO GO BACK TO. With slice 4's ledger the answer is "the newest point that landed
+        // work and that no branch has been forked from yet" — a fact about what has been TRIED.
+        // Without it, the fallback is positional: strictly older than the last target, so a second
+        // rewind at least cannot re-walk the same stretch from the same place. The ledger version
+        // is strictly better because a point can be untried and NEWER than the last fork, which
+        // the positional rule would skip for no reason beyond its own arithmetic.
+        boolean branching = branchExplorer != null && branchExplorer.enabled();
+        Optional<CheckpointRecord> target = branching
+                ? branchExplorer.nextUntriedForkPoint()
+                : rewindService.lastMergedBefore(lastTargetCycleId != null ? lastTargetCycleId : atCycleId);
         if (target.isEmpty()) {
-            log.info("T4-DQ: grinding at {} but no earlier checkpoint landed work — nothing better to return to, halting as before.",
-                    atCycleId);
+            log.info("T4-DQ: grinding at {} but {} — nothing better to return to, halting as before.",
+                    atCycleId, branching
+                            ? "every checkpoint that landed work has already been explored"
+                            : "no earlier checkpoint landed work");
             return Optional.empty();
         }
 
@@ -118,10 +136,16 @@ public class RewindPolicy {
 
         rewindsUsed++;
         lastTargetCycleId = record.cycleId();
-        log.warn("T4-DQ: {} cycles of grinding at {} — returned to {}, the last point that landed work "
+        if (branching) {
+            branchExplorer.forkAt(record, atCycleId,
+                    cyclesInDrought + " cycles without root progress on the path being left");
+        }
+        log.warn("T4-DQ: {} cycles of grinding at {} — returned to {}, {} that landed work "
                         + "(rewind {} of {}). The plan that led here stays in the graph, so the planner "
                         + "cannot re-propose it.",
-                cyclesInDrought, atCycleId, record.cycleId(), rewindsUsed, maxRewinds);
+                cyclesInDrought, atCycleId, record.cycleId(),
+                branching ? "the newest untried point" : "the last point",
+                rewindsUsed, maxRewinds);
         return Optional.of(result);
     }
 

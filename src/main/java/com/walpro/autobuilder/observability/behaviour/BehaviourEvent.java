@@ -853,4 +853,55 @@ public sealed interface BehaviourEvent {
     ) implements BehaviourEvent {
         public String event() { return "replay_divergence"; }
     }
+
+    /**
+     * T4-DQ slice 4: the loop opened a new path forward from an earlier checkpoint. The branch it
+     * was on is sealed in the same moment (see {@link BranchSealed}).
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record BranchForked(
+            Instant timestamp,
+            String cycleId,
+            String branchId,
+            String forkedFromCycleId,
+            String label
+    ) implements BehaviourEvent {
+        public String event() { return "branch_forked"; }
+    }
+
+    /**
+     * T4-DQ slice 4: a path the loop has finished with, and what it achieved.
+     * {@code subgoalsCompletedWithMerge} is the convergence brake's root-progress measure — the
+     * one a planner cannot inflate by re-decomposing — and is the primary ranking key.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record BranchSealed(
+            Instant timestamp,
+            String cycleId,
+            String branchId,
+            int cycles,
+            int merges,
+            int subgoalsCompletedWithMerge,
+            String tipCycleId
+    ) implements BehaviourEvent {
+        public String event() { return "branch_sealed"; }
+    }
+
+    /**
+     * T4-DQ slice 4: the run returned to the tip of the branch that got furthest, so the state it
+     * carries forward — and that a T4-CD resume continues from — is its best explored one rather
+     * than the last one tried.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record BranchAdopted(
+            Instant timestamp,
+            String cycleId,
+            String adoptedBranchId,
+            String leftBranchId,
+            String tipCycleId,
+            int subgoalsCompletedWithMerge,
+            int merges
+    ) implements BehaviourEvent {
+        public String event() { return "branch_adopted"; }
+    }
 }

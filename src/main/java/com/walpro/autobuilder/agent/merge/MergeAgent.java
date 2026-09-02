@@ -401,7 +401,7 @@ public class MergeAgent implements ExecutionAgent {
                 // is not an end-stage property: it needs two annotated peers in the type's own
                 // package, so a partial skeleton produces nothing and a project that annotates
                 // nothing produces nothing.
-                applyInjectedTypeRegistrationRepair(context, outputPath);
+                applyInjectedTypeRegistrationRepair(outputPath);
 
                 // T3-BZ slice 2: a type sitting apart from the peers that named it. The fact was
                 // stated for the whole life of nine archived runs and moved nothing, because its
@@ -742,14 +742,30 @@ public class MergeAgent implements ExecutionAgent {
         }
     }
 
-    private void applyInjectedTypeRegistrationRepair(CycleContextData context, String outputPath) {
+    /**
+     * Gives a type that must be supplied to a constructor the registration its package peers
+     * carry, when it has none.
+     *
+     * <p>Reads the tree from DISK rather than the cycle's source map, for the same reason the
+     * relocation below does: the map is a cycle-start snapshot, and a project only ever acquires
+     * an unregistered injected type from a merge — which lands after that snapshot is taken.
+     * Detecting on the snapshot deferred every repair by one cycle, and skipped it altogether
+     * when the merge that introduced the defect was a run's last, which is the stall shape the
+     * ticket was filed on (run {@code 2026-08-30_18-44-37} ended unstartable with the diagnosis
+     * in hand). The lag was visible in the field the one time the repair fired: run
+     * {@code 2026-08-31_19-50-35} named the fact at 20:25:40 and repaired it at 20:26:28.
+     *
+     * <p>Costs one whole-tree read per post-merge COMPILE_OK on top of the relocation's own,
+     * which cannot be shared: that one must see this repair's writes.
+     */
+    void applyInjectedTypeRegistrationRepair(String outputPath) {
         if (wiringFactsAnalyzer == null || outputPath == null) return;
-        java.util.Map<String, String> sources = context.previousOutput();
-        if (sources == null || sources.isEmpty()) return;
         try {
+            java.nio.file.Path root = java.nio.file.Path.of(outputPath);
+            java.util.Map<String, String> sources = fileService.readFolderContentsResolved(root);
+            if (sources == null || sources.isEmpty()) return;
             var findings = wiringFactsAnalyzer.unregisteredInjectedTypes(sources);
             if (findings.isEmpty()) return;
-            java.nio.file.Path root = java.nio.file.Path.of(outputPath);
             for (var repair : com.walpro.autobuilder.core.build.InjectedTypeRegistrationRepair
                     .plan(sources, findings)) {
                 java.nio.file.Path file = root.resolve(repair.path());

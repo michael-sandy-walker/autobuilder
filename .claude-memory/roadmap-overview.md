@@ -16,6 +16,8 @@
 
 ## Tier 1 — Correctness (132)
 
+- [ ] `T5-BK` — Six integration-test classes holding 20 passing tests never run in `mvn test` (surefire defaults do not match `*IT.java`, no failsafe configured); all 20 pass when named explicitly, so this is invisibility not rot — fix deferred because 3 need Docker
+- [ ] `T1-FX` — A repair for a defect that only a MERGE can introduce detects on the pre-merge snapshot, so it can never fire in the cycle that introduces it — cost T3-CA's actuator the very run it was filed from; FIXED 2026-09-01 (detection moved to the tree on disk, parameter removed), field DoD open on a same-cycle firing
 - [ ] `T1-FW` — A requirement loses part of itself between being READ and being EXERCISED — whatever the specification names as part of the request must survive into it; probe drops the query string, 10 of 14 archived runs — ⚠ the fix AS FILED adds a fifth HTTP field to the verb+path+status record T4-DD wants dissolved; re-derive before building
 - [ ] `T1-FV` — A probe's input is built from what the implementation STORES rather than from what the interface ACCEPTS — proven 2026-08-28 as the SOLE blocker of a 23/23 run's only closure attempt (not "rare"); retry-with-reduced-body mitigation SHIPPED, firing path still field-unproven and reach is narrow (helps only fully-worded criteria) — ⚠ the filed fix is a handler-parameter reader, i.e. a new web subsystem in `core/build`
 - [ ] `T1-FU` — A probe sequence longer than the request budget is TRUNCATED and then judged, so the setup that establishes the precondition is silently dropped and correct code is accused — fix SHIPPED 2026-08-25 (over budget now abstains); ticket open on its field clause

@@ -42,3 +42,23 @@ The last run to self-complete scored **19/23**. The three best results in the pr
 **Why the loop cannot tell 19/23 from 23/23:** `criterion_probe_runs=0` in this run and in all eight before it. T4-CU's probes — the only correctness signal in the system — had never executed, because the boot-gate invocation that actually fires is `EvaluationAgent`'s originating-gate re-run and it called the two-arg form with an empty criteria list (`boot_gate_runs=3, criterion_probe_runs=0` here is the exact fingerprint). Fixed 2026-07-28 in `c374758`; unverified in the field at time of writing.
 
 **How to apply.** Three 23/23s means the ceiling is reachable, not that the stack works — the stack cannot yet distinguish a perfect artifact from a broken one, which is a different and larger problem than precision. Treat "reached 23/23" and "knew it had reached 23/23" as separate axes and report both. The streak the user actually wants (several consecutive) has never been attempted at a fixed build: code changed before nearly every run of 2026-07-27/28, which is exactly what [[feedback-replay-over-batches]] forbids.
+
+---
+
+**23/23 IS NOW ROUTINE, AND THE COUNT-BASED FRAMING ABOVE IS RETIRED (measured 2026-09-03).** Over the
+116-run ledger, **19 runs scored 23/23 — and 8 of the last 20 did**, including four consecutive on
+2026-09-01. The earlier entries here counted perfect scores one at a time because they were rare; on
+the current build the ceiling is reached routinely and counting sightings has stopped being
+informative. Report the RATE, not the count.
+
+**Latest: `2026-09-02_23-42-24`** — 27 cycles, 6 merges, 31.2 min, `terminal=GOAL_EXHAUSTED`,
+`smoke=23/23` and `smoke_strict=23/23 discounted=none`, so every endpoint genuinely exists rather
+than 404-ing its way to five free points ([[project-smoke-score-is-chained]]). Commissioned as the
+T4-DQ field test, and **T4-DQ did nothing that could have caused the score** — the checkpoint layer
+wrote 27 checkpoints and nothing consumed them, no rewind fired, no branch was forked. Attributing
+the result to it would be exactly the error [[feedback-runs-are-variant-by-design]] warns about.
+
+**The unchanged finding is still the important one:** this run scored 23/23 and ended on
+`GOAL_EXHAUSTED` — the backlog emptied — not on `GOAL_FULFILLED`. The loop still cannot tell a
+perfect artifact from a broken one; it stopped because it ran out of work items, and was right by
+accident.

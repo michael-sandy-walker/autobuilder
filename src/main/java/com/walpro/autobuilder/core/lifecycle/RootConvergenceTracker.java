@@ -62,6 +62,14 @@ public class RootConvergenceTracker implements CheckpointableState {
     @Value("${autobuilder.run.budget-minutes:0}")
     private int budgetMinutes = 0;
 
+    /**
+     * T4-DQ: how much wider the mid-run grind window is than the brake's own. See
+     * {@link #grinding()} for the field run that set it.
+     */
+    @Setter
+    @Value("${autobuilder.rewind.mid-run-window-factor:1.5}")
+    private double midRunWindowFactor = 1.5;
+
     private int lastProgressCount = 0;
     private int lastInjectionCount = 0;
     private int cyclesSinceProgress = 0;
@@ -81,6 +89,50 @@ public class RootConvergenceTracker implements CheckpointableState {
      * forward. Called by the cycle owner after a rewind — this class judges whether the run is
      * grinding and says so; what to DO about a halt is not its decision.
      */
+    /**
+     * T4-DQ: is this run grinding RIGHT NOW — a full window of cycles with nothing landing?
+     *
+     * <p>Separate from the halt edge on purpose, and the separation was earned in the field. The
+     * brake asks its question only when it is about to stop the run, and measured over 115
+     * recorded runs only 14 of them (12%) ever reach that point: 55 are killed by the harness
+     * deadline, which runs no terminal code at all, and the rest end on exhaustion, a dead JVM or
+     * a fulfilled goal. **None of the three runs T4-DQ was filed for reached the convergence
+     * halt.** A response wired only to that halt is a response those runs would never have got.
+     *
+     * <p>The predicate requires a FULL window of history, which is what stops a rewind from
+     * firing again on the cycle after one: {@code resyncAfterRewind} clears the series, so a fresh
+     * path gets a whole window to prove itself before it can be judged. Without that requirement
+     * an empty series would read as "nothing landing" and the loop would rewind every cycle.
+     *
+     * <p><b>The mid-run window is deliberately WIDER than the brake's own, and one field run
+     * bought that margin.</b> Run {@code 2026-09-02_23-42-24} scored 23/23 — a complete artifact —
+     * and its longest merge drought was NINETEEN cycles: its tail was closure and verification
+     * work, which lands no merges and looks exactly like a grind from the merge series alone. At
+     * the brake's window of 20 that run sat ONE cycle away from being rewound. The measured
+     * populations are 13 and 19 cycles for runs that finished healthily against 42 and 60 for the
+     * runs that ground to death, so the gap is real but the healthy side runs much closer to the
+     * line than the first four-run reading suggested.
+     *
+     * <p>The factor keeps the trigger relative to the run's own configured environment rather than
+     * introducing a second independent constant ([[feedback-relative-thresholds]]): it is a
+     * multiple of the brake's window, not a number of its own. It is deliberately conservative in
+     * one direction — a mid-run rewind spends cycles the run still has, where the halt-edge one
+     * spends cycles it has already lost — so the halt-edge case stays at the brake's own window.
+     */
+    public boolean grinding() {
+        int window = midRunWindow();
+        if (mergesPerCycle.size() < window) return false;
+        return ConvergenceTrend.assess(mergesPerCycle, window).windowMerges() == 0;
+    }
+
+    /**
+     * The window the mid-run grind judgement is taken over — wider than the brake's, see
+     * {@link #grinding()}.
+     */
+    public int midRunWindow() {
+        return Math.max(cycleLimit, (int) Math.ceil(cycleLimit * midRunWindowFactor));
+    }
+
     /** How long the run has been stalled — read by the halt-edge rewind decision for its trace. */
     public int cyclesSinceProgress() {
         return cyclesSinceProgress;

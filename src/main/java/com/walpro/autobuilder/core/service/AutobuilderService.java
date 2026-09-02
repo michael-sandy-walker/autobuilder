@@ -1212,7 +1212,21 @@ public class AutobuilderService implements CheckpointableState {
         //
         // Measured on the runs this exists for: 2026-09-01_23-11-25 landed nothing for 42 of its
         // 53 cycles and 2026-08-31_05-47-22 for 60 of 65; both shipped 5/23.
-        if (rewindPolicy != null && com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker.HALT_SOURCE.equals(context.pausedReason())) {
+        // T4-DQ slice 3, WIDENED after the field said the original siting was too narrow. It was
+        // wired to the convergence brake's halt alone, on the argument that the brake already asks
+        // the only question that matters. It does — but it only ASKS when it is about to stop the
+        // run, and measured over 115 recorded runs only 14 (12%) ever get there: 55 are killed by
+        // the harness deadline, which runs no terminal code at all. NONE of the three runs this
+        // ticket was filed for reached that halt, and neither did the run that found this.
+        //
+        // So the trigger is the grind itself, wherever the run is in its life: a full window with
+        // nothing landing. The halt case is subsumed — a run about to halt on the convergence
+        // brake is grinding by definition — and the window requirement gives a freshly rewound
+        // path a full window to prove itself before it can be judged again.
+        boolean grinding = rewindPolicy != null && rootConvergenceTracker.grinding();
+        boolean haltingOnTheBrake = rewindPolicy != null
+                && com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker.HALT_SOURCE.equals(context.pausedReason());
+        if (grinding || haltingOnTheBrake) {
             var rewound = rewindPolicy.considerRewindInsteadOfHalting(
                     context.cycleName(), rootConvergenceTracker.cyclesSinceProgress());
             if (rewound.isPresent()) {
@@ -1222,8 +1236,11 @@ public class AutobuilderService implements CheckpointableState {
                 context = context
                         .withPausedReason(null)
                         .withGoalExhaustedReason(null);
-                log.warn("T4-DQ: cycle {} ends at the rewind — the remainder of its post-cycle work "
-                        + "describes the path that was just backed out of.", context.cycleName());
+                log.warn("T4-DQ: cycle {} ends at the rewind ({}) — the remainder of its post-cycle "
+                                + "work describes the path that was just backed out of.",
+                        context.cycleName(),
+                        haltingOnTheBrake ? "the convergence brake was about to halt the run"
+                                : "a full window of cycles landed nothing");
                 return;
             }
         }

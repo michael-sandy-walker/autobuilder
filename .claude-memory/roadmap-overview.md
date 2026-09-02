@@ -370,6 +370,7 @@
 - [x] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals — MEASURED+BUILT 2026-08-24 (6,057 DbHits for 96 rows at 3,028 goals; T6-J's `goal_id_idx` indexed the wrong property); after-measurement pending a free box
 - [x] `T4-CX` — Startup-wiring forecast no longer precedes the gate that measures it (shipped 2026-07-28)
 - [x] `T4-CY` — Loop observes its own running behaviour mid-run: PROVEN, disabled on cost until probe synthesis is deterministic
+- [ ] `T4-DQ` — The loop cannot return to a state it was in: no checkpoint, rewind or backtracking, so a run down a bad path can only grind to death; tree+context snapshots already run every cycle, blockers are goal status mutated in place and 5 decision-bearing trackers never persisted — design note first
 - [ ] `T4-CQ` — Import and continue an existing project (cold read; with or without a graph)
 - [ ] `T4-CR` — Portable project+graph bundle: store a phase, restore it elsewhere (unblocked by T1-D lineage separation)
 - [ ] `T4-CS` — Code-layer merge across lineages (code-side sibling of T4-CM; gated on an overlap measurement)

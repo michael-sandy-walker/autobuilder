@@ -138,6 +138,31 @@ class CheckpointServiceTest {
     }
 
     @Test
+    @DisplayName("a checkpoint whose fingerprint this build cannot read is kept, restorable but unverified")
+    void anUnreadableFingerprintDoesNotCostThePoint() throws IOException {
+        // Exactly what happened: the fingerprint's shape changed and every checkpoint on disk
+        // became unreadable, so nine perfectly restorable points — full trees, all holders, no
+        // capture failures — went unreachable because the VERIFICATION had changed. The check is
+        // not the payload.
+        checkpoints.write(context("cycle-1", "snapshots/cycle-1"));
+        String path = "checkpoints/cycle-1/" + CheckpointService.CHECKPOINT_FILE;
+        var node = (com.fasterxml.jackson.databind.node.ObjectNode)
+                mapper.readTree(fileService.readString(path));
+        node.set("fingerprint", mapper.readTree("{\"tree\":\"abc\",\"goals\":\"a-string-not-a-map\"}"));
+        fileService.writeString(path, mapper.writeValueAsString(node));
+
+        CheckpointRecord record = checkpoints.read("cycle-1").orElseThrow();
+
+        assertThat(record.restorable()).isTrue();
+        assertThat(record.holders()).isNotEmpty();
+        assertThat(record.fingerprint())
+                .as("null means the round trip goes unchecked, which the rewind reports rather than hides")
+                .isNull();
+        assertThat(checkpoints.restorableCheckpoints()).extracting(CheckpointRecord::cycleId)
+                .contains("cycle-1");
+    }
+
+    @Test
     @DisplayName("an incomplete checkpoint is not offered as a rewind target")
     void incompleteCheckpointsAreNotOffered() {
         holder.explode = true;

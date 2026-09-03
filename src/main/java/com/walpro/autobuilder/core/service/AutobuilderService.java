@@ -366,6 +366,14 @@ public class AutobuilderService implements CheckpointableState {
         endReportWrittenThisEpisode = snapshot.endReportWrittenThisEpisode();
     }
 
+    /**
+     * T4-DQ: whether the loop is halted. Read by the operator rewind endpoint, which refuses to
+     * replace {@code output/} and rewrite goal state underneath a cycle that is still running.
+     */
+    public boolean isPaused() {
+        return systemPaused;
+    }
+
     public Optional<CycleContextData> getContext() {
         return Optional.ofNullable(context);
     }

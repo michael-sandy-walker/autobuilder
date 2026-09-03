@@ -129,15 +129,45 @@ public class CheckpointService {
         }
     }
 
-    /** Read a checkpoint back, or empty when there is none for that cycle. */
+    /**
+     * Read a checkpoint back, or empty when there is none for that cycle.
+     *
+     * <p><b>The fingerprint is a check, not the payload, and is dropped rather than allowed to
+     * cost the restore.</b> Learned the hard way: changing the fingerprint's shape made every
+     * checkpoint on disk unreadable, so a run's ten perfectly restorable points — full trees, all
+     * holders, no capture failures — became unreachable because the VERIFICATION had changed. A
+     * checkpoint that can be restored but not verified is worth strictly more than one that can be
+     * neither, and it says which it is: {@code fingerprint == null} means the round trip goes
+     * unchecked, which the rewind reports rather than hides.
+     */
     public Optional<CheckpointRecord> read(String cycleId) {
         if (cycleId == null || cycleId.isBlank()) return Optional.empty();
         String path = CHECKPOINTS_DIR + "/" + cycleId + "/" + CHECKPOINT_FILE;
+        String json;
         try {
             if (!fileService.exists(path)) return Optional.empty();
-            return Optional.of(objectMapper.readValue(fileService.readString(path), CheckpointRecord.class));
+            json = fileService.readString(path);
         } catch (IOException | RuntimeException e) {
             log.warn("T4-DQ: checkpoint {} is unreadable: {}", cycleId, e.getMessage());
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(objectMapper.readValue(json, CheckpointRecord.class));
+        } catch (Exception first) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode tree = objectMapper.readTree(json);
+                if (tree instanceof com.fasterxml.jackson.databind.node.ObjectNode object
+                        && object.has("fingerprint")) {
+                    object.remove("fingerprint");
+                    CheckpointRecord record = objectMapper.treeToValue(object, CheckpointRecord.class);
+                    log.info("T4-DQ: checkpoint {} carries a fingerprint this build cannot read — "
+                            + "keeping the point, restoring it unverified ({}).", cycleId, first.getMessage());
+                    return Optional.of(record);
+                }
+            } catch (Exception ignored) {
+                // fall through to the original failure
+            }
+            log.warn("T4-DQ: checkpoint {} is unreadable: {}", cycleId, first.getMessage());
             return Optional.empty();
         }
     }

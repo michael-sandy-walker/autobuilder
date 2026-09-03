@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -20,6 +21,13 @@ public class AutobuilderController {
 
     private final AutobuilderService autobuilderService;
     private final com.walpro.autobuilder.client.LlmUsageTracker llmUsageTracker;
+
+    /**
+     * T4-DQ: optional — the loop can already back out of its own bad path, but until this there
+     * was no way for a PERSON to ask. Optional so a context without checkpointing still starts.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.checkpoint.RewindService rewindService;
 
     /**
      * T5-R: session LLM token usage — cumulative totals plus a per-role breakdown. Tokens, not
@@ -119,6 +127,108 @@ public class AutobuilderController {
     public ResponseEntity<Map<String, Object>> resume() {
         autobuilderService.clearHaltSignals();
         return ResponseEntity.ok(Map.of("ok", true, "message", "Halt signals cleared."));
+    }
+
+    /**
+     * T4-DQ: the points this run can be returned to, newest first.
+     *
+     * <p>Only points that can actually be restored are listed — a checkpoint whose tree snapshot
+     * has been cleared, or that was incomplete when taken, is not offered, because offering it
+     * would be offering a restore that silently restores less than it claims.
+     */
+    @GetMapping("/checkpoints")
+    public ResponseEntity<Map<String, Object>> checkpoints() {
+        if (rewindService == null) {
+            return ResponseEntity.ok(Map.of("ok", false, "message", "Checkpointing is not enabled."));
+        }
+        List<Map<String, Object>> points = new java.util.ArrayList<>();
+        for (var record : rewindService.available()) {
+            Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("cycleId", record.cycleId());
+            row.put("at", String.valueOf(record.at()));
+            row.put("merged", record.merged());
+            row.put("currentSubGoalId", record.currentSubGoalId());
+            row.put("goalTransitionSeq", record.goalTransitionSeq());
+            row.put("holders", record.holders().size());
+            points.add(row);
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "count", points.size(), "checkpoints", points));
+    }
+
+    /**
+     * T4-DQ: return the loop to an earlier point — the operator's hand on the same capability the
+     * rewind policy uses on its own.
+     *
+     * <p>{@code toCycle} names a checkpoint; {@code back} counts backwards from the newest instead
+     * ({@code back=2} is two points before the latest). {@code cacheMode} is FAITHFUL (the
+     * resolution cache comes back with the state) or FRESH (it is cleared) — running the same
+     * rewind both ways is how we find out whether that cache is decision-bearing at all.
+     *
+     * <p><b>Serialised against the control loop.</b> A rewind replaces {@code output/} and rewrites
+     * goal state, so a cycle running underneath it would be working on a tree changing beneath it.
+     * It runs under the same lock a cycle takes rather than asking the operator to pause first:
+     * "paused" and "not currently cycling" are different states, and with the scheduler disabled
+     * the loop is the second without ever being the first.
+     */
+    @PostMapping("/rewind")
+    public ResponseEntity<Map<String, Object>> rewind(
+            @RequestParam(required = false) String toCycle,
+            @RequestParam(required = false, defaultValue = "0") int back,
+            @RequestParam(required = false, defaultValue = "FAITHFUL") String cacheMode) {
+        if (rewindService == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("ok", false, "message", "Checkpointing is not enabled."));
+        }
+        var available = rewindService.available();
+        if (available.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("ok", false, "message", "No restorable checkpoint on disk."));
+        }
+        String target = toCycle;
+        if (target == null || target.isBlank()) {
+            int index = Math.max(0, back);
+            if (index >= available.size()) {
+                return ResponseEntity.badRequest().body(Map.of("ok", false, "message",
+                        "Only " + available.size() + " restorable point(s); cannot go back " + index + "."));
+            }
+            target = available.get(index).cycleId();
+        }
+        com.walpro.autobuilder.core.checkpoint.CacheMode mode;
+        try {
+            mode = com.walpro.autobuilder.core.checkpoint.CacheMode.valueOf(cacheMode.toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("ok", false, "message", "cacheMode must be FAITHFUL or FRESH."));
+        }
+
+        String targetCycle = target;
+        var outcome = autobuilderService.runExclusively(
+                () -> rewindService.rewindTo(targetCycle, mode, "operator", targetCycle));
+        if (outcome.isEmpty()) {
+            return ResponseEntity.status(409).body(Map.of("ok", false, "message",
+                    "A cycle is running — could not take the control-loop lock. Retry, or "
+                            + "POST /autobuilder/pause first."));
+        }
+        var result = outcome.get();
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("ok", result.performed());
+        body.put("toCycleId", result.toCycleId());
+        body.put("cacheMode", cacheMode.toUpperCase(java.util.Locale.ROOT));
+        if (!result.performed()) {
+            body.put("refusedBecause", result.refusedBecause());
+            return ResponseEntity.badRequest().body(body);
+        }
+        body.put("holdersRestored", result.holdersRestored());
+        body.put("holdersReset", result.holdersReset());
+        body.put("goalStatusesRestored", result.goalStatusesRestored());
+        body.put("goalsRewoundOut", result.goalsRewoundOut());
+        body.put("goalTransitionsUndone", result.goalTransitionsUndone());
+        // Never hidden: a rewind that restored less than it claims must say so here.
+        body.put("clean", result.clean());
+        body.put("failures", result.failures());
+        body.put("message", "Returned to " + result.toCycleId()
+                + ". POST /autobuilder/resume to continue from there.");
+        return ResponseEntity.ok(body);
     }
 
     /**

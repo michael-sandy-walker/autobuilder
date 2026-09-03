@@ -150,7 +150,8 @@ public class RewindService {
      */
     private List<String> verifyRestoredState(CheckpointRecord record) {
         if (record.fingerprint() == null) {
-            return List.of();
+            // Not silence: a rewind nobody could check is a different thing from a clean one.
+            return List.of("not verified — this checkpoint carries no readable fingerprint");
         }
         try {
             return stateFingerprintService.current().divergencesFrom(record.fingerprint());

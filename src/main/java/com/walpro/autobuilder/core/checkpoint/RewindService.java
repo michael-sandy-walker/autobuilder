@@ -60,6 +60,7 @@ public class RewindService {
     private final GoalTransitionLog goalTransitionLog;
     private final GoalPlannerService goalPlannerService;
     private final StateFingerprintService stateFingerprintService;
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentityService;
 
     @Setter
     @Autowired(required = false)
@@ -75,7 +76,7 @@ public class RewindService {
      */
     public Result rewindTo(String toCycleId, CacheMode mode, String trigger, String atCycleId) {
         List<String> failures = new ArrayList<>();
-        Optional<CheckpointRecord> found = checkpointService.read(toCycleId);
+        Optional<CheckpointRecord> found = checkpointService.readAnyRun(toCycleId);
         if (found.isEmpty()) {
             return Result.refused(toCycleId, "no checkpoint for that cycle");
         }
@@ -83,8 +84,15 @@ public class RewindService {
         if (!record.restorable()) {
             return Result.refused(toCycleId, "checkpoint has no tree snapshot to restore");
         }
-        if (!checkpointService.treeStillPresent(record)) {
-            return Result.refused(toCycleId, "the checkpoint's tree snapshot has been cleared");
+        // The run's own snapshot when it survives, the archived source-only copy otherwise. The
+        // second is what lets a rewind reach a point from an earlier run, whose snapshots/ was
+        // cleared at that run's boundary by design.
+        String treeSource = checkpointService.treeStillPresent(record)
+                ? record.snapshotPath()
+                : checkpointService.archivePathOf(toCycleId).orElse(null);
+        if (treeSource == null) {
+            return Result.refused(toCycleId,
+                    "neither the checkpoint's tree snapshot nor an archived copy is on disk");
         }
         if (!record.complete()) {
             // Not a refusal — an operator may deliberately want a point that is the best available.
@@ -93,7 +101,7 @@ public class RewindService {
             failures.add("checkpoint was incomplete when taken: " + record.captureFailures());
         }
 
-        boolean treeRestored = restoreTree(record, failures);
+        boolean treeRestored = restoreTree(treeSource, failures);
         if (!treeRestored) {
             return Result.refused(toCycleId, "the tree could not be restored: " + failures);
         }
@@ -115,7 +123,7 @@ public class RewindService {
                 stateManifest.restore(checkpointService.holdersNode(record), objectMapper);
         failures.addAll(holders.failures());
 
-        applyCacheMode(record, mode, failures);
+        applyCacheMode(record, mode, failures, treeSource);
 
         // T4-DQ decision 4: the completeness check, run at the restore rather than asserted at
         // design time. Anything the checkpoint failed to capture, and that actually matters, shows
@@ -160,9 +168,12 @@ public class RewindService {
         }
     }
 
-    /** The checkpoints a rewind could target right now, newest first. */
+    /**
+     * The points a rewind could target right now, newest first — this run's and every earlier run
+     * of the lineage that still has a restorable tree.
+     */
     public List<CheckpointRecord> available() {
-        return checkpointService.restorableCheckpoints();
+        return checkpointService.restorableAcrossRuns(runIdentityService.lineageId(), 500);
     }
 
     /**
@@ -202,17 +213,20 @@ public class RewindService {
      * to prevent. So the snapshot is assembled into a staging directory first and the live tree is
      * only removed once there is a complete replacement to put in its place.
      */
-    private boolean restoreTree(CheckpointRecord record, List<String> failures) {
+    private boolean restoreTree(String treeSource, List<String> failures) {
         String staging = "output.rewind-staging";
         try {
             Path stagingPath = fileService.resolveSecurePath(staging);
             if (Files.exists(stagingPath)) deleteRecursive(stagingPath);
             fileService.ensureFolderExists(staging);
-            fileService.copyFolder(record.snapshotPath(), staging);
+            fileService.copyFolder(treeSource, staging);
             // The snapshot directory carries T4-CA's state stamp, which belongs to the snapshot
             // rather than to the project — restoring it would plant a stray file in the tree the
             // loop then reads back as source.
             fileService.deleteFile(staging + "/" + MutationSnapshotService.SNAPSHOT_STATE_FILE);
+            // An archived point keeps its cache alongside the tree; it is state, not source, and
+            // must not be planted into output/ where the loop would read it back as project files.
+            fileService.deleteRecursively(staging + "/" + CheckpointArchive.CACHE_SUBDIR);
 
             if (isEmptyTree(stagingPath)) {
                 failures.add("tree: the checkpoint's snapshot staged empty — refusing to replace a "
@@ -248,17 +262,24 @@ public class RewindService {
      * same rewind both ways and comparing what the loop then does is how we find out whether the
      * cache is a pure optimisation or is quietly steering decisions — which nobody knows today.
      */
-    private void applyCacheMode(CheckpointRecord record, CacheMode mode, List<String> failures) {
+    private void applyCacheMode(CheckpointRecord record, CacheMode mode, List<String> failures,
+                                String treeSource) {
         try {
             Path cache = fileService.resolveSecurePath(CheckpointService.CACHE_DIR);
             if (Files.exists(cache)) deleteRecursive(cache);
             fileService.ensureFolderExists(CheckpointService.CACHE_DIR);
             if (mode == CacheMode.FAITHFUL) {
+                // The checkpoint's own copy when this run took it; the archived copy when the point
+                // belongs to an earlier run, whose checkpoints/ went at that run's boundary.
                 String copy = checkpointService.cacheCopyPath(record.cycleId());
-                if (record.cacheCaptured() && fileService.exists(copy)) {
+                boolean fromCheckpoint = record.cacheCaptured() && fileService.exists(copy);
+                String archived = treeSource + "/" + CheckpointArchive.CACHE_SUBDIR;
+                if (fromCheckpoint) {
                     fileService.copyFolder(copy, CheckpointService.CACHE_DIR);
+                } else if (fileService.exists(archived)) {
+                    fileService.copyFolder(archived, CheckpointService.CACHE_DIR);
                 } else {
-                    failures.add("cache: FAITHFUL requested but the checkpoint captured no cache copy");
+                    failures.add("cache: FAITHFUL requested but no cache copy was kept for this point");
                 }
             }
         } catch (IOException | RuntimeException e) {

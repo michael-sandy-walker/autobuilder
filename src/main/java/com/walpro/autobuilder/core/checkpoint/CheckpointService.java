@@ -50,6 +50,15 @@ public class CheckpointService {
     private final RunIdentityService runIdentityService;
     private final StateFingerprintService stateFingerprintService;
     private final com.walpro.autobuilder.goal.GoalPlannerService goalPlannerService;
+    private final CheckpointArchive checkpointArchive;
+
+    /**
+     * T4-DQ: the cross-run index. Optional so a context without a graph keeps exactly the
+     * within-run behaviour it had; with one, a point outlives the run that took it.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.graph.checkpoint.CheckpointGraphService checkpointGraphService;
 
     @Setter
     @Autowired(required = false)
@@ -102,6 +111,13 @@ public class CheckpointService {
                     stateFingerprintService.of(capture));
 
             fileService.writeJson(dir + "/" + CHECKPOINT_FILE, record);
+
+            // Keep the point reachable after this run ends: a source-only tree copy that reset and
+            // resume do not clear, and an index entry in the graph, which they do not purge either.
+            String archivePath = checkpointArchive.archive(record.cycleId(), record.snapshotPath());
+            if (checkpointGraphService != null) {
+                checkpointGraphService.record(record, archivePath);
+            }
             prune();
 
             if (!capture.complete()) {
@@ -175,6 +191,71 @@ public class CheckpointService {
     /** Captured state as a tree, for a restore that wants the raw node. */
     public JsonNode holdersNode(CheckpointRecord record) {
         return objectMapper.valueToTree(record.holders());
+    }
+
+    /**
+     * A point from ANY run of this lineage: the local file first, the graph index second.
+     *
+     * <p>Local first because a point taken by the run that is still going is authoritative and
+     * needs no round trip. The graph answers for everything older, which is what makes a rewind
+     * reach past the run boundary at all.
+     */
+    public Optional<CheckpointRecord> readAnyRun(String cycleId) {
+        Optional<CheckpointRecord> local = read(cycleId);
+        if (local.isPresent()) return local;
+        if (checkpointGraphService == null) return Optional.empty();
+        return checkpointGraphService.byCycleId(cycleId)
+                .map(com.walpro.autobuilder.graph.checkpoint.CheckpointGraphService.StoredCheckpoint::record);
+    }
+
+    /**
+     * Where a point's archived tree lives, or empty when it kept none.
+     *
+     * <p>The archive's own layout answers first, because the path is deterministic from the cycle
+     * id and the copy is sitting on this machine either way. Requiring the graph to find it made a
+     * rewind depend on the database for a file it could see — and, since the graph is optional,
+     * made the archive invisible wherever one is not wired.
+     */
+    public Optional<String> archivePathOf(String cycleId) {
+        if (cycleId == null || cycleId.isBlank()) return Optional.empty();
+        String conventional = CheckpointArchive.ARCHIVE_DIR + "/" + cycleId;
+        if (checkpointArchive.has(conventional)) return Optional.of(conventional);
+        if (checkpointGraphService == null) return Optional.empty();
+        return checkpointGraphService.byCycleId(cycleId)
+                .map(com.walpro.autobuilder.graph.checkpoint.CheckpointGraphService.StoredCheckpoint::archivePath)
+                .filter(p -> p != null && !p.isBlank());
+    }
+
+    /**
+     * Every point this lineage can be returned to, newest first, across runs — the local run's own
+     * points plus everything the graph remembers, deduplicated by cycle id with the local copy
+     * winning.
+     *
+     * <p>A point is offered only when something can actually restore it: its own tree snapshot is
+     * still present, or its archived source-only copy is. A point with neither is history, not a
+     * destination, and listing it would be offering a restore that silently restores less than it
+     * claims.
+     */
+    public List<CheckpointRecord> restorableAcrossRuns(String lineageId, int limit) {
+        java.util.LinkedHashMap<String, CheckpointRecord> byCycle = new java.util.LinkedHashMap<>();
+        for (CheckpointRecord local : restorableCheckpoints()) {
+            byCycle.put(local.cycleId(), local);
+        }
+        if (checkpointGraphService != null) {
+            for (var stored : checkpointGraphService.forLineage(lineageId, Math.max(1, limit))) {
+                CheckpointRecord record = stored.record();
+                if (record == null || record.cycleId() == null) continue;
+                if (byCycle.containsKey(record.cycleId())) continue;
+                if (!record.complete()) continue;
+                boolean restorable = treeStillPresent(record)
+                        || checkpointArchive.has(stored.archivePath())
+                        || archivePathOf(record.cycleId()).isPresent();
+                if (restorable) byCycle.put(record.cycleId(), record);
+            }
+        }
+        List<CheckpointRecord> out = new java.util.ArrayList<>(byCycle.values());
+        out.sort(java.util.Comparator.comparing(CheckpointRecord::cycleId).reversed());
+        return out;
     }
 
     /** Every checkpoint cycle id present on disk, oldest first (cycle ids sort chronologically). */

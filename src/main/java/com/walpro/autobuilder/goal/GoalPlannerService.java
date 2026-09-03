@@ -2806,6 +2806,33 @@ public class GoalPlannerService {
                 }
             }
 
+            // A goal that existed at the cut point and has since been pruned from the live tree has
+            // to come BACK, or the fold only ever shrinks: it can remove what was planned after the
+            // checkpoint and is powerless over what was deleted after it. The transition log knows
+            // such a goal existed but not what it said, so the text comes from the graph, which
+            // keeps goal nodes rather than deleting them. Without this, a rewind — and especially a
+            // cross-run one, where more has had time to be pruned — silently restores a smaller
+            // tree than the one it claims to be returning to.
+            int resurrected = 0;
+            if (statuses != null && goalGraphService != null) {
+                for (String id : statuses.keySet()) {
+                    if (goalMap.containsKey(id)) continue;
+                    try {
+                        GoalEntity fromGraph = goalGraphService.findById(id).orElse(null);
+                        if (fromGraph == null) continue;
+                        goalMap.put(id, fromGraph);
+                        resurrected++;
+                    } catch (Exception e) {
+                        log.debug("T4-DQ: could not restore pruned goal {} from the graph: {}",
+                                id, e.getMessage());
+                    }
+                }
+                if (resurrected > 0) {
+                    log.info("T4-DQ: restored {} goal(s) that existed at the cut point and had since "
+                            + "been pruned from the live tree.", resurrected);
+                }
+            }
+
             if (statuses != null) {
                 for (Map.Entry<String, GoalStatus> entry : statuses.entrySet()) {
                     GoalEntity g = goalMap.get(entry.getKey());

@@ -16,6 +16,16 @@ autobuilder:
     retain: 40
     # Copy cache/ into each checkpoint (a few kilobytes) so a FAITHFUL rewind has one to restore.
     capture-cache: true
+    # T4-DQ: keep a SOURCE-ONLY copy of each cycle's tree in checkpoint-archive/, which reset and
+    # resume do not clear, so a point stays reachable after the run that took it has ended. A
+    # lineage spans runs (a T4-CD resume continues one), so "time travel within a lineage" has
+    # always meant across runs; only the storage stood in the way. Measured: a snapshot is ~120 KB
+    # of which ~56 KB is target/ build output that regenerates — dropping it leaves ~16 KB of
+    # source, so a point plus its restorable tree costs roughly 36 KB.
+    archive-enabled: true
+    # Archived trees kept in total, across runs, pruned oldest-first. 2000 is roughly fifty runs
+    # at forty cycles each — bounded by count rather than by the run boundary.
+    archive-retain: 2000
   rewind:
     # Back out to the last point that landed work instead of halting, when the convergence brake
     # judges the run to be grinding. One switch, in case dying turns out to be better.

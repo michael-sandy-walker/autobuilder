@@ -73,15 +73,15 @@ class RewindRoundTripPropertyTest {
     /** Rebuilds the manifest-dependent services over a chosen set of holders. */
     private void wire(CheckpointableState... holders) {
         StateManifest manifest = new StateManifest(factoryOf(holders));
-        fingerprints = new StateFingerprintService(fileService, mapper, planner, manifest);
+        fingerprints = new StateFingerprintService(fileService, mapper, planner, manifest, diffConfig());
         RunIdentityService identity = mock(RunIdentityService.class);
         when(identity.runId()).thenReturn("run-1");
         when(identity.lineageId()).thenReturn("lineage-1");
-        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner);
+        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner, archiveFor(fileService));
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
         ReflectionTestUtils.setField(checkpoints, "retainCheckpoints", 40);
         ReflectionTestUtils.setField(checkpoints, "captureCache", true);
-        rewind = new RewindService(fileService, mapper, checkpoints, manifest, log, planner, fingerprints);
+        rewind = new RewindService(fileService, mapper, checkpoints, manifest, log, planner, fingerprints, identity);
     }
 
     @Test
@@ -258,5 +258,23 @@ class RewindRoundTripPropertyTest {
         public void restoreState(JsonNode state, ObjectMapper mapper) {
             // deliberately does nothing: the defect under test
         }
+    }
+
+    /**
+     * A real archive over the temp target. The graph index is left unwired, which is the
+     * no-graph path: checkpoints stay within their own run, exactly as before this existed.
+     */
+    private CheckpointArchive archiveFor(FileService files) {
+        CheckpointArchive archive = new CheckpointArchive(files, diffConfig());
+        ReflectionTestUtils.setField(archive, "enabled", true);
+        ReflectionTestUtils.setField(archive, "retain", 500);
+        return archive;
+    }
+
+    /** The same exclusions the archive uses — one definition of what counts as the project. */
+    private com.walpro.autobuilder.config.DiffConfigProperties diffConfig() {
+        var diff = new com.walpro.autobuilder.config.DiffConfigProperties();
+        diff.setExcludeFolders(java.util.List.of("target", "logs"));
+        return diff;
     }
 }

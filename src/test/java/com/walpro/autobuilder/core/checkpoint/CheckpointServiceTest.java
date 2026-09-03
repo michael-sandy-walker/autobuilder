@@ -53,8 +53,8 @@ class CheckpointServiceTest {
         GoalPlannerService planner = mock(GoalPlannerService.class);
         when(planner.getAllGoals()).thenReturn(java.util.List.of());
         StateFingerprintService fingerprints =
-                new StateFingerprintService(fileService, mapper, planner, manifest);
-        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner);
+                new StateFingerprintService(fileService, mapper, planner, manifest, diffConfig());
+        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner, archiveFor(fileService));
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
         ReflectionTestUtils.setField(checkpoints, "retainCheckpoints", 40);
         ReflectionTestUtils.setField(checkpoints, "captureCache", true);
@@ -255,5 +255,23 @@ class CheckpointServiceTest {
         public void restoreState(JsonNode state, ObjectMapper mapper) {
             value = state == null || state.isNull() ? 0 : mapper.convertValue(state, State.class).value();
         }
+    }
+
+    /**
+     * A real archive over the temp target. The graph index is left unwired, which is the
+     * no-graph path: checkpoints stay within their own run, exactly as before this existed.
+     */
+    private CheckpointArchive archiveFor(FileService files) {
+        CheckpointArchive archive = new CheckpointArchive(files, diffConfig());
+        ReflectionTestUtils.setField(archive, "enabled", true);
+        ReflectionTestUtils.setField(archive, "retain", 500);
+        return archive;
+    }
+
+    /** The same exclusions the archive uses — one definition of what counts as the project. */
+    private com.walpro.autobuilder.config.DiffConfigProperties diffConfig() {
+        var diff = new com.walpro.autobuilder.config.DiffConfigProperties();
+        diff.setExcludeFolders(java.util.List.of("target", "logs"));
+        return diff;
     }
 }

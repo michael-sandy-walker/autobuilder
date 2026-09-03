@@ -83,9 +83,11 @@ public class SystemResetConfig {
         // domain-type NONE rows, stale version pins) are each closed by later mechanisms —
         // member-token gate at write, BOM-managed version omission at the pom-write home,
         // discovery-first ordering (precondition analysis on the T4-CD ticket, 2026-07-17).
-        // T4-DQ: "checkpoints" is cleared with the rest — a reset severs the lineage, and points
-        // belonging to the severed one are not points this run can return to. The goal-transition
-        // log lives under meta/ and goes with it, so the fold restarts empty alongside the tree.
+        // T4-DQ: "checkpoints" is cleared with the rest — those hold the unpruned per-cycle build
+        // output. "checkpoint-archive" is deliberately NOT in this list: it holds the source-only
+        // tree copies that let a rewind reach a point from an earlier run, and it is bounded by
+        // count rather than by the run boundary. The graph is not purged either, so the index and
+        // the goal-status transitions survive with it.
         for (String dir : List.of("output", "mutations", "snapshots", "meta", "checkpoints", "llm-recordings", "branches")) {
             Path dirPath = fileService.resolveSecurePath(dir);
             if (dirPath.toFile().exists()) {

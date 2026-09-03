@@ -67,14 +67,14 @@ class RewindServiceTest {
         // one source (a mismatch between the two was the first field divergence).
         when(planner.getCurrentSubGoalId()).thenReturn("s1");
         StateFingerprintService fingerprints =
-                new StateFingerprintService(fileService, mapper, planner, manifest);
-        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner);
+                new StateFingerprintService(fileService, mapper, planner, manifest, diffConfig());
+        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner, archiveFor(fileService));
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
         ReflectionTestUtils.setField(checkpoints, "retainCheckpoints", 40);
         ReflectionTestUtils.setField(checkpoints, "captureCache", true);
         when(planner.restoreGoalStateAsOf(any(), any(), any()))
                 .thenReturn(new GoalPlannerService.RewindResult(2, 1, "s1"));
-        rewind = new RewindService(fileService, mapper, checkpoints, manifest, log, planner, fingerprints);
+        rewind = new RewindService(fileService, mapper, checkpoints, manifest, log, planner, fingerprints, identity);
     }
 
     @Test
@@ -156,17 +156,46 @@ class RewindServiceTest {
     }
 
     @Test
-    @DisplayName("a checkpoint whose tree is gone is refused rather than half-restored")
-    void missingTreeIsRefused() throws IOException {
+    @DisplayName("when the run's own snapshot is gone, the archived copy still restores it")
+    void theArchivedCopyOutlivesTheSnapshot() throws IOException {
+        // This is what makes a point reachable after the run that took it has ended: snapshots/ is
+        // cleared at the run boundary by design, and the source-only archive is not.
         writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
         checkpoints.write(context("cycle-1"));
         fileService.deleteRecursively("snapshots/cycle-1");
 
         RewindService.Result result = rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-9");
 
+        assertThat(result.performed()).isTrue();
+        assertThat(tmp.resolve("output/src/A.java")).exists();
+    }
+
+    @Test
+    @DisplayName("with neither a snapshot nor an archived copy, the rewind is refused")
+    void aPointWithNoTreeAtAllIsRefused() throws IOException {
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(context("cycle-1"));
+        fileService.deleteRecursively("snapshots/cycle-1");
+        fileService.deleteRecursively(CheckpointArchive.ARCHIVE_DIR + "/cycle-1");
+
+        RewindService.Result result = rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-9");
+
         assertThat(result.performed()).isFalse();
-        assertThat(result.refusedBecause()).contains("cleared");
+        assertThat(result.refusedBecause()).contains("archived copy");
         verify(planner, never()).restoreGoalStateAsOf(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("build output is left out of the archive — it regenerates and it is the bulk")
+    void theArchiveKeepsSourceNotBuildOutput() throws IOException {
+        writeSnapshot("cycle-1", Map.of(
+                "src/A.java", "class A {}",
+                "target/classes/A.class", "binary-ish",
+                "target/maven-status/x.lst", "listing"));
+        checkpoints.write(context("cycle-1"));
+
+        assertThat(tmp.resolve(CheckpointArchive.ARCHIVE_DIR + "/cycle-1/src/A.java")).exists();
+        assertThat(tmp.resolve(CheckpointArchive.ARCHIVE_DIR + "/cycle-1/target")).doesNotExist();
     }
 
     @Test
@@ -237,5 +266,23 @@ class RewindServiceTest {
             factory.registerSingleton(holder.stateKey() + "Holder", holder);
         }
         return factory;
+    }
+
+    /**
+     * A real archive over the temp target. The graph index is left unwired, which is the
+     * no-graph path: checkpoints stay within their own run, exactly as before this existed.
+     */
+    private CheckpointArchive archiveFor(FileService files) {
+        CheckpointArchive archive = new CheckpointArchive(files, diffConfig());
+        ReflectionTestUtils.setField(archive, "enabled", true);
+        ReflectionTestUtils.setField(archive, "retain", 500);
+        return archive;
+    }
+
+    /** The same exclusions the archive uses — one definition of what counts as the project. */
+    private com.walpro.autobuilder.config.DiffConfigProperties diffConfig() {
+        var diff = new com.walpro.autobuilder.config.DiffConfigProperties();
+        diff.setExcludeFolders(java.util.List.of("target", "logs"));
+        return diff;
     }
 }

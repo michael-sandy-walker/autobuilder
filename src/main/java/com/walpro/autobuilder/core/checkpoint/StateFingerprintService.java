@@ -45,6 +45,7 @@ public class StateFingerprintService {
     private final ObjectMapper objectMapper;
     private final GoalPlannerService goalPlannerService;
     private final StateManifest stateManifest;
+    private final com.walpro.autobuilder.config.DiffConfigProperties diffConfig;
 
     /** The current state of the loop, digested per component. */
     public StateFingerprint current() {
@@ -95,10 +96,13 @@ public class StateFingerprintService {
             try (var walk = fileService.walkResolved(root)) {
                 for (Path p : walk.filter(java.nio.file.Files::isRegularFile).toList()) {
                     String rel = root.relativize(p).toString().replace('\\', '/');
-                    // The snapshot's own state stamp describes the snapshot, not the project.
-                    if (rel.equals(com.walpro.autobuilder.core.persistence.MutationSnapshotService.SNAPSHOT_STATE_FILE)) {
-                        continue;
-                    }
+                    // The snapshot's own state stamp describes the snapshot, not the project — and
+                    // neither does build output. BUILD OUTPUT IS EXCLUDED HERE FOR THE SAME REASON
+                    // the archive leaves it out: it regenerates, so it is not part of the state a
+                    // rewind is trying to return to. Measuring it made every restore from a
+                    // source-only archived tree report a tree divergence that was not one. One
+                    // definition of "the project", shared with the archive and the diff.
+                    if (excludedFromState(rel)) continue;
                     lines.add(rel + ":" + sha256(fileService.readStringResolved(p)));
                 }
             }
@@ -191,6 +195,21 @@ public class StateFingerprintService {
             out = out.replace(e.getKey(), e.getValue());
         }
         return out;
+    }
+
+    /** What is not part of the state: the snapshot stamp, and whatever the diff excludes. */
+    private boolean excludedFromState(String relativePath) {
+        if (relativePath.equals(
+                com.walpro.autobuilder.core.persistence.MutationSnapshotService.SNAPSHOT_STATE_FILE)) {
+            return true;
+        }
+        java.util.List<String> folders = diffConfig == null ? null : diffConfig.getExcludeFolders();
+        if (folders == null) return false;
+        for (String folder : folders) {
+            if (folder == null || folder.isBlank()) continue;
+            if (relativePath.equals(folder) || relativePath.startsWith(folder + "/")) return true;
+        }
+        return false;
     }
 
     private static String normalise(String s) {

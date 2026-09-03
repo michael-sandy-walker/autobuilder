@@ -89,6 +89,30 @@ class GoalPlannerServiceRewindTest {
     }
 
     @Test
+    @DisplayName("a goal pruned since the cut point is brought back, not silently left out")
+    void prunedGoalsAreRestoredFromTheGraph() {
+        // The fold knows a goal existed at the cut but not what it said, so the text comes from the
+        // graph. Without this the fold can only ever shrink the tree: it removes what was planned
+        // after the checkpoint and is powerless over what was deleted after it — which a cross-run
+        // rewind hits hardest, having given the planner longer to prune.
+        installTree(goal("root", null, GoalStatus.ACTIVE), goal("s1", "root", GoalStatus.ACTIVE));
+        log.append("root", null, "ACTIVE", GoalTransition.Kind.CREATED, "cycle-1", null);
+        log.append("s1", null, "ACTIVE", GoalTransition.Kind.CREATED, "cycle-1", null);
+        long cut = log.append("pruned", null, "ACTIVE", GoalTransition.Kind.CREATED, "cycle-1", null);
+
+        GoalEntity fromGraph = goal("pruned", "root", GoalStatus.ACTIVE);
+        org.mockito.Mockito.when(goalGraphService.findById("pruned"))
+                .thenReturn(java.util.Optional.of(fromGraph));
+
+        service.restoreGoalStateAsOf(log.statusesAsOf(cut), log.goalsExistingAsOf(cut), "s1");
+
+        assertThat(service.getGoalById("pruned"))
+                .as("it existed at the cut point, so the restored tree must contain it")
+                .isNotNull();
+        assertThat(service.getGoalById("pruned").getDescription()).isEqualTo("desc-pruned");
+    }
+
+    @Test
     @DisplayName("the rewind's own writes are appended as history, never rewritten over it")
     void theRewindIsItselfRecorded() {
         installTree(goal("root", null, GoalStatus.ACTIVE), goal("s1", "root", GoalStatus.COMPLETED));

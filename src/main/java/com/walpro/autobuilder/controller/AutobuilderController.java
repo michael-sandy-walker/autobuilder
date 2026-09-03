@@ -29,6 +29,8 @@ public class AutobuilderController {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.checkpoint.RewindService rewindService;
 
+    private final com.walpro.autobuilder.core.init.RunIdentityService runIdentityService;
+
     /**
      * T5-R: session LLM token usage — cumulative totals plus a per-role breakdown. Tokens, not
      * dollars: the target runs a local model (project_local_first_constraint), so tokens are the
@@ -156,6 +158,9 @@ public class AutobuilderController {
             row.put("runId", record.runId());
             row.put("lineageId", record.lineageId());
             row.put("verified", record.fingerprint() != null);
+            // Whether the point belongs to the run now in progress, so the UI can mark the ones
+            // that will restore from an archived tree rather than from this run's own snapshot.
+            row.put("current", java.util.Objects.equals(record.runId(), runIdentityService.runId()));
             points.add(row);
         }
         return ResponseEntity.ok(Map.of("ok", true, "count", points.size(), "checkpoints", points));

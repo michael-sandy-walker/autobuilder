@@ -262,6 +262,44 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     }
 
     @Override
+    public java.util.List<com.walpro.autobuilder.goal.GoalTransition> transitionsForLineage(
+            String lineageId, int limit) {
+        if (lineageId == null || lineageId.isBlank()) return java.util.List.of();
+        return neo4jClient.query("""
+                MATCH (t:GoalStatusTransition)
+                WHERE t.lineageId = $lineageId
+                RETURN t ORDER BY t.seq ASC LIMIT $limit
+                """)
+                .bind(lineageId).to("lineageId")
+                .bind(Math.max(1, limit)).to("limit")
+                .fetch().all().stream()
+                .map(row -> toTransition(row.get("t")))
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
+    private com.walpro.autobuilder.goal.GoalTransition toTransition(Object node) {
+        if (!(node instanceof Node t)) return null;
+        try {
+            String kind = t.containsKey("kind") ? t.get("kind").asString(null) : null;
+            String at = t.containsKey("at") ? t.get("at").asString(null) : null;
+            return new com.walpro.autobuilder.goal.GoalTransition(
+                    t.containsKey("seq") ? t.get("seq").asLong(0L) : 0L,
+                    t.containsKey("cycleId") ? t.get("cycleId").asString(null) : null,
+                    t.get("goalId").asString(null),
+                    t.containsKey("fromStatus") ? t.get("fromStatus").asString(null) : null,
+                    t.containsKey("toStatus") ? t.get("toStatus").asString(null) : null,
+                    kind == null ? com.walpro.autobuilder.goal.GoalTransition.Kind.CHANGED
+                            : com.walpro.autobuilder.goal.GoalTransition.Kind.valueOf(kind),
+                    t.containsKey("resolution") ? t.get("resolution").asString(null) : null,
+                    at == null ? null : Instant.parse(at));
+        } catch (Exception e) {
+            log.debug("T4-DQ: unreadable transition node: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    @Override
     public void promote(String id) {
         log.info("Promotion logic not yet implemented for goal: {}", id);
     }

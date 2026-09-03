@@ -158,6 +158,44 @@ class GoalTransitionLogTest {
     }
 
     @Test
+    @DisplayName("with the log file gone, the fold recovers the lineage's events from the graph")
+    void aLostLogIsRecoveredFromTheGraph() {
+        // The file is authoritative and normally present. When it is not, the alternative to this
+        // is a fold that yields nothing and a rewind that restores no goal state while reporting
+        // success — the silent partial restore the design exists to prevent.
+        var graph = org.mockito.Mockito.mock(com.walpro.autobuilder.graph.goal.GoalGraphService.class);
+        var identity = org.mockito.Mockito.mock(com.walpro.autobuilder.core.init.RunIdentityService.class);
+        org.mockito.Mockito.when(identity.lineageId()).thenReturn("lineage-1");
+        org.mockito.Mockito.when(graph.transitionsForLineage(org.mockito.ArgumentMatchers.eq("lineage-1"),
+                        org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(List.of(
+                        new GoalTransition(1L, "c1", "g1", null, "ACTIVE",
+                                GoalTransition.Kind.CREATED, null, java.time.Instant.now()),
+                        new GoalTransition(2L, "c2", "g1", "ACTIVE", "COMPLETED",
+                                GoalTransition.Kind.CHANGED, "done", java.time.Instant.now())));
+        log.setGoalGraphService(graph);
+        log.setRunIdentityService(identity);
+
+        // No file was ever written.
+        assertThat(log.readAll()).hasSize(2);
+        assertThat(log.statusesAsOf(1L)).containsEntry("g1", GoalStatus.ACTIVE);
+        assertThat(log.foldAt(1L).transitionsUndone()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("the file wins when it has events — the graph is a fallback, not a second source")
+    void theFileIsAuthoritative() {
+        var graph = org.mockito.Mockito.mock(com.walpro.autobuilder.graph.goal.GoalGraphService.class);
+        log.setGoalGraphService(graph);
+        log.append("g1", null, "ACTIVE", GoalTransition.Kind.CREATED, "c1", null);
+
+        assertThat(log.readAll()).hasSize(1);
+        org.mockito.Mockito.verify(graph, org.mockito.Mockito.never())
+                .transitionsForLineage(org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
     @DisplayName("the sequence survives a new reader over the same file")
     void sequenceIsRecoveredFromTheFile() throws IOException {
         log.append("g1", null, "ACTIVE", GoalTransition.Kind.CREATED, "c1", null);

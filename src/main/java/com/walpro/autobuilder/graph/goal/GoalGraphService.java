@@ -64,6 +64,19 @@ public interface GoalGraphService {
         // no-op
     }
 
+    /**
+     * T4-DQ: the appended goal-status history for a lineage, oldest first.
+     *
+     * <p>The file log under {@code meta/} stays authoritative — a rewind must work with the
+     * database unavailable — but the graph holds the same events and survives things the file does
+     * not. Read only when the file yields nothing, so a lost log degrades to a slower answer rather
+     * than to a fold that silently restores no goal state at all.
+     */
+    default java.util.List<com.walpro.autobuilder.goal.GoalTransition> transitionsForLineage(
+            String lineageId, int limit) {
+        return java.util.List.of();
+    }
+
     Optional<GoalGraphState> getState();
 
     void setState(String rootGoalId, String currentSubGoalId);

@@ -60,8 +60,16 @@ public class GoalTransitionLog {
     private final FileService fileService;
     private final ObjectMapper objectMapper;
 
+    /** T4-DQ: the lineage whose transitions the graph is asked for when the file has none. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.init.RunIdentityService runIdentityService;
+
     /** Mirrors the last line's sequence; {@code -1} until first read from the file. */
     private long cachedSeq = -1L;
+
+    /** Transitions recovered from the graph because the file had none; read at most once. */
+    private List<GoalTransition> graphFallback;
 
     /** Goal ids the log already carries at least one event for; mirrors the file. */
     private final Set<String> knownGoalIds = new LinkedHashSet<>();
@@ -136,6 +144,7 @@ public class GoalTransitionLog {
     public synchronized void forgetCachedSeq() {
         cachedSeq = -1L;
         knownGoalIds.clear();
+        graphFallback = null;
     }
 
     /**
@@ -147,6 +156,34 @@ public class GoalTransitionLog {
      * failure mode this whole design exists to avoid discovering at a restore.
      */
     public synchronized List<GoalTransition> readAll() {
+        List<GoalTransition> out = readFromFile();
+        if (!out.isEmpty()) return out;
+        // The file is authoritative and is normally there. When it is not — lost, or cleared by
+        // something that should not have — the graph holds the same events. Falling back beats the
+        // alternative, which is a fold that quietly yields nothing and a rewind that restores no
+        // goal state while reporting success.
+        return readFromGraph();
+    }
+
+    private List<GoalTransition> readFromGraph() {
+        if (graphFallback != null) return graphFallback;
+        graphFallback = List.of();
+        if (goalGraphService == null || runIdentityService == null) return graphFallback;
+        try {
+            List<GoalTransition> fromGraph =
+                    goalGraphService.transitionsForLineage(runIdentityService.lineageId(), 10_000);
+            if (!fromGraph.isEmpty()) {
+                log.info("T4-DQ: the goal-transition log is absent or empty — recovered {} event(s) "
+                        + "for this lineage from the graph.", fromGraph.size());
+            }
+            graphFallback = fromGraph;
+        } catch (Exception e) {
+            log.warn("T4-DQ: could not recover goal transitions from the graph: {}", e.getMessage());
+        }
+        return graphFallback;
+    }
+
+    private List<GoalTransition> readFromFile() {
         List<GoalTransition> out = new ArrayList<>();
         try {
             if (!fileService.exists(LOG_PATH)) return out;

@@ -110,6 +110,13 @@ public class RewindService {
         // so a rewind cannot restore a goal it also believes never existed.
         GoalTransitionLog.Fold fold = goalTransitionLog.foldAt(record.goalTransitionSeq());
         int undone = fold.transitionsUndone();
+        // A point taken after goal history existed, folding to nothing, means the history is gone.
+        // The restore then touches no goal state at all — and would otherwise report success, which
+        // is the silent partial restore this whole design exists to make impossible.
+        if (record.goalTransitionSeq() > 0 && fold.statuses().isEmpty()) {
+            failures.add("goal history is unavailable — the fold at seq " + record.goalTransitionSeq()
+                    + " yielded nothing, so no goal state was restored");
+        }
         GoalPlannerService.RewindResult goals;
         try {
             goals = goalPlannerService.restoreGoalStateAsOf(

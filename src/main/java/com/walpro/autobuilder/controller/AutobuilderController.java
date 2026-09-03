@@ -150,6 +150,12 @@ public class AutobuilderController {
             row.put("currentSubGoalId", record.currentSubGoalId());
             row.put("goalTransitionSeq", record.goalTransitionSeq());
             row.put("holders", record.holders().size());
+            // T4-DQ: which run and lineage the point belongs to. Checkpoints are run-scoped and
+            // cleared on reset and on resume, so today this is one run — but the grouping is a
+            // fact about the data rather than a guess, and it stops the UI implying otherwise.
+            row.put("runId", record.runId());
+            row.put("lineageId", record.lineageId());
+            row.put("verified", record.fingerprint() != null);
             points.add(row);
         }
         return ResponseEntity.ok(Map.of("ok", true, "count", points.size(), "checkpoints", points));

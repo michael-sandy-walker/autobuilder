@@ -173,6 +173,48 @@
   details.cycle .file-row .file-name:hover { color: #60a5fa; text-decoration: underline; }
 
   /* in-browser editor modal */
+  /* T4-DQ: return the loop to an earlier point. */
+  #rewind-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 150;
+    display: none; align-items: center; justify-content: center; }
+  #rewind-overlay.open { display: flex; }
+  #rewind-modal { width: min(760px, 94vw); max-height: 88vh; background: #0b1220;
+    border: 1px solid #1f2937; border-radius: 10px; display: flex; flex-direction: column; }
+  #rewind-modal header { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    border-bottom: 1px solid #1f2937; font-size: 13px; font-weight: 600; }
+  #rewind-modal header .spacer { flex: 1; }
+  #rewind-modal .body { padding: 12px 14px; overflow: auto; }
+  #rewind-modal .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    font-size: 11px; color: #9ca3af; }
+  #rewind-modal select { background: #111827; color: #e5e7eb; border: 1px solid #374151;
+    border-radius: 6px; padding: 4px 6px; font-size: 11px; }
+  #rewind-note { font-size: 10px; color: #6b7280; margin: -4px 0 10px; line-height: 1.5; }
+  #rewind-list { border: 1px solid #1f2937; border-radius: 8px; overflow: hidden; }
+  .rw-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; cursor: pointer;
+    border-bottom: 1px solid #111827; font-size: 11px; }
+  .rw-item:last-child { border-bottom: none; }
+  .rw-item:hover { background: #111827; }
+  .rw-item.sel { background: #1e3a8a33; box-shadow: inset 2px 0 0 #3b82f6; }
+  .rw-item .cyc { font-family: ui-monospace, monospace; color: #e5e7eb; }
+  .rw-item .meta { color: #6b7280; }
+  .rw-item .spacer { flex: 1; }
+  .rw-badge { font-size: 9px; padding: 1px 6px; border-radius: 999px; border: 1px solid #374151;
+    color: #9ca3af; }
+  .rw-badge.merged { color: #86efac; border-color: #14532d; background: #052e16; }
+  .rw-badge.unver { color: #fcd34d; border-color: #78350f; background: #451a03; }
+  #rewind-modal footer { display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    border-top: 1px solid #1f2937; }
+  #rewind-modal footer .spacer { flex: 1; }
+  #rewind-modal button { background: #1f2937; color: #e5e7eb; border: 1px solid #374151;
+    border-radius: 6px; padding: 5px 10px; font-size: 11px; cursor: pointer; }
+  #rewind-modal button:hover { background: #374151; }
+  #rewind-modal button.primary { background: #1e3a8a; color: #fff; border-color: #3b82f6; }
+  #rewind-modal button.primary:hover { background: #2563eb; }
+  #rewind-modal button:disabled { opacity: 0.45; cursor: not-allowed; }
+  #rewind-result { margin-top: 10px; font-size: 11px; line-height: 1.6; display: none; }
+  #rewind-result.show { display: block; }
+  #rewind-result .warn { color: #fcd34d; }
+  #rewind-result .bad { color: #fca5a5; }
+  #rewind-result .good { color: #86efac; }
   #editor-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 150;
     display: none; align-items: center; justify-content: center; }
   #editor-overlay.open { display: flex; }
@@ -390,6 +432,8 @@
       <button id="pause-loop" title="Inject SYSTEM_PAUSED — loop halts after the current cycle finishes">Pause loop</button>
       <button id="resume" style="display:none;" title="Clear SYSTEM_PAUSED + GOAL_EXHAUSTED so the scheduler picks work back up">Resume loop</button>
       <hr>
+      <button id="rewind-loop" title="Return the loop to an earlier checkpoint and continue from there (T4-DQ)">Rewind to a cycle…</button>
+      <hr>
       <button id="edit-seed" title="Edit bootstrap/seed.txt — the root goal text used on reset">Edit seed…</button>
       <button id="reset-loop" class="danger" title="Wipe goal graph + mutation/output folders, re-seed root goal, and start over">Reset…</button>
     </div>
@@ -414,6 +458,36 @@
   <div class="panel" id="panel-signals" style="display:none;"></div>
   <div class="panel" id="panel-inject" style="display:none;"></div>
 </aside>
+
+<!-- T4-DQ: pick a point this run can be returned to, and go back to it. -->
+<div id="rewind-overlay">
+  <div id="rewind-modal">
+    <header>
+      <span>Rewind to an earlier cycle</span>
+      <span class="spacer"></span>
+      <button id="rewind-close">Close</button>
+    </header>
+    <div class="body">
+      <div class="row">
+        <label for="rewind-run">Run</label>
+        <select id="rewind-run"></select>
+        <label for="rewind-cache" style="margin-left:10px;">Cache</label>
+        <select id="rewind-cache">
+          <option value="FAITHFUL" selected>FAITHFUL — restore it with the state</option>
+          <option value="FRESH">FRESH — clear it</option>
+        </select>
+      </div>
+      <div id="rewind-note"></div>
+      <div id="rewind-list"></div>
+      <div id="rewind-result"></div>
+    </div>
+    <footer>
+      <span id="rewind-sel" style="font-size:10px; color:#6b7280;">No cycle selected.</span>
+      <span class="spacer"></span>
+      <button id="rewind-go" class="primary" disabled>Rewind to selected cycle</button>
+    </footer>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -1697,6 +1771,125 @@ document.getElementById('pause-loop').onclick = () => { closeLoopMenu(); pauseLo
 document.getElementById('edit-seed').onclick = () => { closeLoopMenu(); editSeed(); };
 document.getElementById('run-cycle').onclick = runCycleManually;
 document.getElementById('reset-loop').onclick = () => { closeLoopMenu(); resetLoop(); };
+document.getElementById('rewind-loop').onclick = () => { closeLoopMenu(); openRewind(); };
+
+// ------ T4-DQ: rewind to an earlier cycle ------
+// The points come from the loop's own checkpoints, so this offers exactly what can actually be
+// restored: a checkpoint whose tree snapshot has been cleared, or that was incomplete when taken,
+// is never listed by the endpoint.
+const rewindState = { points: [], selected: null };
+
+async function openRewind() {
+  document.getElementById('rewind-overlay').classList.add('open');
+  document.getElementById('rewind-result').className = '';
+  rewindState.selected = null;
+  updateRewindSelection();
+  document.getElementById('rewind-list').innerHTML =
+    '<div style="padding:10px; font-size:11px; color:#6b7280;">Loading…</div>';
+  try {
+    const data = await fetch('/autobuilder/checkpoints').then(r => r.json());
+    rewindState.points = data.checkpoints || [];
+  } catch (e) {
+    rewindState.points = [];
+    toast('Could not load checkpoints: ' + e.message, 'error');
+  }
+  renderRewindRuns();
+  renderRewindList();
+}
+function closeRewind() { document.getElementById('rewind-overlay').classList.remove('open'); }
+
+function renderRewindRuns() {
+  const sel = document.getElementById('rewind-run');
+  const runs = [...new Set(rewindState.points.map(p => p.runId).filter(Boolean))];
+  sel.innerHTML = runs.length
+    ? runs.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(shortRun(r))}</option>`).join('')
+    : '<option value="">(none on disk)</option>';
+  // Said plainly rather than implied by an empty-looking dropdown: checkpoints are run-scoped and
+  // cleared on reset and on resume, so an EARLIER run's points are not on disk to offer. Making
+  // them selectable means retaining them per run, which carries a real storage cost (the tree
+  // snapshots they reference are the bulk) and is a decision, not an oversight.
+  document.getElementById('rewind-note').innerHTML = runs.length > 1
+    ? `${runs.length} runs have points on disk.`
+    : 'Only the current lineage has checkpoints — they are run-scoped and cleared on reset and on '
+      + 'resume, so earlier runs are not selectable. Retaining them per run is possible but costs '
+      + 'the tree snapshots they reference.';
+}
+function shortRun(r) { return r.length > 20 ? r.slice(0, 12) + '…' + r.slice(-4) : r; }
+
+function renderRewindList() {
+  const runId = document.getElementById('rewind-run').value;
+  const list = document.getElementById('rewind-list');
+  const points = rewindState.points.filter(p => !runId || p.runId === runId);
+  if (!points.length) {
+    list.innerHTML = '<div style="padding:10px; font-size:11px; color:#6b7280;">'
+      + 'No restorable point on disk. A checkpoint is offered only when its tree snapshot is still '
+      + 'present and it was complete when taken.</div>';
+    return;
+  }
+  list.innerHTML = points.map((p, i) => {
+    const when = (p.at || '').replace('T', ' ').slice(0, 19);
+    return `<div class="rw-item${rewindState.selected === p.cycleId ? ' sel' : ''}" data-cycle="${escapeHtml(p.cycleId)}">
+      <span class="cyc">${escapeHtml(p.cycleId)}</span>
+      ${p.merged ? '<span class="rw-badge merged">merged</span>' : ''}
+      ${p.verified === false ? '<span class="rw-badge unver" title="No readable fingerprint — this point restores unverified">unverified</span>' : ''}
+      <span class="spacer"></span>
+      <span class="meta">${i === 0 ? 'latest · ' : 'back ' + i + ' · '}${escapeHtml(when)} · ${p.holders} holders · goalSeq ${p.goalTransitionSeq}</span>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.rw-item').forEach(el => {
+    el.onclick = () => { rewindState.selected = el.dataset.cycle; renderRewindList(); updateRewindSelection(); };
+  });
+}
+function updateRewindSelection() {
+  const go = document.getElementById('rewind-go');
+  const label = document.getElementById('rewind-sel');
+  go.disabled = !rewindState.selected;
+  label.textContent = rewindState.selected
+    ? 'Selected ' + rewindState.selected
+    : 'No cycle selected.';
+}
+
+async function doRewind() {
+  const cycle = rewindState.selected;
+  if (!cycle) return;
+  const cache = document.getElementById('rewind-cache').value;
+  if (!confirm('Rewind to ' + cycle + '?\n\nThis replaces output/ with that cycle\'s tree, folds goal '
+      + 'state back to it, and restores the decision-bearing trackers. Work done after that point is '
+      + 'left behind — it stays in the graph as history.')) return;
+  const out = document.getElementById('rewind-result');
+  out.className = 'show';
+  out.innerHTML = '<span class="warn">Rewinding…</span>';
+  try {
+    const res = await fetch(`/autobuilder/rewind?toCycle=${encodeURIComponent(cycle)}&cacheMode=${cache}`,
+      { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || d.ok === false) {
+      out.innerHTML = `<span class="bad">Refused: ${escapeHtml(d.refusedBecause || d.message || ('HTTP ' + res.status))}</span>`;
+      return;
+    }
+    // The failures list is shown whenever it is non-empty — a rewind that restored less than it
+    // claims has to say so here, not only in the log.
+    const failures = (d.failures || []);
+    out.innerHTML = `<span class="good">Returned to ${escapeHtml(d.toCycleId)}.</span><br>`
+      + `${d.holdersRestored} holders restored, ${d.goalStatusesRestored} goal status(es) restored, `
+      + `${d.goalsRewoundOut} goal(s) rewound out, ${d.goalTransitionsUndone} transition(s) undone, `
+      + `cache ${escapeHtml(d.cacheMode)}.<br>`
+      + (failures.length
+          ? `<span class="warn">Not clean — ${failures.map(f => escapeHtml(f)).join('; ')}</span><br>`
+          : '<span class="good">State verified against the checkpoint.</span><br>')
+      + '<span class="meta">Resume the loop to continue from here.</span>';
+    toast('Rewound to ' + d.toCycleId, failures.length ? 'error' : 'ok');
+    setTimeout(boot, 600);
+  } catch (e) {
+    out.innerHTML = `<span class="bad">Rewind failed: ${escapeHtml(e.message)}</span>`;
+  }
+}
+document.getElementById('rewind-close').onclick = closeRewind;
+document.getElementById('rewind-go').onclick = doRewind;
+document.getElementById('rewind-run').onchange = () => { rewindState.selected = null; renderRewindList(); updateRewindSelection(); };
+document.getElementById('rewind-overlay').onclick = (e) => {
+  if (e.target.id === 'rewind-overlay') closeRewind();
+};
 
 // Loop dropdown toggle
 (function () {

@@ -371,6 +371,7 @@
 - [x] `T4-CX` — Startup-wiring forecast no longer precedes the gate that measures it (shipped 2026-07-28)
 - [x] `T4-CY` — Loop observes its own running behaviour mid-run: PROVEN, disabled on cost until probe synthesis is deterministic
 - [ ] `T4-DQ` — The loop cannot return to a state it was in: no checkpoint, rewind or backtracking, so a run down a bad path can only grind to death; tree+context snapshots already run every cycle, blockers are goal status mutated in place and 5 decision-bearing trackers never persisted — design note first
+- [ ] `T4-DP` — How a run STARTS is an accident of five flags: no explicit start mode, so "continue someone else's project" and "wipe it and begin again" are one careless default apart; recommendation is runtime not wrapper, chooser UI last
 - [ ] `T4-CQ` — Import and continue an existing project (cold read; with or without a graph)
 - [ ] `T4-CR` — Portable project+graph bundle: store a phase, restore it elsewhere (unblocked by T1-D lineage separation)
 - [ ] `T4-CS` — Code-layer merge across lineages (code-side sibling of T4-CM; gated on an overlap measurement)

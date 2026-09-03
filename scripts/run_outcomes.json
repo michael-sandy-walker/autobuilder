@@ -2382,6 +2382,26 @@
    "smoke_total": 23,
    "terminal": "GOAL_EXHAUSTED",
    "total_cycles": "27"
+  },
+  "2026-09-03_00-34-16": {
+   "cost_readout": "build=34855ms/6 sms-batch-build=264ms/1",
+   "criteria_authored": "7",
+   "criteria_executable_count": "6",
+   "criteria_executable_pct": "86",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "56",
+   "merges": "2",
+   "peaked_at_cycle": "cycle-1788388672146 (4/4)",
+   "preserved_source": "reconstructed:cycle-1788388672146",
+   "recorded": "2026-09-03",
+   "repeat_proposals": "0",
+   "repeats_refused": "0",
+   "run_duration_min": "2.7",
+   "score_delta": "n/a (boot-failed vs boot-failed)",
+   "smoke": "boot-failed",
+   "smoke_preserved": "boot-failed",
+   "terminal": "honest-halt:exhaustion-runaway",
+   "total_cycles": "4"
   }
  },
  "updated": "2026-09-03"

@@ -652,6 +652,12 @@ public class AutobuilderService implements CheckpointableState {
         if (!resumedFromLlmBreakerPause && context != null && context.cycleResultState() != null) {
             if (com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(context)) {
                 if (!systemPaused) {
+                    // T4-DQ: every honest halt funnels through here — convergence stall, exhaustion
+                    // runaway, empty-backlog limit, root exhaustion. Ask ONCE, at the one place
+                    // they all reach, whether there is a better path to go back to instead.
+                    if (rewindBeforeHalting(context)) {
+                        return;
+                    }
                     systemPaused = true;
                     log.info("System is paused (cycle {}). Skipping run.", context.cycleName());
                     // Catch-all for pause reasons raised outside this method (REST user-pause,
@@ -1212,37 +1218,12 @@ public class AutobuilderService implements CheckpointableState {
         //
         // Measured on the runs this exists for: 2026-09-01_23-11-25 landed nothing for 42 of its
         // 53 cycles and 2026-08-31_05-47-22 for 60 of 65; both shipped 5/23.
-        // T4-DQ slice 3, WIDENED after the field said the original siting was too narrow. It was
-        // wired to the convergence brake's halt alone, on the argument that the brake already asks
-        // the only question that matters. It does — but it only ASKS when it is about to stop the
-        // run, and measured over 115 recorded runs only 14 (12%) ever get there: 55 are killed by
-        // the harness deadline, which runs no terminal code at all. NONE of the three runs this
-        // ticket was filed for reached that halt, and neither did the run that found this.
-        //
-        // So the trigger is the grind itself, wherever the run is in its life: a full window with
-        // nothing landing. The halt case is subsumed — a run about to halt on the convergence
-        // brake is grinding by definition — and the window requirement gives a freshly rewound
-        // path a full window to prove itself before it can be judged again.
-        boolean grinding = rewindPolicy != null && rootConvergenceTracker.grinding();
-        boolean haltingOnTheBrake = rewindPolicy != null
-                && com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker.HALT_SOURCE.equals(context.pausedReason());
-        if (grinding || haltingOnTheBrake) {
-            var rewound = rewindPolicy.considerRewindInsteadOfHalting(
-                    context.cycleName(), rootConvergenceTracker.cyclesSinceProgress());
-            if (rewound.isPresent()) {
-                rootConvergenceTracker.resyncAfterRewind();
-                // Clear the halt this cycle raised: the run is continuing, from further back.
-                // `context` is the service's own field, which the next tick reads.
-                context = context
-                        .withPausedReason(null)
-                        .withGoalExhaustedReason(null);
-                log.warn("T4-DQ: cycle {} ends at the rewind ({}) — the remainder of its post-cycle "
-                                + "work describes the path that was just backed out of.",
-                        context.cycleName(),
-                        haltingOnTheBrake ? "the convergence brake was about to halt the run"
-                                : "a full window of cycles landed nothing");
-                return;
-            }
+        // T4-DQ slice 3, mid-run: a full window with nothing landing. This is the only moment a
+        // deadline-killed run ever gets — a SIGTERM runs no terminal code — and 55 of 115 recorded
+        // runs die that way. The halt cases are handled where they all converge, at the pause
+        // transition in this same class.
+        if (rewindIfGrinding(context)) {
+            return;
         }
 
         // T4-AJ Part B: catch-up consolidation of equivalent goals. Triggers well before the
@@ -1358,6 +1339,71 @@ public class AutobuilderService implements CheckpointableState {
             emitSystemPausedOnce(context.cycleName(), context.pausedReason(), 0);
         }
     }
+
+    /**
+     * T4-DQ slice 3, MID-RUN: the run is grinding — a full window with nothing landing — so return
+     * to a point where work was still landing rather than carrying on down a path that has stopped
+     * producing. Returns {@code true} when the loop went back, in which case the caller must END
+     * THE CYCLE: the rest of the post-cycle tail describes the path just abandoned.
+     *
+     * <p>This entry point exists for the runs that never reach any terminal code at all. 55 of the
+     * 115 recorded runs die on the harness deadline, which is a SIGTERM — no halt, no end report,
+     * no chance to reconsider. For those, mid-run is the only moment there is.
+     */
+    boolean rewindIfGrinding(CycleContextData context) {
+        if (context == null || !rootConvergenceTracker.grinding()) return false;
+        return attemptRewind(context, "a full window of cycles landed nothing");
+    }
+
+    /**
+     * T4-DQ slice 3, AT THE HALT: the run has decided to stop, for whatever reason. Before it
+     * does, is there a point that landed work and has not been explored?
+     *
+     * <p><b>Ungated on the reason, and the field is why.</b> The first cut consulted the rewind
+     * only when the convergence brake was halting, which reaches 14 of 115 recorded runs. Widening
+     * it to the grind caught more, and then a forced run died at cycle 4 on
+     * {@code exhaustion-runaway} — a THIRD path to the same place, with the same question worth
+     * asking and nobody asking it. Every honest halt funnels through this one branch, so the
+     * question belongs here rather than at each reason in turn
+     * ([[feedback-one-invariant-one-home]]).
+     *
+     * <p>The one exclusion is an operator pause: {@code user-pause} means a person asked the loop
+     * to stop, and backing up to keep working would be overriding them. The LLM circuit breaker is
+     * excluded too — that pause is a suspension waiting on the endpoint to recover (T1-FL), not a
+     * statement that this path is bad, and rewinding would discard good work over a network blip.
+     */
+    boolean rewindBeforeHalting(CycleContextData context) {
+        if (context == null) return false;
+        String reason = context.pausedReason();
+        if (reason == null || NON_REWINDABLE_PAUSES.contains(reason)) return false;
+        return attemptRewind(context, "the run was about to halt (" + reason + ")");
+    }
+
+    /**
+     * Ask the policy, and if it went back, clear the halt this cycle raised so the run continues.
+     * The policy owns the bounds — how many rewinds a run gets, and which fork points remain
+     * unexplored — so neither caller needs to know them.
+     */
+    private boolean attemptRewind(CycleContextData context, String why) {
+        if (rewindPolicy == null) return false;
+        var rewound = rewindPolicy.considerRewindInsteadOfHalting(
+                context.cycleName(), rootConvergenceTracker.cyclesSinceProgress());
+        if (rewound.isEmpty()) return false;
+
+        rootConvergenceTracker.resyncAfterRewind();
+        // `context` is the service's own field, which the next tick reads.
+        this.context = context.withPausedReason(null).withGoalExhaustedReason(null);
+        log.warn("T4-DQ: cycle {} ends at the rewind ({}) — the remainder of its post-cycle work "
+                + "describes the path that was just backed out of.", context.cycleName(), why);
+        return true;
+    }
+
+    /**
+     * Pauses a rewind must not override: a person asked the loop to stop, or it is waiting for the
+     * model endpoint to come back rather than judging the path it is on.
+     */
+    private static final java.util.Set<String> NON_REWINDABLE_PAUSES =
+            java.util.Set.of("user-pause", LLM_BREAKER_PAUSE_REASON);
 
     /**
      * T3-BY: is this cycle the one that should re-preserve? Counts MERGED cycles only — an

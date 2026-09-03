@@ -110,6 +110,59 @@ public class StartModeService {
         return mode;
     }
 
+    /** Where a run's own start record lives. Per RUN, not per lineage, so it is not the identity file. */
+    public static final String START_RECORD = "meta/run-start.json";
+
+    /**
+     * T4-DP slice 3: what a run started as, written once the start has actually happened.
+     *
+     * @param mode        the mode it began in
+     * @param situation   what the tree was when it did
+     * @param target      the target directory's name, which is what selects it on the command line
+     * @param treeCleared whether anything was deleted to make room, which is the fact worth auditing
+     * @param at          when
+     */
+    public record StartRecord(String mode, String situation, String target, boolean treeCleared, String at) {}
+
+    @Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger;
+
+    /**
+     * Records how this run began, after the start actions have settled.
+     *
+     * <p>Written AFTER rather than before, and that is not incidental: {@code NEW_PROJECT} clears
+     * {@code meta/}, so anything written first would be deleted by the very step it describes.
+     *
+     * <p>Never throws. A run that cannot write its own start record is still a run, and failing the
+     * boot over a bookkeeping line would be a worse trade than losing the line.
+     */
+    public void recordStart(Decision decision, boolean treeCleared) {
+        String target = targetName();
+        StartRecord record = new StartRecord(decision.mode().name(), decision.situation().name(),
+                target, treeCleared, java.time.Instant.now().toString());
+        try {
+            fileService.ensureFolderExists("meta");
+            fileService.writeJson(START_RECORD, record);
+        } catch (IOException | RuntimeException e) {
+            log.warn("T4-DP: could not write {} ({}) — the run is unaffected", START_RECORD, e.getMessage());
+        }
+        if (behaviourLogger != null) {
+            behaviourLogger.runStarted(record.mode(), record.situation(), target, treeCleared);
+        }
+        log.info("T4-DP: run started as {} on {} ({}), tree cleared: {}",
+                record.mode(), target, record.situation(), treeCleared);
+    }
+
+    private String targetName() {
+        try {
+            Path dir = targetDir();
+            return dir.getFileName() == null ? dir.toString() : dir.getFileName().toString();
+        } catch (RuntimeException e) {
+            return "(unknown)";
+        }
+    }
+
     /** What this run's own tree is. Same rule the catalogue applies to every other target. */
     public Situation situation() {
         return Situation.of(targetDir());

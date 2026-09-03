@@ -184,6 +184,31 @@ class StartModeServiceTest {
     }
 
     @Test
+    @DisplayName("a run records how it began, so a row can say more than how it ended")
+    void aRunRecordsHowItBegan() throws IOException {
+        someoneElsesProject();
+        service.setMode(StartMode.ADOPT_PROJECT);
+
+        service.recordStart(service.decide(), false);
+
+        String written = Files.readString(tmp.resolve(StartModeService.START_RECORD));
+        assertThat(written).contains("ADOPT_PROJECT").contains("FOREIGN").contains("\"treeCleared\"");
+    }
+
+    @Test
+    @DisplayName("a start record that cannot be written does not cost the run")
+    void anUnwritableRecordDoesNotFailTheBoot() {
+        StartModeService unwritable = new StartModeService(new FileService(
+                tmp.resolve("nope/deeper").toString(), new ObjectMapper()));
+        unwritable.setMode(StartMode.ADOPT_PROJECT);
+
+        org.assertj.core.api.Assertions.assertThatCode(
+                        () -> unwritable.recordStart(unwritable.decide(), false))
+                .as("failing a boot over a bookkeeping line is the worse trade")
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("the catalogue and the startup check judge the same tree the same way")
     void oneRuleNotTwo() throws IOException {
         // These were two rules for one question and they disagreed about the same directory within

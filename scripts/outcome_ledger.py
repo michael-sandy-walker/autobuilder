@@ -42,6 +42,10 @@ LEDGER = os.path.join(HERE, "run_outcomes.json")
 SMOKE_RE = re.compile(r"SMOKE:\s*(\d+)/(\d+)")
 # Fields worth keeping per run: the outcome itself plus the drift context T6-A/T6-B compute.
 CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_delta",
+           # T4-DP: how the run BEGAN. A row that says only how a run ended cannot be compared
+           # with another whose tree started from somewhere else. Absent on rows predating this,
+           # which is why every read of it uses .get.
+           "start_mode", "start_tree", "start_cleared_tree",
            "run_duration_min", "total_cycles", "peaked_at_cycle", "drift_tail_cycles", "merges",
            # T2-EX: how much of the run was verifiable at all. Across three frozen runs of one
            # build and one seed the executable share was 71%, 31% and 74%, and the run at 31% was

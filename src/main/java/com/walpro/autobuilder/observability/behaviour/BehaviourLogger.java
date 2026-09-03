@@ -267,6 +267,12 @@ public class BehaviourLogger {
                 rootReactivated, regroundedGoals, endReportLoaded));
     }
 
+    /** T4-DP slice 3: how this run began — the mode, and what the tree was when it did. */
+    public void runStarted(String mode, String situation, String targetName, boolean treeCleared) {
+        emit(new BehaviourEvent.RunStarted(Instant.now(), "start", mode, situation,
+                targetName, treeCleared));
+    }
+
     /** T4-DQ: a checkpoint was taken at the end of a cycle. */
     public void checkpointWritten(String cycleId, int holders, long goalTransitionSeq,
                                   boolean restorable, int captureFailures) {

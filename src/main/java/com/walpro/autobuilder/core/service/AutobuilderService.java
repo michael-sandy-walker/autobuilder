@@ -598,12 +598,20 @@ public class AutobuilderService implements CheckpointableState {
         // T4-DP: the modes below are what those flags always meant, said out loud. NEW_PROJECT is
         // the only one that may clear the tree, and ADOPT_PROJECT neither clears it nor seeds over
         // what someone else wrote.
+        boolean treeCleared = false;
         if (mode == StartMode.CONTINUE_LINEAGE
                 && runResumeService != null && runResumeService.attemptResume()) {
             log.info("T4-CD: resumed prior lineage — skipping reset-on-start.");
         } else if (mode.discardsTheTree() && autobuilderConfig.isResetOnStart()) {
             log.warn("Autobuilder system reset triggered via config (AutobuilderService)");
             systemResetConfig.resetSystem();
+            treeCleared = true;
+        }
+
+        // T4-DP slice 3: after the start has actually happened, never before — NEW_PROJECT clears
+        // meta/, so a record written first would be deleted by the step it describes.
+        if (start != null && startModeService != null) {
+            startModeService.recordStart(start, treeCleared);
         }
 
         if (mode != StartMode.ADOPT_PROJECT) {

@@ -572,6 +572,19 @@ if len(ts) > 1:
     print(int(d[len(d) // 2]))
 PYCYC
 )"
+        # T4-DP slice 3: how this run BEGAN, read from the record the run writes itself. Without
+        # it a ledger row says how a run ended and nothing about the state it started from, so two
+        # rows with the same score are not comparable when one began fresh and one continued.
+        python3 - "$target/meta/run-start.json" <<'PYSTART' 2>/dev/null || true
+import json, sys
+try:
+    r = json.load(open(sys.argv[1]))
+except Exception:
+    raise SystemExit
+print("start_mode=" + str(r.get("mode", "")))
+print("start_tree=" + str(r.get("situation", "")))
+print("start_cleared_tree=" + ("yes" if r.get("treeCleared") else "no"))
+PYSTART
         # T6-A drift overview: the final-vs-best delta + where the run peaked + how long it spent
         # drifting after (score_delta > 0 => the run ended worse than a state it already saved).
         python3 "$REPO/scripts/drift_report.py" "$run_dir" \

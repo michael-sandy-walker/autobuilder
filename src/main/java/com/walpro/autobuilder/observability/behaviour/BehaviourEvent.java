@@ -348,6 +348,22 @@ public sealed interface BehaviourEvent {
      * {@code endReportLoaded} (T4-CD slice 2): the parent's end report was found, ownership-checked
      * against the loaded root goal, and will be consulted in the first prompts.
      */
+    /**
+     * T4-DP slice 3: how this run began. Emitted once, after the start actions have settled, so a
+     * trace answers "what state did this run start from?" without anyone having to reconstruct it
+     * from which flags happened to be on the command line.
+     */
+    record RunStarted(
+            Instant timestamp,
+            String cycleId,
+            String mode,
+            String situation,
+            String targetName,
+            boolean treeCleared
+    ) implements BehaviourEvent {
+        public String event() { return "run_started"; }
+    }
+
     record RunResumed(
             Instant timestamp,
             String cycleId,

@@ -585,6 +585,54 @@ public class AutobuilderService implements CheckpointableState {
             startRefused = true;
             return;
         }
+        performStart(start);
+        runAutobuilderCycle();
+    }
+
+    /**
+     * T4-DP slice 4: release a held run and start it in {@code requested}.
+     *
+     * <p>The counterpart to {@link StartMode#ASK}, which holds a run before anything on disk is
+     * touched. Without a release the hold is a dead end and the only way out is a restart, which
+     * defeats the point of holding rather than defaulting.
+     *
+     * <p>Deliberately does NOT run the first cycle itself: the scheduler picks the run up within a
+     * tick, and a cycle can take minutes, which is not something to do on the caller's thread while
+     * it waits for an answer.
+     *
+     * @return the decision that was acted on, or the refusal that stopped it
+     */
+    public synchronized StartModeService.Decision startNow(StartMode requested) throws IOException {
+        if (startModeService == null) {
+            return new StartModeService.Decision(false, requested, StartModeService.Situation.EMPTY,
+                    "start modes are not enabled in this context");
+        }
+        if (!startRefused) {
+            return new StartModeService.Decision(false, startModeService.mode(),
+                    startModeService.situation(),
+                    "this run has already started; a start mode is chosen once, so restart to change it");
+        }
+        startModeService.setMode(requested);
+        StartModeService.Decision decision = startModeService.decide();
+        if (!decision.allowed()) {
+            log.warn("T4-DP: refusing to start in {} — {}", decision.mode(), decision.explanation());
+            return decision;
+        }
+        performStart(decision);
+        // Last, and only once the start actually succeeded: until this flips the scheduler stays
+        // idle, which is what makes a refused or held run leave the disk alone.
+        startRefused = false;
+        log.warn("T4-DP: released by request — starting in {}", decision.mode());
+        return decision;
+    }
+
+    /** Whether this run is holding, waiting to be told how to start. */
+    public boolean held() {
+        return startRefused;
+    }
+
+    /** The start actions themselves, shared by the boot path and the release. */
+    private void performStart(StartModeService.Decision start) throws IOException {
         StartMode mode = start != null ? start.mode() : StartMode.NEW_PROJECT;
         if (start != null) {
             log.info("T4-DP: starting in {} ({}) — {}", mode, start.situation(), start.explanation());
@@ -626,8 +674,6 @@ public class AutobuilderService implements CheckpointableState {
         // T3-BT: seed build system skeleton into output/ before cycle 1 so that mvn compile
         // succeeds on the first invocation and BUILD_FIX is not injected at session start.
         buildSystemBootstrap.seedBuildSystemIfNecessary();
-
-        runAutobuilderCycle();
     }
 
     @Scheduled(fixedDelayString = "${autobuilder.scheduler.inter-cycle-delay-ms:1000}")

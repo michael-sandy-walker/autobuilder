@@ -87,6 +87,75 @@ public class AutobuilderController {
         return ResponseEntity.ok(body.toString());
     }
 
+    /**
+     * T4-DP slice 4: everything the chooser needs, as JSON — what is startable, what this run is
+     * pointed at, and whether it is holding.
+     */
+    @GetMapping("/start-state")
+    public ResponseEntity<Map<String, Object>> startState() {
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("held", autobuilderService.held());
+        if (startModeService != null) {
+            var d = startModeService.decide();
+            body.put("mode", d.mode().name());
+            body.put("situation", d.situation().name());
+            body.put("allowed", d.allowed());
+            body.put("explanation", d.explanation());
+        }
+        java.nio.file.Path base = java.nio.file.Path.of(fileBasePath).toAbsolutePath().normalize();
+        body.put("target", base.getFileName() == null ? base.toString() : base.getFileName().toString());
+        body.put("targetPath", base.toString());
+        if (targetCatalog != null) {
+            List<Map<String, Object>> rows = new java.util.ArrayList<>();
+            for (var t : targetCatalog.targets()) {
+                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                row.put("name", t.name());
+                row.put("situation", t.situation().name());
+                row.put("sourceFiles", t.sourceFiles());
+                row.put("hasSeed", t.hasSeed());
+                row.put("seedSummary", t.seedSummary());
+                row.put("hasYardstick", t.hasYardstick());
+                row.put("priorRunState", t.priorRunState());
+                row.put("modes", t.supportedModes().stream().map(Enum::name).toList());
+                row.put("current", t.name().equals(body.get("target")));
+                rows.add(row);
+            }
+            body.put("targets", rows);
+        }
+        return ResponseEntity.ok(body);
+    }
+
+    /**
+     * T4-DP slice 4: release a held run and start it in the chosen mode.
+     *
+     * <p>Only a held run can be released. A start mode is chosen once, so a run that is already
+     * going says so rather than half-applying a second one.
+     */
+    @PostMapping("/start")
+    public ResponseEntity<Map<String, Object>> start(@RequestParam String mode) {
+        com.walpro.autobuilder.core.init.StartMode requested;
+        try {
+            requested = com.walpro.autobuilder.core.init.StartMode
+                    .valueOf(mode.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false,
+                    "message", "mode must be one of "
+                            + java.util.Arrays.toString(com.walpro.autobuilder.core.init.StartMode.values())));
+        }
+        try {
+            var decision = autobuilderService.startNow(requested);
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("ok", decision.allowed());
+            body.put("mode", decision.mode().name());
+            body.put("situation", decision.situation().name());
+            body.put("message", decision.explanation());
+            return decision.allowed() ? ResponseEntity.ok(body) : ResponseEntity.badRequest().body(body);
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("ok", false,
+                    "message", "the start failed part-way: " + e.getMessage()));
+        }
+    }
+
     /** T4-DQ: where the loop's state stands, as distinct from which point is newest on disk. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.checkpoint.CheckpointService checkpointService;

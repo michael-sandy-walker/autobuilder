@@ -1,0 +1,221 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Start Autobuilder</title>
+<style>
+  :root {
+    --bg: #050710; --panel: #0b1220; --panel-2: #111827; --rule: #1f2937;
+    --ink: #e5e7eb; --muted: #9ca3af; --dim: #6b7280;
+    --accent: #3b82f6; --accent-bg: #1e3a8a;
+    --good: #86efac; --good-bg: #052e16; --good-rule: #14532d;
+    --warn: #fcd34d; --warn-bg: #451a03; --warn-rule: #78350f;
+    --bad: #fca5a5; --bad-bg: #2a0a0a; --bad-rule: #7f1d1d;
+    --violet: #c4b5fd; --violet-rule: #4c1d95; --violet-bg: #2e1065;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 28px 20px 80px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 22px; font-size: 12.5px; }
+  h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--dim); margin: 30px 0 10px; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+  .banner { border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; margin-bottom: 6px;
+    background: var(--panel); display: flex; gap: 14px; align-items: flex-start; }
+  .banner.held { border-color: var(--warn-rule); background: var(--warn-bg); }
+  .banner.running { border-color: var(--good-rule); background: var(--good-bg); }
+  .banner .dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 6px; flex: none;
+    background: var(--muted); }
+  .banner.held .dot { background: var(--warn); }
+  .banner.running .dot { background: var(--good); }
+  .banner b { display: block; margin-bottom: 3px; }
+  .banner.held b { color: var(--warn); }
+  .banner.running b { color: var(--good); }
+  .banner .why { color: var(--muted); font-size: 12.5px; }
+
+  .card { border: 1px solid var(--rule); border-radius: 8px; background: var(--panel);
+    padding: 16px 18px; margin-bottom: 10px; }
+  .card.current { border-color: var(--accent-bg); }
+  .card .head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .card .name { font-size: 15px; font-weight: 600; }
+  .facts { display: grid; grid-template-columns: 116px 1fr; gap: 5px 14px; font-size: 12.5px;
+    margin-bottom: 12px; }
+  .facts dt { color: var(--dim); }
+  .facts dd { margin: 0; color: var(--ink); }
+  .facts dd.quiet { color: var(--muted); }
+  .seed { color: var(--muted); font-style: italic; }
+
+  .tag { font-size: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule);
+    color: var(--muted); white-space: nowrap; }
+  .tag.foreign { color: var(--violet); border-color: var(--violet-rule); background: var(--violet-bg); }
+  .tag.own { color: var(--good); border-color: var(--good-rule); background: var(--good-bg); }
+  .tag.empty { color: var(--muted); }
+  .tag.here { color: #bfdbfe; border-color: var(--accent); background: #0c1e3a; font-weight: 600; }
+
+  .modes { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { font: inherit; cursor: pointer; border-radius: 6px; padding: 8px 13px;
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--rule); }
+  button:hover:not(:disabled) { background: var(--accent-bg); border-color: var(--accent); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.destructive { border-color: var(--bad-rule); color: var(--bad); }
+  button.destructive:hover:not(:disabled) { background: var(--bad-bg); border-color: var(--bad); }
+  button .what { display: block; font-size: 11px; color: var(--dim); font-weight: 400; margin-top: 2px; }
+
+  .launch { background: var(--panel-2); border: 1px solid var(--rule); border-radius: 6px;
+    padding: 10px 12px; overflow-x: auto; color: var(--muted); }
+  .launch code { color: var(--ink); white-space: pre; display: block; }
+
+  #result { margin-top: 14px; padding: 12px 14px; border-radius: 8px; display: none;
+    border: 1px solid var(--rule); background: var(--panel); font-size: 12.5px; }
+  #result.show { display: block; }
+  #result.ok { border-color: var(--good-rule); background: var(--good-bg); color: var(--good); }
+  #result.no { border-color: var(--bad-rule); background: var(--bad-bg); color: var(--bad); }
+
+  .note { color: var(--dim); font-size: 12px; margin: 8px 0 0; }
+  a { color: #93c5fd; }
+  @media (max-width: 560px) { .facts { grid-template-columns: 1fr; gap: 2px; } }
+</style>
+
+<div class="wrap">
+  <h1>Start Autobuilder</h1>
+  <p class="sub">Which state this run begins from, checked against what is actually in the tree.</p>
+
+  <div id="banner" class="banner"><span class="dot"></span><div><b>Reading…</b></div></div>
+  <div id="result"></div>
+
+  <h2>This run</h2>
+  <div id="current"></div>
+
+  <h2>Other targets</h2>
+  <p class="note">A target is chosen when the process starts, because the file root is fixed then.
+    To work on one of these, launch with its name and restart.</p>
+  <div id="others"></div>
+</div>
+
+<script>
+const MODE_TEXT = {
+  NEW_PROJECT:      { label: 'Start a new project', what: 'clears the tree, seeds from the specification', destructive: true },
+  CONTINUE_LINEAGE: { label: 'Continue',            what: 'resumes the lineage already here; clears nothing' },
+  ADOPT_PROJECT:    { label: 'Adopt this codebase', what: 'works on what is here; clears nothing, seeds nothing' }
+};
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const SITUATION = { FOREIGN: ['foreign', 'code the loop did not write'],
+                    LOOP_AUTHORED: ['own', 'the loop worked here before'],
+                    EMPTY: ['empty', 'nothing here yet'] };
+
+let state = null;
+
+async function load() {
+  try {
+    state = await fetch('/autobuilder/start-state').then(r => r.json());
+  } catch (e) {
+    document.getElementById('banner').innerHTML =
+      '<span class="dot"></span><div><b>Cannot reach Autobuilder</b>'
+      + '<div class="why">' + esc(e.message) + '</div></div>';
+    return;
+  }
+  renderBanner();
+  renderCurrent();
+  renderOthers();
+}
+
+function renderBanner() {
+  const el = document.getElementById('banner');
+  el.className = 'banner ' + (state.held ? 'held' : 'running');
+  el.innerHTML = '<span class="dot"></span><div><b>'
+    + (state.held
+        ? 'Holding — nothing on disk has been touched'
+        : 'Running as ' + esc(state.mode))
+    + '</b><div class="why">'
+    + esc(state.held
+        ? (state.explanation || 'Waiting to be told how to start.')
+        : 'A start mode is chosen once. Restart to begin differently.')
+    + '</div></div>';
+}
+
+function tag(situation) {
+  const [cls, title] = SITUATION[situation] || ['empty', situation];
+  return '<span class="tag ' + cls + '" title="' + esc(title) + '">' + esc(situation.toLowerCase().replace('_', ' ')) + '</span>';
+}
+
+function factsFor(t) {
+  return '<dl class="facts">'
+    + '<dt>tree</dt><dd>' + esc(t.situation.toLowerCase().replace('_', ' ')) + ', '
+      + t.sourceFiles + ' source file' + (t.sourceFiles === 1 ? '' : 's') + '</dd>'
+    + '<dt>specification</dt><dd class="' + (t.hasSeed ? '' : 'quiet') + '">'
+      + (t.hasSeed ? 'yes' : 'none, so it cannot be begun fresh') + '</dd>'
+    + (t.seedSummary ? '<dt></dt><dd class="seed">' + esc(t.seedSummary) + '</dd>' : '')
+    + '<dt>yardstick</dt><dd class="' + (t.hasYardstick ? '' : 'quiet') + '">'
+      + (t.hasYardstick ? 'declared' : 'none') + '</dd>'
+    + (t.priorRunState && t.priorRunState.length
+        ? '<dt>earlier runs</dt><dd class="quiet">' + esc(t.priorRunState.join(', ')) + '</dd>' : '')
+    + '</dl>';
+}
+
+function renderCurrent() {
+  const el = document.getElementById('current');
+  const t = (state.targets || []).find(x => x.current);
+  if (!t) {
+    el.innerHTML = '<div class="card"><div class="head"><span class="name">'
+      + esc(state.target) + '</span></div>'
+      + '<p class="note">Not listed beside the other targets: ' + esc(state.targetPath) + '</p></div>';
+    return;
+  }
+  let buttons = '';
+  if (state.held) {
+    buttons = '<div class="modes">' + t.modes.map(m => {
+      const info = MODE_TEXT[m] || { label: m, what: '' };
+      return '<button data-mode="' + m + '"' + (info.destructive ? ' class="destructive"' : '') + '>'
+        + esc(info.label) + '<span class="what">' + esc(info.what) + '</span></button>';
+    }).join('') + '</div>'
+      + (t.modes.length ? '' : '<p class="note">No mode is available: it has neither a specification nor code.</p>');
+  } else {
+    buttons = '<p class="note">Already started. Restart the process to choose again.</p>';
+  }
+  el.innerHTML = '<div class="card current"><div class="head">'
+    + '<span class="name">' + esc(t.name) + '</span>' + tag(t.situation)
+    + '<span class="tag here">this run</span></div>'
+    + factsFor(t) + buttons + '</div>';
+  el.querySelectorAll('button[data-mode]').forEach(b => b.onclick = () => start(b.dataset.mode));
+}
+
+function renderOthers() {
+  const el = document.getElementById('others');
+  const others = (state.targets || []).filter(t => !t.current);
+  if (!others.length) { el.innerHTML = '<p class="note">No other targets.</p>'; return; }
+  el.innerHTML = others.map(t =>
+    '<div class="card"><div class="head"><span class="name">' + esc(t.name) + '</span>'
+    + tag(t.situation) + '</div>' + factsFor(t)
+    + '<div class="launch"><code>FILE_BASE_PATH=data/' + esc(t.name)
+    + ' java -jar target/autobuilder-1.0.1-SNAPSHOT.jar \\\n'
+    + '  --spring.profiles.active=dev-auto,fast \\\n'
+    + '  --autobuilder.start.mode=' + esc(t.modes[0] || 'ASK') + '</code></div></div>').join('');
+}
+
+async function start(mode) {
+  const info = MODE_TEXT[mode] || { label: mode };
+  if (info.destructive && !confirm(
+      'Start a new project on "' + state.target + '"?\n\n'
+      + 'This CLEARS the tree before it begins. Anything in it that is not committed elsewhere is gone.')) {
+    return;
+  }
+  const out = document.getElementById('result');
+  out.className = 'show';
+  out.textContent = 'Starting as ' + mode + '…';
+  try {
+    const res = await fetch('/autobuilder/start?mode=' + encodeURIComponent(mode), { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    out.className = 'show ' + (d.ok ? 'ok' : 'no');
+    out.textContent = (d.ok ? 'Started as ' + d.mode + '. ' : 'Refused. ') + (d.message || '');
+    if (d.ok) setTimeout(load, 800);
+  } catch (e) {
+    out.className = 'show no';
+    out.textContent = 'The request failed: ' + e.message;
+  }
+}
+
+load();
+setInterval(() => { if (state && state.held) load(); }, 10000);
+</script>

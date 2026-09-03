@@ -184,6 +184,21 @@ class StartModeServiceTest {
     }
 
     @Test
+    @DisplayName("ASK is refused at boot but names a mode the tree would accept, so the hold is escapable")
+    void theHoldPointsAtAWayOut() throws IOException {
+        someoneElsesProject();
+        service.setMode(StartMode.ASK);
+
+        assertThat(service.decide().allowed()).isFalse();
+
+        // The release path asks the same question with a different mode; nothing else changes.
+        service.setMode(StartMode.ADOPT_PROJECT);
+        assertThat(service.decide().allowed())
+                .as("a hold with no reachable mode would be a dead end, not a choice")
+                .isTrue();
+    }
+
+    @Test
     @DisplayName("a run records how it began, so a row can say more than how it ended")
     void aRunRecordsHowItBegan() throws IOException {
         someoneElsesProject();

@@ -36,6 +36,10 @@ public class AutobuilderController {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.coldread.ColdReadService coldReadService;
 
+    /** T4-CQ: runs an imported project's own tests, in a copy, so a read never writes. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.coldread.ColdReadVerification coldReadVerification;
+
     @org.springframework.beans.factory.annotation.Value("${file.base-path}")
     private String fileBasePath;
 
@@ -47,13 +51,26 @@ public class AutobuilderController {
      * tree without changing anything in it.
      */
     @GetMapping(value = "/cold-read", produces = org.springframework.http.MediaType.TEXT_PLAIN_VALUE)
-    public ResponseEntity<String> coldRead() {
+    public ResponseEntity<String> coldRead(
+            @RequestParam(name = "runTests", required = false, defaultValue = "false") boolean runTests) {
         if (coldReadService == null) {
             return ResponseEntity.status(503).body("Cold read is not enabled in this context.\n");
         }
         java.nio.file.Path root = java.nio.file.Path.of(fileBasePath, "output").toAbsolutePath().normalize();
+        // Opt-in, because it builds: minutes of work and a reach for the network is not something
+        // to do because somebody asked what a directory holds. The build runs in a COPY, so asking
+        // still never writes to the project.
+        com.walpro.autobuilder.core.coldread.ColdReadVerification.Result verification = null;
+        if (runTests) {
+            if (coldReadVerification == null) {
+                verification = com.walpro.autobuilder.core.coldread.ColdReadVerification.Result
+                        .notAttempted("the verification service is not available in this context");
+            } else {
+                verification = coldReadVerification.verify(root);
+            }
+        }
         return ResponseEntity.ok(com.walpro.autobuilder.core.coldread.ColdReadReport.render(
-                coldReadService.read(root)));
+                coldReadService.read(root), verification));
     }
 
     /** T4-DP: what is startable, and which modes each target supports. */

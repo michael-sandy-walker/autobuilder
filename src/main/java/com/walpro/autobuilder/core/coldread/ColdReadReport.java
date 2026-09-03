@@ -14,6 +14,10 @@ public final class ColdReadReport {
     private ColdReadReport() {}
 
     public static String render(ColdRead r) {
+        return render(r, null);
+    }
+
+    public static String render(ColdRead r, ColdReadVerification.Result v) {
         StringBuilder b = new StringBuilder();
         b.append("COLD READ of ").append(r.root()).append('\n');
         b.append("Everything below was read from the project. Nothing is inferred about what it ought to do.\n");
@@ -80,6 +84,21 @@ public final class ColdReadReport {
         if (!r.skipped().isEmpty()) {
             b.append("\nNOT READ (").append(r.skipped().size()).append(")\n");
             for (String s : r.skipped()) b.append("  - ").append(s).append('\n');
+        }
+
+        if (v != null && !v.attempted()) {
+            b.append("\nITS OWN TESTS: not run\n");
+            for (String n : v.notes()) b.append("  - ").append(n).append('\n');
+        }
+        if (v != null && v.attempted()) {
+            b.append("\nITS OWN TESTS, RUN (").append(v.durationMs() / 1000).append("s)\n");
+            b.append("  builds        ").append(v.builds() ? "yes" : "NO").append('\n');
+            b.append("  tests         ").append(v.testsRun()).append(" run, ")
+             .append(v.testsFailed()).append(" not passing\n");
+            for (String n : v.notes()) b.append("  - ").append(n).append('\n');
+            b.append("  baseline      ").append(v.greenBaseline()
+                    ? "GREEN — someone else's suite passes, so a change here has something to break"
+                    : "not green — there is no regression baseline to work against yet").append('\n');
         }
 
         b.append("\nACTIONABLE: ").append(r.actionable()

@@ -59,7 +59,14 @@ autobuilder_jvms() {
     for p in /proc/[0-9]*/cmdline; do
         pid="${p#/proc/}"; pid="${pid%/cmdline}"
         [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "java" ] || continue
-        if tr '\0' ' ' < "$p" 2>/dev/null | grep -q 'autobuilder-.*-SNAPSHOT\.jar'; then
+        # Matches BOTH ways this application is started, which is the point of a safety gate.
+        # 2026-09-03: the jar pattern alone missed an IntelliJ run configuration — an IDE launch
+        # uses a classpath and a main class, never the jar — so a live JVM was invisible here. A
+        # session then launched three runs that each failed to bind port 8081 and, not noticing,
+        # read the IDE's older instance instead. G1 exists to stop a repo mvn beside a live run;
+        # against an IDE-launched run it was not stopping anything.
+        if tr '\0' ' ' < "$p" 2>/dev/null \
+                | grep -qE 'autobuilder-.*-SNAPSHOT\.jar|com\.walpro\.autobuilder\.AutobuilderApplication'; then
             echo "$pid"
         fi
     done

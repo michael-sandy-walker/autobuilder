@@ -201,3 +201,18 @@ deterministic replay of live runs on its own, which is worth having regardless
   exposed on `/autobuilder/checkpoints` as `position` + per-row `here`; the dialog opens on that run
   and badges the row, and Mission Control consumes `rewind_performed` (it used to drop it) and
   re-reads subgoal/mode from `/autobuilder/status`.
+- **2026-09-03, the second field defect: RESTORABLE and CONTINUABLE are different facts.** The
+  grind policy chose the newest point that had landed a merge; its root goal was already COMPLETED
+  because it came from an earlier finished run of the lineage. The restore was faultless and the
+  next cycle halted on a finished root, with five older merged points whose root was still ACTIVE
+  passed over to reach it. **`merged == true` was the entire candidate test — "this cycle landed
+  work" is not on its own a reason to go back somewhere; a point is somewhere to CONTINUE from only
+  while something is still left to do there.** One home: `CheckpointService.canContinueFrom`,
+  derived from the same goal fold the restore applies, so the prediction cannot disagree with the
+  outcome. Unknown status is not treated as settled. **The operator surface deliberately shows what
+  the policy may not choose** — returning to a finished state is a legitimate thing for a person to
+  want, so it is badged and warned about rather than hidden, the same treatment `unverified` gets.
+- **The cross-run index forgets a checkpoint's capture failures.** `Neo4jCheckpointGraphService`
+  rebuilds a `CheckpointRecord` with `captureFailures` hardcoded empty, so any point read back from
+  the graph claims to be complete whatever it was on disk, and `restorableAcrossRuns` readmits
+  points the local listing correctly excluded. Not fixed: persisting it is a schema change.

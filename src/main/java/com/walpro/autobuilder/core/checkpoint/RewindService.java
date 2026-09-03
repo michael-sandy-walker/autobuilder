@@ -187,11 +187,13 @@ public class RewindService {
     }
 
     /**
-     * The newest restorable checkpoint strictly older than {@code beforeCycleId}, or empty. What a
-     * policy asks for when it wants "back up one point" without naming one.
+     * The newest checkpoint strictly older than {@code beforeCycleId} that the loop could restore
+     * AND still work from, or empty. What a policy asks for when it wants "back up one point"
+     * without naming one.
      */
     public Optional<CheckpointRecord> lastGoodBefore(String beforeCycleId) {
         for (CheckpointRecord record : available()) {
+            if (!checkpointService.canContinueFrom(record)) continue;
             if (beforeCycleId == null || record.cycleId().compareTo(beforeCycleId) < 0) {
                 return Optional.of(record);
             }
@@ -200,13 +202,17 @@ public class RewindService {
     }
 
     /**
-     * The newest restorable checkpoint strictly older than {@code beforeCycleId} whose cycle
-     * LANDED WORK — the last point at which the run was still merging, which is what "the last
-     * good state" means for a run that has since ground to a stop.
+     * The newest checkpoint strictly older than {@code beforeCycleId} whose cycle LANDED WORK and
+     * whose root goal was still open — the last point at which the run was still merging AND still
+     * had something to merge toward, which together are what "the last good state" means for a run
+     * that has since ground to a stop. See {@link CheckpointService#canContinueFrom}: dropping the
+     * second half sent a field run back onto a finished path.
      */
     public Optional<CheckpointRecord> lastMergedBefore(String beforeCycleId) {
         for (CheckpointRecord record : available()) {
             if (!record.merged()) continue;
+            // Landing work is not enough — the loop must still have something to do there.
+            if (!checkpointService.canContinueFrom(record)) continue;
             if (beforeCycleId == null || record.cycleId().compareTo(beforeCycleId) < 0) {
                 return Optional.of(record);
             }

@@ -250,6 +250,49 @@ class RewindServiceTest {
     }
 
     @Test
+    @DisplayName("the field case: a merged point whose root is finished is passed over for an older open one")
+    void aMergedButFinishedPointIsNotChosenToContinueFrom() throws IOException {
+        // The 2026-09-03 shape exactly: an older merged point with the root still open, then a
+        // newer merged point taken once the root had completed. "Newest that landed work" picks
+        // the second, restores it faultlessly, and the next cycle halts on a finished root.
+        log.append("g1", null, "ACTIVE",
+                com.walpro.autobuilder.goal.GoalTransition.Kind.CREATED, "cycle-1", null);
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(mergedContext("cycle-1"));
+        log.append("g1", "ACTIVE", "COMPLETED",
+                com.walpro.autobuilder.goal.GoalTransition.Kind.CHANGED, "cycle-2", null);
+        writeSnapshot("cycle-2", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(mergedContext("cycle-2"));
+
+        assertThat(rewind.available()).extracting(CheckpointRecord::cycleId)
+                .as("both are restorable, and the operator listing keeps offering both")
+                .containsExactly("cycle-2", "cycle-1");
+        assertThat(rewind.lastMergedBefore(null)).get()
+                .extracting(CheckpointRecord::cycleId)
+                .as("the newer one restores perfectly and then halts — the older one still has work in it")
+                .isEqualTo("cycle-1");
+        assertThat(rewind.lastGoodBefore(null)).get()
+                .extracting(CheckpointRecord::cycleId)
+                .isEqualTo("cycle-1");
+    }
+
+    @Test
+    @DisplayName("with no open point left to return to, the policy accessors say so rather than offering a finished one")
+    void nothingOpenLeftIsReportedAsNothing() throws IOException {
+        log.append("g1", null, "ACTIVE",
+                com.walpro.autobuilder.goal.GoalTransition.Kind.CREATED, "cycle-0", null);
+        log.append("g1", "ACTIVE", "COMPLETED",
+                com.walpro.autobuilder.goal.GoalTransition.Kind.CHANGED, "cycle-1", null);
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(mergedContext("cycle-1"));
+
+        assertThat(rewind.available()).hasSize(1);
+        assertThat(rewind.lastMergedBefore(null))
+                .as("empty means the halt happens as before, which is honest; a finished point would look like a rescue")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("lastGoodBefore finds the newest restorable point older than a cycle")
     void lastGoodBeforePicksTheNewestOlderPoint() throws IOException {
         writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
@@ -270,6 +313,11 @@ class RewindServiceTest {
             Files.createDirectories(p.getParent());
             Files.writeString(p, e.getValue());
         }
+    }
+
+    /** A cycle that landed a merge — what makes a point a candidate to return to. */
+    private CycleContextData mergedContext(String cycleId) {
+        return context(cycleId).toBuilder().merged(true).build();
     }
 
     private CycleContextData context(String cycleId) {

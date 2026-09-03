@@ -173,6 +173,14 @@ public class AutobuilderController {
             row.put("current", java.util.Objects.equals(record.runId(), runIdentityService.runId()));
             // The point the loop's state currently corresponds to — where "continue" continues from.
             row.put("here", record.cycleId().equals(hereCycle));
+            // Restorable and continuable are different facts. A point whose root goal was already
+            // settled restores perfectly and then halts on the next cycle, so it is shown with what
+            // it will do rather than hidden — a person may deliberately want the finished state.
+            if (checkpointService != null) {
+                row.put("continuable", checkpointService.canContinueFrom(record));
+                row.put("rootGoalStatus", checkpointService.rootGoalStatusAt(record)
+                        .map(Enum::name).orElse(null));
+            }
             points.add(row);
         }
         Map<String, Object> body = new java.util.LinkedHashMap<>();

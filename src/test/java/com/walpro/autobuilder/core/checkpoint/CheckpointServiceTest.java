@@ -38,6 +38,7 @@ class CheckpointServiceTest {
     private ObjectMapper mapper;
     private CheckpointService checkpoints;
     private CountingHolder holder;
+    private GoalTransitionLog transitions;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -47,6 +48,7 @@ class CheckpointServiceTest {
         StateManifest manifest = new StateManifest(factoryOf(holder));
         GoalTransitionLog log = new GoalTransitionLog(fileService, mapper);
         log.append("g1", null, "ACTIVE", com.walpro.autobuilder.goal.GoalTransition.Kind.CREATED, "c1", null);
+        transitions = log;
         RunIdentityService identity = mock(RunIdentityService.class);
         when(identity.runId()).thenReturn("run-1");
         when(identity.lineageId()).thenReturn("lineage-1");
@@ -183,6 +185,82 @@ class CheckpointServiceTest {
 
         assertThat(record.complete()).isFalse();
         assertThat(record.captureFailures()).anyMatch(f -> f.startsWith("counting:"));
+    }
+
+    // ---- T4-DQ: restorable and continuable are different facts ----
+    //
+    // 2026-09-03, in the field: the grind policy backed out onto the newest MERGED point, whose
+    // root goal was already COMPLETED because it came from an earlier finished run. The restore
+    // was faultless and the next cycle halted on a finished root, with five older still-open
+    // points passed over to get there.
+
+    @Test
+    @DisplayName("a point whose root goal was still open is one the loop can continue from")
+    void anOpenRootIsContinuable() {
+        CheckpointRecord record = checkpoints.write(context("cycle-1", "snapshots/cycle-1")).orElseThrow();
+
+        assertThat(checkpoints.rootGoalStatusAt(record)).contains(com.walpro.autobuilder.goal.GoalStatus.ACTIVE);
+        assertThat(checkpoints.canContinueFrom(record)).isTrue();
+    }
+
+    @Test
+    @DisplayName("a point whose root goal was already finished restores fine and is not somewhere to continue from")
+    void aSettledRootIsNotContinuable() {
+        transitions.append("g1", "ACTIVE", "COMPLETED",
+                com.walpro.autobuilder.goal.GoalTransition.Kind.CHANGED, "cycle-2", null);
+        CheckpointRecord record = checkpoints.write(context("cycle-2", "snapshots/cycle-2")).orElseThrow();
+
+        assertThat(checkpoints.rootGoalStatusAt(record)).contains(com.walpro.autobuilder.goal.GoalStatus.COMPLETED);
+        assertThat(checkpoints.canContinueFrom(record))
+                .as("it restores exactly as described — and then the next cycle reads a finished root and halts")
+                .isFalse();
+        assertThat(checkpoints.restorableCheckpoints()).extracting(CheckpointRecord::cycleId)
+                .as("the operator listing still offers it; a person may want the finished state")
+                .contains("cycle-2");
+        assertThat(checkpoints.continuableCheckpoints()).extracting(CheckpointRecord::cycleId)
+                .as("a policy choosing where to keep working may not have it")
+                .doesNotContain("cycle-2");
+    }
+
+    @Test
+    @DisplayName("a root given up is no more workable than one completed")
+    void aGivenUpRootIsNotContinuableEither() {
+        transitions.append("g1", "ACTIVE", "GIVEN_UP",
+                com.walpro.autobuilder.goal.GoalTransition.Kind.CHANGED, "cycle-2", null);
+        CheckpointRecord record = checkpoints.write(context("cycle-2", "snapshots/cycle-2")).orElseThrow();
+
+        assertThat(checkpoints.canContinueFrom(record)).isFalse();
+    }
+
+    @Test
+    @DisplayName("the fold is read at the point's OWN cut, so later completion does not disqualify an earlier point")
+    void aLaterCompletionDoesNotDisqualifyAnEarlierPoint() {
+        CheckpointRecord early = checkpoints.write(context("cycle-1", "snapshots/cycle-1")).orElseThrow();
+        transitions.append("g1", "ACTIVE", "COMPLETED",
+                com.walpro.autobuilder.goal.GoalTransition.Kind.CHANGED, "cycle-2", null);
+        CheckpointRecord late = checkpoints.write(context("cycle-2", "snapshots/cycle-2")).orElseThrow();
+
+        assertThat(checkpoints.canContinueFrom(early))
+                .as("at cycle-1's own cut point the root was still open — that is the state a rewind there restores")
+                .isTrue();
+        assertThat(checkpoints.canContinueFrom(late)).isFalse();
+    }
+
+    @Test
+    @DisplayName("an unknown root status is not treated as settled — missing history costs the loop nothing")
+    void anUnknownRootIsLeftAvailable() {
+        CycleContextData noRoot = CycleContextData.builder()
+                .cycleName("cycle-3").snapshotPath("snapshots/cycle-3")
+                .mutationPath("mutations/cycle-3").currentSubGoalId("s1").build();
+        try {
+            fileService.ensureFolderExists("snapshots/cycle-3");
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
+        CheckpointRecord record = checkpoints.write(noRoot).orElseThrow();
+
+        assertThat(checkpoints.rootGoalStatusAt(record)).isEmpty();
+        assertThat(checkpoints.canContinueFrom(record)).isTrue();
     }
 
     private CycleContextData context(String cycleId, String snapshotPath) {

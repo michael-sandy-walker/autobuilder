@@ -203,6 +203,8 @@
   .rw-badge.unver { color: #fcd34d; border-color: #78350f; background: #451a03; }
   .rw-badge.past { color: #c4b5fd; border-color: #4c1d95; background: #2e1065; }
   .rw-badge.here { color: #93c5fd; border-color: #1e40af; background: #0c1e3a; font-weight: 700; }
+  .rw-badge.settled { color: #fca5a5; border-color: #7f1d1d; background: #2a0a0a; }
+  .rw-item.settled .cyc { color: #9ca3af; }
   .rw-item.here .cyc { color: #bfdbfe; }
   #rewind-modal footer { display: flex; align-items: center; gap: 8px; padding: 10px 14px;
     border-top: 1px solid #1f2937; }
@@ -1848,9 +1850,10 @@ function renderRewindList() {
   }
   list.innerHTML = points.map((p, i) => {
     const when = (p.at || '').replace('T', ' ').slice(0, 19);
-    return `<div class="rw-item${rewindState.selected === p.cycleId ? ' sel' : ''}${p.here ? ' here' : ''}" data-cycle="${escapeHtml(p.cycleId)}">
+    return `<div class="rw-item${rewindState.selected === p.cycleId ? ' sel' : ''}${p.here ? ' here' : ''}${p.continuable === false ? ' settled' : ''}" data-cycle="${escapeHtml(p.cycleId)}">
       <span class="cyc">${escapeHtml(p.cycleId)}</span>
       ${p.here ? '<span class="rw-badge here" title="The loop\'s state is this point right now — continuing continues from here">here</span>' : ''}
+      ${p.continuable === false ? `<span class="rw-badge settled" title="The root goal was already ${escapeHtml(p.rootGoalStatus || 'settled')} at this point. It restores exactly as described, and then the next cycle reads a finished root and halts. There is nothing left to work on here.">root ${escapeHtml(p.rootGoalStatus || 'settled')}</span>` : ''}
       ${p.merged ? '<span class="rw-badge merged">merged</span>' : ''}
       ${p.current === false ? '<span class="rw-badge past" title="From an earlier run — restores from its archived source-only tree">earlier run</span>' : ''}
       ${p.verified === false ? '<span class="rw-badge unver" title="No readable fingerprint — this point restores unverified">unverified</span>' : ''}
@@ -1875,9 +1878,17 @@ async function doRewind() {
   const cycle = rewindState.selected;
   if (!cycle) return;
   const cache = document.getElementById('rewind-cache').value;
+  const point = rewindState.points.find(p => p.cycleId === cycle) || {};
+  // Said before the choice rather than discovered after it: this point restores correctly and then
+  // the loop stops, because its root goal was already finished when the checkpoint was taken.
+  const settledWarning = point.continuable === false
+    ? '\n\nNOTE: the root goal was already ' + (point.rootGoalStatus || 'settled') + ' at this point. '
+      + 'The restore will succeed, and then the next cycle will read a finished root and halt. '
+      + 'There is nothing left to work on here.'
+    : '';
   if (!confirm('Rewind to ' + cycle + '?\n\nThis replaces output/ with that cycle\'s tree, folds goal '
       + 'state back to it, and restores the decision-bearing trackers. Work done after that point is '
-      + 'left behind — it stays in the graph as history.')) return;
+      + 'left behind — it stays in the graph as history.' + settledWarning)) return;
   const out = document.getElementById('rewind-result');
   out.className = 'show';
   out.innerHTML = '<span class="warn">Rewinding…</span>';

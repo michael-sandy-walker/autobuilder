@@ -301,6 +301,59 @@ public class CheckpointService {
     }
 
     /**
+     * The root goal's status as of a point, folded from the SAME goal history a restore there
+     * would apply — so what this predicts and what the rewind actually produces cannot disagree.
+     *
+     * <p>Empty when the log records nothing about that root so early, which is not evidence that
+     * it was settled.
+     */
+    public Optional<com.walpro.autobuilder.goal.GoalStatus> rootGoalStatusAt(CheckpointRecord record) {
+        if (record == null || record.rootGoalId() == null) return Optional.empty();
+        try {
+            return Optional.ofNullable(goalTransitionLog.foldAt(record.goalTransitionSeq())
+                    .statuses().get(record.rootGoalId()));
+        } catch (RuntimeException e) {
+            log.debug("T4-DQ: could not fold goal history at {}: {}", record.cycleId(), e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Whether the loop could still WORK from a point, as opposed to merely restore it correctly.
+     *
+     * <p><b>The distinction cost a field run, 2026-09-03.</b> The grind policy backed out of a
+     * stalled path onto the newest point that had landed a merge — and that point's root goal was
+     * already COMPLETED, because it belonged to an earlier run of the lineage that had finished.
+     * The restore itself was faultless: twelve holders, three goal statuses, no divergence, no
+     * failures. The very next cycle read a completed root, concluded {@code GOAL_FULFILLED} and
+     * paused. The run had backed out of a bad path onto a terminal one, and five older merged
+     * points whose root was still ACTIVE were passed over to reach it.
+     *
+     * <p>So "this cycle landed work" is not on its own a reason to go back somewhere. A point is
+     * somewhere to CONTINUE from only while there is still something left to do there.
+     *
+     * <p>Unknown is deliberately not treated as settled: only a positively recorded terminal
+     * status disqualifies a point, so a missing or unreadable history costs the loop nothing.
+     */
+    public boolean canContinueFrom(CheckpointRecord record) {
+        return rootGoalStatusAt(record)
+                .map(status -> status == com.walpro.autobuilder.goal.GoalStatus.ACTIVE)
+                .orElse(true);
+    }
+
+    /**
+     * The points the loop could go back to AND still work from, newest first — what a policy
+     * choosing a fork point asks for.
+     *
+     * <p>The operator listing deliberately shows more than this. Returning to a finished state is
+     * something a person may genuinely want, so that surface marks the difference rather than
+     * hiding it; a policy whose whole purpose is to keep the run going may not choose one at all.
+     */
+    public List<CheckpointRecord> continuableCheckpoints() {
+        return restorableCheckpoints().stream().filter(this::canContinueFrom).toList();
+    }
+
+    /**
      * The checkpoints that could actually be rewound to, newest first — a checkpoint whose tree
      * snapshot has since been cleared is listed nowhere, because offering it would be offering a
      * restore that silently restores less than it claims.

@@ -54,7 +54,7 @@ class CheckpointServiceTest {
         when(planner.getAllGoals()).thenReturn(java.util.List.of());
         StateFingerprintService fingerprints =
                 new StateFingerprintService(fileService, mapper, planner, manifest);
-        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints);
+        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner);
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
         ReflectionTestUtils.setField(checkpoints, "retainCheckpoints", 40);
         ReflectionTestUtils.setField(checkpoints, "captureCache", true);

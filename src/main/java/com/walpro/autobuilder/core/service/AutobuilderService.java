@@ -671,6 +671,10 @@ public class AutobuilderService implements CheckpointableState {
                     // T4-CA already picks the best TREE to ship; nothing picked the best state to
                     // carry on from, so a run that backed out of a good path and ground on a worse
                     // one handed its successor the worse one.
+                    // T4-DQ slice 4: the run is ending honestly, so settle it on the path that
+                    // got furthest. The rewind policy does the same when exploration runs out
+                    // mid-run, which is the only chance a deadline-killed run gets; this covers
+                    // the halts, and both are one-shot so they cannot fight each other.
                     if (branchExplorer != null) {
                         branchExplorer.sealCurrent(context.cycleName());
                         log.info("T4-DQ: paths explored this run — {}", branchExplorer.readout());

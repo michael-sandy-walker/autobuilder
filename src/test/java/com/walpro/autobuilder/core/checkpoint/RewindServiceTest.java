@@ -63,9 +63,12 @@ class RewindServiceTest {
         when(identity.lineageId()).thenReturn("lineage-1");
         planner = mock(GoalPlannerService.class);
         when(planner.getAllGoals()).thenReturn(java.util.List.of());
+        // The checkpoint records the PLANNER's pointer now, not the cycle context's — one fact,
+        // one source (a mismatch between the two was the first field divergence).
+        when(planner.getCurrentSubGoalId()).thenReturn("s1");
         StateFingerprintService fingerprints =
                 new StateFingerprintService(fileService, mapper, planner, manifest);
-        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints);
+        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner);
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
         ReflectionTestUtils.setField(checkpoints, "retainCheckpoints", 40);
         ReflectionTestUtils.setField(checkpoints, "captureCache", true);

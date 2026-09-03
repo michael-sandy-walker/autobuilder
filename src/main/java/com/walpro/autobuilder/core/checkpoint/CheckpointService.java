@@ -49,6 +49,7 @@ public class CheckpointService {
     private final GoalTransitionLog goalTransitionLog;
     private final RunIdentityService runIdentityService;
     private final StateFingerprintService stateFingerprintService;
+    private final com.walpro.autobuilder.goal.GoalPlannerService goalPlannerService;
 
     @Setter
     @Autowired(required = false)
@@ -85,7 +86,12 @@ public class CheckpointService {
                     runIdentityService.runId(),
                     runIdentityService.lineageId(),
                     context.currentGoalId(),
-                    context.currentSubGoalId(),
+                    // T4-DQ: the PLANNER's pointer, not the cycle context's. They are two copies
+                    // of one fact and the context's is taken earlier in the cycle, so recording it
+                    // here while the fingerprint digests the planner's made every rewind restore a
+                    // pointer that had never been fingerprinted — reported, correctly, as a goal
+                    // divergence on the first two field rewinds.
+                    goalPlannerService.getCurrentSubGoalId(),
                     goalTransitionLog.currentSeq(),
                     context.snapshotPath(),
                     context.mutationPath() == null ? null : context.mutationPath() + "/meta.json",

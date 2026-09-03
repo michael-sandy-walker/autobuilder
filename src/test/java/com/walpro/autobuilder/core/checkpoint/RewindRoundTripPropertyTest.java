@@ -77,7 +77,7 @@ class RewindRoundTripPropertyTest {
         RunIdentityService identity = mock(RunIdentityService.class);
         when(identity.runId()).thenReturn("run-1");
         when(identity.lineageId()).thenReturn("lineage-1");
-        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints);
+        checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner);
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
         ReflectionTestUtils.setField(checkpoints, "retainCheckpoints", 40);
         ReflectionTestUtils.setField(checkpoints, "captureCache", true);
@@ -97,7 +97,10 @@ class RewindRoundTripPropertyTest {
 
         assertThat(fingerprints.current().divergencesFrom(before))
                 .as("the forward run genuinely moved the state, or this test proves nothing")
-                .contains("tree", "goals", "holder:counting");
+                .contains("tree", "holder:counting")
+                // Goals are reported per goal now, naming the one that moved rather than saying
+                // only that something in the tree did.
+                .anyMatch(d -> d.startsWith("goal["));
 
         RewindService.Result result = rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-2");
 

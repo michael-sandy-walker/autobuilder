@@ -61,7 +61,7 @@ class BranchExplorerTest {
         when(identity.runId()).thenReturn("run-1");
         when(identity.lineageId()).thenReturn("lineage-1");
         checkpoints = new CheckpointService(fileService, mapper, manifest,
-                new GoalTransitionLog(fileService, mapper), identity, fingerprints);
+                new GoalTransitionLog(fileService, mapper), identity, fingerprints, planner);
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
         ReflectionTestUtils.setField(checkpoints, "retainCheckpoints", 40);
         ReflectionTestUtils.setField(checkpoints, "captureCache", false);
@@ -134,9 +134,9 @@ class BranchExplorerTest {
         when(rewindService.rewindTo(anyString(), any(), anyString(), anyString()))
                 .thenReturn(performed());
 
-        Optional<ExplorationBranch> adopted = explorer.adoptMostAdvanced("cycle-3");
+        Optional<RewindService.Result> adopted = explorer.adoptMostAdvanced("cycle-3");
 
-        assertThat(adopted).get().extracting(ExplorationBranch::id).isEqualTo(ExplorationBranch.MAIN);
+        assertThat(adopted).as("the run was moved back onto the path that got furthest").isPresent();
         verify(rewindService).rewindTo("cycle-2", CacheMode.FAITHFUL, "branch-adoption", "cycle-3");
     }
 

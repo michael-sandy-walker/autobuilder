@@ -69,7 +69,8 @@ class RewindPolicyTest {
         assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 42)).isPresent();
         assertThat(policy.considerRewindInsteadOfHalting("cycle-70", 42)).isPresent();
         assertThat(policy.considerRewindInsteadOfHalting("cycle-90", 42))
-                .as("the third grind halts; two rewinds from two points already said enough")
+                .as("the third grind explores no further; with no branch explorer wired there is "
+                        + "nothing to settle onto either, so the run halts as it always did")
                 .isEmpty();
     }
 
@@ -130,6 +131,27 @@ class RewindPolicyTest {
 
         assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 42)).isEmpty();
         verify(rewindService, never()).rewindTo(anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("when exploration runs out, the run is put on the best path it found — once")
+    void exhaustedExplorationSettlesOnTheBestPath() {
+        BranchExplorer explorer = mock(BranchExplorer.class);
+        when(explorer.enabled()).thenReturn(true);
+        when(explorer.nextUntriedForkPoint()).thenReturn(Optional.empty());
+        when(explorer.adoptMostAdvanced(anyString())).thenReturn(Optional.of(performed("cycle-2")));
+        policy.setBranchExplorer(explorer);
+
+        assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 42))
+                .as("a deadline-killed run never reaches the halt, so this is its only chance to "
+                        + "end on the best path rather than the last one tried")
+                .isPresent();
+        verify(explorer).sealCurrent("cycle-50");
+        verify(explorer).adoptMostAdvanced("cycle-50");
+
+        // One-shot: the "exploration is over" branch is reached on every later cycle too.
+        assertThat(policy.considerRewindInsteadOfHalting("cycle-51", 43)).isEmpty();
+        verify(explorer, org.mockito.Mockito.times(1)).adoptMostAdvanced(anyString());
     }
 
     @Test

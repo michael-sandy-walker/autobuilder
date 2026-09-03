@@ -59,8 +59,31 @@ public class StateFingerprintService {
      */
     public StateFingerprint of(StateManifest.Capture capture) {
         Map<String, String> canonicalIds = canonicalGoalIds();
-        return new StateFingerprint(treeDigest("output"), goalsDigest(canonicalIds),
+        return new StateFingerprint(treeDigest("output"), pointerKey(), goalDigests(),
                 holderDigests(capture, canonicalIds));
+    }
+
+    /**
+     * The current subgoal, named the way the goal digests are — by position and description rather
+     * than by its UUID, so it survives a replay that re-creates the same work under a fresh id.
+     *
+     * <p>Its own component because the first field divergence was a pointer mismatch hiding inside
+     * the coarse goals digest, and because it had TWO sources: the checkpoint recorded the cycle
+     * context's pointer while the fingerprint digested the planner's live one. One fact, one
+     * source — the planner's, which is the authoritative goal state at checkpoint time; the
+     * context's is a copy taken earlier in the cycle.
+     */
+    private String pointerKey() {
+        String current = goalPlannerService.getCurrentSubGoalId();
+        if (current == null) return "-";
+        GoalEntity g = goalPlannerService.getGoalById(current);
+        return g == null ? "-" : goalKey(g, index());
+    }
+
+    private Map<String, GoalEntity> index() {
+        Map<String, GoalEntity> byId = new HashMap<>();
+        goalPlannerService.getAllGoals().forEach(g -> byId.put(g.getId(), g));
+        return byId;
     }
 
     /** The digest of an arbitrary tree — used to compare a snapshot against what was restored. */
@@ -88,21 +111,31 @@ public class StateFingerprintService {
     }
 
     /**
-     * The goal tree as it reads, not as it is keyed: description, type, status and parent position
-     * per goal, ordered canonically.
+     * One digest per goal — status, type and parent — keyed by what the goal SAYS rather than by
+     * its UUID, so a divergence names the goal a reader can find rather than reporting that
+     * something, somewhere in the tree, moved.
+     *
+     * <p>The key deliberately excludes the description while the VALUE includes it: a goal whose
+     * text was re-grounded mid-run is then reported as that goal changing, not as one goal
+     * vanishing and another appearing.
      */
-    private String goalsDigest(Map<String, String> canonicalIds) {
-        List<String> lines = new ArrayList<>();
+    private Map<String, String> goalDigests() {
+        Map<String, GoalEntity> byId = index();
+        Map<String, String> digests = new TreeMap<>();
         for (GoalEntity g : goalPlannerService.getAllGoals()) {
-            lines.add(canonicalIds.getOrDefault(g.getId(), g.getId())
-                    + "|" + g.getType()
+            GoalEntity parent = g.getParentId() == null ? null : byId.get(g.getParentId());
+            digests.put(goalKey(g, byId), sha256(g.getType()
                     + "|" + g.getStatus()
-                    + "|" + (g.getParentId() == null ? "-" : canonicalIds.getOrDefault(g.getParentId(), g.getParentId()))
-                    + "|" + normalise(g.getDescription()));
+                    + "|" + (parent == null ? "-" : goalKey(parent, byId))
+                    + "|" + normalise(g.getDescription())));
         }
-        lines.sort(Comparator.naturalOrder());
-        String pointer = canonicalIds.getOrDefault(goalPlannerService.getCurrentSubGoalId(), "-");
-        return sha256(String.join("\n", lines) + "\ncurrent=" + pointer);
+        return digests;
+    }
+
+    /** A goal's identity for comparison: its depth in the tree plus a short form of its text. */
+    private static String goalKey(GoalEntity g, Map<String, GoalEntity> byId) {
+        String text = normalise(g.getDescription());
+        return depth(g, byId) + "|" + text.substring(0, Math.min(48, text.length()));
     }
 
     /** One digest per registered holder, with goal ids canonicalised inside the captured state. */

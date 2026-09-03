@@ -14,7 +14,10 @@ import java.util.TreeSet;
  *
  * <p>Deliberately per-component rather than one number. A single digest answers "did anything
  * differ" and nothing else; these answer WHICH part differed, which is the difference between a
- * red light and a diagnosis. The components are the same three the checkpoint moves — the output
+ * red light and a diagnosis. The first real field divergence made the point: a coarse {@code goals}
+ * digest said the goal tree did not match and left no way to tell a changed status from a moved
+ * pointer from a reworded description. Goals are per-goal now, and the current-subgoal pointer is
+ * its own component. The components are the same three the checkpoint moves — the output
  * tree, the goal tree, and each registered holder's captured state.
  *
  * <p>Comparison is by structure, not by identity. Goal ids are freshly minted UUIDs, so a goal the
@@ -22,9 +25,11 @@ import java.util.TreeSet;
  * report divergence on every replay and prove nothing. {@link StateFingerprintService} canonicalises
  * ids to their position in the goal tree before digesting.
  */
-public record StateFingerprint(String tree, String goals, Map<String, String> holders) {
+public record StateFingerprint(String tree, String pointer, Map<String, String> goals,
+                               Map<String, String> holders) {
 
     public StateFingerprint {
+        goals = goals == null ? Map.of() : Map.copyOf(goals);
         holders = holders == null ? Map.of() : Map.copyOf(holders);
     }
 
@@ -37,15 +42,28 @@ public record StateFingerprint(String tree, String goals, Map<String, String> ho
         List<String> out = new ArrayList<>();
         if (other == null) return List.of("no fingerprint to compare against");
         if (!Objects.equals(tree, other.tree)) out.add("tree");
-        if (!Objects.equals(goals, other.goals)) out.add("goals");
-        Set<String> keys = new TreeSet<>(holders.keySet());
-        keys.addAll(other.holders().keySet());
-        for (String key : keys) {
+        if (!Objects.equals(pointer, other.pointer)) {
+            out.add("pointer(now=" + pointer + " then=" + other.pointer() + ")");
+        }
+        for (String key : union(goals.keySet(), other.goals().keySet())) {
+            if (!Objects.equals(goals.get(key), other.goals().get(key))) {
+                String where = !goals.containsKey(key) ? " gone-now"
+                        : !other.goals().containsKey(key) ? " new-now" : "";
+                out.add("goal[" + key + "]" + where);
+            }
+        }
+        for (String key : union(holders.keySet(), other.holders().keySet())) {
             if (!Objects.equals(holders.get(key), other.holders().get(key))) {
                 out.add("holder:" + key);
             }
         }
         return out;
+    }
+
+    private static Set<String> union(Set<String> a, Set<String> b) {
+        Set<String> keys = new TreeSet<>(a);
+        keys.addAll(b);
+        return keys;
     }
 
     /** True when every component matches. */
@@ -57,7 +75,8 @@ public record StateFingerprint(String tree, String goals, Map<String, String> ho
     public String readout() {
         Map<String, String> all = new LinkedHashMap<>();
         all.put("tree", shorten(tree));
-        all.put("goals", shorten(goals));
+        all.put("pointer", pointer == null ? "-" : pointer);
+        all.put("goals", String.valueOf(goals.size()));
         holders.forEach((k, v) -> all.put(k, shorten(v)));
         StringBuilder sb = new StringBuilder();
         all.forEach((k, v) -> sb.append(sb.isEmpty() ? "" : " ").append(k).append('=').append(v));

@@ -145,9 +145,9 @@ public class BranchExplorer {
      * from.
      *
      * @param atCycleId the cycle the decision is taken in
-     * @return the adopted branch, or empty when the loop is already on the most advanced one
+     * @return the rewind that moved the run, or empty when it is already on the most advanced path
      */
-    public Optional<ExplorationBranch> adoptMostAdvanced(String atCycleId) {
+    public Optional<RewindService.Result> adoptMostAdvanced(String atCycleId) {
         if (!enabled) return Optional.empty();
         List<ExplorationBranch> sealed = branchLedger.sealedBranches();
         if (sealed.size() < 2) return Optional.empty();
@@ -179,7 +179,7 @@ public class BranchExplorer {
             behaviourLogger.branchAdopted(atCycleId, target.id(), current.id(), tip,
                     target.outcome().subgoalsCompletedWithMerge(), target.outcome().merges());
         }
-        return Optional.of(target);
+        return Optional.of(result);
     }
 
     /** A readable one-line comparison of everything explored, for the halt log. */

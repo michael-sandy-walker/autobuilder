@@ -129,6 +129,20 @@ autobuilder:
       similarity-floor: 0.5
       # T2-EC grace window is derived, not configured: leaf count alone only triggers after a
       # merge landed or one observed cycle per active leaf passed (scales with tree size).
+  start:
+    # T4-DP: how a run begins, in ONE place. Was an accident of five flags, and the standard entry
+    # point defaulted to the destructive one — on 2026-09-03 that would have deleted an imported
+    # project before its first cycle.
+    #   NEW_PROJECT      clear output/ and seed the root goal from bootstrap/seed.txt
+    #   CONTINUE_LINEAGE resume a lineage this loop built before; never clears
+    #   ADOPT_PROJECT    work on a codebase the loop did not write; never clears, never seeds over it
+    #   ASK              touch nothing and wait to be told. A resting state, not a pause before a
+    #                    default: nothing here times out into an action.
+    # The mode is checked against what is actually in the tree, so NEW_PROJECT is REFUSED on a
+    # codebase the loop did not write rather than quietly deleting it.
+    mode: NEW_PROJECT
+    # The one escape hatch, deliberately awkward to reach: discard a foreign codebase on purpose.
+    confirm-discard-foreign-tree: false
   service:
     reset-on-start: true
     # T4-CD slice 1: resume a preserved prior lineage at boot (output/ from meta/preserved-artifact/,

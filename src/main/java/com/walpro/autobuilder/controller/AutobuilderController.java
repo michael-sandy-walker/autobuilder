@@ -56,6 +56,37 @@ public class AutobuilderController {
                 coldReadService.read(root)));
     }
 
+    /** T4-DP: what is startable, and which modes each target supports. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.init.TargetCatalog targetCatalog;
+
+    /** T4-DP: how this run began, and whether the tree agreed to it. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.init.StartModeService startModeService;
+
+    /**
+     * The targets available to start, with what each one carries and the modes it supports.
+     *
+     * <p>The question that comes before choosing a start mode: what is there to start? A target
+     * carrying a specification can be begun fresh, one carrying a lineage can be continued, and
+     * someone else's code can only be adopted.
+     */
+    @GetMapping(value = "/targets", produces = org.springframework.http.MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<String> targets() {
+        if (targetCatalog == null) {
+            return ResponseEntity.status(503).body("The target catalogue is not enabled in this context.\n");
+        }
+        StringBuilder body = new StringBuilder(targetCatalog.render());
+        if (startModeService != null) {
+            var decision = startModeService.decide();
+            body.append("\nTHIS RUN\n  mode          ").append(decision.mode())
+                .append("\n  tree          ").append(decision.situation())
+                .append("\n  ").append(decision.allowed() ? "allowed       " : "REFUSED       ")
+                .append(decision.explanation()).append('\n');
+        }
+        return ResponseEntity.ok(body.toString());
+    }
+
     /** T4-DQ: where the loop's state stands, as distinct from which point is newest on disk. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.checkpoint.CheckpointService checkpointService;

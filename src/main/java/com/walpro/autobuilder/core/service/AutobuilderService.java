@@ -22,6 +22,8 @@ import org.springframework.stereotype.Service;
 
 import com.walpro.autobuilder.client.LlmCircuitBreaker;
 import com.walpro.autobuilder.config.AutobuilderConfigProperties;
+import com.walpro.autobuilder.core.init.StartMode;
+import com.walpro.autobuilder.core.init.StartModeService;
 import com.walpro.autobuilder.core.init.SystemResetConfig;
 import com.walpro.autobuilder.core.persistence.CyclePersistenceService;
 import com.walpro.autobuilder.goal.CoverageReviewResult;
@@ -100,6 +102,11 @@ public class AutobuilderService implements CheckpointableState {
     @Setter
     @Autowired(required = false)
     private com.walpro.autobuilder.core.persistence.RunEndReportService runEndReportService;
+
+    /** T4-DP: names how this run begins and refuses a mode the tree cannot support. */
+    @Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.init.StartModeService startModeService;
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
     private final com.walpro.autobuilder.goal.GoalConsolidationService goalConsolidationService;
@@ -258,6 +265,13 @@ public class AutobuilderService implements CheckpointableState {
     private boolean schedulerEnabled = true;
 
     private boolean systemPaused = false;
+
+    /**
+     * T4-DP: the start was refused, so this run never initialised. The scheduler must not cycle on
+     * a tree nobody confirmed — the refusal exists precisely to leave the disk untouched, and a
+     * loop that then starts working defeats it.
+     */
+    private volatile boolean startRefused = false;
 
     /** T5-BF follow-up: guards {@link #emitSystemPausedOnce} — one behaviour event per pause
      *  episode. Reset alongside {@code systemPaused} on the first provably-unpaused tick. */
@@ -558,18 +572,46 @@ public class AutobuilderService implements CheckpointableState {
             return;
         }
 
+        // T4-DP: how this run begins, said once and checked against what is actually in the tree.
+        // The check is not ceremony: NEW_PROJECT clears output/, the standard entry point defaulted
+        // to it, and on 2026-09-03 the target was a codebase the loop had not written.
+        StartModeService.Decision start = startModeService != null
+                ? startModeService.decide()
+                : null;
+        if (start != null && !start.allowed()) {
+            log.warn("T4-DP: refusing to start in {} — {}", start.mode(), start.explanation());
+            log.warn("T4-DP: nothing on disk has been touched. Set autobuilder.start.mode to a mode "
+                    + "this tree supports, then restart.");
+            startRefused = true;
+            return;
+        }
+        StartMode mode = start != null ? start.mode() : StartMode.NEW_PROJECT;
+        if (start != null) {
+            log.info("T4-DP: starting in {} ({}) — {}", mode, start.situation(), start.explanation());
+        }
+
         // T4-CD slice 1: resume wins over reset when a resumable lineage exists — the reset
         // would delete the very artifact the resume restores. attemptResume() is false unless
         // the flag is on AND preserved state + a non-COMPLETED root are present, so passing
         // both flags means "resume if possible, else fresh".
-        if (runResumeService != null && runResumeService.attemptResume()) {
+        //
+        // T4-DP: the modes below are what those flags always meant, said out loud. NEW_PROJECT is
+        // the only one that may clear the tree, and ADOPT_PROJECT neither clears it nor seeds over
+        // what someone else wrote.
+        if (mode == StartMode.CONTINUE_LINEAGE
+                && runResumeService != null && runResumeService.attemptResume()) {
             log.info("T4-CD: resumed prior lineage — skipping reset-on-start.");
-        } else if (autobuilderConfig.isResetOnStart()) {
+        } else if (mode.discardsTheTree() && autobuilderConfig.isResetOnStart()) {
             log.warn("Autobuilder system reset triggered via config (AutobuilderService)");
             systemResetConfig.resetSystem();
         }
 
-        seedCoordinator.seedFromFileIfNecessary();
+        if (mode != StartMode.ADOPT_PROJECT) {
+            seedCoordinator.seedFromFileIfNecessary();
+        } else {
+            log.info("T4-DP: ADOPT_PROJECT — not seeding a goal over a codebase the loop did not "
+                    + "write. Read it with GET /autobuilder/cold-read and set one deliberately.");
+        }
 
         fileService.ensureFolderExists("output");
 
@@ -647,6 +689,10 @@ public class AutobuilderService implements CheckpointableState {
     }
 
     private void runAutobuilderCycleLocked() {
+        // T4-DP: the start was refused, so nothing on disk was confirmed. Cycling here would undo
+        // the point of the refusal, which is that the tree is left exactly as it was found.
+        if (startRefused) return;
+
         // T1-FL: a breaker-caused pause is a suspension, not a terminal. The breaker's timed
         // open (T1-FD) already encodes when the next attempt is allowed; once its cooldown
         // elapses the pause episode is over — otherwise the self-recovering breaker is frozen

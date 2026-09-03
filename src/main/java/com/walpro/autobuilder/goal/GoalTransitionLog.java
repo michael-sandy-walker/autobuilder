@@ -248,11 +248,53 @@ public class GoalTransitionLog {
      * file the loop is still appending to, and a rewind that took its statuses from one read and
      * its existence set from another could restore a goal it also believes never existed.
      */
+    /**
+     * The fold for a point belonging to {@code lineageId}, which may not be the lineage now
+     * running.
+     *
+     * <p><b>Why a cut point needs its lineage, 2026-09-03.</b> A reset clears {@code meta/} and
+     * starts the sequence again at one, while the tree archive keeps the per-cycle copies. So a
+     * checkpoint from before a reset carries a cut point that now indexes into an unrelated
+     * history: folding a pre-reset seq of 125 against a 77-entry log returns the CURRENT run's
+     * goals in their latest state and reports zero transitions undone, so the restore looks clean
+     * and hands back a tree from one lineage with the goals of another. The graph keeps
+     * transitions per lineage and survives the reset, so a foreign point is folded against its own
+     * history or against nothing at all.
+     *
+     * <p>An empty fold for a foreign lineage is the caller's signal to REFUSE. It is not the same
+     * as "that lineage had no goals": see {@link Fold#historyAvailable()}.
+     */
+    public Fold foldAtForLineage(long seq, String lineageId) {
+        if (lineageId == null || runIdentityService == null
+                || lineageId.equals(runIdentityService.lineageId())) {
+            return foldAt(seq);
+        }
+        List<GoalTransition> foreign = List.of();
+        if (goalGraphService != null) {
+            try {
+                foreign = goalGraphService.transitionsForLineage(lineageId, 10_000);
+            } catch (Exception e) {
+                log.warn("T4-DQ: could not read lineage {} transitions from the graph: {}",
+                        lineageId, e.getMessage());
+            }
+        }
+        if (foreign.isEmpty()) {
+            log.warn("T4-DQ: no goal history on record for lineage {} — a point from it cannot be "
+                    + "folded, so nothing may be restored from its cut point.", lineageId);
+            return new Fold(seq, Map.of(), Set.of(), 0, false);
+        }
+        return foldOver(foreign, seq);
+    }
+
     public Fold foldAt(long seq) {
+        return foldOver(readAll(), seq);
+    }
+
+    private Fold foldOver(List<GoalTransition> transitions, long seq) {
         Map<String, GoalStatus> statuses = new LinkedHashMap<>();
         Set<String> existing = new LinkedHashSet<>();
         int after = 0;
-        for (GoalTransition t : readAll()) {
+        for (GoalTransition t : transitions) {
             if (t.seq() > seq) {
                 after++;
                 continue;
@@ -266,12 +308,18 @@ public class GoalTransitionLog {
             GoalStatus status = t.toStatus();
             if (status != null) statuses.put(t.goalId(), status);
         }
-        return new Fold(seq, statuses, existing, after);
+        return new Fold(seq, statuses, existing, after, true);
     }
 
     /** The goal tree as of a cut point, plus how much history a rewind there would undo. */
+    /**
+     * The goal tree as of a cut point, plus how much history a rewind there would undo.
+     *
+     * @param historyAvailable false only when the cut point belongs to a lineage whose history is
+     *                         not on record at all — which is a refusal, not an empty tree
+     */
     public record Fold(long seq, Map<String, GoalStatus> statuses, Set<String> existingGoalIds,
-                       int transitionsUndone) {}
+                       int transitionsUndone, boolean historyAvailable) {}
 
     /**
      * The transitions a rewind to {@code seq} would undo, newest first. Rendered into the rewind's

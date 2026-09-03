@@ -30,3 +30,14 @@ See [[project-capability-outruns-routing]] — again the behaviour was unreached
 injected the exact message as work (`goal-4982e938`); one mutation was rejected at 19:16:13 and the
 loop then never touched `BookRepository` again, spending 25 more minutes merging `BookController`
 five times — the victim, not the cause. Filed as the open question in [[project-resume-state]].
+
+**The second half of the same run, fixed 2026-09-03: the planner deleted the gate's observation.**
+The boot gate DID catch the missing bean at 19:15:23 and injected the message verbatim as work
+(`goal-4982e938`, `originatingGate=boot-gate`). Thirty-six seconds later the planner listed that id
+under `#SubGoalRemove` and replaced it with "implement the complete BookController" — which is
+exactly what the loop then spent twenty-five minutes doing, merging the controller five times while
+the unregistered repository was never touched again. **A plan can be rewritten; a failure that was
+observed cannot be un-observed by rewriting one.** `PlannerAgent` now refuses to prune any goal
+carrying `BlockerTypes.ORIGINATING_GATE_KEY`. It strands nothing: such goals are still retired the
+ordinary ways (fulfilled when the fix lands, given up when the subgoal exhausts); only the route
+that discards a still-true observation is closed.

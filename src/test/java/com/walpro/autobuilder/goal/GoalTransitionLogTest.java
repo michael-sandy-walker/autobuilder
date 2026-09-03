@@ -208,4 +208,55 @@ class GoalTransitionLogTest {
         assertThat(reopened.append("g2", null, "ACTIVE", GoalTransition.Kind.CREATED, "c3", null))
                 .isEqualTo(3L);
     }
+
+    // ---- T4-DQ: a cut point means nothing without the lineage it was taken in ----
+
+    /** The log only distinguishes lineages when it knows which one is running. */
+    private void runningInLineage(String lineageId) {
+        var identity = org.mockito.Mockito.mock(com.walpro.autobuilder.core.init.RunIdentityService.class);
+        org.mockito.Mockito.when(identity.lineageId()).thenReturn(lineageId);
+        log.setRunIdentityService(identity);
+    }
+
+    @Test
+    @DisplayName("a point from a lineage a reset severed is not folded against the current history")
+    void aForeignLineagePointIsNotFoldedAgainstTheCurrentLog() {
+        runningInLineage("lineage-1");
+        log.append("g1", null, "ACTIVE", GoalTransition.Kind.CREATED, "c1", null);
+        log.append("g1", "ACTIVE", "COMPLETED", GoalTransition.Kind.CHANGED, "c2", null);
+
+        // A pre-reset cut point of 125 against a two-entry log: the old behaviour returned this
+        // run's goals in their latest state and called it a clean fold.
+        GoalTransitionLog.Fold fold = log.foldAtForLineage(125L, "lineage-from-before-the-reset");
+
+        assertThat(fold.historyAvailable())
+                .as("refusing is the only honest answer when the history is not on record")
+                .isFalse();
+        assertThat(fold.statuses()).isEmpty();
+        assertThat(fold.existingGoalIds()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the current lineage folds exactly as it always did")
+    void theCurrentLineageIsUnaffected() {
+        runningInLineage("lineage-1");
+        log.append("g1", null, "ACTIVE", GoalTransition.Kind.CREATED, "c1", null);
+        log.append("g1", "ACTIVE", "COMPLETED", GoalTransition.Kind.CHANGED, "c2", null);
+
+        GoalTransitionLog.Fold current = log.foldAtForLineage(1L, "lineage-1");
+
+        assertThat(current.historyAvailable()).isTrue();
+        assertThat(current.statuses()).containsEntry("g1", GoalStatus.ACTIVE);
+        assertThat(current.transitionsUndone()).isEqualTo(1);
+        assertThat(current).isEqualTo(log.foldAt(1L));
+    }
+
+    @Test
+    @DisplayName("a null lineage means the caller did not know, and is read as the current one")
+    void anUnknownLineageFallsBackToTheCurrentLog() {
+        runningInLineage("lineage-1");
+        log.append("g1", null, "ACTIVE", GoalTransition.Kind.CREATED, "c1", null);
+
+        assertThat(log.foldAtForLineage(1L, null)).isEqualTo(log.foldAt(1L));
+    }
 }

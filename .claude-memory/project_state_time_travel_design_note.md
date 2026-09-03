@@ -229,3 +229,13 @@ deterministic replay of live runs on its own, which is worth having regardless
   that failed: the old rule picks a finished earlier point, the finished-root rule picks an open
   earlier point, and the shipped rule finds no candidate at all and halts honestly, which is
   correct because that run had landed nothing of its own.
+- **A cut point means nothing without its lineage (2026-09-03).** A reset clears `meta/` and starts
+  the sequence at 1, while the tree archive keeps the per-cycle copies — so a pre-reset checkpoint's
+  `goalTransitionSeq` indexes into an unrelated history. Folding a pre-reset seq of 125 against a
+  77-entry log returns the CURRENT run's goals at their latest state and reports **zero transitions
+  undone**, so the restore reads clean and hands back one lineage's tree beside another's goals.
+  Neither the finished-root rule nor the empty-fold guard catches it. Fixed with
+  `GoalTransitionLog.foldAtForLineage`, which folds a foreign point against **that lineage's own
+  transitions from the graph** (they survive the reset, unlike the file) and returns
+  `historyAvailable=false` when there are none — which the rewind turns into a refusal. This is what
+  made the operator listing safe to widen beyond the current lineage.

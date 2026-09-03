@@ -346,8 +346,10 @@ public class CheckpointService {
     public Optional<com.walpro.autobuilder.goal.GoalStatus> rootGoalStatusAt(CheckpointRecord record) {
         if (record == null || record.rootGoalId() == null) return Optional.empty();
         try {
-            return Optional.ofNullable(goalTransitionLog.foldAt(record.goalTransitionSeq())
-                    .statuses().get(record.rootGoalId()));
+            var fold = goalTransitionLog.foldAtForLineage(
+                    record.goalTransitionSeq(), record.lineageId());
+            if (!fold.historyAvailable()) return Optional.empty();
+            return Optional.ofNullable(fold.statuses().get(record.rootGoalId()));
         } catch (RuntimeException e) {
             log.debug("T4-DQ: could not fold goal history at {}: {}", record.cycleId(), e.getMessage());
             return Optional.empty();

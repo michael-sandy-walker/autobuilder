@@ -56,6 +56,19 @@ public final class BlockerTypes {
      * check, whose done-when is a requirement about the target application rather than a fact
      * about the build.
      */
+    /**
+     * True when the goal's work item was raised by a deterministic gate rather than proposed by
+     * the planner — a recorded OBSERVATION of the artifact, not a plan.
+     *
+     * <p>The distinction decides who may retire it. See the planner's prune loop: a plan can be
+     * rewritten, but a failure that was observed cannot be un-observed by rewriting one.
+     */
+    public static boolean isFromGate(java.util.Map<String, Object> metadata) {
+        if (metadata == null) return false;
+        Object gate = metadata.get(ORIGINATING_GATE_KEY);
+        return gate != null && !String.valueOf(gate).isBlank();
+    }
+
     public static boolean isFromCriteriaGate(java.util.Map<String, Object> metadata) {
         return metadata != null && GATE_CRITERIA.equals(metadata.get(ORIGINATING_GATE_KEY));
     }

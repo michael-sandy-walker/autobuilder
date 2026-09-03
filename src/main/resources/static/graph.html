@@ -174,6 +174,18 @@
 
   /* in-browser editor modal */
   /* T4-DQ: return the loop to an earlier point. */
+  .journey-step { position: fixed; top: 50%; transform: translateY(-50%); z-index: 120;
+    width: 34px; height: 58px; border-radius: 8px; cursor: pointer;
+    background: rgba(17,24,39,0.72); color: #cbd5e1; border: 1px solid #1f2937;
+    font-size: 16px; line-height: 1; backdrop-filter: blur(2px); transition: background 0.15s, color 0.15s; }
+  .journey-step:hover:not(:disabled) { background: #1e3a8a; color: #fff; border-color: #3b82f6; }
+  .journey-step:disabled { opacity: 0.25; cursor: default; }
+  #step-back { left: 8px; }
+  #step-fwd { right: 8px; }
+  #step-hint { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 121;
+    font-size: 11px; color: #9ca3af; background: rgba(11,18,32,0.9); border: 1px solid #1f2937;
+    border-radius: 6px; padding: 5px 10px; display: none; max-width: 70vw; }
+  #step-hint.show { display: block; }
   #rewind-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 150;
     display: none; align-items: center; justify-content: center; }
   #rewind-overlay.open { display: flex; }
@@ -467,6 +479,11 @@
 </aside>
 
 <!-- T4-DQ: pick a point this run can be returned to, and go back to it. -->
+<!-- T4-DQ: one point back, one point forward, without opening the dialog. -->
+<button id="step-back" class="journey-step" title="Rewind to the previous checkpoint">&#10094;</button>
+<button id="step-fwd" class="journey-step fwd" title="Return to the next checkpoint forward">&#10095;</button>
+<div id="step-hint"></div>
+
 <div id="rewind-overlay">
   <div id="rewind-modal">
     <header>
@@ -570,6 +587,10 @@ const state = {
   links: [],
   currentSubGoalId: null,
   currentGoalId: null,
+  // T4-DQ journey view: goals the loop has actually stood on this session, in order. Seeded from
+  // the tree's own evidence (see wasApproached) so a page opened mid-run is not blank.
+  visited: new Set(),
+  visitOrder: [],
   signals: {},                   // SignalType name -> strength
   cycleName: null,
   cycleResultState: null,
@@ -675,22 +696,56 @@ function cropDesc(s, n) {
 
 Graph.d3Force('charge').strength(-180);
 
+/**
+ * Re-evaluates only the two accessors the journey styling depends on, and only while something is
+ * actually moving: an active goal to breathe, or a goal young enough to still be flashing. An idle
+ * tree costs nothing, which matters because this runs beside a live 3D force simulation.
+ */
+(function animateJourney() {
+  let last = 0;
+  function frame(t) {
+    requestAnimationFrame(frame);
+    if (t - last < 90) return;               // ~11fps: smooth enough for a pulse, cheap enough
+    last = t;
+    if (document.hidden) return;
+    let moving = !!state.currentSubGoalId;
+    if (!moving) {
+      for (const n of state.nodesById.values()) {
+        if (freshness(n) > 0) { moving = true; break; }
+      }
+    }
+    if (!moving) return;
+    Graph.nodeColor(nodeColor);
+    Graph.nodeVal(nodeSize);
+  }
+  requestAnimationFrame(frame);
+})();
+
 // Suppress the browser's default context menu over the 3D canvas so our custom menu wins.
 container.addEventListener('contextmenu', e => e.preventDefault());
 
 function nodeColor(n) {
-  const base = n.id === state.currentSubGoalId
+  let base = n.id === state.currentSubGoalId
     ? CURRENT_COLOR
     : (STATUS_COLORS[n.status] || STATUS_COLORS.UNKNOWN);
   // Dim filtered-out nodes.
   if (!nodePasses(n)) return fadeColor(base, 0.2);
+  // A goal that has just been planned announces itself, then settles into its status colour.
+  const fresh = freshness(n);
+  if (fresh > 0) base = mixColor(base, NEW_GOAL_COLOR, 0.75 * fresh);
+  // Where the loop stands right now, breathing so the eye finds it without hunting.
+  if (n.id === state.currentSubGoalId) return mixColor(base, '#fbbf24', 0.35 * pulse());
+  // Goals never approached sit back; the path the run has taken stays fully lit. Distinct from
+  // the filter fade above, which is much heavier on purpose.
+  if (!wasApproached(n)) return fadeColor(base, 0.5);
   return base;
 }
 function nodeSize(n) {
   let s = 2;
   if (n.type === 'GOAL') s = 14;
   else s += Math.min(12, (n.mergeCount || 0) * 2);
-  if (n.id === state.currentSubGoalId) s *= 1.3;
+  if (n.id === state.currentSubGoalId) s *= 1.3 + 0.25 * pulse();
+  s *= 1 + 0.6 * freshness(n);
   if (state.signalHalo) {
     const haloBoost = computeHalo(n);
     s += haloBoost;
@@ -740,6 +795,52 @@ function fadeColor(hex, alpha) {
   const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
+/** Blend two colours; used to flash a goal the moment it is created. */
+function mixColor(hex, toward, t) {
+  const a = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+  const b = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(toward || '');
+  if (!a || !b) return hex;
+  const c = i => Math.round(parseInt(a[i], 16) * (1 - t) + parseInt(b[i], 16) * t);
+  return `rgb(${c(1)},${c(2)},${c(3)})`;
+}
+
+// ------ T4-DQ: the journey — where the loop is, where it has been, what is new ------
+const PULSE_MS = 1600;
+const NEW_GOAL_MS = 3500;
+const NEW_GOAL_COLOR = '#a78bfa';
+
+/** 0..1 around the pulse cycle, so the active goal breathes rather than sits still. */
+function pulse() {
+  return 0.5 - 0.5 * Math.cos((Date.now() % PULSE_MS) / PULSE_MS * 2 * Math.PI);
+}
+
+/** 1 the instant a goal appears, decaying to 0 — what makes a new goal announce itself. */
+function freshness(n) {
+  if (!n || !n.createdAtMs) return 0;
+  const age = Date.now() - n.createdAtMs;
+  return age >= NEW_GOAL_MS ? 0 : 1 - age / NEW_GOAL_MS;
+}
+
+/**
+ * Whether the loop has actually been on this goal, as opposed to merely planned it.
+ *
+ * <p>Live visits are recorded as the current subgoal moves, but a page opened mid-run has watched
+ * none of them — so the tree's own evidence counts too: a goal that merged something, or that
+ * reached a terminal status, was worked on whether or not this browser saw it happen.
+ */
+function wasApproached(n) {
+  if (!n) return false;
+  return state.visited.has(n.id)
+      || (n.mergeCount || 0) > 0
+      || n.status === 'COMPLETED' || n.status === 'GIVEN_UP' || n.status === 'SUBSUMED';
+}
+
+function noteVisit(id) {
+  if (!id || state.visited.has(id)) return;
+  state.visited.add(id);
+  state.visitOrder.push(id);
+}
+
 function countVisibleNodes() {
   let n = 0;
   for (const m of state.nodesById.values()) if (nodePasses(m)) n++;
@@ -823,7 +924,10 @@ function mergeSnapshot(goals) {
     incoming.add(g.id);
     let node = state.nodesById.get(g.id);
     if (!node) {
-      node = { id: g.id };
+      // Stamped on first sight rather than from the payload: this is "new to the view", which is
+      // what an animation is honestly able to say. The first snapshot after a page load would
+      // otherwise flash the entire tree at once, so that one is stamped silent.
+      node = { id: g.id, createdAtMs: state.sawFirstSnapshot ? Date.now() : 0 };
       state.nodesById.set(g.id, node);
     }
     Object.assign(node, {
@@ -863,6 +967,7 @@ function mergeSnapshot(goals) {
   for (const n of state.nodesById.values()) restyleSprite(n);
   rebuildRolesFromNodes();
   updateNodeCountPill();
+  state.sawFirstSnapshot = true;
 }
 
 function restyleSprite(n) {
@@ -872,7 +977,8 @@ function restyleSprite(n) {
     if (!child || !child.isSprite) continue;
     const txt = cropDesc(n.description || n.id, 40);
     if (child.text !== txt) child.text = txt;
-    child.color = n.id === state.currentSubGoalId ? '#fef3c7' : '#e5e7eb';
+    child.color = n.id === state.currentSubGoalId ? '#fef3c7'
+        : (freshness(n) > 0 ? NEW_GOAL_COLOR : (wasApproached(n) ? '#e5e7eb' : '#7c8798'));
     const r = 5 * Math.cbrt(Math.max(1, nodeSize(n)));
     child.position.set(0, r + 3, 0);
   }
@@ -1103,6 +1209,7 @@ function handleEvent(payload) {
 
   const prevSubGoalId = state.currentSubGoalId;
   state.currentSubGoalId = payload.currentSubGoalId || null;
+  noteVisit(state.currentSubGoalId);
   state.signals = payload.signals || {};
   if (payload.goals) mergeSnapshot(payload.goals);
   // T5-BF: goal-status tally for the mission-control HUD (the goal stream is the
@@ -1935,6 +2042,95 @@ async function doRewind() {
     out.innerHTML = `<span class="bad">Rewind failed: ${escapeHtml(e.message)}</span>`;
   }
 }
+// ------ T4-DQ: step one checkpoint back or forward without opening the dialog ------
+//
+// "Back" and "forward" are relative to WHERE THE LOOP STANDS, not to the newest point on disk —
+// after a rewind those differ, and stepping from the wrong one would walk the wrong way. The
+// position comes from the same endpoint the dialog reads.
+const stepState = { points: [], position: null, busy: false };
+
+function stepIndex() {
+  // Points arrive newest first, so index 0 is the newest and larger indices are older.
+  const here = stepState.position && stepState.position.cycleId;
+  const i = stepState.points.findIndex(p => p.cycleId === here);
+  return i >= 0 ? i : 0;
+}
+function stepTarget(direction) {
+  if (!stepState.points.length) return null;
+  const i = stepIndex() + (direction === 'back' ? 1 : -1);
+  return i >= 0 && i < stepState.points.length ? stepState.points[i] : null;
+}
+async function refreshStepButtons() {
+  try {
+    const data = await fetch('/autobuilder/checkpoints').then(r => r.json());
+    stepState.points = data.checkpoints || [];
+    stepState.position = data.position || null;
+  } catch (e) {
+    stepState.points = []; stepState.position = null;
+  }
+  for (const dir of ['back', 'fwd']) {
+    const btn = document.getElementById(dir === 'back' ? 'step-back' : 'step-fwd');
+    const target = stepTarget(dir);
+    btn.disabled = stepState.busy || !target;
+    btn.title = target
+      ? (dir === 'back' ? 'Rewind to ' : 'Return forward to ') + target.cycleId
+        + (target.merged ? ' (merged)' : '')
+        + (target.continuable === false ? ' — root already ' + (target.rootGoalStatus || 'settled')
+                                          + ', the loop will halt there' : '')
+      : (dir === 'back' ? 'No earlier checkpoint to return to' : 'Already at the newest checkpoint');
+  }
+}
+function showStepHint(html, ms) {
+  const el = document.getElementById('step-hint');
+  el.innerHTML = html;
+  el.classList.add('show');
+  clearTimeout(showStepHint.t);
+  if (ms) showStepHint.t = setTimeout(() => el.classList.remove('show'), ms);
+}
+async function stepTo(direction) {
+  const target = stepTarget(direction);
+  if (!target || stepState.busy) return;
+  // The same warning the dialog gives before the choice rather than after it.
+  const settled = target.continuable === false
+    ? '\n\nNOTE: the root goal was already ' + (target.rootGoalStatus || 'settled')
+      + ' at this point, so the restore will succeed and then the loop will halt.'
+    : '';
+  if (!confirm((direction === 'back' ? 'Rewind to ' : 'Return forward to ') + target.cycleId
+      + '?\n\nThis replaces output/ with that cycle\'s tree and folds goal state back to it.'
+      + settled)) return;
+  stepState.busy = true;
+  refreshStepButtons();
+  showStepHint('Returning to <b>' + escapeHtml(target.cycleId) + '</b>…');
+  try {
+    const res = await fetch('/autobuilder/rewind?toCycle=' + encodeURIComponent(target.cycleId)
+        + '&cacheMode=FAITHFUL', { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || d.ok === false) {
+      showStepHint('<span style="color:#fca5a5">Refused: '
+          + escapeHtml(d.refusedBecause || d.message || ('HTTP ' + res.status)) + '</span>', 9000);
+    } else {
+      const failures = d.failures || [];
+      showStepHint('<span style="color:#86efac">At ' + escapeHtml(d.toCycleId) + '</span> — '
+          + d.holdersRestored + ' holders, ' + d.goalStatusesRestored + ' goal status(es), '
+          + d.goalTransitionsUndone + ' transition(s) undone'
+          + (failures.length ? ' · <span style="color:#fcd34d">' + failures.length
+              + ' problem(s), see the rewind dialog</span>' : '')
+          + (d.paused ? ' · the loop stays paused' : ' · continuing from there'), 9000);
+      toast('Rewound to ' + d.toCycleId, failures.length ? 'error' : 'ok');
+      setTimeout(boot, 600);
+    }
+  } catch (e) {
+    showStepHint('<span style="color:#fca5a5">Rewind failed: ' + escapeHtml(e.message) + '</span>', 9000);
+  } finally {
+    stepState.busy = false;
+    refreshStepButtons();
+  }
+}
+document.getElementById('step-back').onclick = () => stepTo('back');
+document.getElementById('step-fwd').onclick = () => stepTo('fwd');
+refreshStepButtons();
+setInterval(refreshStepButtons, 15000);
+
 document.getElementById('rewind-close').onclick = closeRewind;
 document.getElementById('rewind-go').onclick = doRewind;
 document.getElementById('rewind-run').onchange = () => { rewindState.selected = null; renderRewindList(); updateRewindSelection(); };

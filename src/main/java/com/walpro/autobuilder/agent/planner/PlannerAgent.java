@@ -576,6 +576,28 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
                                     log.warn("T1-DC: refusing to prune subgoal [{}] — evolution this cycle has not been evaluated yet", g.getId());
                                     return;
                                 }
+                                // A gate's work item is an OBSERVATION, and the planner may not
+                                // delete one. Run 2026-09-03_19-05-02: the boot gate watched the
+                                // artifact die at startup, injected the exact message as work at
+                                // 19:15:23 — and 36 seconds later the planner listed that id under
+                                // #SubGoalRemove and replaced it with "implement the complete
+                                // BookController". The loop then did exactly that, merging the
+                                // controller five times over 25 minutes while the unregistered
+                                // repository that actually stopped it was never touched again. The
+                                // run shipped an artifact that could not start.
+                                //
+                                // Rewriting a plan cannot un-observe a failure. Such a goal is
+                                // still retired the ordinary ways — fulfilled when the fix lands,
+                                // given up when the subgoal exhausts — so this strands nothing; it
+                                // only removes the one route that discards the observation while
+                                // it still holds.
+                                if (com.walpro.autobuilder.core.build.BlockerTypes.isFromGate(g.getMetadata())) {
+                                    log.warn("Refusing to prune subgoal [{}] — it was raised by {} from a "
+                                                    + "direct observation of the artifact, so replanning cannot retire it",
+                                            g.getId(),
+                                            g.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY));
+                                    return;
+                                }
                                 // Planner removal IS supersession — replacement work carries
                                 // the obligation, so the retired goal becomes SUBSUMED (not
                                 // GIVEN_UP), which T2-DR's closure rule treats as a

@@ -171,6 +171,11 @@ public class AutobuilderController {
             // Whether the point belongs to the run now in progress, so the UI can mark the ones
             // that will restore from an archived tree rather than from this run's own snapshot.
             row.put("current", java.util.Objects.equals(record.runId(), runIdentityService.runId()));
+            // Whether it predates a reset. Returning to such a point adopts work from a lineage the
+            // loop no longer continues, which is a bigger step than crossing a run boundary and so
+            // is named separately rather than folded into "earlier run".
+            row.put("sameLineage",
+                    java.util.Objects.equals(record.lineageId(), runIdentityService.lineageId()));
             // The point the loop's state currently corresponds to — where "continue" continues from.
             row.put("here", record.cycleId().equals(hereCycle));
             // Restorable and continuable are different facts. A point whose root goal was already

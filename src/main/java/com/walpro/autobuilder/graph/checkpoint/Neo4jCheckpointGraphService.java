@@ -90,8 +90,7 @@ public class Neo4jCheckpointGraphService implements CheckpointGraphService {
                     WHERE $lineageId IS NULL OR c.lineageId = $lineageId
                     RETURN c ORDER BY c.cycleId DESC LIMIT $limit
                     """)
-                    .bind(lineageId).to("lineageId")
-                    .bind(Math.max(1, limit)).to("limit")
+                    .bindAll(everyLineageWhenNull(lineageId, limit))
                     .fetch().all().stream()
                     .map(row -> toStored(row.get("c")))
                     .filter(java.util.Objects::nonNull)
@@ -128,8 +127,7 @@ public class Neo4jCheckpointGraphService implements CheckpointGraphService {
                            max(c.at) AS lastAt
                     ORDER BY lastCycleId DESC LIMIT $limit
                     """)
-                    .bind(lineageId).to("lineageId")
-                    .bind(Math.max(1, limit)).to("limit")
+                    .bindAll(everyLineageWhenNull(lineageId, limit))
                     .fetch().all()
                     .forEach(row -> runs.add(new StoredRun(
                             (String) row.get("runId"),
@@ -173,6 +171,20 @@ public class Neo4jCheckpointGraphService implements CheckpointGraphService {
             log.debug("T4-DQ: unreadable checkpoint node: {}", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Parameters for the two lineage-scoped reads, where a null lineage legitimately means EVERY
+     * lineage — both queries have always said {@code $lineageId IS NULL OR ...}, and the operator
+     * listing is the first caller to use it, so that a reset does not hide the points the archive
+     * deliberately kept. Bound through a map because a map tolerates a null value; the fluent
+     * {@code bind(null)} leaves that to the driver.
+     */
+    private static java.util.Map<String, Object> everyLineageWhenNull(String lineageId, int limit) {
+        java.util.Map<String, Object> params = new java.util.HashMap<>();
+        params.put("lineageId", lineageId);
+        params.put("limit", Math.max(1, limit));
+        return params;
     }
 
     private static String str(org.neo4j.driver.types.Node n, String key) {

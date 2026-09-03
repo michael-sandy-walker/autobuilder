@@ -204,6 +204,7 @@
   .rw-badge.past { color: #c4b5fd; border-color: #4c1d95; background: #2e1065; }
   .rw-badge.here { color: #93c5fd; border-color: #1e40af; background: #0c1e3a; font-weight: 700; }
   .rw-badge.settled { color: #fca5a5; border-color: #7f1d1d; background: #2a0a0a; }
+  .rw-badge.prereset { color: #fdba74; border-color: #9a3412; background: #2a1405; }
   .rw-item.settled .cyc { color: #9ca3af; }
   .rw-item.here .cyc { color: #bfdbfe; }
   #rewind-modal footer { display: flex; align-items: center; gap: 8px; padding: 10px 14px;
@@ -1812,8 +1813,16 @@ function closeRewind() { document.getElementById('rewind-overlay').classList.rem
 function renderRewindRuns() {
   const sel = document.getElementById('rewind-run');
   const runs = [...new Set(rewindState.points.map(p => p.runId).filter(Boolean))];
+  // "All runs" first, so every point the archive kept is reachable in one view rather than only
+  // through whichever run the selector happened to land on.
   sel.innerHTML = runs.length
-    ? runs.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(shortRun(r))}</option>`).join('')
+    ? `<option value="">All runs (${rewindState.points.length})</option>`
+      + runs.map(r => {
+          const n = rewindState.points.filter(p => p.runId === r).length;
+          const pre = rewindState.points.some(p => p.runId === r && p.sameLineage === false);
+          return `<option value="${escapeHtml(r)}">${escapeHtml(shortRun(r))} · ${n}`
+               + `${pre ? ' · before a reset' : ''}</option>`;
+        }).join('')
     : '<option value="">(none on disk)</option>';
   // Open on the run the loop is actually IN, not on whichever run happens to be newest: after a
   // rewind into an earlier run those differ, and opening on the newest hid the point just rewound to.
@@ -1830,11 +1839,13 @@ function renderRewindRuns() {
           + ` at ${escapeHtml(String(pos.since || '').replace('T', ' ').slice(0, 19))}; no cycle has run since.`
         : `Loop is at <b>${escapeHtml(pos.cycleId)}</b>, the newest point.`)
     : 'Loop position unknown for this JVM yet (no checkpoint written since start) — the newest point is where it stands.';
+  const preReset = rewindState.points.filter(p => p.sameLineage === false).length;
   document.getElementById('rewind-note').innerHTML = where + '<br>' + (runs.length > 1
-    ? `${rewindState.points.length} points across ${runs.length} runs of this lineage. `
-      + `Points from an earlier run restore from an archived source-only tree; build output is not `
-      + `kept because it regenerates. Returning to another run is a MANUAL action only — the loop's `
-      + `own rewinds stay inside the run they happen in.`
+    ? `${rewindState.points.length} points across ${runs.length} runs`
+      + (preReset ? `, of which ${preReset} predate a reset` : '')
+      + `. Points from an earlier run restore from an archived source-only tree; build output is `
+      + `not kept because it regenerates. Reaching back to another run is a MANUAL action only — `
+      + `the loop's own rewinds stay inside the run they happen in.`
     : `${rewindState.points.length} point(s), all from the current run.`);
 }
 function shortRun(r) { return r.length > 20 ? r.slice(0, 12) + '…' + r.slice(-4) : r; }
@@ -1857,6 +1868,7 @@ function renderRewindList() {
       ${p.continuable === false ? `<span class="rw-badge settled" title="The root goal was already ${escapeHtml(p.rootGoalStatus || 'settled')} at this point. It restores exactly as described, and then the next cycle reads a finished root and halts. There is nothing left to work on here.">root ${escapeHtml(p.rootGoalStatus || 'settled')}</span>` : ''}
       ${p.merged ? '<span class="rw-badge merged">merged</span>' : ''}
       ${p.current === false ? '<span class="rw-badge past" title="From an earlier run — restores from its archived source-only tree">earlier run</span>' : ''}
+      ${p.sameLineage === false ? '<span class="rw-badge prereset" title="From before a reset severed the lineage. Its tree is kept in the archive and still restores; returning to it adopts work the loop no longer counts as its own history.">before a reset</span>' : ''}
       ${p.verified === false ? '<span class="rw-badge unver" title="No readable fingerprint — this point restores unverified">unverified</span>' : ''}
       <span class="spacer"></span>
       <span class="meta">${i === 0 ? 'latest · ' : 'back ' + i + ' · '}${escapeHtml(when)} · ${p.holders} holders · goalSeq ${p.goalTransitionSeq}</span>

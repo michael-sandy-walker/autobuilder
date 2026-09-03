@@ -71,6 +71,26 @@ public class WiringFactsAnalyzer {
     /** T3-BW: how many OTHER types must agree before their shared shape counts as the norm. */
     static final int PEER_GROUP_MIN_OTHERS = 2;
 
+    /**
+     * The peer bar for {@link #findUnregisteredInjectedTypes}, and the one place in this class that
+     * does not need {@link #PEER_GROUP_MIN_OTHERS}.
+     *
+     * <p><b>Why this rule may ask for less, 2026-09-03.</b> The other rules infer an anomaly from
+     * the peer group ALONE, so they need a group big enough to establish a norm. This rule has
+     * independent evidence the others do not: the type is a constructor parameter of a type that IS
+     * registered, so the container will be asked for it and will fail without it. The peer set is
+     * only there to name WHICH annotation is missing, and one annotated peer names it as well as
+     * two do.
+     *
+     * <p>Requiring two hid the defect exactly as it got worse. Run {@code 2026-08-30_18-44-37} left
+     * one repository of three unregistered, saw two annotated peers, and was caught. Run
+     * {@code 2026-09-03_19-05-02} left TWO of three unregistered, so each candidate saw a single
+     * annotated peer, the rule went silent, and the artifact ended unstartable on the same defect
+     * this rule and its repair exist for. A detector that stops firing as the fault spreads is
+     * worse than one that never fired.
+     */
+    static final int INJECTED_TYPE_MIN_ANNOTATED_PEERS = 1;
+
     private static final Pattern MUTATOR_CALL = Pattern.compile("^(save|persist|store|insert)\\w*$");
     private static final Set<String> STATUS_MAPPING_ANNOTATIONS = AnnotationVocabularies.STATUS_MAPPING;
     private static final Pattern JAVA_FILE = Pattern.compile(".*\\.java$");
@@ -407,10 +427,13 @@ public class WiringFactsAnalyzer {
         for (UnregisteredInjectedType f : findUnregisteredInjectedTypes(units)) {
             out.add(String.format(
                     "%s is a constructor parameter of %s, which is annotated, but %s itself carries no "
-                            + "annotation at all — while all %d other types in its package carry @%s (%s). "
+                            + "annotation at all — while %s in its package carr%s @%s (%s). "
                             + "If @%s is what makes a type available for injection, %s cannot be supplied "
                             + "and %s cannot be constructed.",
-                    f.typeName(), f.injectedBy(), f.typeName(), f.peers().size(), f.missingAnnotation(),
+                    f.typeName(), f.injectedBy(), f.typeName(),
+                    f.peers().size() == 1 ? "another type" : "all " + f.peers().size() + " other types",
+                    f.peers().size() == 1 ? "ies" : "y",
+                    f.missingAnnotation(),
                     String.join(", ", f.peers()), f.missingAnnotation(), f.typeName(), f.injectedBy()));
             if (out.size() >= MAX_OBSERVATIONS) return;
         }
@@ -484,7 +507,7 @@ public class WiringFactsAnalyzer {
                     .map(Map.Entry::getKey)
                     .filter(t -> !annotationsByType.get(t).isEmpty())
                     .toList();
-            if (peers.size() < PEER_GROUP_MIN_OTHERS) continue;
+            if (peers.size() < INJECTED_TYPE_MIN_ANNOTATED_PEERS) continue;
 
             // Unanimity, as elsewhere in this class: one dissenter makes it a style choice.
             Set<String> unanimous = new LinkedHashSet<>(annotationsByType.get(peers.get(0)));

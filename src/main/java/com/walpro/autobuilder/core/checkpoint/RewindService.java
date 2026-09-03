@@ -179,12 +179,16 @@ public class RewindService {
     }
 
     /**
-     * The points a rewind could target right now, newest first — this run's and every earlier run
-     * of the lineage that still has a restorable tree.
+     * The points an OPERATOR could return to right now, newest first: this run's, every earlier
+     * run's, and points from before a reset severed the lineage. Everything whose tree is still on
+     * disk or in the archive.
+     *
+     * <p>Deliberately wider than what the loop may choose on its own — see
+     * {@link CheckpointService#autoRewindCandidates()}. Reaching back across a run, or across a
+     * reset, is exactly the thing that stays a person's call.
      */
     public List<CheckpointRecord> available() {
-        return checkpointService.restorableAcrossRuns(
-                runIdentityService.lineageId(), CheckpointService.ACROSS_RUN_LIMIT);
+        return checkpointService.allRestorablePoints(CheckpointService.ACROSS_RUN_LIMIT);
     }
 
     /**

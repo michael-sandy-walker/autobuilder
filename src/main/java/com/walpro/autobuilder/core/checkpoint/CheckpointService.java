@@ -303,6 +303,24 @@ public class CheckpointService {
         return out;
     }
 
+    /**
+     * Every point a PERSON may return to, newest first — this run's, earlier runs', and points
+     * from earlier LINEAGES, which is to say from before a reset.
+     *
+     * <p><b>Why the operator listing is not lineage-scoped.</b> A reset severs the lineage and
+     * clears the checkpoint directory, so scoping this to the current lineage made every point the
+     * archive had deliberately preserved vanish from the one surface built to offer them — the
+     * archive exists precisely so a point outlives the run, and the reset, that produced it. The
+     * restore has always crossed lineages ({@link #readAnyRun} looks up any run of any lineage),
+     * so this only stops the listing being narrower than the operation it lists.
+     *
+     * <p>The loop's own rewinds are a separate question and stay scoped: see
+     * {@link #autoRewindCandidates()}.
+     */
+    public List<CheckpointRecord> allRestorablePoints(int limit) {
+        return restorableAcrossRuns(null, limit);
+    }
+
     /** Every checkpoint cycle id present on disk, oldest first (cycle ids sort chronologically). */
     public List<String> listCheckpointCycles() {
         List<String> cycles = new ArrayList<>();

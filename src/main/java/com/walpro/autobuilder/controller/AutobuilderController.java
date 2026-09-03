@@ -29,6 +29,33 @@ public class AutobuilderController {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.checkpoint.RewindService rewindService;
 
+    /**
+     * Reads a project the loop did not create and reports what is there. Optional so a context
+     * without it still starts.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.coldread.ColdReadService coldReadService;
+
+    @org.springframework.beans.factory.annotation.Value("${file.base-path}")
+    private String fileBasePath;
+
+    /**
+     * What is in the tree this loop is pointed at, read as if it had never seen it.
+     *
+     * <p>Answers the question a person asks before pointing the loop at someone else's code: what
+     * does it think this project even is? Deterministic and read-only, so it can be run against a
+     * tree without changing anything in it.
+     */
+    @GetMapping(value = "/cold-read", produces = org.springframework.http.MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<String> coldRead() {
+        if (coldReadService == null) {
+            return ResponseEntity.status(503).body("Cold read is not enabled in this context.\n");
+        }
+        java.nio.file.Path root = java.nio.file.Path.of(fileBasePath, "output").toAbsolutePath().normalize();
+        return ResponseEntity.ok(com.walpro.autobuilder.core.coldread.ColdReadReport.render(
+                coldReadService.read(root)));
+    }
+
     /** T4-DQ: where the loop's state stands, as distinct from which point is newest on disk. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.checkpoint.CheckpointService checkpointService;

@@ -73,3 +73,27 @@ recorded as evidence rather than assumed either way.
 - **T4-CQ** — import and continue an existing project (cold read; with or without graph)
 - **T4-CR** — portable project+graph bundle: store a phase, restore it elsewhere
 - **T4-CS** — code-layer merge across lineages (sibling of T4-CM)
+
+## Cold read — slice 1 shipped 2026-09-03 (user-directed)
+
+**The user's correction, and it reframed rung 1:** the SEED must be derived by the loop too. Handing
+it a hand-written spec means a person did the comprehension, which is exactly what will not be
+available when the loop reads its own source. `T4-CQ`'s recorded design question ("where does the
+GOAL come from on a cold read?") is that same question, and the ticket's warning is the real
+constraint: **a loop that writes its own specification and grades itself against it always scores
+well, because both sides come from the same guess** — the false-completion shape, four times over.
+
+**The way out is anchoring.** A derived account is checkable only where it rests on something the
+loop did not invent: someone else's TESTS (executable intent), the running application's OBSERVED
+responses (fact), the project's own PROSE (quotable, not composable), and the code's declared
+structure. An account built from the loop's opinion of what the project ought to do is not.
+
+**Shipped:** `core/coldread/ColdReadService` + `ColdRead` + `ColdReadReport`, `GET /autobuilder/cold-read`.
+Deterministic, no model call, read-only. Reports build/runtime/prose/surface/types/tests, plus what
+it SKIPPED and what it could NOT establish — an imported tree contains wrapper binaries and scripts
+the loop's whole-tree reader treated as source (it read a wrapper jar as text every cycle and pulled
+a Windows batch file into prompts). Routes print with the context path applied, because the
+controllers never mention it and the annotation-derived paths would all 404.
+
+**Deliberately NOT done:** turning the account into a seed. That is where the circularity enters and
+it is its own decision. Slice 1 stops at "what is there", which a person can check line by line.

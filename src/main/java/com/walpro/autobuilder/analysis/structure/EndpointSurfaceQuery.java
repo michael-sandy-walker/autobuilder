@@ -177,6 +177,20 @@ public class EndpointSurfaceQuery {
      * Empty optional = at least one mapping path could not be grounded to a literal, so the
      * built set is incomplete and no comparison against it is safe.
      */
+    /**
+     * The surface a codebase SERVES, asked of the code alone.
+     *
+     * <p>Same computation as {@link #builtInOutput}, which exists to be compared against a
+     * specification and is therefore package-scoped. This is the question asked in the other
+     * direction, by a reader who has no specification yet because the project is not theirs: what
+     * does this thing offer? Empty for the same reason as there — a mapping path that is not a
+     * literal makes the set a lower bound, and a lower bound presented as a surface would be a
+     * false account.
+     */
+    public Optional<Set<Endpoint>> servedByCode(Map<String, String> sources) {
+        return builtInOutput(sources);
+    }
+
     Optional<Set<Endpoint>> builtInOutput(Map<String, String> outputFiles) {
         Set<Endpoint> built = new LinkedHashSet<>();
         for (Map.Entry<String, String> e : outputFiles.entrySet()) {

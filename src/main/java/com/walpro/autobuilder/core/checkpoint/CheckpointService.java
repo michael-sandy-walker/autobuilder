@@ -40,6 +40,13 @@ import java.util.Optional;
 public class CheckpointService {
 
     public static final String CHECKPOINTS_DIR = "checkpoints";
+
+    /**
+     * How far back the cross-run index is read. One number, used by every caller that asks for
+     * points beyond this run, so the operator listing and an enabled cross-run rewind see the
+     * same history rather than two different depths of it.
+     */
+    public static final int ACROSS_RUN_LIMIT = 500;
     public static final String CHECKPOINT_FILE = "checkpoint.json";
     public static final String CACHE_DIR = "cache";
 
@@ -75,6 +82,17 @@ public class CheckpointService {
     /** Copy {@code cache/} into each checkpoint so a FAITHFUL rewind has something to restore. */
     @Value("${autobuilder.checkpoint.capture-cache:true}")
     private boolean captureCache = true;
+
+    /**
+     * Whether an AUTOMATIC rewind may leave the run it is in. Off: the loop backs out only to
+     * points its own run took, and reaching into an earlier run of the lineage stays something a
+     * person asks for by hand. See {@link #autoRewindCandidates()} for why that is the default.
+     *
+     * <p>Governs the policy alone. The operator listing is deliberately unaffected.
+     */
+    @Setter
+    @Value("${autobuilder.rewind.auto-cross-run-enabled:false}")
+    private boolean autoCrossRunEnabled = false;
 
     /**
      * T4-DQ: which point the loop's state currently IS. Advances to every checkpoint as it is
@@ -342,15 +360,36 @@ public class CheckpointService {
     }
 
     /**
-     * The points the loop could go back to AND still work from, newest first — what a policy
-     * choosing a fork point asks for.
+     * The points an AUTOMATIC rewind may target, newest first. Two conditions, and the operator
+     * listing applies neither, because both are about what the LOOP should decide on its own.
      *
-     * <p>The operator listing deliberately shows more than this. Returning to a finished state is
-     * something a person may genuinely want, so that surface marks the difference rather than
-     * hiding it; a policy whose whole purpose is to keep the run going may not choose one at all.
+     * <ol>
+     *   <li><b>Still open.</b> See {@link #canContinueFrom}: a point whose root goal was already
+     *       settled restores perfectly and then halts on the next cycle.</li>
+     *   <li><b>This run's own.</b> Off by default, and deliberately so. The checkpoint directory
+     *       and the cross-run index both outlive the run that filled them, so "the newest point
+     *       that landed work" silently reaches back into earlier runs of the lineage — which is
+     *       how a stalled run ended up adopting a FINISHED one's state. Crossing a run boundary
+     *       changes which run's work the loop is continuing, and that is a judgement a person
+     *       should make while looking at the runs, not one a grind detector should make at 3am.
+     *       The capability stays available and stays exercised by hand.</li>
+     * </ol>
+     *
+     * <p>With the switch on, the source widens to the whole lineage rather than only what is on
+     * this disk, so an enabled cross-run rewind can reach a point whose tree survives only in the
+     * archive. With it off the local directory is enough, since anything else is out of scope by
+     * definition.
      */
-    public List<CheckpointRecord> continuableCheckpoints() {
-        return restorableCheckpoints().stream().filter(this::canContinueFrom).toList();
+    public List<CheckpointRecord> autoRewindCandidates() {
+        List<CheckpointRecord> source = autoCrossRunEnabled
+                ? restorableAcrossRuns(runIdentityService.lineageId(), ACROSS_RUN_LIMIT)
+                : restorableCheckpoints();
+        String runId = runIdentityService.runId();
+        return source.stream()
+                .filter(record -> autoCrossRunEnabled
+                        || java.util.Objects.equals(record.runId(), runId))
+                .filter(this::canContinueFrom)
+                .toList();
     }
 
     /**

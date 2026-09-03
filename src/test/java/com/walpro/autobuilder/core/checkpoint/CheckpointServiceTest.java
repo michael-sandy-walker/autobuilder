@@ -39,6 +39,7 @@ class CheckpointServiceTest {
     private CheckpointService checkpoints;
     private CountingHolder holder;
     private GoalTransitionLog transitions;
+    private RunIdentityService identity;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -49,7 +50,7 @@ class CheckpointServiceTest {
         GoalTransitionLog log = new GoalTransitionLog(fileService, mapper);
         log.append("g1", null, "ACTIVE", com.walpro.autobuilder.goal.GoalTransition.Kind.CREATED, "c1", null);
         transitions = log;
-        RunIdentityService identity = mock(RunIdentityService.class);
+        identity = mock(RunIdentityService.class);
         when(identity.runId()).thenReturn("run-1");
         when(identity.lineageId()).thenReturn("lineage-1");
         GoalPlannerService planner = mock(GoalPlannerService.class);
@@ -217,9 +218,55 @@ class CheckpointServiceTest {
         assertThat(checkpoints.restorableCheckpoints()).extracting(CheckpointRecord::cycleId)
                 .as("the operator listing still offers it; a person may want the finished state")
                 .contains("cycle-2");
-        assertThat(checkpoints.continuableCheckpoints()).extracting(CheckpointRecord::cycleId)
+        assertThat(checkpoints.autoRewindCandidates()).extracting(CheckpointRecord::cycleId)
                 .as("a policy choosing where to keep working may not have it")
                 .doesNotContain("cycle-2");
+    }
+
+    @Test
+    @DisplayName("an automatic rewind stays inside its own run, though the directory outlives earlier ones")
+    void anAutomaticRewindDoesNotCrossARunBoundary() {
+        // The checkpoint directory is not cleared at a run boundary, so an earlier run's points sit
+        // right beside this run's and "the newest that landed work" reaches back into them.
+        writeForeignRunCheckpoint("cycle-0", "run-0");
+        checkpoints.write(context("cycle-1", "snapshots/cycle-1"));
+
+        assertThat(checkpoints.restorableCheckpoints()).extracting(CheckpointRecord::cycleId)
+                .as("both are on disk and both restore")
+                .containsExactly("cycle-1", "cycle-0");
+        assertThat(checkpoints.autoRewindCandidates()).extracting(CheckpointRecord::cycleId)
+                .as("the loop may only choose its own run's")
+                .containsExactly("cycle-1");
+    }
+
+    @Test
+    @DisplayName("with the switch on, an earlier run's points become available to the loop again")
+    void crossRunCanBeTurnedBackOn() {
+        writeForeignRunCheckpoint("cycle-0", "run-0");
+        checkpoints.write(context("cycle-1", "snapshots/cycle-1"));
+        ReflectionTestUtils.setField(checkpoints, "autoCrossRunEnabled", true);
+
+        assertThat(checkpoints.autoRewindCandidates()).extracting(CheckpointRecord::cycleId)
+                .containsExactly("cycle-1", "cycle-0");
+    }
+
+    @Test
+    @DisplayName("the run boundary and the finished-root rule are independent — own run is not enough")
+    void ownRunStillHasToBeSomewhereWorthGoing() {
+        transitions.append("g1", "ACTIVE", "COMPLETED",
+                com.walpro.autobuilder.goal.GoalTransition.Kind.CHANGED, "cycle-2", null);
+        checkpoints.write(context("cycle-2", "snapshots/cycle-2"));
+
+        assertThat(checkpoints.autoRewindCandidates())
+                .as("this run's own point, and still nowhere to work from")
+                .isEmpty();
+    }
+
+    /** A point left behind by an EARLIER run, which is what a checkpoint directory accumulates. */
+    private void writeForeignRunCheckpoint(String cycleId, String runId) {
+        when(identity.runId()).thenReturn(runId);
+        checkpoints.write(context(cycleId, "snapshots/" + cycleId));
+        when(identity.runId()).thenReturn("run-1");
     }
 
     @Test

@@ -115,9 +115,8 @@ public class BranchExplorer {
      * exploration rather than a loop.
      */
     public Optional<CheckpointRecord> nextUntriedForkPoint() {
-        // Continuable, not merely restorable: a point whose root goal was already settled restores
-        // perfectly and then halts on the next cycle, which is not a path worth exploring.
-        for (CheckpointRecord record : checkpointService.continuableCheckpoints()) {
+        // The candidates an automatic rewind is allowed: still open, and by default this run's own.
+        for (CheckpointRecord record : checkpointService.autoRewindCandidates()) {
             if (!record.merged()) continue;
             if (branchLedger.alreadyForkedFrom(record.cycleId())) continue;
             return Optional.of(record);

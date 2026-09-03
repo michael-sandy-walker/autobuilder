@@ -37,6 +37,15 @@ autobuilder:
     # itself the instrument — if outcomes differ, the resolution cache is decision-bearing rather
     # than a pure optimisation, which nobody currently knows.
     cache-mode: FAITHFUL
+    # Whether an AUTOMATIC rewind may leave the run it is in. OFF: the loop backs out only to
+    # points its own run took; reaching into an earlier run of the lineage stays a manual action.
+    # The checkpoint directory and the cross-run index both outlive the run that filled them, so
+    # "the newest point that landed work" silently reaches backwards — which is how a stalled run
+    # adopted a FINISHED earlier one's state on 2026-09-03 and halted on the next cycle. Crossing a
+    # run boundary changes whose work is being continued, and that is a judgement for a person
+    # looking at the runs rather than for a grind detector. The operator rewind is unaffected and
+    # still offers every restorable point, marked with the run it belongs to.
+    auto-cross-run-enabled: false
   branch:
     # T4-DQ slice 4. Each rewind seals the path being left and opens a branch from the fork point,
     # so the run accumulates a record of what it has TRIED rather than only a position: the next

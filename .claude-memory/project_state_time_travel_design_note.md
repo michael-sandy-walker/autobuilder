@@ -216,3 +216,16 @@ deterministic replay of live runs on its own, which is worth having regardless
   rebuilds a `CheckpointRecord` with `captureFailures` hardcoded empty, so any point read back from
   the graph claims to be complete whatever it was on disk, and `restorableAcrossRuns` readmits
   points the local listing correctly excluded. Not fixed: persisting it is a schema change.
+- **An automatic rewind must not cross a run boundary (user-directed, 2026-09-03; switch off).**
+  The finished-root rule alone was not enough: replaying the same decision showed it would still
+  have chosen an EARLIER run's point, just a different one. Two separate reaches were happening at
+  once, because the checkpoint directory and the cross-run index both outlive the run that filled
+  them, so "the newest point that landed work" walks backwards past the run boundary without
+  anything marking it. **Crossing a run boundary changes whose work the loop is continuing, and
+  that is a judgement for a person looking at the runs, not for a grind detector.** One home:
+  `CheckpointService.autoRewindCandidates()` holds BOTH conditions (still-open root, own run), and
+  the three policy call sites draw from it; the operator listing applies neither and marks the run
+  each point belongs to. `autobuilder.rewind.auto-cross-run-enabled: false`. Replayed on the run
+  that failed: the old rule picks a finished earlier point, the finished-root rule picks an open
+  earlier point, and the shipped rule finds no candidate at all and halts honestly, which is
+  correct because that run had landed nothing of its own.

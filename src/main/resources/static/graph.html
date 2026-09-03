@@ -1833,7 +1833,8 @@ function renderRewindRuns() {
   document.getElementById('rewind-note').innerHTML = where + '<br>' + (runs.length > 1
     ? `${rewindState.points.length} points across ${runs.length} runs of this lineage. `
       + `Points from an earlier run restore from an archived source-only tree; build output is not `
-      + `kept because it regenerates.`
+      + `kept because it regenerates. Returning to another run is a MANUAL action only — the loop's `
+      + `own rewinds stay inside the run they happen in.`
     : `${rewindState.points.length} point(s), all from the current run.`);
 }
 function shortRun(r) { return r.length > 20 ? r.slice(0, 12) + '…' + r.slice(-4) : r; }

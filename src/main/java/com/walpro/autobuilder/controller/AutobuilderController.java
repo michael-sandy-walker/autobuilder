@@ -29,6 +29,10 @@ public class AutobuilderController {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.checkpoint.RewindService rewindService;
 
+    /** T4-DQ: where the loop's state stands, as distinct from which point is newest on disk. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.checkpoint.CheckpointService checkpointService;
+
     private final com.walpro.autobuilder.core.init.RunIdentityService runIdentityService;
 
     /**
@@ -143,6 +147,12 @@ public class AutobuilderController {
         if (rewindService == null) {
             return ResponseEntity.ok(Map.of("ok", false, "message", "Checkpointing is not enabled."));
         }
+        // The loop's position: after a rewind it is NOT the newest point, and this is the only
+        // place that says so. Empty on a fresh JVM until its first checkpoint; the UI then treats
+        // the newest point as the position, which is right in that case.
+        var position = checkpointService != null
+                ? checkpointService.position() : java.util.Optional.<com.walpro.autobuilder.core.checkpoint.CheckpointService.Position>empty();
+        String hereCycle = position.map(com.walpro.autobuilder.core.checkpoint.CheckpointService.Position::cycleId).orElse(null);
         List<Map<String, Object>> points = new java.util.ArrayList<>();
         for (var record : rewindService.available()) {
             Map<String, Object> row = new java.util.LinkedHashMap<>();
@@ -161,9 +171,23 @@ public class AutobuilderController {
             // Whether the point belongs to the run now in progress, so the UI can mark the ones
             // that will restore from an archived tree rather than from this run's own snapshot.
             row.put("current", java.util.Objects.equals(record.runId(), runIdentityService.runId()));
+            // The point the loop's state currently corresponds to — where "continue" continues from.
+            row.put("here", record.cycleId().equals(hereCycle));
             points.add(row);
         }
-        return ResponseEntity.ok(Map.of("ok", true, "count", points.size(), "checkpoints", points));
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("ok", true);
+        body.put("count", points.size());
+        body.put("checkpoints", points);
+        position.ifPresent(pos -> {
+            Map<String, Object> at = new java.util.LinkedHashMap<>();
+            at.put("cycleId", pos.cycleId());
+            at.put("since", String.valueOf(pos.since()));
+            at.put("rewound", pos.rewound());
+            at.put("fromCycleId", pos.fromCycleId());
+            body.put("position", at);
+        });
+        return ResponseEntity.ok(body);
     }
 
     /**
@@ -212,9 +236,10 @@ public class AutobuilderController {
                     .body(Map.of("ok", false, "message", "cacheMode must be FAITHFUL or FRESH."));
         }
 
-        String targetCycle = target;
-        var outcome = autobuilderService.runExclusively(
-                () -> rewindService.rewindTo(targetCycle, mode, "operator", targetCycle));
+        // Through the service, not straight to the RewindService: the restore is only half of a
+        // rewind. The carried cycle context has to be settled too, or the next tick re-processes
+        // the result of the cycle that was just backed out of and pauses the loop again.
+        var outcome = autobuilderService.rewindAsOperator(target, mode);
         if (outcome.isEmpty()) {
             return ResponseEntity.status(409).body(Map.of("ok", false, "message",
                     "A cycle is running — could not take the control-loop lock. Retry, or "
@@ -237,8 +262,12 @@ public class AutobuilderController {
         // Never hidden: a rewind that restored less than it claims must say so here.
         body.put("clean", result.clean());
         body.put("failures", result.failures());
-        body.put("message", "Returned to " + result.toCycleId()
-                + ". POST /autobuilder/resume to continue from there.");
+        // Which state the loop is left in, so the caller does not have to guess whether to resume.
+        boolean paused = autobuilderService.userPaused();
+        body.put("paused", paused);
+        body.put("message", "Returned to " + result.toCycleId() + (paused
+                ? ". The loop stays paused because you paused it; POST /autobuilder/resume to continue from there."
+                : ". The loop continues from there on its next tick."));
         return ResponseEntity.ok(body);
     }
 

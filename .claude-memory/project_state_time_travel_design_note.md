@@ -187,3 +187,17 @@ deterministic replay of live runs on its own, which is worth having regardless
   indistinguishable from "everything explored", silently removing slice 3's rewind instead of
   slice 4's bookkeeping. **A component's off-switch must be asked about directly, never inferred
   from its answers.**
+- **2026-09-03, the operator rewind field defect: the carried cycle context is NOT a holder.** Four
+  operator rewinds each restored cleanly and were each undone within ten milliseconds. The holders
+  put `systemPaused` back to false, but `AutobuilderService.context` still said `GOAL_FULFILLED`
+  from the cycle just backed out of, and the next tick re-ran the fulfilled terminal (re-pause,
+  re-preserve, a goal-fulfilled end report written over the REWOUND tree). No cycle ever ran from the
+  restored state. The in-loop rewind had the same latent gap for `GOAL_EXHAUSTED`. Fix: one
+  `settleAfterRewind` (reasons cleared, result `CONTINUE`, episode flags reset; an explicit
+  `user-pause` survives) called by both `attemptRewind` and the new `rewindAsOperator`; the controller
+  goes through the service. **Rule: a rewind is restore PLUS settle — anything the scheduler reads on
+  its next tick that is not a holder must be reset by hand.** Also added `CheckpointService.position()`
+  (the point the loop's state IS, distinct from the newest point on disk; in-memory, rewind-aware),
+  exposed on `/autobuilder/checkpoints` as `position` + per-row `here`; the dialog opens on that run
+  and badges the row, and Mission Control consumes `rewind_performed` (it used to drop it) and
+  re-reads subgoal/mode from `/autobuilder/status`.

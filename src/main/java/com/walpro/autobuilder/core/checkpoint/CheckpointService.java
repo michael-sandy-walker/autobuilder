@@ -77,6 +77,32 @@ public class CheckpointService {
     private boolean captureCache = true;
 
     /**
+     * T4-DQ: which point the loop's state currently IS. Advances to every checkpoint as it is
+     * written and jumps back on a rewind, so a reader can tell "the newest point on disk" apart
+     * from "where the loop stands" — after a rewind those differ, and nothing else records the
+     * difference (the status endpoint keeps naming the last cycle that RAN). In memory only: a
+     * fresh JVM has no position until its first checkpoint, and readers fall back to the newest
+     * point, which is then also correct.
+     *
+     * @param cycleId     the checkpoint the loop's state corresponds to
+     * @param since       when it got there
+     * @param rewound     true when it got there by a rewind rather than by finishing that cycle
+     * @param fromCycleId for a rewind, the cycle the loop was at before; otherwise null
+     */
+    public record Position(String cycleId, java.time.Instant since, boolean rewound, String fromCycleId) {}
+
+    private volatile Position position;
+
+    public Optional<Position> position() {
+        return Optional.ofNullable(position);
+    }
+
+    /** Called by the rewind once its restore succeeded: the loop's state is now that of {@code toCycleId}. */
+    public void notePositionAfterRewind(String toCycleId, String fromCycleId) {
+        position = new Position(toCycleId, java.time.Instant.now(), true, fromCycleId);
+    }
+
+    /**
      * Take a checkpoint at the end of {@code context}'s cycle. Never throws: a failed checkpoint
      * costs the loop the ability to rewind to this point, which must not also cost it the cycle.
      */
@@ -111,6 +137,7 @@ public class CheckpointService {
                     stateFingerprintService.of(capture));
 
             fileService.writeJson(dir + "/" + CHECKPOINT_FILE, record);
+            position = new Position(record.cycleId(), record.at(), false, null);
 
             // Keep the point reachable after this run ends: a source-only tree copy that reset and
             // resume do not clear, and an index entry in the graph, which they do not purge either.

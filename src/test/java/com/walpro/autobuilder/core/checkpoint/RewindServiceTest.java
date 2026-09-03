@@ -93,6 +93,29 @@ class RewindServiceTest {
     }
 
     @Test
+    @DisplayName("after a rewind the loop's position is the target, not the newest point on disk")
+    void positionFollowsTheRewind() throws IOException {
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        writeSnapshot("cycle-2", Map.of("src/A.java", "class A {}", "src/B.java", "class B {}"));
+        checkpoints.write(context("cycle-1"));
+        checkpoints.write(context("cycle-2"));
+        assertThat(checkpoints.position()).get()
+                .as("writing a point advances the position to it")
+                .extracting(CheckpointService.Position::cycleId, CheckpointService.Position::rewound)
+                .containsExactly("cycle-2", false);
+
+        rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-2");
+
+        CheckpointService.Position position = checkpoints.position().orElseThrow();
+        assertThat(position.cycleId()).isEqualTo("cycle-1");
+        assertThat(position.rewound()).isTrue();
+        assertThat(position.fromCycleId()).isEqualTo("cycle-2");
+        assertThat(rewind.available().get(0).cycleId())
+                .as("the listing still names cycle-2 newest — the position is what tells them apart")
+                .isEqualTo("cycle-2");
+    }
+
+    @Test
     @DisplayName("the snapshot's own state stamp is not planted into the restored tree")
     void snapshotStampIsNotRestoredAsSource() throws IOException {
         writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));

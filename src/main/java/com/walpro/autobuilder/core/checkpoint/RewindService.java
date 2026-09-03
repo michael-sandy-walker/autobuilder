@@ -141,6 +141,9 @@ public class RewindService {
             failures.add("state diverged after restore: " + component);
         }
 
+        // The loop's state is now that of the target, whatever the checkpoint listing says is newest.
+        checkpointService.notePositionAfterRewind(toCycleId, atCycleId);
+
         Result result = new Result(true, toCycleId, null, mode, holders.restored().size(),
                 holders.reset().size(), goals.statusesRestored(), goals.goalsRewoundOut(), undone,
                 true, List.copyOf(failures));

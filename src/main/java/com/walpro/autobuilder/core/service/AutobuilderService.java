@@ -284,6 +284,15 @@ public class AutobuilderService implements CheckpointableState {
     private com.walpro.autobuilder.core.checkpoint.RewindPolicy rewindPolicy;
 
     /**
+     * T4-DQ: the operator's rewind goes through this service rather than straight to the
+     * {@link com.walpro.autobuilder.core.checkpoint.RewindService}, because the restore alone is
+     * not the whole rewind — see {@link #settleAfterRewind}. Optional for the same reason as the policy.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.checkpoint.RewindService rewindService;
+
+    /**
      * T4-DQ slice 4: optional — at the run terminal, ends the run on the path that got furthest
      * rather than the one it was last on. Absent leaves the terminal exactly as it was.
      */
@@ -1402,12 +1411,74 @@ public class AutobuilderService implements CheckpointableState {
                 context.cycleName(), rootConvergenceTracker.cyclesSinceProgress());
         if (rewound.isEmpty()) return false;
 
-        rootConvergenceTracker.resyncAfterRewind();
-        // `context` is the service's own field, which the next tick reads.
-        this.context = context.withPausedReason(null).withGoalExhaustedReason(null);
+        settleAfterRewind(context, false);
         log.warn("T4-DQ: cycle {} ends at the rewind ({}) — the remainder of its post-cycle work "
                 + "describes the path that was just backed out of.", context.cycleName(), why);
         return true;
+    }
+
+    /**
+     * T4-DQ: an operator asked the loop to return to {@code toCycleId}. Runs under the control
+     * loop's own lock (empty when a cycle holds it), performs the restore, and then settles the
+     * carried cycle context the same way the in-loop rewind does — which is the part the first
+     * field rewinds lacked. Four operator rewinds in a row each restored cleanly and were each
+     * undone within ten milliseconds: the checkpoint's holders put {@code systemPaused} back to
+     * false, the untouched context still said {@code GOAL_FULFILLED}, and the next tick re-ran the
+     * fulfilled terminal — re-pausing, re-preserving, and writing a goal-fulfilled end report over
+     * the rewound tree. No cycle ever ran from the restored state.
+     *
+     * <p>A pause the person asked for is kept: rewinding is not the same as resuming, and the
+     * response says which state the loop is left in.
+     */
+    public Optional<com.walpro.autobuilder.core.checkpoint.RewindService.Result> rewindAsOperator(
+            String toCycleId, com.walpro.autobuilder.core.checkpoint.CacheMode mode) {
+        if (rewindService == null) return Optional.empty();
+        return runExclusively(() -> {
+            String at = context != null && context.cycleName() != null ? context.cycleName() : toCycleId;
+            var result = rewindService.rewindTo(toCycleId, mode, "operator", at);
+            if (result.performed()) {
+                settleAfterRewind(context, true);
+            }
+            return result;
+        });
+    }
+
+    /**
+     * The half of a rewind that the checkpoint cannot carry. The restore puts every holder back,
+     * but the cycle context the scheduler reads on its next tick is not a holder: it is the record
+     * of the cycle that just RAN, on the path that was just backed out of. Left alone, its result
+     * state is re-processed as though it had just happened — a {@code GOAL_FULFILLED} pauses the
+     * loop again, a {@code GOAL_EXHAUSTED} raises the exhaustion halt again — and the restored
+     * state never gets a cycle. So the context is settled to "continue from here": no halt reason,
+     * no exhaustion reason, result {@code CONTINUE}, the same reading the run had when it finished
+     * the cycle the checkpoint was taken at. One home for both the policy's rewind and the operator's.
+     *
+     * @param keepUserPause whether a pause a person asked for survives (the operator's rewind keeps
+     *                      it; the policy's never fires under one — see {@code NON_REWINDABLE_PAUSES})
+     */
+    private void settleAfterRewind(CycleContextData current, boolean keepUserPause) {
+        if (rootConvergenceTracker != null) {
+            rootConvergenceTracker.resyncAfterRewind();
+        }
+        if (current == null) return;
+        boolean userPaused = keepUserPause && "user-pause".equals(current.pausedReason());
+        // `context` is the service's own field, which the next tick reads.
+        this.context = current
+                .withPausedReason(userPaused ? "user-pause" : null)
+                .withGoalExhaustedReason(null)
+                .withCycleResultState(CycleResultState.CONTINUE);
+        // The holder restore set these from the checkpoint; this makes the outcome not depend on
+        // which tick the checkpoint happened to be written on. A kept user pause keeps its episode
+        // flags too, so the next tick does not re-announce, re-preserve and re-report a pause the
+        // person already has.
+        systemPaused = userPaused;
+        pauseEventEmitted = userPaused;
+        endReportWrittenThisEpisode = userPaused;
+    }
+
+    /** T4-DQ: whether the loop stands paused by a person right now (survives an operator rewind). */
+    public boolean userPaused() {
+        return context != null && "user-pause".equals(context.pausedReason());
     }
 
     /**

@@ -4,6 +4,7 @@ import com.walpro.autobuilder.core.checkpoint.CacheMode;
 import com.walpro.autobuilder.core.checkpoint.RewindPolicy;
 import com.walpro.autobuilder.core.checkpoint.RewindService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.lifecycle.CycleResultState;
 import com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,7 +15,9 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -34,6 +37,7 @@ class AutobuilderServiceRewindWiringTest {
     private AutobuilderService service;
     private RootConvergenceTracker tracker;
     private RewindPolicy policy;
+    private RewindService rewinds;
 
     @BeforeEach
     void setUp() {
@@ -45,6 +49,87 @@ class AutobuilderServiceRewindWiringTest {
         // collaborators and counting positions is how a test ends up asserting about the wrong one.
         ReflectionTestUtils.setField(service, "rootConvergenceTracker", tracker);
         ReflectionTestUtils.setField(service, "rewindPolicy", policy);
+        rewinds = mock(RewindService.class);
+        service.setRewindService(rewinds);
+    }
+
+    // ---- the operator's rewind: the field defect this test class was widened for ----
+    //
+    // Four operator rewinds on 2026-09-03 each restored cleanly and were each undone within ten
+    // milliseconds. The checkpoint's holders put systemPaused back to false; the cycle context —
+    // not a holder — still said GOAL_FULFILLED; the next tick re-ran the fulfilled terminal. No
+    // cycle ever ran from the restored state, and the run stayed at one checkpoint.
+
+    @Test
+    @DisplayName("an operator rewind settles the stale result, so the next tick runs a cycle rather than re-pausing")
+    void anOperatorRewindDoesNotLeaveTheFulfilledResultBehind() {
+        when(rewinds.rewindTo(eq("cycle-12"), any(), eq("operator"), anyString()))
+                .thenReturn(performed("cycle-12"));
+        ReflectionTestUtils.setField(service, "context",
+                cycle("cycle-30", null).withCycleResultState(CycleResultState.GOAL_FULFILLED));
+        ReflectionTestUtils.setField(service, "systemPaused", true);
+
+        var result = service.rewindAsOperator("cycle-12", CacheMode.FAITHFUL);
+
+        assertThat(result).isPresent();
+        CycleContextData after = service.getContext().orElseThrow();
+        assertThat(after.cycleResultState())
+                .as("the result of the cycle that was backed out of must not be re-processed")
+                .isEqualTo(CycleResultState.CONTINUE);
+        assertThat(after.pausedReason()).isNull();
+        assertThat(after.goalExhaustedReason()).isNull();
+        assertThat(service.isPaused()).isFalse();
+        assertThat(service.userPaused()).isFalse();
+        verify(tracker).resyncAfterRewind();
+        // the trace names the cycle the loop was AT, not the target twice
+        verify(rewinds).rewindTo("cycle-12", CacheMode.FAITHFUL, "operator", "cycle-30");
+    }
+
+    @Test
+    @DisplayName("a pause the person asked for survives their rewind — rewinding is not resuming")
+    void anOperatorRewindKeepsAUserPause() {
+        when(rewinds.rewindTo(anyString(), any(), anyString(), anyString()))
+                .thenReturn(performed("cycle-12"));
+        ReflectionTestUtils.setField(service, "context",
+                cycle("cycle-30", "user-pause").withCycleResultState(CycleResultState.CONTINUE));
+        ReflectionTestUtils.setField(service, "systemPaused", true);
+
+        service.rewindAsOperator("cycle-12", CacheMode.FAITHFUL);
+
+        assertThat(service.getContext().orElseThrow().pausedReason()).isEqualTo("user-pause");
+        assertThat(service.isPaused()).isTrue();
+        assertThat(service.userPaused()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a refused operator rewind changes nothing about the carried context")
+    void aRefusedOperatorRewindLeavesTheContextAlone() {
+        when(rewinds.rewindTo(anyString(), any(), anyString(), anyString()))
+                .thenReturn(new RewindService.Result(false, "cycle-12", "no checkpoint for that cycle",
+                        null, 0, 0, 0, 0, 0, false, List.of()));
+        ReflectionTestUtils.setField(service, "context",
+                cycle("cycle-30", null).withCycleResultState(CycleResultState.GOAL_FULFILLED));
+
+        var result = service.rewindAsOperator("cycle-12", CacheMode.FAITHFUL);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().performed()).isFalse();
+        assertThat(service.getContext().orElseThrow().cycleResultState()).isEqualTo(CycleResultState.GOAL_FULFILLED);
+        verify(tracker, never()).resyncAfterRewind();
+    }
+
+    @Test
+    @DisplayName("the policy's rewind settles the result state too — the same stale-context gap, one home")
+    void thePolicysRewindSettlesTheResultStateToo() {
+        when(policy.considerRewindInsteadOfHalting(anyString(), anyInt()))
+                .thenReturn(Optional.of(performed()));
+
+        service.rewindBeforeHalting(
+                cycle("cycle-30", "root-exhaustion").withCycleResultState(CycleResultState.GOAL_EXHAUSTED));
+
+        assertThat(service.getContext().orElseThrow().cycleResultState())
+                .as("left as GOAL_EXHAUSTED, the next tick raises the exhaustion halt again")
+                .isEqualTo(CycleResultState.CONTINUE);
     }
 
     @Test
@@ -150,7 +235,11 @@ class AutobuilderServiceRewindWiringTest {
     }
 
     private static RewindService.Result performed() {
-        return new RewindService.Result(true, "cycle-10", null, CacheMode.FAITHFUL,
+        return performed("cycle-10");
+    }
+
+    private static RewindService.Result performed(String toCycleId) {
+        return new RewindService.Result(true, toCycleId, null, CacheMode.FAITHFUL,
                 12, 0, 3, 1, 20, true, List.of());
     }
 }

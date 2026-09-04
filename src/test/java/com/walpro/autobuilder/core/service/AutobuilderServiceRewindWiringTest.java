@@ -234,6 +234,34 @@ class AutobuilderServiceRewindWiringTest {
                 .build();
     }
 
+    @Test
+    @DisplayName("an adopted project with no goal waits, and a goal releases it")
+    void anAdoptedProjectWaitsForAGoal() {
+        // The first adopted run died at boot on "Parent goal not found: create-basic-structure".
+        // With no current goal and no remaining goals the planner injects a fallback naming ids
+        // that do not exist, and the first thing to treat one as a real parent throws. An adopted
+        // project has no goal by design, so it must WAIT rather than cycle into that.
+        ReflectionTestUtils.setField(service, "awaitingGoal", true);
+
+        assertThat(service.awaitingGoal()).isTrue();
+
+        service.goalProvided();
+
+        assertThat(service.awaitingGoal())
+                .as("the goal endpoint is what releases it; nothing else should")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("waiting for a goal is not the same as being refused")
+    void waitingIsNotRefusal() {
+        ReflectionTestUtils.setField(service, "awaitingGoal", true);
+
+        assertThat(service.held())
+                .as("the start succeeded and the tree is adopted; only the purpose is missing")
+                .isFalse();
+    }
+
     private static RewindService.Result performed() {
         return performed("cycle-10");
     }

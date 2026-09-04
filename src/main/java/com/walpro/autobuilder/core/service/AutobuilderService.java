@@ -273,6 +273,19 @@ public class AutobuilderService implements CheckpointableState {
      */
     private volatile boolean startRefused = false;
 
+    /**
+     * T4-CQ: adopted, but with nothing to work towards yet.
+     *
+     * <p>{@code ADOPT_PROJECT} deliberately does not invent a goal for a codebase the loop did not
+     * write. It then has to actually WAIT for one, which is not the same as being refused: the
+     * start succeeded, the tree is adopted, and only the purpose is missing. Cycling anyway walks
+     * into the planner's no-goals fallback, which invents the ids
+     * {@code bootstrap-project-structure} / {@code create-basic-structure} for a context that has
+     * no such goals — and the first thing to treat one as a real parent throws
+     * {@code Parent goal not found}, which is how the first adopted run died at boot.
+     */
+    private volatile boolean awaitingGoal = false;
+
     /** T5-BF follow-up: guards {@link #emitSystemPausedOnce} — one behaviour event per pause
      *  episode. Reset alongside {@code systemPaused} on the first provably-unpaused tick. */
     private boolean pauseEventEmitted = false;
@@ -586,7 +599,29 @@ public class AutobuilderService implements CheckpointableState {
             return;
         }
         performStart(start);
+        StartMode startedAs = start != null ? start.mode() : StartMode.NEW_PROJECT;
+        if (startedAs == StartMode.ADOPT_PROJECT && goalPlannerService.getRootGoal() == null) {
+            awaitingGoal = true;
+            log.warn("T4-CQ: adopted {} and it has no goal yet, so the loop is waiting rather than "
+                    + "cycling. Read it with GET /autobuilder/cold-read and set one with "
+                    + "POST /autobuilder/goal.", startModeService != null
+                            ? startModeService.situation() : "this tree");
+            return;
+        }
         runAutobuilderCycle();
+    }
+
+    /** T4-CQ: a goal arrived for an adopted project, so it may start working. */
+    public void goalProvided() {
+        if (awaitingGoal) {
+            awaitingGoal = false;
+            log.warn("T4-CQ: a goal was set — the adopted project starts on the next cycle.");
+        }
+    }
+
+    /** Whether this run is adopted and still has nothing to work towards. */
+    public boolean awaitingGoal() {
+        return awaitingGoal;
     }
 
     /**
@@ -745,7 +780,9 @@ public class AutobuilderService implements CheckpointableState {
     private void runAutobuilderCycleLocked() {
         // T4-DP: the start was refused, so nothing on disk was confirmed. Cycling here would undo
         // the point of the refusal, which is that the tree is left exactly as it was found.
-        if (startRefused) return;
+        // T4-CQ: adopted with no goal is the same restraint for a different reason — there is
+        // nothing to work towards, and the planner's fallback would invent goals that do not exist.
+        if (startRefused || awaitingGoal) return;
 
         // T1-FL: a breaker-caused pause is a suspension, not a terminal. The breaker's timed
         // open (T1-FD) already encodes when the next attempt is allowed; once its cooldown

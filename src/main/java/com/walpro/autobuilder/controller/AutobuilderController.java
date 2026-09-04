@@ -7,6 +7,7 @@ import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.core.service.AutobuilderService;
 import com.walpro.autobuilder.goal.CoverageReviewResult;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +18,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/autobuilder")
 @RequiredArgsConstructor
+@Slf4j
 public class AutobuilderController {
 
     private final AutobuilderService autobuilderService;
@@ -112,6 +114,7 @@ public class AutobuilderController {
     public ResponseEntity<Map<String, Object>> startState() {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("held", autobuilderService.held());
+        body.put("awaitingGoal", autobuilderService.awaitingGoal());
         if (startModeService != null) {
             var d = startModeService.decide();
             body.put("mode", d.mode().name());
@@ -171,6 +174,60 @@ public class AutobuilderController {
             return ResponseEntity.internalServerError().body(Map.of("ok", false,
                     "message", "the start failed part-way: " + e.getMessage()));
         }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.goal.GoalPlannerService goalPlannerServiceForGoal;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.service.FileService fileServiceForGoal;
+
+    /**
+     * T4-CQ: give an adopted project a goal.
+     *
+     * <p>An adopted codebase deliberately gets no goal at startup — inventing one is the
+     * circularity the import ticket warns about, where the loop writes a specification and then
+     * grades itself against it. But that left no way to supply one either, so an adopted project
+     * could be read and never worked on. This is the way.
+     *
+     * <p>Written to {@code bootstrap/seed.txt} as well as set live, so the goal is durable, is
+     * visible in the same place every other target keeps its specification, and a restart
+     * reproduces this run rather than starting goalless again.
+     *
+     * <p>Refuses when a root goal already exists. Replacing the purpose of a run that is already
+     * pursuing one is not an edit, it is a different run.
+     */
+    @PostMapping(value = "/goal", consumes = org.springframework.http.MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<Map<String, Object>> setGoal(@RequestBody String goalText) {
+        if (goalPlannerServiceForGoal == null || fileServiceForGoal == null) {
+            return ResponseEntity.status(503).body(Map.of("ok", false,
+                    "message", "Goal setting is not available in this context."));
+        }
+        String text = goalText == null ? "" : goalText.strip();
+        if (text.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false,
+                    "message", "The goal text is empty."));
+        }
+        var existing = goalPlannerServiceForGoal.getRootGoal();
+        if (existing != null) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false,
+                    "message", "This run already has a root goal (" + existing.getId()
+                            + "). Replacing what a run is pursuing is a different run, not an edit."));
+        }
+        String goalId = "goal-" + java.util.UUID.randomUUID();
+        try {
+            fileServiceForGoal.ensureFolderExists("bootstrap");
+            fileServiceForGoal.writeFile("bootstrap/seed.txt", text);
+        } catch (java.io.IOException e) {
+            // The live goal still gets set: losing the durable copy costs a restart, not the run.
+            log.warn("T4-CQ: could not persist the goal to bootstrap/seed.txt: {}", e.getMessage());
+        }
+        goalPlannerServiceForGoal.addInitialGoal(goalId, text);
+        autobuilderService.goalProvided();
+        log.warn("T4-CQ: root goal set by request on an adopted project — {}", goalId);
+        return ResponseEntity.ok(Map.of("ok", true, "goalId", goalId,
+                "message", "Root goal set and written to bootstrap/seed.txt. The loop picks it up on "
+                        + "its next cycle."));
     }
 
     /** T4-DQ: where the loop's state stands, as distinct from which point is newest on disk. */

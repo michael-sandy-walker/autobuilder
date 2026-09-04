@@ -97,3 +97,25 @@ controllers never mention it and the annotation-derived paths would all 404.
 
 **Deliberately NOT done:** turning the account into a seed. That is where the circularity enters and
 it is its own decision. Slice 1 stops at "what is there", which a person can check line by line.
+
+## Giving an adopted project a goal — 2026-09-05
+
+- **The gap was total: `addInitialGoal` was reachable only from `bootstrap/seed.txt`.** An adopted
+  project could be read and never worked on. `POST /autobuilder/goal` sets the root goal and writes
+  it to `bootstrap/seed.txt`, so it is durable, sits where every other target keeps its
+  specification, and a restart reproduces the run. Refused when a root goal already exists —
+  replacing what a run is pursuing is a different run, not an edit.
+- **🔴 ADOPTION MUST WAIT, NOT CYCLE.** The first adopted run died at boot with
+  `Parent goal not found: create-basic-structure`. `PlannerAgent.ensureFallbackGoalState` injects
+  `bootstrap-project-structure` / `create-basic-structure` when there is no current goal AND no
+  remaining goals — a fallback for a fresh project, which invents ids that do not exist in the tree;
+  the first call treating one as a real parent throws. **An adopted project has no goal BY DESIGN,
+  so it is exactly the state that fallback cannot survive.** `awaitingGoal` now holds the scheduler
+  until a goal arrives. Distinct from a refused start: the start succeeded and the tree is adopted,
+  only the purpose is missing. (The hardcoded ids are also target-domain strings in framework code
+  — [[feedback-no-target-domain-in-framework-strings]] — left alone here, worth a ticket.)
+- **The first goal for an adopted project should be CHARACTERISATION, not correction.** The one
+  given: extend the suite so every served route is exercised, asserting what the code does TODAY,
+  changing nothing. It is anchored in a fact from the cold read (5 tests cover 1 of 8 types, no
+  route is exercised), it cannot be graded against the loop's own guess, and it builds the
+  regression baseline before any behaviour changes — the ladder's rung 2 in miniature.

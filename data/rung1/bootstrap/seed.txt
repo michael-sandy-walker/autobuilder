@@ -1,0 +1,13 @@
+This is an existing Spring Boot REST calculator that already works, with a passing suite of five
+tests. Those five cover one class, ScientificCalculatorService, plus the application context. None
+of the seven HTTP routes the application serves is exercised by any test.
+
+Extend the existing test suite so that every route the application serves is exercised by a test,
+using the project's own test framework and conventions. ADD TESTS ONLY: do not change the
+application's behaviour, its packages, or its classes.
+
+These are characterisation tests. Each one must assert what the code does TODAY and pass against it
+unchanged. Where a route's current behaviour looks surprising, still assert what it actually does,
+and note the surprise in the test's name or a comment rather than correcting the code.
+
+The five tests already present must keep passing.

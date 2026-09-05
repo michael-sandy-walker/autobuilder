@@ -1,22 +1,29 @@
-An existing project, adopted. It was written by someone else and it already runs. In its own
+  An existing project, adopted. It was written by someone else and it already runs. In its own
   words, from its README:
 
     "rest-calculator — A simple calculator exposed as Rest API, built with Java 11 using Spring Boot."
 
-  It serves these routes, read from its own controllers, under the context path /calculator:
+  Its controllers declare these routes:
 
-    GET /calculator/basic/add            GET /calculator/scientific/square/{factor}
-    GET /calculator/basic/subtract       GET /calculator/scientific/factorial/{number}
-    GET /calculator/basic/multiply       GET /calculator/scientific/prime/{number}
-    GET /calculator/basic/divide
+    GET /basic/add?augend=&addend=              GET /scientific/square/{factor}
+    GET /basic/subtract?minuent=&subtrahend=    GET /scientific/factorial/{number}
+    GET /basic/multiply?multiplier=&multiplicand=   GET /scientific/prime/{number}
+    GET /basic/divide?dividend=&divisor=
+
+  Those are the paths the controllers themselves declare. The application is separately configured
+  with a servlet context path of /calculator, which the controllers do not mention, so over real
+  HTTP the same routes answer at /calculator/basic/add and so on. Which of the two a test needs
+  depends on how the test reaches the application. Establish that rather than assuming it.
 
   OBJECTIVE: every route this application serves is covered by a test in the project's own test
   suite, and the whole suite passes.
 
   Work inside the project as it is. Keep its packages, its classes, its naming and its test
-  framework. Add tests under src/test/java. Do not restructure the application and do not change
-  what a route returns.
+  framework. Add tests under src/test/java. DO NOT modify anything under src/main/java: not the
+  formatting, not the exception types, not the logic. If a test you wrote does not pass, the test
+  is what is wrong.
 
-  A test must assert what the route actually does. If a route's behaviour looks wrong to you, still
+  A test must assert what the route actually does. Do not assume a status code or a body: exercise
+  the route, observe the answer, and assert that. If a route's behaviour looks wrong to you, still
   assert the behaviour it has, and say what looked wrong in the test name or a comment. Deciding
   whether that behaviour should change is not part of this objective.

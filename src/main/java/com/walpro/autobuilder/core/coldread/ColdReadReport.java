@@ -58,21 +58,27 @@ public final class ColdReadReport {
             for (String l : r.prose()) b.append("  | ").append(l).append('\n');
         }
 
-        b.append("\nREQUEST SURFACE the code declares");
+        b.append("\nREQUEST SURFACE");
         b.append(r.surfaceComplete() ? "\n" : "  (INCOMPLETE — a mapping path is not a literal)\n");
         if (r.surface().isEmpty()) b.append("  (none found)\n");
         String prefix = r.runtime() == null ? null : r.runtime().contextPath();
-        for (String s : r.surface()) {
-            // Printed as it is actually reachable. The context path lives in configuration and the
-            // controllers never mention it, so a surface listed off the annotations alone names
-            // routes that answer 404 to anyone who tries them.
-            if (prefix == null) { b.append("  ").append(s).append('\n'); continue; }
-            int sp = s.indexOf(' ');
-            b.append("  ").append(s, 0, sp + 1).append(prefix).append(s.substring(sp + 1)).append('\n');
-        }
-        if (prefix != null) {
-            b.append("  (the ").append(prefix)
-             .append(" prefix comes from configuration, not from the controllers)\n");
+        if (prefix == null) {
+            for (String s : r.surface()) b.append("  ").append(s).append('\n');
+        } else {
+            // BOTH forms, because they are two different facts and a reader who is handed only one
+            // of them will use it in the wrong place. Run 2026-09-05: this printed the reachable
+            // form alone, that form went into a specification, the loop wrote its tests with
+            // MockMvc — which bypasses the servlet container and applies no context path — and ten
+            // of eleven tests answered 404. The prefix is real, and it is real only over HTTP.
+            b.append(String.format("  %-42s %s%n", "as the controllers declare it", "as it answers over HTTP"));
+            for (String s : r.surface()) {
+                int sp = s.indexOf(' ');
+                String reachable = s.substring(0, sp + 1) + prefix + s.substring(sp + 1);
+                b.append(String.format("  %-42s %s%n", s, reachable));
+            }
+            b.append("  the ").append(prefix)
+             .append(" prefix is configuration, not code. Anything reaching the application through\n")
+             .append("  a real HTTP request needs it; anything bypassing the servlet container does not.\n");
         }
 
         section(b, "TYPES", r.types());

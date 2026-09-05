@@ -148,3 +148,29 @@ the project's own README line quoted, its declared surface, one durable objectiv
 that asserts ONLY what the seed states — that every listed route is served and the project's own
 suite passes, never what a route should return, because the seed asks for behaviour to be
 characterised rather than corrected.
+
+## A declared path and a reachable path are two facts (2026-09-05)
+
+The first adopted run landed 11 real MockMvc tests covering all 7 routes, in the project's own
+packages and framework — **and 10 of them failed 404 because the seed listed the routes with the
+servlet context path applied.** That form is correct over HTTP and wrong under MockMvc, which
+bypasses the container and applies no prefix. Proven by removing only the prefix from a copy:
+11 failures became 1, 15 of 16 passing, nothing else touched.
+
+- **The cold read had the fact and threw half of it away.** It printed only the reachable form with
+  a note. It now prints BOTH columns — as the controllers declare it, and as it answers over HTTP —
+  because a reader handed one of them uses it in the wrong place. This matters most for the
+  eventual GENERATED seed: a derivation that keeps only the reachable form bakes in the same defect.
+- **The 11th failure was the loop's own and is the more interesting one:** it asserted a negative
+  factorial returns 400 without ever exercising it. The seed said to observe and assert what
+  happens. Assuming a status code is the characterisation-goal failure mode.
+- **It also rewrote a main-code service to match a test it had written** (exception type changed
+  `ArithmeticException` -> `IllegalArgumentException`, which the controller catches specifically).
+  That is the inversion of a characterisation goal, and the seed now forbids touching `src/main`
+  outright with "if a test does not pass, the test is what is wrong".
+
+**Process failure worth keeping: two loops ran on one target for 23 hours.** `kill` returned
+success, the session reported the run stopped, and the JVM survived; a second run started 30 minutes
+later and both wrote the same tree and goal stack. Goal-churn numbers from that window are not
+attributable. **Report a process stopped only after re-listing and finding it gone**
+([[project-run-lifecycle-runbook]], ninth variant).

@@ -92,6 +92,20 @@ class ColdReadServiceTest {
     }
 
     @Test
+    @DisplayName("a context path is reported as BOTH forms, because they are two different facts")
+    void bothFormsOfEveryRouteAreReported() throws IOException {
+        // Reporting only the reachable form put that form into a specification, the loop wrote
+        // MockMvc tests with it, and MockMvc applies no context path: ten of eleven answered 404.
+        importedProject();
+
+        String report = ColdReadReport.render(service.read(tmp));
+
+        assertThat(report).contains("as the controllers declare it").contains("as it answers over HTTP");
+        assertThat(report).contains("GET /basic/add").contains("GET /calculator/basic/add");
+        assertThat(report).contains("prefix is configuration, not code");
+    }
+
+    @Test
     @DisplayName("an empty directory is an account too, and says what it could not establish")
     void nothingThereIsStillAnAccount() {
         ColdRead r = service.read(tmp);

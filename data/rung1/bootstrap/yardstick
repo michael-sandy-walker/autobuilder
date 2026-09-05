@@ -1,0 +1,5 @@
+# T4-DG: the yardstick this target is scored by. One line: <script> [mode]
+# Asserts only what the seed states: every listed route is served, and the project's own suite
+# passes. Deliberately says nothing about what a route returns — the seed asks for behaviour to be
+# characterised, not corrected.
+scripts/smoke_rung1.sh serving

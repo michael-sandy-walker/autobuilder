@@ -66,11 +66,24 @@ autobuilder:
     # changed build, where some divergence is the thing being measured.
     strict: false
   diff:
+    # T4-CQ 2026-09-05: matched by PATH SEGMENT, not prefix. A tree the loop wrote keeps these at
+    # the root; an imported one puts build tooling anywhere, and `.mvn/wrapper/maven-wrapper.jar`
+    # broke the diff on every cycle of the first imported run.
+    # `test` REMOVED 2026-09-05. It was there for the loop's own scratch folder, which lives at
+    # data/<target>/test — a SIBLING of output/, so the diff never saw it and the entry never
+    # matched anything. Under segment matching it would have started matching src/test/java, i.e.
+    # a project's own tests, making a change to them invisible to the loop that wrote it.
     exclude-folders:
       - logs
-      - test
       - responses
       - target
+      - .mvn
+      - .git
+      - .idea
+      - .gradle
+      - node_modules
+      - build
+      - out
     exclude-files:
       - meta.json
   evaluation:

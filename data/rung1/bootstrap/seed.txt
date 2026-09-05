@@ -1,13 +1,22 @@
-This is an existing Spring Boot REST calculator that already works, with a passing suite of five
-tests. Those five cover one class, ScientificCalculatorService, plus the application context. None
-of the seven HTTP routes the application serves is exercised by any test.
+An existing project, adopted. It was written by someone else and it already runs. In its own
+  words, from its README:
 
-Extend the existing test suite so that every route the application serves is exercised by a test,
-using the project's own test framework and conventions. ADD TESTS ONLY: do not change the
-application's behaviour, its packages, or its classes.
+    "rest-calculator — A simple calculator exposed as Rest API, built with Java 11 using Spring Boot."
 
-These are characterisation tests. Each one must assert what the code does TODAY and pass against it
-unchanged. Where a route's current behaviour looks surprising, still assert what it actually does,
-and note the surprise in the test's name or a comment rather than correcting the code.
+  It serves these routes, read from its own controllers, under the context path /calculator:
 
-The five tests already present must keep passing.
+    GET /calculator/basic/add            GET /calculator/scientific/square/{factor}
+    GET /calculator/basic/subtract       GET /calculator/scientific/factorial/{number}
+    GET /calculator/basic/multiply       GET /calculator/scientific/prime/{number}
+    GET /calculator/basic/divide
+
+  OBJECTIVE: every route this application serves is covered by a test in the project's own test
+  suite, and the whole suite passes.
+
+  Work inside the project as it is. Keep its packages, its classes, its naming and its test
+  framework. Add tests under src/test/java. Do not restructure the application and do not change
+  what a route returns.
+
+  A test must assert what the route actually does. If a route's behaviour looks wrong to you, still
+  assert the behaviour it has, and say what looked wrong in the test name or a comment. Deciding
+  whether that behaviour should change is not part of this objective.

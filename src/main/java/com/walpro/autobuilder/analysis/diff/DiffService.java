@@ -81,23 +81,54 @@ public class DiffService {
         if (folder == null) return Map.of(); // defensive, shouldn't be needed anymore
 
         Map<String, String> fileMap = new HashMap<>();
+        int unreadable = 0;
+        String firstUnreadable = null;
         for (var info : fileService.listFiles(folder)) {
             String rawPath = info.getName();
             String normalized = rawPath.replace("\\", "/");
 
-            if (diffConfig.getExcludeFolders().stream().anyMatch(normalized::startsWith)) {
-                log.debug("Skipping excluded folder: {}", normalized);
+            if (isExcluded(normalized)) {
+                log.debug("Skipping excluded path: {}", normalized);
                 continue;
             } else if (diffConfig.getExcludeFiles().stream().anyMatch(normalized::endsWith)) {
                 log.debug("Skipping excluded file: {}", normalized);
                 continue;
             }
 
-
-            String content = fileService.readFile(folder + "/" + rawPath);
-            fileMap.put(rawPath, content);
+            try {
+                fileMap.put(rawPath, fileService.readFile(folder + "/" + rawPath));
+            } catch (java.nio.charset.MalformedInputException e) {
+                // A file that is not text is not a change to the project's source, and one of them
+                // must never cost the whole diff. Until 2026-09-05 it did: the first imported
+                // project carried a Maven wrapper jar, reading it threw, computeDiff failed on
+                // EVERY cycle, and with no diff nothing was scored or merged. Eighteen cycles,
+                // sixteen proposals, zero of them judged.
+                unreadable++;
+                if (firstUnreadable == null) firstUnreadable = normalized;
+            }
+        }
+        if (unreadable > 0) {
+            // Counted and named, not silent: a diff that quietly ignores part of a tree is how a
+            // change goes unnoticed, which is the failure this whole service exists to prevent.
+            log.info("Diff skipped {} file(s) that are not text (first: {}) — they cannot hold a "
+                    + "source change and are not part of the comparison", unreadable, firstUnreadable);
         }
         return fileMap;
+    }
+
+    /**
+     * Whether a path lies under an excluded folder, matched by PATH SEGMENT.
+     *
+     * <p>This compared prefixes until 2026-09-05, which works only for a tree the loop wrote
+     * itself, where every excluded folder sits at the root. An imported project puts them
+     * anywhere: {@code .mvn/wrapper/} holds a binary the old test never matched, and a prefix rule
+     * would also have to be told about {@code src/test/java} separately from {@code test}.
+     */
+    private boolean isExcluded(String normalizedPath) {
+        for (String segment : normalizedPath.split("/")) {
+            if (diffConfig.getExcludeFolders().contains(segment)) return true;
+        }
+        return false;
     }
 
 

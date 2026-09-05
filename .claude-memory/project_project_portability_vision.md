@@ -119,3 +119,32 @@ it is its own decision. Slice 1 stops at "what is there", which a person can che
   changing nothing. It is anchored in a fact from the cold read (5 tests cover 1 of 8 types, no
   route is exercised), it cannot be graded against the loop's own guess, and it builds the
   regression baseline before any behaviour changes — the ladder's rung 2 in miniature.
+
+## 🔴 The diff could not survive a tree the loop did not write (2026-09-05)
+
+**First real adopted run: 18 cycles, 16 mutations proposed, ZERO scored, zero merged, zero
+rejected.** `DiffService.loadFiles` reads every file in the tree as UTF-8; the Maven wrapper ships
+`maven-wrapper.jar`; the read threw `MalformedInputException` and `ProjectDiffService.computeDiff`
+failed on **every cycle**. With no diff nothing is judged, so no mutation reached evaluation, no
+subgoal ever completed, and the planner replanned the same six subgoals three times over — 24 goal
+nodes, 21 SUBSUMED, for six routes.
+
+- **The exclusion list could not have saved it: it matched path PREFIXES.** `target/...` matched;
+  `.mvn/wrapper/...` did not. Fine for a tree the loop wrote, where excluded folders sit at the
+  root; useless for an imported one, which puts tooling anywhere. Now matched by path SEGMENT.
+- **And one unreadable file must never cost the whole diff.** Binaries are skipped, counted and
+  named in the log, instead of throwing.
+- **`test` REMOVED from the exclusions.** It was there for the loop's own scratch dir at
+  `data/<target>/test` — a SIBLING of `output/`, so the diff never saw it and the entry matched
+  nothing. Under segment matching it would have started excluding `src/test/java`, making a
+  project's own tests invisible to the loop asked to write them.
+- **Lesson, the same shape as the cold read's:** every assumption that the tree contains only what
+  the loop put there is a defect waiting for the first imported project. Audit the others.
+
+**Seed lesson (user-raised, and correct).** The first seed I wrote for the adopted project stated
+perishable facts ("five tests", "seven routes") that its own success would falsify, framed the goal
+as a task ("write tests") rather than the project's purpose, and had no yardstick. Replaced with:
+the project's own README line quoted, its declared surface, one durable objective, and a yardstick
+that asserts ONLY what the seed states — that every listed route is served and the project's own
+suite passes, never what a route should return, because the seed asks for behaviour to be
+characterised rather than corrected.

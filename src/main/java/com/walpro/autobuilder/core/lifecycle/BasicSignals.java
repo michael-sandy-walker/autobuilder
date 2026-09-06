@@ -26,8 +26,6 @@ public final class BasicSignals {
     // T2-AP: emitted after K consecutive accepted mutations with a flat score band (|Δ| < 0.03)
     public static final SignalType SCORE_PLATEAU      = SignalType.of("SCORE_PLATEAU");
 
-    // T2-R: emitted by ReplanPatternDetector when planner fingerprint repetition is a leading indicator of thrash
-    public static final SignalType REPLAN_THRASH_DETECTED = SignalType.of("REPLAN_THRASH_DETECTED");
 
     public static final SignalType SUBGOAL_EXHAUSTED  = SignalType.of("SUBGOAL_EXHAUSTED");
     public static final SignalType GOAL_EXHAUSTED     = SignalType.of("GOAL_EXHAUSTED");
@@ -106,7 +104,6 @@ public final class BasicSignals {
             LOW_CONFIDENCE,
             PLANNING_THROTTLED,
             REPLAN_REQUESTED,
-            REPLAN_THRASH_DETECTED,
             SCOPE_OUT_OF_SCOPE,
             MISSING_SYMBOL
     );
@@ -152,7 +149,7 @@ public final class BasicSignals {
     // (attention set ∩ this set); previously three test-side copies of the same list.
     public static final Set<SignalType> REQUEST_CHANNEL_KINDS = Set.of(
             REPLAN_REQUESTED, DIVERGENCE_REQUEST, LOW_CONFIDENCE, STAGNATION,
-            REPETITION_DETECTED, SCORE_PLATEAU, REPLAN_THRASH_DETECTED, SUBGOAL_EXHAUSTED,
+            REPETITION_DETECTED, SCORE_PLATEAU, SUBGOAL_EXHAUSTED,
             EVOLUTION_NOOP, POTENTIALLY_COMPLETE, MISSING_SYMBOL, PLANNING_THROTTLED
     );
 
@@ -189,7 +186,6 @@ public final class BasicSignals {
 
     // Debug / bootstrap: everything
     public static final Set<SignalType> ALL = Set.of(
-            REPLAN_THRASH_DETECTED,
             ROLE_PLANNER,
             ROLE_EVOLUTION,
             ROLE_EVALUATION,

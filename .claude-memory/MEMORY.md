@@ -1,117 +1,162 @@
 # Autobuilder — Persistent Memory
 
+Index only. One line per memory: what it is, and when to open it. Detail lives in the file.
+Every index line ends with a review stamp -- `(reviewed YYYY-MM-DD)` -- recording when it was
+last checked against the file it points at. `python3 scripts/orientation_check.py` reports a
+stamp older than the target's newest dated entry as `stale-index-line`, and a line rewritten
+without a restamp will be reported that way too -- restamp it the same day you edit it.
+
+## Orientation
+**START HERE** — two live queues answer two different questions; read below to see which one answers yours.
+- The product queue is the source of truth for what Autobuilder gets built next; read it at
+  `.claude-memory/roadmap.md`, or cheaply via `python3 scripts/next_work.py`. `roadmap-overview.md`
+  is its thin one-line-per-ticket index, and `tier_definitions.md` is its tier legend.
+- The development-process axis is the sequence for how a session picks work, proves a claim,
+  and hands off; it lives in `.claude-memory/meta_process.md`, which holds the `M-` history and,
+  since the 2026-09-08 milestone cut deleted `.planning/`, is now the whole of it.
+
+The product queue answers what Autobuilder gets built next; the development-process axis answers
+how a session does the work. Neither re-orders the other.
+
 ## Project
 Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target codebase (under `file.base-path`) toward a stated goal using LLMs. Neo4j for graph history; H2 for JPA. OpenAI API.
 
 ## Key facts
 - Build: `mvn clean install` | Test: `mvn test -Dtest=ClassName#method`
-- Targets live under `data/<name>/` (each owns a tracked `bootstrap/seed.txt`, everything else ignored by one glob). `mvn test` needs **no** `FILE_BASE_PATH` since 2026-08-28 — the default is relative (`data/firestarter`); the container keeps absolute `/data/firestarter`. Runs select a target by NAME: `PREFLIGHT_TARGET=flightsim`
+- Targets live under `data/<name>/` (each owns a tracked `bootstrap/seed.txt`, rest ignored by one glob). `mvn test` needs no `FILE_BASE_PATH` since 2026-08-28 (default is relative); the container keeps absolute `/data/firestarter`. Runs select a target by NAME: `PREFLIGHT_TARGET=flightsim`
 - Neo4j required for graph-backed features and integration tests
-- Goal stack: `meta/GoalStack.json` (relative to `file.base-path`, default `data/firestarter`)
-- Spring profiles: `test` (no scheduler/bootstrap), `dev-local` (bootstrap, no scheduler), `dev-auto` (full autonomous); add `fast` for ~10-15% faster runs
-- **`.claude-memory/` IS the loading memory** — `git checkout`/branch/cherry-pick that touches it mutates live memory; commit memory on the target branch before switching
-- Ticket IDs: T1=Correctness, T2=Steering, T3=Feature completion, T4=New systems, T5=Quality/observability, T6=Harness & yardsticks (added 2026-07-18)
+- Goal stack: `meta/GoalStack.json`, relative to `file.base-path` (default `data/firestarter`)
+- Spring profiles: `test` (no scheduler/bootstrap), `dev-local` (bootstrap only), `dev-auto` (full autonomous); add `fast` for ~10-15% faster runs
+- **`.claude-memory/` IS the loading memory** — `git checkout`/branch/cherry-pick touching it mutates live memory; commit memory on the target branch before switching
+- Ticket IDs: T1=Correctness, T2=Steering, T3=Feature completion, T4=New systems, T5=Quality/observability, T6=Harness & yardsticks
 
 ## Architecture in one line
-`AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked — sole orchestrator since the 2026-07-09 T4-AI-2+5 meta-lane deletion) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` (goal tree) + Neo4j graph
+`AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked; sole orchestrator since the T4-AI-2+5 meta-lane deletion) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `memory/roadmap-overview.md` — thin active-queue index; start here for triage.
-- `memory/roadmap.md` — full backlog and ticket bodies (source of truth).
+- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-08)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-08)
+- `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
-- `meta_process.md` — the development-process axis (how YOU+ME divide/sequence/staff the work), separate from the product roadmap. "Model" = which Claude runs a session (Fable/Opus/Sonnet/Haiku), not the autobuilder's local model; model choice is capability-vs-cost and advisory.
+- `meta_process.md` — how YOU+ME divide/sequence/staff the work, separate from the product roadmap. "Model" = which Claude runs a session, not the autobuilder's local model; model choice is capability-vs-cost and advisory. (reviewed 2026-09-08)
 
 ## Project insights
-- `project_session_agenda.md`: **START HERE for what to do next** — sequenced agenda for the next ~6 sessions (verification → cleanliness debt → first T4-DD seam → layer D consumer → T6-I → second yardstick), each with a first action, done-when, and an explicit do-not. Rationale, never a queue.
-- `project_resume_state.md`: **START HERE** — 2026-08-25: the CLOSURE GATE is three-quarters false — three independent probe defects (`T1-FW` query string dropped, 10/14 runs · `T1-FU` nine-request answer truncated to six then judged, FIX SHIPPED · `T1-FV` entity-derived body fields, rare), each proven by booting the artifact via `scripts/probe_truth.sh`. A 23/23 baseline run was still refused closure 33 times. `T6-P`: the yardstick sent malformed JSON to UUID-id artifacts. Six tickets closed on evidence. `T6-Q` answered: **no evidence today's commits regressed the loop** (pairs +4/0/0, rule pre-registered, decided before the last pair) — and 5 of 6 runs scored 23/23 while being refused closure.
-- `project_reliability_plan.md`: RATIONALE note behind the 2026-07-12–14 reliability work (floor up, ceiling free; batch gating dropped for corpus replay). NOT a queue — the roadmap decides order; everything it selected is now filed/closed as T4-CA/T5-BE/T4-CB.
-- `project_t4j_design_note.md`: T4-J = OPEN signal-system audit (which signals should decay vs not, obsolete vs missing; calibration LAST), Q1-Q7 + layered cheap-first experiment stack. Read before any signal-tuning/deletion work.
-- `project_signal_consumer_map.md`: T4-J Phases 0+1 done (2026-07-09) — 35-type emitter/clearer/reader map + `scripts/signal_boundary_report.py`. COMPILE_DIAGNOSTIC_FED_BACK has zero consumers; 3 signals fully dead; EVOLUTION_OCCURRED most load-bearing (462/1163 ablation flips); calibration shortlist = MISSING_SYMBOL, PLANNING_THROTTLED, ROLE_MERGE. The LLM is itself a consumer AND emitter (analysis renders all signal names; interpretation renders the full map and emits 3 types via parser; defect FIXED 2026-07-09: analysis SIGNALS block now renders NAME=strength pairs).
-- `project_t4bz_design_note.md`: **T4-BZ plan (2026-07-10)** — signal re-architecture: family map (5 attention windows / 9 derived views / 10 requests / 2 staleness / 2 switches) + readout; 6 slices, readout extraction FIRST, deletion LAST; equivalence via the T4-J instruments; invariants I1-I12. READ BEFORE any T4-BZ slice.
-- `project_t4ap_prompt_audit.md`: **T4-AP Phase B audit (2026-07-24)** — prompt bloat = raw-payload passthroughs, NOT contract conditional blocks (those are lean); scope-classifier toString dump (29-35%/run) fixed; taxonomy: enumerated name-anchored lines win, dumps/concats/echoes lose; `scripts/prompt_block_report.py`. Read before ANY prompt-surface change or T2-EP.
-- `project_signal_dispositions.md`: **T4-J answer sheet (2026-07-09)** — decided disposition per signal: 5 deleted, 2 operator switches documented, 3 markers rebranded truthful, 25 leave; census calibration shortlist DISSOLVED (diagnostic decays inert; ROLE_ANALYSIS/ROLE_PLANNER decay = the real Q7 surface, flagged for live confirmation). Open: analysis/planner tie-break, evaluation-prompt signal-blindness.
-- `project_t4j_perturbation_lab.md`: T4-J Phase 3 done (2026-07-09) — frozen-state lab (`FrozenCycleObserver`, fidelity 12/14). Planner/analysis fitness often EXACTLY tied (saturation + shared set members) → Phase-0 coin-flips are exact ties; PLANNING_THROTTLED blocks planner while boosting its fitness; decay is single-cycle-inert (Q7 decay needs 3d replay); eligibility, not rank, often picks the executor. 3c prompt-diff: interpretation prompt sees everything (decay's only same-cycle consumer), evaluation prompt is signal-blind. 3d replay over ALL signals: the decision-sensitive decay constants are the ROLE-identity signals (ROLE_ANALYSIS everywhere, ROLE_PLANNER where eligible), NOT the census shortlist — MISSING_SYMBOL decay is an inert plateau [0.0,0.25]; reinforce() ratchets decay downward (min), so re-emitted signals' decay resists state perturbation. Read before Phase 4/5 or any signal tuning.
-- `project_meta_concrete_target_hint_idea.md`: historical NOTE — meta's per-step request text may have reduced #NoDiff attempts; mechanism deleted with T4-AI-2+5; read only if reintroducing a concrete-target hint via a non-LLM path.
-- `project_yardstick_must_not_outrun_the_spec.md`: **a yardstick may only assert what the SPEC states** — twice a check graded the loop on an unstated convention (T6-P malformed JSON 7 checks; create status 201-vs-200 5 checks) and both read as loop defects. Unstated requirements are unfixable in-loop BY DESIGN (authored criteria are excluded from the gate, correctly). Audit yardstick vs seed before attributing any score change.
-- `project_smoke_score_is_chained.md`: **the 23-check score is a stateful CHAIN, not 23 measurements** — one missing controller costs 8 points and 2 checks pass spuriously from its absence. Compare failing check SETS, never totals.
-- `project_first_perfect_smoke_score.md`: smoke-score yardstick. **23/23 is ROUTINE on the current build — 19 of 116 recorded runs, and 8 of the last 20** (the "once, 2026-07-07" reading is long stale). The open question was never the ceiling but whether the loop KNOWS it got there: the best scores keep arriving on `deadline` terminals, so completion is decided by something uncorrelated with correctness.
-- `project_rejection_composition.md`: **measured why mutations are rejected** (33 corpora, 438 rejections) — 62.6% compile failures, half of those author errors; the "model can't see the signatures it calls" hypothesis is REFUTED (STRUCTURE_SUMMARY fires 91/91 with full parameter types). Read before filing anything about compile failures.
-- `project_completion_binding_constraint.md`: RESOLVED 2026-06-24 — T4-BN-2 test-compile flip was the bisect-confirmed regression; constraint now planner-coverage/convergence + residual env/variance (two-factor). Earlier finding: binding constraint was keeping a large main+test build compiling, not model naming.
-- `project_t4ai_design_note.md`: T4-AI design — meta lane was decorative/duplicate; closed by deletion 2026-07-09. Read before touching AdaptiveExecutionEngine/DeliberationService.
-- `project_t4bo_design_note.md`: T4-BO signal-decay observability design — two-snapshot death attribution, causality-preserving snapshot point. Read before touching signal plumbing.
-- `project_wave2_structure.md`: **START HERE for direction** — wave 2 restructured 2026-07-26 around "from disposable runs to an accumulating system": five layers (substrate ✅ → portability → reconciliation → consultation → yardsticks), gate-driven sequence (measure overlap → one thin consumer → prove it helps → only then build heavy), per-tier ticket mapping, and the standing principle that widening what the loop SEES must be preceded by scoping what it CONSULTS. Rationale only; the roadmap is the queue.
-- `project_state_time_travel_design_note.md`: **T4-DQ — checkpoint/rewind/backtracking/branching; ALL FOUR SLICES SHIPPED 2026-09-02.** Design plus a build record of where reality differed: the state surface is **40 holders, not 5** (`AutobuilderService` alone outweighs the five named trackers), `DERIVED_DO_NOT_RESTORE` widened to cover state a rewind may not REFUND (wall clock, the rewind budget), goal EXISTENCE is the half status-restoration misses, and **a plain rewind at temperature 0 deterministically repeats — backtracking needs something to differ.** Slice 4: a branch is a CYCLE RANGE (not a lineage fork — that question is settled NO), ranked on root progress not merge rate, and the actuator is ending the run on the best explored path because T4-CA only picks the best tree to SHIP. Cache-mode question now askable, still unanswered. **Read before any checkpoint/rewind/branching or T4-CR work.**
-- `project_project_portability_vision.md`: **the CODE-layer sibling of the knowledge-base chain** — import/continue an existing project (with or without its graph), store a project phase, restore it elsewhere, merge two lineages' code. Filed as T4-CQ/T4-CR/T4-CS. Unblocked by the 2026-07-26 lineage separation (a lineage is now a selectable subgraph, 0 cross-edges). Read before any import/export/bundle work.
-- `project_cross_run_knowledge_base.md`: **the cross-run knowledge-base vision + anti-drift anchor** — T4-CJ slice 2 retention → T4-CN cross-graph compatibility → T4-CM merge workbench are ONE chain about reconciling graphs from DIFFERENT runs/seeds into a durable knowledge base, NOT single-tree goal folding or single-graph browsing. Read before touching T4-CM / T4-CN / T4-CJ slice 2. (Records the 2026-07-23 drift: both were mis-built as trivial single-graph slices and corrected.)
-- `project_t2ei_design_note.md`: T2-EI structure-first goal closure design (2026-06-24). Read before implementing T2-EI.
-- `project_t2ei_rule_interaction_map.md`: T2-EI planner-rule map — FULL_COVERAGE + coverage gate are one invariant; depth-first must move enforcement to the empty-backlog edge. Read before touching any planner rule.
-- `project_false_completion_unmasked.md`: 2026-06-16 — first false completion; a correct fix (T1-FA) unmasked verifier stub-blindness. Re-validate outcomes after correct fixes.
-- `project_false_completion_2.md`: 2026-07-02 — second false completion (unbootable jar); abstain≠pass at the completion edge; a gate can be satisfied instead of its requirement.
-- `project_invented_facts_have_authorities.md`: **2026-08-28 session lens — every defect = an INVENTED FACT whose cheap authority sat unconsulted** (member home→classpath, coordinate→repository, API surface→both, convention→seed, completion→seed); same shape governed the session's own count/fixture errors. Triage question: "what fact was invented, what is its authority, who consulted it?"
-- `project_false_completion_4.md`: 2026-08-28 — fourth false completion, first by BOOKKEEPING: closure ledger counts dispositions (23 GIVEN_UP + 15 SUBSUMED cleared it), never the seed; T1-DJ relabeled exhaustion as fulfilment; taints the GOAL_FULFILLED yardstick population until audited. Filed T4-DK.
-- `project_false_completion_3.md`: 2026-07-04 — third false completion (DI-wiring defect invisible to compile gates; correct REJECTED vote averaged away).
-- `project_local_first_constraint.md`: local execution is a HARD constraint — hosted-model upgrade off the table; attack the precision ceiling via better LOCAL model or mechanism.
-- `project_completion_edge_gates.md`: completion edge = coverage → package → test gate sequence; every diagnosis needs an actuator; brakes must count every evidence class.
-- `project_grounding_night_insight.md`: prefer belief→verification moves in triage; the evidence/verify-before-celebrate loop shape recurs at every scale.
-- `project_pattern_recognition_design_note.md`: **the plan for making pattern recognition MEANINGFUL** (2026-07-25) — diagnosis of the 4 `analysis/pattern/` classes (2 of 4 never fired in 235 runs; `PlanningThrashSignalAnalyzer` inert by arithmetic), the key asymmetry (real recognition already exists offline in `run_profile.py`/`drift_aggregate.py`; the loop can't see any of it), 4 properties meaningful recognition needs, a 6-slice gated plan (P0 replay harness → P1 disposition → P2 relative thresholds → P3 in-loop incremental features → P4 consultation+action → P5 derived vocabulary), and per-class keep/refactor/delete dispositions. **Read before touching `analysis/pattern/` or filing any pattern/self-model ticket.**
-- `project_target_domain_plugin_design.md`: **the core is a patchwork of target-domain (web-service) knowledge — user-raised 2026-07-30.** Measured inventory (GoalPlannerService 66 hits, BootGate 64, 4 prompt contracts 51, …), the five seams a plug-in would need (requirement extraction / surface discovery / probe synthesis / execution+observation / structural risk facts), what stays in the core, and the design questions to settle before any code. DESIGN NOT STARTED — queued behind T4-DC field proof. **Read before adding any new ecosystem-aware rule.**
-- `project_scenario_replay_harness.md`: **freeze a real run's tree as a test scenario and replay it in milliseconds** — `scripts/freeze_scenario.sh` + `Scenario.load`; answers everything decided WITHOUT the model. Read before reproducing a bad run by re-running it.
-- `project_detector_went_silent_as_the_fault_spread.md`: **2026-09-03 — a peer rule needing two annotated peers stopped firing when TWO of three classes were wrong.** Ask of any majority rule what it does when the anomaly becomes the majority.
-- `project_capability_outruns_routing.md`: **assume a missing behaviour is UNREACHED, not unbuilt** — 4 mechanisms in one session already existed; the defect was one line of classifier precedence. Trace the chain to the link that doesn't fire before writing code.
-- `project_introspection_as_north_star.md`: the ultimate goal is a loop with a self-model it consults before acting; use as triage lens ("substrate or patch?").
-- `project_three_disciplines_lens.md`: failures→priors, capabilities-replace-scar-tissue, delete-subsumed.
-- `project_agent_diagnosis_not_shared.md`: evaluator rejection reasons were discarded → T4-BX shipped 2026-07-06 as verbatim prose relay into evolution/planner prompts.
-- `project_t4bq_naming_consistency_ab.md`: naming-consistency A/B stood down (0/6); ≥3-pair minimum before claims; don't name a replacement lever without critical-path evidence.
-- `project_delete_debt_pattern.md`: caller-migration/delete work filed as T5 follow-ups never reaches the queue top; scaffolding accumulates by mechanism.
-- `project_coverage_guard_experiment.md`: runbook pattern for falsifiable off-switch experiments — metrics, decision rule, branching actions, stated in advance.
-- `project_log_and_backup_conventions.md`: **current run = UNSUFFIXED `logs/behaviour.ndjson`/`autobuilder.log`** — a `behaviour-*.ndjson` glob silently excludes it; behaviour files are pretty-printed concatenated JSON, not line-JSON.
-- `project_tests_rotate_live_logs.md`: mvn tests rotate a live run's logs; stop the app before testing, re-arm monitors after.
-- `project_run_lifecycle_runbook.md`: start/stop/monitor runs safely — pause keeps JVM on port 8081 (kill before relaunch), pgrep self-match trap, FILE_BASE_PATH, watcher patterns.
-- `project_goal_fulfilled_is_real_happy_path.md`: GOAL_FULFILLED fires routinely (~27x in 5 weeks); use length-matched fulfilled runs as yardsticks.
+
+Direction and orientation:
+- `project_session_agenda.md`: the live ordering is the appended 2026-08-23 REORDER section at the end of the file; the S1-S6 sections above it are kept for their reasoning, not their sequence. Rationale, never a queue. (reviewed 2026-09-08)
+- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. (reviewed 2026-09-08)
+- `project_wave2_structure.md`: wave 2's five layers (substrate -> portability -> reconciliation -> consultation -> yardsticks) and gate-driven sequence; widening what the loop SEES must follow scoping what it CONSULTS. Rationale only. (reviewed 2026-07-26)
+- `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
+- `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
+
+Design notes, read before touching their area:
+- `project_t4j_design_note.md`: T4-J OPEN signal-system audit (decay vs not, obsolete vs missing; calibration LAST). Read before any signal tuning or deletion. (reviewed 2026-07-09)
+- `project_signal_consumer_map.md`: T4-J emitter/clearer/reader map over 35 signal types + `scripts/signal_boundary_report.py`. The LLM is itself both consumer and emitter. (reviewed 2026-07-09)
+- `project_signal_dispositions.md`: T4-J answer sheet — the decided disposition per signal. Open: analysis/planner tie-break, evaluation-prompt signal-blindness. (reviewed 2026-09-08)
+- `project_t4j_perturbation_lab.md`: frozen-state lab; the decision-sensitive decay constants are the ROLE-identity signals, not the census shortlist. Read before signal tuning. (reviewed 2026-09-08)
+- `project_t4bz_design_note.md`: T4-BZ signal re-architecture SHIPPED (all 6 slices closed, deletion complete, 2026-07-11 field run confirms no regression) -- family map and invariants I1-I12 stay the design record. Read for the migration rationale, not as an open task list. (reviewed 2026-09-08)
+- `project_t4bo_design_note.md`: T4-BO signal-decay observability — two-snapshot death attribution, causality-preserving snapshot point. Read before touching signal plumbing. (reviewed 2026-07-09)
+- `project_t4ai_design_note.md`: T4-AI — the meta lane was decorative; closed by deletion. Read before touching AdaptiveExecutionEngine/DeliberationService. (reviewed 2026-07-09)
+- `project_t2ei_design_note.md`: T2-EI structure-first goal closure. Read before implementing T2-EI. (reviewed 2026-07-09)
+- `project_t2ei_rule_interaction_map.md`: planner-rule map — FULL_COVERAGE and the coverage gate are one invariant. Read before touching any planner rule. (reviewed 2026-07-09)
+- `project_t4ap_prompt_audit.md`: prompt bloat is raw-payload passthroughs, not contract conditionals; enumerated name-anchored lines win, dumps/concats/echoes lose; `scripts/prompt_block_report.py`. Read before ANY prompt-surface change or T2-EP. (reviewed 2026-07-24)
+- `project_pattern_recognition_design_note.md`: the 6-slice gated plan for meaningful pattern recognition, plus per-class dispositions. Read before touching `analysis/pattern/` or filing any pattern/self-model ticket. (reviewed 2026-09-08)
+- `project_target_domain_plugin_design.md`: T4-DC's field proof landed (a CLI target ran clean, 12/12, no HTTP anywhere) and REVISED the design from five seams to two -- an outcome-representation abstraction beyond HTTP status, plus a handful of leaked REST-specific strings fixable by grep. Read before adding any ecosystem-aware rule. (reviewed 2026-09-08)
+- `project_state_time_travel_design_note.md`: T4-DQ checkpoint/rewind/backtracking/branching, all four slices shipped. The state surface is 40 holders, not 5; a plain rewind at temperature 0 repeats; a branch is a CYCLE RANGE, not a lineage fork (settled NO). Read before any rewind/branching or T4-CR work. (reviewed 2026-09-08)
+- `project_project_portability_vision.md`: import/continue/store/restore/merge a project's CODE layer (T4-CQ/CR/CS, all still open); the import half now has a real first adopted-project run (goal-setting endpoint, awaitingGoal state) and a field finding that a diff cannot survive a tree the loop did not write. Read before any import/export/bundle work. (reviewed 2026-09-08)
+- `project_cross_run_knowledge_base.md`: T4-CJ slice 2 to T4-CN to T4-CM are ONE chain about reconciling graphs from DIFFERENT runs, not single-graph browsing. Read before touching any of them. (reviewed 2026-07-23)
+- `project_reliability_plan.md`: rationale behind the reliability work (floor up, ceiling free). NOT a queue; everything it selected is filed or closed. (reviewed 2026-07-14)
+
+Measurement and yardsticks:
+- `project_yardstick_must_not_outrun_the_spec.md`: a yardstick may only assert what the SPEC states; unstated requirements are unfixable in-loop BY DESIGN. Audit yardstick against seed before attributing any score change. (reviewed 2026-09-08)
+- `project_smoke_score_is_chained.md`: the 23-check score is a stateful CHAIN, not 23 measurements. Compare failing check SETS, never totals. (reviewed 2026-08-01)
+- `project_first_perfect_smoke_score.md`: 23/23 is routine on the current build; the open question is whether the loop KNOWS it got there -- the best scores keep arriving on `deadline` terminals. (reviewed 2026-09-08)
+- `project_goal_fulfilled_is_real_happy_path.md`: GOAL_FULFILLED fires routinely; use length-matched fulfilled runs as yardsticks. (reviewed 2026-07-09)
+- `project_rejection_composition.md`: measured why mutations are rejected; the "model cannot see the signatures it calls" hypothesis is REFUTED. Read before filing anything about compile failures. (reviewed 2026-09-08)
+- `project_completion_binding_constraint.md`: resolved — the constraint is planner coverage/convergence plus residual variance, two-factor. (reviewed 2026-07-09)
+- `project_scenario_replay_harness.md`: freeze a real run's tree and replay it in milliseconds (`scripts/freeze_scenario.sh`); answers everything decided WITHOUT the model. Read before reproducing a bad run by re-running it. (reviewed 2026-09-03)
+- `project_coverage_guard_experiment.md`: runbook pattern for falsifiable off-switch experiments — metrics and decision rule stated in advance. (reviewed 2026-07-09)
+- `project_t4bq_naming_consistency_ab.md`: naming-consistency A/B stood down; 3-pair minimum before claims; do not name a replacement lever without critical-path evidence. (reviewed 2026-07-09)
+
+False completions and diagnosis lenses:
+- `project_false_completion_unmasked.md`: the first — a correct fix unmasked verifier stub-blindness. Re-validate outcomes after correct fixes. (reviewed 2026-07-09)
+- `project_false_completion_2.md`: unbootable jar; abstain is not pass at the completion edge; a gate can be satisfied instead of its requirement. (reviewed 2026-07-09)
+- `project_false_completion_3.md`: DI-wiring defect invisible to compile gates; a correct REJECTED vote averaged away. (reviewed 2026-07-09)
+- `project_false_completion_4.md`: the first by BOOKKEEPING — the closure ledger counts dispositions, never the seed. Taints the GOAL_FULFILLED population until audited. (reviewed 2026-08-28)
+- `project_invented_facts_have_authorities.md`: every defect is an INVENTED FACT whose cheap authority sat unconsulted. Triage question: what fact was invented, what is its authority, who consulted it? (reviewed 2026-08-28)
+- `project_capability_outruns_routing.md`: assume a missing behaviour is UNREACHED, not unbuilt. Trace to the link that does not fire before writing code. (reviewed 2026-08-24)
+- `project_detector_went_silent_as_the_fault_spread.md`: a majority rule stopped firing when the anomaly became the majority. Ask any majority rule what it does then. (reviewed 2026-09-03)
+- `project_completion_edge_gates.md`: completion edge is coverage then package then test; every diagnosis needs an actuator; brakes must count every evidence class. (reviewed 2026-07-09)
+- `project_grounding_night_insight.md`: prefer belief-to-verification moves in triage. (reviewed 2026-07-09)
+- `project_agent_diagnosis_not_shared.md`: evaluator rejection reasons were discarded; T4-BX now relays them verbatim into evolution/planner prompts. (reviewed 2026-07-09)
+- `project_delete_debt_pattern.md`: delete work filed as a T5 follow-up never reaches the queue top; scaffolding accumulates by mechanism. (reviewed 2026-07-09)
+- `project_local_first_constraint.md`: local execution is a HARD constraint -- a hosted-model upgrade is off the table; attack the precision ceiling via a better local model or mechanism. (reviewed 2026-07-09)
+- `project_meta_concrete_target_hint_idea.md`: historical note; read only if reintroducing a concrete-target hint via a non-LLM path. (reviewed 2026-07-09)
+
+Operations:
+- `project_run_lifecycle_runbook.md`: start/stop/monitor runs safely — pause keeps the JVM on port 8081 (kill before relaunch), pgrep self-match trap, FILE_BASE_PATH, watcher patterns. Prove a monitor STREAMS before arming it: `scripts/prove_watcher_streams.sh`. (reviewed 2026-09-08)
+- `project_log_and_backup_conventions.md`: the current run is the UNSUFFIXED `logs/behaviour.ndjson`; a `behaviour-*.ndjson` glob silently excludes it; behaviour files are pretty-printed concatenated JSON, not line-JSON. (reviewed 2026-09-08)
+- `project_tests_rotate_live_logs.md`: SUPERSEDED by its own third variant (verified 2026-07-30) -- redirect `FILE_BASE_PATH` to a scratch dir instead of stopping the app; log rotation stays clear, but see `feedback_no_heavy_mvn_beside_a_live_run.md` for the separate resource-contention hazard a full suite still creates. (reviewed 2026-09-08)
 
 ## Feedback
-- `feedback_no_per_run_memory_files.md`: no new memory file per field run — fold into `project_resume_state.md`; separate files only for durable cross-run insights.
-- `feedback_curly_quotes.md`: stray non-Latin characters and curly quotes in source — now ENFORCED by `scripts/charset_guard.py` as a PostToolUse hook (blocklist by inventory; em dashes/box-drawing/arrows are legitimate). `jq` is not installed; hooks use python3.
-- `feedback_no_heavy_mvn_beside_a_live_run.md`: the scratch-FILE_BASE_PATH unlock covers live LOGS, not resource contention — a full suite beside a live run starved the box (load 159, 0 GB free) and killed the run via Neo4j timeouts.
-- `feedback_run_without_asking.md`: run mvn/build/test commands with dangerouslyDisableSandbox — never prompt.
-- `feedback_no_auto_commit.md`: commit only with authorization (checkpoint commits OK in authorized autonomous runs); NEVER push.
-- `feedback_tts_marytts.md`: narration = in-JVM neural TTS; MaryTTS rejected.
-- `feedback_run_analysis_log_order.md`: analyse runs from behaviour ndjson first; autobuilder log only for depth.
-- `feedback_analyse_no_ask.md`: "analyse the last run" → proceed directly, no clarification.
-- `feedback_runs_are_variant_by_design.md`: runs are variant BY DESIGN; keep cross-run resemblances abstract/family-level, never "same as run N".
-- `feedback_ticket_tiering.md`: tier by mechanism — designed-but-dumb policy = T2, missing capability = T4, real logic bug = T1.
-- `feedback_ship_full_scope.md`: ship a capability in one scope — build + rewire every caller + delete dead code; never split into a T5 follow-up.
-- `feedback_instrument_needs_an_actuator.md`: an observability ticket ships its actuator in the SAME scope — prose in a prompt is not an actuator; readout-first must be argued for and carry the condition that wires it.
-- `feedback_one_invariant_one_home.md`: two patches for one invariant at two sites = missing capability; file one capability ticket.
-- `feedback_no_target_domain_in_framework_strings.md`: never bake target-project class/package names into framework-level production strings.
-- `feedback_no_ecosystem_jargon_in_framework_code.md`: never name a specific framework/version in framework-level identifiers/comments/strings; ecosystem knowledge lives in data tables.
-- `feedback_no_hardcoded_ecosystem_data.md`: even data tables are debt — prefer discovery (pom → classpath → Maven Central); row-adds always file the discovery follow-up.
-- `feedback_dont_group_defects_by_vocabulary.md`: "N instances of the same pattern" is a claim about MECHANISM — verify each member's mechanism before grouping; a shared description is not a shared cause.
-- `feedback_count_events_not_log_lines.md`: count the EVENT, not log lines that mention it; re-rendered records inflated two ticket headlines 23x and 3x.
-- `feedback_dont_evaluate_a_build_with_older_runs.md`: a window is a rate only if the build is constant across it; this session's runs evaluate the PREVIOUS build — the fix's verdict belongs to the next session.
-- `feedback_verify_population_before_claim.md`: before "all/most/never" claims, scan the full corpus (incl. backups, .log.gz) and dedupe by timestamp.
-- `feedback_no_defensive_recast.md`: after a correction, don't pivot to a fresh confident framing; gather data first.
-- `feedback_llm_probe_realistic_context.md`: synthetic LLM-probe contexts must match the real run distribution or they manufacture false findings (2026-07-24 rollback false alarm; corpus 31/31 said APPLIED).
-- `feedback_calibrate_not_flip.md`: don't over-retract a grounded diagnosis on one noisy result; resist single-cause commitment on multi-factor data.
-- `feedback_stabilize_before_tuning_signals.md`: stabilize the substrate before signal-dynamics redesign; tune only when convergence is reproducible (gate now met as of 2026-07-09).
-- `feedback_roadmap_is_the_queue.md`: sessions pick work from roadmap-overview/roadmap.md ONLY; direction/plan notes are rationale, never a parallel queue — never under Roadmap in MEMORY.md, never the source of "what's next".
-- `feedback_replay_over_batches.md`: never validate a change with a small-N live batch under measured variance — deterministic corpus replay + passive watch items; live batches only for rare strategic questions with N + decision rule stated in advance.
-- `feedback_short_field_run_after_context_change.md`: a green suite + clean replay cannot see integration defects — short live run after any cycle-context/persisted-record change.
-- `feedback_never_edit_a_running_script.md`: never edit preflight.sh (or what it reads) mid-run — bash reads scripts incrementally, so edits land half-applied and silently.
-- `feedback_verify_diff_is_substantive.md`: before reporting an achievement, prove what input now yields different output; green tests on a behaviour-preserving diff is not progress.
-- `feedback_verify_at_decision_timestamp.md`: diagnose outcomes against the state AT decision time (per-cycle snapshots), not the final artifact.
-- `feedback_no_co_mention_pairing.md`: don't co-list unrelated tickets across reports; name the category, not a recurring pair.
-- `feedback_no_invented_labels.md`: no invented structural labels/role-nouns (arm 1/2, winner/keeper); use participles/descriptions. Don't silently truncate criteria for cost.
-- `feedback_no_symbolic_enumerations.md`: never use ①②③ anywhere — name each item instead; positional tokens carry no meaning on re-read.
-- `feedback_neutral_vocabulary.md`: no courtroom or military wording project-wide; plain descriptive words. ("killer" also banned.) Also no emoji decorations/stop-signs in responses. **2026-08-30: `planner-output-amputation` → `planner-output-truncated`** (ledger migrated; ARCHIVED run dirs still carry the old string, so readers accept both). Tests renamed: `GivenUpCascadeDeadlockReplayTest`, `PlannerAgentGoalReactivationTest`. **`rehabilitation*` API/metadata NOT renamed — `"rehabilitationVotes"` is a PERSISTED goal-metadata key (GoalStack + Neo4j); renaming it is a schema migration, not a rename.**
-- `feedback_relative_thresholds.md`: triggers/limits relative to the run's environment, never another fixed constant; constants only for measurable environmental facts.
-- `feedback_capability_gap_not_prohibition.md`: model limitations as revisable capability gaps — not permanent bans, not TTL'd stored facts when derivable live.
-- `feedback_string_consumption_path.md`: "structured, don't string-scrape" governs CODE consuming strings for control flow — NOT prose relayed into another agent's PROMPT.
-- `feedback_activity_not_progress.md`: a mechanism firing ≠ helping — validate the outcome moved; source "what's missing" from structure, not string-scraping.
-- `feedback_monitor_every_terminal.md`: a run monitor must match EVERY terminal state; stopping one for noise means re-arming a narrower one, never going blind.
-- `feedback_escalate_unrecoverable_stagnation.md`: watchers must detect periodic failure patterns and inform early — not just terminal markers and silence.
-- `feedback_ecosystem_gated_heuristics.md`: ecosystem-specific heuristics must self-gate on the ecosystem's own markers; no opinion on marker-free projects.
-- `feedback_ticket_definition_of_done.md`: tickets state their DoD and close then; residual design questions stay NOTES; complete existing tickets over adding new ones.
-- `feedback_append_dont_rewrite_tickets.md`: ticket updates/closures APPEND (status + date + deviations sub-bullet); the filed body stays untouched and visible — never rewrite into an as-built paragraph.
-- `feedback_sonnet_for_batch_tickets.md`: batch/mechanical tickets (e.g. T5-AG sweeps) → delegate to a Sonnet subagent (Agent tool model override); design/validation stays on the main model.
+
+How to work:
+- `feedback_run_without_asking.md`: run mvn/build/test with dangerouslyDisableSandbox; never prompt. (reviewed 2026-07-09)
+- `feedback_analyse_no_ask.md`: "analyse the last run" means proceed directly, no clarification. (reviewed 2026-07-09)
+- `feedback_run_analysis_log_order.md`: analyse runs from the behaviour ndjson first; the autobuilder log only for depth. (reviewed 2026-07-09)
+- `feedback_no_auto_commit.md`: commit only with authorization (checkpoint commits OK in authorized autonomous runs); NEVER push. (reviewed 2026-07-09)
+- `feedback_no_branch_ops.md`: never run branch-manipulation commands (merge, rebase, reset, branch -d, push) autonomously; describe the commands and wait for the user's explicit 'do it'. (reviewed 2026-09-08)
+- `feedback_never_edit_a_running_script.md`: never edit preflight.sh (or what it reads) mid-run — bash reads scripts incrementally, so edits land half-applied and silently. (reviewed 2026-07-30)
+- `feedback_no_heavy_mvn_beside_a_live_run.md`: the scratch-FILE_BASE_PATH unlock covers live LOGS, not resource contention -- a full suite beside a live run starves the box and kills the run via Neo4j timeouts. (reviewed 2026-09-08)
+- `feedback_flag_ceremony_cost_early.md`: when the process around a task costs more than the task, say so BEFORE running it; measure delivered code against process artifacts rather than defending the workflow. (reviewed 2026-09-08)
+- `feedback_sonnet_for_batch_tickets.md`: batch/mechanical tickets go to a Sonnet subagent (Agent tool model override); design and validation stay on the main model. (reviewed 2026-07-14)
+- `feedback_roadmap_is_the_queue.md`: work comes from roadmap-overview/roadmap.md ONLY; direction notes are rationale, never a parallel queue — never listed under Roadmap in this file, never the source of "what's next". (reviewed 2026-09-08)
+- `feedback_no_per_run_memory_files.md`: no new memory file per field run; fold into `project_resume_state.md`; separate files only for durable cross-run insights. (reviewed 2026-07-09)
+
+Evidence discipline:
+- `feedback_verify_population_before_claim.md`: before any all/most/never claim, scan the full corpus including backups and dedupe by timestamp. (reviewed 2026-07-09)
+- `feedback_count_events_not_log_lines.md`: count the EVENT, not log lines mentioning it; re-rendered records inflated two ticket headlines 23x and 3x. (reviewed 2026-08-01)
+- `feedback_dont_group_defects_by_vocabulary.md`: "N instances of the same pattern" is a claim about MECHANISM -- verify each member's mechanism before grouping; a shared description is not a shared cause. (reviewed 2026-08-29)
+- `feedback_dont_evaluate_a_build_with_older_runs.md`: a window is a rate only if the build is constant across it; this session's runs evaluate the PREVIOUS build, so a fix's verdict belongs to the next session. (reviewed 2026-08-24)
+- `feedback_verify_diff_is_substantive.md`: before reporting an achievement, prove what input now yields different output; green tests on a behaviour-preserving diff is not progress. (reviewed 2026-09-08)
+- `feedback_verify_at_decision_timestamp.md`: diagnose against the state AT decision time (per-cycle snapshots), not the final artifact. (reviewed 2026-07-09)
+- `feedback_activity_not_progress.md`: a mechanism firing is not the same as helping; validate that the outcome moved; source "what's missing" from structure, not string-scraping. (reviewed 2026-07-09)
+- `feedback_replay_over_batches.md`: never validate a change with a small-N live batch under measured variance; use deterministic corpus replay plus passive watch items. Live batches only for rare strategic questions, with N and the decision rule stated in advance. A definition of done names its instrument when the claim is made. (reviewed 2026-09-08)
+- `feedback_short_field_run_after_context_change.md`: a green suite and clean replay cannot see integration defects; do a short live run after any cycle-context or persisted-record change. (reviewed 2026-07-30)
+- `feedback_llm_probe_realistic_context.md`: synthetic probe contexts must match the real run distribution or they manufacture false findings. (reviewed 2026-07-24)
+- `feedback_runs_are_variant_by_design.md`: runs are variant BY DESIGN; keep cross-run resemblances family-level, never "same as run N". (reviewed 2026-07-09)
+- `feedback_stabilize_before_tuning_signals.md`: stabilize the substrate before signal-dynamics redesign; tune only when convergence is reproducible (gate met 2026-07-09). (reviewed 2026-07-09)
+
+Reasoning and correction:
+- `feedback_calibrate_not_flip.md`: do not over-retract a grounded diagnosis on one noisy result; resist single-cause commitment on multi-factor data. (reviewed 2026-07-09)
+- `feedback_no_defensive_recast.md`: after a correction, do not pivot to a fresh confident framing; gather data first. (reviewed 2026-07-09)
+- `feedback_capability_gap_not_prohibition.md`: model limitations as revisable capability gaps -- not permanent bans, and not TTL'd stored facts when derivable live. (reviewed 2026-07-09)
+
+Ticket and scope discipline:
+- `feedback_ticket_tiering.md`: tier by mechanism — designed-but-dumb policy is T2, missing capability T4, real logic bug T1. (reviewed 2026-07-09)
+- `feedback_ticket_definition_of_done.md`: tickets state their DoD and close then; residual design questions stay NOTES; complete existing tickets over adding new ones. (reviewed 2026-07-09)
+- `feedback_append_dont_rewrite_tickets.md`: ticket updates APPEND (status, date, deviations); the filed body stays untouched and visible — never rewrite into an as-built paragraph. (reviewed 2026-07-10)
+- `feedback_ship_full_scope.md`: ship a capability in one scope — build, rewire every caller, delete dead code; never split into a T5 follow-up. (reviewed 2026-07-09)
+- `feedback_instrument_needs_an_actuator.md`: an observability ticket ships its actuator in the SAME scope; prose in a prompt is not an actuator; readout-first must be argued for and carry the condition that wires it. (reviewed 2026-07-31)
+- `feedback_one_invariant_one_home.md`: two patches for one invariant at two sites means a missing capability; file one capability ticket. (reviewed 2026-07-09)
+
+Code and design constraints:
+- `feedback_no_target_domain_in_framework_strings.md`: never bake target-project class or package names into framework-level production strings. (reviewed 2026-07-09)
+- `feedback_no_ecosystem_jargon_in_framework_code.md`: never name a specific framework or version in framework-level identifiers, comments or strings; ecosystem knowledge lives in data tables. (reviewed 2026-07-09)
+- `feedback_no_hardcoded_ecosystem_data.md`: even data tables are debt; prefer discovery (pom -> classpath -> Maven Central), and row-adds always file the discovery follow-up. (reviewed 2026-07-09)
+- `feedback_ecosystem_gated_heuristics.md`: ecosystem-specific heuristics must self-gate on the ecosystem's own markers; no opinion on marker-free projects. (reviewed 2026-07-09)
+- `feedback_relative_thresholds.md`: triggers and limits relative to the run's environment; constants only for measurable environmental facts. (reviewed 2026-07-09)
+- `feedback_string_consumption_path.md`: "structured, do not string-scrape" governs CODE consuming strings for control flow, NOT prose relayed into another agent's PROMPT. (reviewed 2026-07-09)
+
+Watchers:
+- `feedback_monitor_every_terminal.md`: a monitor must match EVERY terminal state; stopping one for noise means re-arming a narrower one, never going blind. (reviewed 2026-07-27)
+- `feedback_escalate_unrecoverable_stagnation.md`: watchers must detect periodic failure patterns and inform early, not just terminal markers and silence. (reviewed 2026-07-09)
+
+Writing:
+- `feedback_curly_quotes.md`: no curly quotes or stray non-Latin characters; ENFORCED by `scripts/charset_guard.py` as a PostToolUse hook (em dashes, box-drawing and arrows are legitimate). `jq` is not installed; hooks use python3. (reviewed 2026-08-28)
+- `feedback_neutral_vocabulary.md`: no courtroom or military wording, no emoji decorations. Records the amputation-to-truncated rename, and why `rehabilitationVotes` was NOT renamed (persisted schema key). (reviewed 2026-09-08)
+- `feedback_no_symbolic_enumerations.md`: never use circled-number characters anywhere; name each item instead -- positional tokens carry no meaning on re-read. (reviewed 2026-07-30)
+- `feedback_no_invented_labels.md`: no invented structural labels or role-nouns; use participles and descriptions. Do not silently truncate criteria for cost. (reviewed 2026-07-09)
+- `feedback_no_co_mention_pairing.md`: do not co-list unrelated tickets across reports; name the category, not a recurring pair. (reviewed 2026-07-09)
+- `feedback_tts_marytts.md`: narration is in-JVM neural TTS; MaryTTS rejected. (reviewed 2026-07-09)

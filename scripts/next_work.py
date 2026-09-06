@@ -12,11 +12,13 @@ Three things it reports, each one a mistake a real session made:
   CENSUS       marker counts straight from the ticket headers. The 2026-07-24 census listed T6-A as
                open while its body recorded SHIPPED and the overview index already read `[x]`.
 
-  WARNINGS     unflipped closures — a live checkbox over a body that says the ticket itself
-               finished. T6-A sat at `[ ]` for a day while its body recorded SHIPPED and the
-               overview index already read `[x]`; this is the drift M-A exists to eliminate, and it
-               recurred anyway. The opposite direction is NOT a warning: a ticket closed won't-do on
-               measured evidence is correctly `[x]`.
+  WARNINGS     two directions, one list. `unflipped-closure` — a live checkbox over a body that
+               says the ticket itself finished. T6-A sat at `[ ]` for a day while its body recorded
+               SHIPPED and the overview index already read `[x]`; this is the drift M-A exists to
+               eliminate, and it recurred anyway. `closed-with-residual` — a closed checkbox over a
+               body that asserts the ticket's own remaining work, so nothing drops out of the queue
+               with nothing pointing at it. A ticket closed won't-do on measured evidence is
+               correctly closed and stays quiet in both directions.
 
   DEAD DEPS    a live ticket whose stated gate/prerequisite/fallback cannot be satisfied as written —
                either blocked on a deferred ticket, or resting on one that was closed WITHOUT being
@@ -80,6 +82,27 @@ EXPLICIT_CLOSURE = re.compile(r"\bticket\s+CLOSED\b|\bCLOSED\s+\d{4}-\d\d-\d\d\b
 # A partial-progress qualifier: one slice/phase shipping under an open umbrella is not drift.
 PARTIAL_CLAIM = re.compile(r"\b(slice|phase|half|part|step)\b", re.I)
 
+# The reverse direction: a body line asserting THIS ticket's own remaining work. Deliberately
+# high-precision the same way CLOSURE_CLAIM is: the claim must LEAD the line. Unlike the forward
+# direction, "half" is signal here, not noise (T4-DK's own phrase is "the open half"), so this
+# constant does not share PARTIAL_CLAIM or any qualifier built for the forward direction. The
+# leading label group tolerates a dated all-caps narrative marker ("SUBSTRATE RE-READ 2026-07-16
+# -- still open"); case sensitivity in that group is load-bearing — it is what separates a dated
+# label from ordinary sentence-case prose ("Intent still open:", "Step 3 remains open:") that
+# happens to precede the phrase but is not this construction.
+RESIDUAL_CLAIM = re.compile(
+    r"^(?:[✅⚠️\s*_-]*)(?:\*\*)?(?:[A-Z][A-Z-]{1,14}\s+){0,3}"
+    r"(?:\d{4}-\d\d-\d\d\s*[-—]{1,3}\s*)?"
+    r"(?i:still open|remains open|open half)\b")
+# The reflexive tier: a line that refers to THIS ticket's own residual anywhere in the line, not
+# only leading it — "this ticket's ... open half", bounded so it cannot cross a sentence.
+EXPLICIT_RESIDUAL = re.compile(r"\bthis ticket's\b[^.!?]{0,80}?\bopen half\b", re.I)
+# Identifiers that can OWN a residual claim: ticket ids (T4-BZ-0) and milestone ids (M-C, M-D).
+# Broader than TICKET_REF, which stays ticket-only for dependency parsing, but enumerated to the
+# two shapes that actually exist rather than a general caps-hyphen shape -- the loose form read
+# ordinary prose (AS-IS, NO-OP, DO-NOT) as a subject and suppressed genuine self-claims.
+SUBJECT_ID = re.compile(r"\b(?:T\d-[A-Z]{1,3}(?:-\d)?|M-[A-Z]{1,2})\b")
+
 
 # A closed ticket that was closed WITHOUT building: the decision was recorded, no mechanism exists.
 DECLINE_CLAIM = re.compile(r"\bdo not build\b|\bdoes not get built\b|\bwon'?t-?do\b|\bno-build\b"
@@ -92,12 +115,50 @@ def declines_build(body):
     return any(DECLINE_CLAIM.search(line) for line in body)
 
 
+# The acknowledgment that a warned ticket has been read and is correct as-is (D-06): a body-level
+# phrase, not a sidecar list. Requiring the date is what stops the token becoming a bare mute — an
+# acknowledgment states when the body was read.
+REVIEW_ACK = re.compile(
+    r"^(?:[✅⚠️\s*_-]*)(?:\*\*)?MARKER REVIEWED \d{4}-\d\d-\d\d")
+
+
+def marker_reviewed(body):
+    """True when a body line carries a leading, dated MARKER REVIEWED acknowledgment."""
+    return any(REVIEW_ACK.match(line.strip()) for line in body)
+
+
 def claims_own_closure(line):
     """True when this line asserts the ticket itself is finished (not a slice, not another ticket)."""
     stripped = line.strip()
     if PARTIAL_CLAIM.search(stripped):
         return False
     return bool(CLOSURE_CLAIM.match(stripped) or EXPLICIT_CLOSURE.search(stripped))
+
+
+def claims_own_residual(line, own_id=None):
+    """True when this line asserts THIS ticket's own remaining work (not another ticket's).
+
+    D-02 discrimination is per-tier, because the two tiers put the claim's SUBJECT in different
+    places:
+
+    RESIDUAL_CLAIM is matched with `re.match`, so a successful match always starts at offset 0 and
+    a leading id is absorbed by the pattern's own narrative-label prefix — the subject sits INSIDE
+    the match, never before it. (A pre-match slice is therefore always empty, which is why keying
+    on `m.start()` could never suppress anything.) The absorbed shape is digitless, so `M-E` is
+    taken up where `T4-CL` is not; SUBJECT_ID covers both.
+
+    EXPLICIT_RESIDUAL is reflexive by construction — it requires the literal words "this ticket's"
+    — so a match can never be about another ticket and no guard applies. Keying on ids anywhere
+    earlier in the line cancelled genuine self-claims, including on the ticket's own id.
+
+    The ticket's own id is never a foreign subject: restating your own id in prose is not a
+    co-reference (mirrors `find_dead_deps`'s `ref == t["id"]` exclusion).
+    """
+    stripped = line.strip()
+    m = RESIDUAL_CLAIM.match(stripped)
+    if m:
+        return not any(ref != own_id for ref in SUBJECT_ID.findall(stripped[:m.end()]))
+    return bool(EXPLICIT_RESIDUAL.search(stripped))
 
 
 def parse(path):
@@ -164,14 +225,19 @@ def gate_lines(body, limit=3):
 
 
 def find_warnings(tickets):
-    """Unflipped closures: a live checkbox over a body that says the ticket itself finished.
+    """Two directions, appended to one list. `unflipped-closure`: a live checkbox over a body
+    that says the ticket itself finished. `closed-with-residual`: a closed checkbox over a body
+    that asserts the ticket's own remaining work, so nothing drops out of the queue with nothing
+    pointing at it.
 
-    Only this direction is reported. The reverse ("[x] but the body declines the build") is not an
-    error at all — a ticket closed won't-do on measured evidence is correctly `[x]`, which is how
-    T3-G, T4-CE and T4-CP all legitimately read.
+    A ticket closed won't-do on measured evidence is correctly closed and stays quiet in both
+    directions, which is how T3-G, T4-CE and T4-CP all legitimately read. Either direction is
+    silenced by a leading, dated MARKER REVIEWED acknowledgment in the body (D-06).
     """
     warnings = []
     for t in tickets:
+        if marker_reviewed(t["body"]):
+            continue
         if t["marker"] not in LIVE_MARKERS:
             continue
         claims = [line.strip().lstrip("-*_ ").strip() for line in t["body"]
@@ -180,6 +246,21 @@ def find_warnings(tickets):
             warnings.append({
                 "kind": "unflipped-closure", "id": t["id"], "line": t["line"],
                 "detail": "checkbox is [%s] but the body claims this ticket finished"
+                          % t["marker"],
+                "evidence": claims[:1]})
+    for t in tickets:
+        if marker_reviewed(t["body"]):
+            continue
+        if t["marker"] not in CLOSED_KINDS:
+            continue
+        if declines_build(t["body"]):
+            continue
+        claims = [line.strip().lstrip("-*_ ").strip() for line in t["body"]
+                  if claims_own_residual(line, t["id"])]
+        if claims:
+            warnings.append({
+                "kind": "closed-with-residual", "id": t["id"], "line": t["line"],
+                "detail": "checkbox is [%s] but the body asserts this ticket's own remaining work"
                           % t["marker"],
                 "evidence": claims[:1]})
     return warnings

@@ -6,7 +6,6 @@ import com.walpro.autobuilder.core.checkpoint.StateHolder;
 
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.EmptyDiffDetector;
-import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
 import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
@@ -54,7 +53,6 @@ public class CycleExecutor implements CheckpointableState {
     private final CycleScoreRecorder cycleScoreRecorder;
     private final GoalCompletionDecider goalCompletionDecider;
     private final EmptyDiffDetector emptyDiffDetector;
-    private final ReplanPatternDetector replanPatternDetector;
     private final ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     private final SubgoalScopeGuard subgoalScopeGuard;
     private final MutationSnapshotService mutationSnapshotService;
@@ -226,12 +224,9 @@ public class CycleExecutor implements CheckpointableState {
         persistEvaluationResultToMeta(context);
 
         context = emptyDiffDetector.detect(context);
-        if (!DerivedFacts.scopeOutOfScope(context)) {
-            // T5-BH: PlanningThrashSignalAnalyzer removed here — inert by construction (its 45min x 8
-            // baseline windows needed 6h of history against a 30-min median run; 0 firings in 237
-            // recorded runs) and PLANNING_THROTTLED is emitted by PlannerAgent's own two rules.
-            context = replanPatternDetector.detect(context);
-        }
+        // T5-BL: ReplanPatternDetector removed here, and PlanningThrashSignalAnalyzer before it
+        // (T5-BH). Repeated planning is detected on goal-text similarity at the planner's own
+        // injection gate, and a majority-skip ratio there raises PLANNING_THROTTLED.
         context = scopeThrashSignalAnalyzer.analyze(context);
 
         context = applyMergeOnAcceptedMutation(context);

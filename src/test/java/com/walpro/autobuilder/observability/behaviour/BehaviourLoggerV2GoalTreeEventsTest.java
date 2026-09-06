@@ -82,15 +82,15 @@ class BehaviourLoggerV2GoalTreeEventsTest {
 
     @Test
     void patternDetected_envelopeAndPayload() {
-        logger.patternDetected("cycle-4", "ReplanPatternDetector",
-                "severity=0.72 repetitionDensity=0.83 maxRun=3 scope=goal-x", "REPLAN_THRASH_DETECTED");
+        logger.patternDetected("cycle-4", "ScopeThrashSignalAnalyzer",
+                "severity=0.72 repetitionDensity=0.83 maxRun=3 scope=goal-x", "SUBGOAL_EXHAUSTED");
         JsonNode env = capturedAsJson();
         assertEnvelope(env, "cycle-4", "pattern_detected");
         JsonNode p = env.get("payload");
         assertThat(p.fieldNames()).toIterable().containsExactlyInAnyOrder(
                 "detector", "evidence", "signalEmitted");
-        assertThat(p.get("detector").asText()).isEqualTo("ReplanPatternDetector");
-        assertThat(p.get("signalEmitted").asText()).isEqualTo("REPLAN_THRASH_DETECTED");
+        assertThat(p.get("detector").asText()).isEqualTo("ScopeThrashSignalAnalyzer");
+        assertThat(p.get("signalEmitted").asText()).isEqualTo("SUBGOAL_EXHAUSTED");
     }
 
     private JsonNode capturedAsJson() {

@@ -90,7 +90,7 @@ class DetectorReplayTest(unittest.TestCase):
     def test_never_fired_detector_is_reported_as_an_explicit_finding(self):
         c = self._run_dir("quiet", [ev("c1", "cycle_start")])
         text = self._report([c])
-        self.assertIn("ReplanPatternDetector", text)
+        self.assertIn("ScopeThrashSignalAnalyzer", text)
         self.assertIn("INERT", text)
         self.assertIn("never fired in the whole population", text)
 

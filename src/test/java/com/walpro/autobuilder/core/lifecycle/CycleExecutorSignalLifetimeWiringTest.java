@@ -2,7 +2,6 @@ package com.walpro.autobuilder.core.lifecycle;
 
 import com.walpro.autobuilder.analysis.heuristic.SubGoalFulfillmentHeuristic;
 import com.walpro.autobuilder.analysis.pattern.EmptyDiffDetector;
-import com.walpro.autobuilder.analysis.pattern.ReplanPatternDetector;
 import com.walpro.autobuilder.analysis.pattern.ScopeThrashSignalAnalyzer;
 import com.walpro.autobuilder.analysis.problem.GoalCompletionDecider;
 import com.walpro.autobuilder.analysis.scope.SubgoalScopeGuard;
@@ -57,7 +56,6 @@ class CycleExecutorSignalLifetimeWiringTest {
         CycleScoreRecorder cycleScoreRecorder = mock(CycleScoreRecorder.class);
         GoalCompletionDecider goalCompletionDecider = mock(GoalCompletionDecider.class);
         EmptyDiffDetector emptyDiffDetector = mock(EmptyDiffDetector.class);
-        ReplanPatternDetector replanPatternDetector = mock(ReplanPatternDetector.class);
         ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer = mock(ScopeThrashSignalAnalyzer.class);
         SubgoalScopeGuard subgoalScopeGuard = mock(SubgoalScopeGuard.class);
 
@@ -87,7 +85,6 @@ class CycleExecutorSignalLifetimeWiringTest {
                 cycleScoreRecorder,
                 goalCompletionDecider,
                 emptyDiffDetector,
-                replanPatternDetector,
                 scopeThrashSignalAnalyzer,
                 subgoalScopeGuard,
                 mutationSnapshotService,
@@ -100,7 +97,6 @@ class CycleExecutorSignalLifetimeWiringTest {
 
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(emptyDiffDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
-        when(replanPatternDetector.detect(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(scopeThrashSignalAnalyzer.analyze(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(interpretationService.interpret(any())).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
         when(goalCompletionDecider.decide(any(), anyBoolean())).thenReturn(mock(GoalCompletionDecider.CompletionDecision.class));

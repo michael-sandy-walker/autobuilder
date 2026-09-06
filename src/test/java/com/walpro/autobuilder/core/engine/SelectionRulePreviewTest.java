@@ -52,7 +52,6 @@ class SelectionRulePreviewTest {
             BasicSignals.STAGNATION,
             BasicSignals.REPETITION_DETECTED,
             BasicSignals.SCORE_PLATEAU,
-            BasicSignals.REPLAN_THRASH_DETECTED,
             BasicSignals.SUBGOAL_EXHAUSTED,
             BasicSignals.EVOLUTION_NOOP,
             BasicSignals.POTENTIALLY_COMPLETE,

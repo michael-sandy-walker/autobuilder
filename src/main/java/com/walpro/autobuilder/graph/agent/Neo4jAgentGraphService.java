@@ -362,9 +362,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
 
     @Override
     public List<PlannerActionSnapshot> findRecentPlannerActions(String scopeGoalId, int limit) {
-        // T4-CJ slice 2: RUN-SCOPED. Both consumers (ReplanPatternDetector,
-        // PlannerRepetitionHeuristic) measure repetition "recently" — a counter that silently
-        // spans a resumed lineage's earlier runs is counting someone else's work.
+        // T4-CJ slice 2: RUN-SCOPED. Its consumer (PlannerRepetitionHeuristic) measures
+        // repetition "recently" — a counter that silently spans a resumed lineage's earlier
+        // runs is counting someone else's work.
         return neo4jClient.query("""
             MATCH (a:Action)
             WHERE a.type = 'planner'

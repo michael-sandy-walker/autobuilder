@@ -59,16 +59,6 @@
       }
     },
     {
-      "id": "t5bh-replan-detector-liveness",
-      "ticket": "T5-BH",
-      "description": "which precondition keeps ReplanPatternDetector at 0/237 firings — each early-out names itself, so one live run decides recalibrate-vs-delete (read the dominant reason by eye)",
-      "type": "tally",
-      "fired": {
-        "file": "applog",
-        "pattern": "T5-BH liveness: ReplanPatternDetector abstained"
-      }
-    },
-    {
       "id": "t2eo-stagnation-rescue",
       "ticket": "T2-EO",
       "description": "verify-before-pause at the stagnation-runaway edge promotes done-but-unbanked work instead of halting",

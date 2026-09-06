@@ -258,9 +258,10 @@ def report(rows, skipped, rule, out):
     # Current classes first, then names that only appear in historical run directories. T5-BH renamed
     # PatternSignalAnalyzer -> EmptyDiffDetector and deleted PlanningThrashSignalAnalyzer, so a
     # zero against those two is expected in NEW runs and must not read as a fresh inertness finding.
-    known = ["EmptyDiffDetector", "ScopeThrashSignalAnalyzer", "ReplanPatternDetector"]
+    known = ["EmptyDiffDetector", "ScopeThrashSignalAnalyzer"]
     historical = {"PatternSignalAnalyzer": "renamed to EmptyDiffDetector by T5-BH",
-                  "PlanningThrashSignalAnalyzer": "deleted by T5-BH (was inert 0/237)"}
+                  "PlanningThrashSignalAnalyzer": "deleted by T5-BH (was inert 0/237)",
+                  "ReplanPatternDetector": "deleted by T5-BL (subsumed by similarity dedup)"}
     # Introduced after this run_dir was recorded: a zero here means "not yet exercised", NOT inert.
     # Reporting it as inertness would be a false finding of exactly the kind this harness exists to
     # prevent, so new detectors are named explicitly until a run has had the chance to fire them.

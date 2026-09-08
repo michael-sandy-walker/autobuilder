@@ -230,8 +230,10 @@ class BehaviouralCriterionParserTest {
     }
 
     /**
-     * A pattern is READ here and its exercisability decided by the synthesizer, which knows the
-     * asserted status. Reading it is what stops the bare path being exercised in its place.
+     * A pattern is READ here -- reading it is what stops the bare path being exercised in its
+     * place. Whether it can be EXERCISED is {@link BehaviouralCriterionParser#exercisable}'s
+     * question, and the answer is no for every pattern: the status-dependent grounding this
+     * test's rationale used to name was built and then withdrawn on measurement.
      */
     @Test
     void aPatternStatedAsInputIsStillRead() {
@@ -239,6 +241,48 @@ class BehaviouralCriterionParserTest {
                 "GET /loans?memberId={id} returns HTTP 200")).contains("memberId={id}");
         assertThat(BehaviouralCriterionParser.parse("GET /loans?memberId={id} returns HTTP 404"))
                 .get().extracting(BehaviouralCriterionParser.Assertion::path).isEqualTo("/loans");
+    }
+
+    /**
+     * T1-FW. Parsing and exercisability are different questions, and three callers asked the first
+     * while meaning the second. A criterion naming an input PATTERN parses -- correctly, it does
+     * address that endpoint -- and is then abstained on by the synthesizer, so a caller reading
+     * {@code parse(...).isPresent()} as "this will be probed" was wrong every time: the
+     * executability readout reported it in criteria_executable_pct, and the closure verifier
+     * bought a package and a boot before probing nothing.
+     */
+    @Test
+    void onlyARequirementWhoseStatedInputCanBeGroundedIsExercisable() {
+        // A pattern: parses, but nothing can ground it without the handler's parameter declaration.
+        String pattern = "GET /loans?memberId={id} returns HTTP 200 with a JSON array of loans";
+        assertThat(BehaviouralCriterionParser.parse(pattern)).isPresent();
+        assertThat(BehaviouralCriterionParser.exercisable(pattern)).isEmpty();
+
+        // A literal value: rides into the request unchanged, so it is exercisable as written.
+        String value = "GET /loans?memberId=1 returns HTTP 200 with a JSON array of loans";
+        assertThat(BehaviouralCriterionParser.exercisable(value))
+                .get().extracting(BehaviouralCriterionParser.Assertion::path).isEqualTo("/loans");
+
+        // The common case names no extra input at all and is untouched.
+        assertThat(BehaviouralCriterionParser.exercisable("POST /books returns HTTP 400"))
+                .get().extracting(BehaviouralCriterionParser.Assertion::path).isEqualTo("/books");
+
+        // And what does not parse is not exercisable either -- empty stays "no opinion".
+        assertThat(BehaviouralCriterionParser.exercisable("Book is stored in the repository"))
+                .isEmpty();
+    }
+
+    /**
+     * A path VARIABLE is not a stated input component -- grounding it from a setup response is
+     * machinery the synthesizer has and uses. Only the discarded query component is at issue, so
+     * pinning this stops the fix widening into criteria that were never affected.
+     */
+    @Test
+    void aPathVariableDoesNotMakeARequirementUnexercisable() {
+        assertThat(BehaviouralCriterionParser.exercisable(
+                "GET /books/{id} returns HTTP 404 when no such book exists")).isPresent();
+        assertThat(BehaviouralCriterionParser.exercisable(
+                "POST /loans/{id}/return returns HTTP 404 when the loan does not exist")).isPresent();
     }
 
     @Test

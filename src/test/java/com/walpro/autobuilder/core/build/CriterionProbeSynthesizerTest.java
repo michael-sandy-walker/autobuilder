@@ -1,8 +1,12 @@
 package com.walpro.autobuilder.core.build;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
@@ -156,6 +160,71 @@ class CriterionProbeSynthesizerTest {
 
         assertThat(synthesizer.synthesizeWithModel(SPEC, assertion("POST /members returns HTTP 409")))
                 .isEmpty();
+    }
+
+    /**
+     * T1-FU, 2026-09-08: an abstention that cannot say what it dropped is not a readable record.
+     * Read back over the post-fix corpus, this was the only refusal in the class that named no
+     * criterion, so a log showed fifteen honest abstentions and no way to tell which fifteen
+     * criteria went unverified without reconstructing them from the census line.
+     */
+    @Test
+    void theBudgetRefusalNamesTheCriterionItRefused() {
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= CriterionProbeSynthesizer.MAX_REQUESTS + 4; i++) {
+            sb.append(i).append(". POST /members {\"n\":").append(i).append("}\n");
+        }
+        modelAnswers(sb.toString());
+
+        synthesizer.synthesizeWithModel(SPEC, assertion("POST /members returns HTTP 409"));
+
+        assertThat(messages(appender)).anyMatch(m ->
+                m.startsWith("T1-FU:") && m.contains("POST /members") && m.contains("409"));
+    }
+
+    /**
+     * The abstention used to fall through to the endpoint check, so every over-budget answer was
+     * ALSO reported as one that "does not end on the asserted endpoint" — a different failure from
+     * the one that happened, and the reason a reader would reach for first.
+     */
+    @Test
+    void theBudgetRefusalIsNotAlsoReportedAsADriftedEndpoint() {
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= CriterionProbeSynthesizer.MAX_REQUESTS + 4; i++) {
+            sb.append(i).append(". POST /members {\"n\":").append(i).append("}\n");
+        }
+        modelAnswers(sb.toString());
+
+        synthesizer.synthesizeWithModel(SPEC, assertion("POST /members returns HTTP 409"));
+
+        assertThat(messages(appender)).noneMatch(m -> m.contains("does not end on the asserted endpoint"));
+    }
+
+    /** An answer carrying no request line at all states THAT, rather than borrowing another reason. */
+    @Test
+    void anAnswerWithNoRequestLineSaysSoAndNamesTheCriterion() {
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        modelAnswers("I cannot construct a sequence for this criterion.");
+
+        synthesizer.synthesizeWithModel(SPEC, assertion("POST /members returns HTTP 409"));
+
+        assertThat(messages(appender)).anyMatch(m ->
+                m.contains("contained no request line") && m.contains("POST /members"));
+        assertThat(messages(appender)).noneMatch(m -> m.contains("does not end on the asserted endpoint"));
+    }
+
+    private static List<String> messages(ListAppender<ILoggingEvent> appender) {
+        return appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+    }
+
+    private static ListAppender<ILoggingEvent> attachAppender() {
+        Logger logger = (Logger) LoggerFactory.getLogger(CriterionProbeSynthesizer.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
     }
 
     @Test

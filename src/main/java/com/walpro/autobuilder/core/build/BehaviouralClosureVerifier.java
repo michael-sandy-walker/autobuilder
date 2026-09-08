@@ -59,8 +59,13 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
         // Only criteria that state one endpoint's response status can be turned into a request.
         // Filtering here rather than inside the gate keeps the expensive steps behind a decision
         // made in memory: two thirds of closures stop at this line having spent nothing.
+        //
+        // T1-FW: this asks `exercisable`, not `parse`. A requirement naming an input pattern
+        // nothing can ground parses cleanly and is then abstained on by the synthesizer — so
+        // asking `parse` let a claim whose criteria were ALL of that kind past this line and buy
+        // a package and a boot before probing nothing at all.
         List<String> executable = criteria.stream()
-                .filter(c -> c != null && BehaviouralCriterionParser.parse(c).isPresent())
+                .filter(c -> c != null && BehaviouralCriterionParser.exercisable(c).isPresent())
                 .toList();
         if (executable.isEmpty()) {
             // Two thirds of closures land here. Logged so a run with no closure checks can be read

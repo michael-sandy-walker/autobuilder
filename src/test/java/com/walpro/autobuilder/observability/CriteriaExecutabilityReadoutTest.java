@@ -70,6 +70,29 @@ class CriteriaExecutabilityReadoutTest {
         assertThat(CriteriaExecutabilityReadout.over(List.of(new GoalEntity())).isEmpty()).isTrue();
     }
 
+    /**
+     * T1-FW. The readout's own javadoc promised "the figure the probe path will actually see", and
+     * for this one shape it did not deliver: a requirement naming an input PATTERN parses cleanly
+     * and is then abstained on by the synthesizer, so counting it as executable reported an upper
+     * bound under the name of an observation. It is now counted under its own cause, because the
+     * shortfall is neither the authoring nor the parser -- it is a missing capability (T1-FV), and
+     * folding it into namedButUnparsed would blame the wording for it.
+     */
+    @Test
+    void aCriterionNamingAnInputNothingCanGroundIsNotCountedAsExecutable() {
+        var counts = CriteriaExecutabilityReadout.over(List.of(
+                goal("GET /loans?memberId={id} returns HTTP 200 with the member's loans"), // ungroundable
+                goal("GET /loans?memberId=1 returns HTTP 200 with the member's loans"),    // value: fine
+                goal("POST /books returns HTTP 400 when the title is missing")));          // plain: fine
+
+        assertThat(counts.authored()).isEqualTo(3);
+        assertThat(counts.namingEndpoint()).isEqualTo(3);
+        assertThat(counts.executable()).isEqualTo(2);
+        assertThat(counts.ungroundableInput()).isEqualTo(1);
+        // Not blamed on the wording: the criterion parses, and it names its endpoint.
+        assertThat(counts.namedButUnparsed()).isZero();
+    }
+
     @Test
     void usesTheParserRatherThanASecondCopyOfItsRules() {
         // "returns 404" with no HTTP marker parses since T4-DB widened the pattern; a readout

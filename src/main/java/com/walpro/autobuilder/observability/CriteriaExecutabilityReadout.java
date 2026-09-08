@@ -28,6 +28,13 @@ import java.util.regex.Pattern;
  * <p>Nothing here decides anything. It counts, and the counting uses
  * {@link BehaviouralCriterionParser} itself rather than a second copy of its rules, so the
  * "executable" figure is the one the probe path will actually see.
+ *
+ * <p><b>T1-FW: that last sentence was false for one class of criterion and is now true again.</b>
+ * The count asked {@code parse(...).isPresent()}, which succeeds for a requirement naming an
+ * input pattern the probe path always abstains on — so the figure reported an upper bound and
+ * called it the observed one. It now asks {@link BehaviouralCriterionParser#exercisable}, and
+ * those criteria are counted under their own cause rather than folded into the wording shortfall,
+ * because the shortfall is neither the wording nor the parser: it is a missing capability.
  */
 public final class CriteriaExecutabilityReadout {
 
@@ -36,11 +43,14 @@ public final class CriteriaExecutabilityReadout {
             Pattern.compile("\\b(GET|POST|PUT|PATCH|DELETE)\\s+/");
 
     /**
-     * @param authored       acceptance criteria declared anywhere in the goal tree
-     * @param namingEndpoint those addressed to an endpoint at all
-     * @param executable     those the parser turns into an assertion a probe can be built from
+     * @param authored          acceptance criteria declared anywhere in the goal tree
+     * @param namingEndpoint    those addressed to an endpoint at all
+     * @param executable        those a probe can actually be built from
+     * @param ungroundableInput those that parse but name an input component nothing can ground —
+     *                          counted apart because their owner is a capability gap (T1-FV), not
+     *                          the wording and not the parser
      */
-    public record Counts(int authored, int namingEndpoint, int executable) {
+    public record Counts(int authored, int namingEndpoint, int executable, int ungroundableInput) {
 
         public boolean isEmpty() {
             return authored == 0;
@@ -57,7 +67,7 @@ public final class CriteriaExecutabilityReadout {
          * conflating them is the mistake this readout was written after making.
          */
         public int namedButUnparsed() {
-            return namingEndpoint - executable;
+            return namingEndpoint - executable - ungroundableInput;
         }
     }
 
@@ -65,18 +75,23 @@ public final class CriteriaExecutabilityReadout {
     }
 
     public static Counts over(Collection<GoalEntity> goals) {
-        if (goals == null || goals.isEmpty()) return new Counts(0, 0, 0);
+        if (goals == null || goals.isEmpty()) return new Counts(0, 0, 0, 0);
         int authored = 0;
         int namingEndpoint = 0;
         int executable = 0;
+        int ungroundableInput = 0;
         for (GoalEntity goal : goals) {
             for (String criterion : criteriaOf(goal)) {
                 authored++;
                 if (NAMES_ENDPOINT.matcher(criterion).find()) namingEndpoint++;
-                if (BehaviouralCriterionParser.parse(criterion).isPresent()) executable++;
+                if (BehaviouralCriterionParser.exercisable(criterion).isPresent()) {
+                    executable++;
+                } else if (BehaviouralCriterionParser.parse(criterion).isPresent()) {
+                    ungroundableInput++;
+                }
             }
         }
-        return new Counts(authored, namingEndpoint, executable);
+        return new Counts(authored, namingEndpoint, executable, ungroundableInput);
     }
 
     private static List<String> criteriaOf(GoalEntity goal) {

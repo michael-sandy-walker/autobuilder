@@ -398,9 +398,9 @@ public class MergeAgent implements ExecutionAgent {
                 // BookRepository twenty times — and its only consumer was a paragraph in a
                 // prompt, so the run ended unstartable with the diagnosis in hand. This is that
                 // fact's actuator. Unlike the packaging check T2-EQ removed from this branch, it
-                // is not an end-stage property: it needs two annotated peers in the type's own
-                // package, so a partial skeleton produces nothing and a project that annotates
-                // nothing produces nothing.
+                // is not an end-stage property: it needs an annotated peer in the type's own
+                // package (one, since 2026-09-03 — requiring two hid the defect exactly as it
+                // spread), so a project that annotates nothing produces nothing.
                 applyInjectedTypeRegistrationRepair(outputPath);
 
                 // T3-BZ slice 2: a type sitting apart from the peers that named it. The fact was

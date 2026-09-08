@@ -61,6 +61,23 @@ class BehaviouralClosureVerifierTest {
         assertThat(verifier.refute("goal-1", List.of(EXECUTABLE))).isEmpty();
     }
 
+    /**
+     * T1-FW. The filter asked {@code parse(...).isPresent()}, which succeeds for a requirement
+     * naming an input PATTERN -- and the synthesizer then abstains on every one of them. So a
+     * claim carrying only criteria of that shape cleared the in-memory decision this class exists
+     * to make, bought a package build and a boot, and probed nothing. RED before the filter moved
+     * to {@code exercisable}: {@code verifyPackageable} was called.
+     */
+    @Test
+    void aClaimWhoseCriteriaNothingCanGroundBuysNoPackageAndNoBoot() {
+        String ungroundable = "GET /loans?memberId={id} returns HTTP 200 with the member's loans";
+
+        assertThat(verifier.refute("goal-1", List.of(ungroundable))).isEmpty();
+
+        verify(packageGate, never()).verifyPackageable(anyString());
+        verify(bootGate, never()).verifyBootsAndServes(anyString(), anyString(), any());
+    }
+
     @Test
     void criteriaThatCannotBeExecutedCostNothingAtAll() {
         // The common case — 302 of 452 closed subgoals across 32 corpora have only criteria like

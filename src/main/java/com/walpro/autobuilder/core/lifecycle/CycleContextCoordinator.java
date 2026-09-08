@@ -328,9 +328,10 @@ public class CycleContextCoordinator {
         if (counts.isEmpty() || counts.equals(lastExecutability)) return;
         lastExecutability = counts;
         log.info("T2-EX: criteria executability — {} authored, {} name an endpoint, {} executable ({}%);"
-                        + " {} name one but do not parse",
+                        + " {} name one but do not parse, {} name an input nothing can ground",
                 counts.authored(), counts.namingEndpoint(), counts.executable(),
-                Math.round(counts.executableShare() * 100), counts.namedButUnparsed());
+                Math.round(counts.executableShare() * 100), counts.namedButUnparsed(),
+                counts.ungroundableInput());
     }
 
     /** T2-EY: optional run-level rejection ledger — wired in production, null in unit tests. */

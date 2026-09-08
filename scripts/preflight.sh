@@ -525,6 +525,13 @@ except Exception:
         echo "criteria_executable_pct=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, [0-9]* executable (\([0-9]*\)%).*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         echo "criteria_executable_count=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, \([0-9]*\) executable.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         echo "criteria_authored=$(sed -n 's/.*criteria executability — \([0-9]*\) authored.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        # T1-FW: criteria that parse but name an input component nothing can ground. Emitted so the
+        # 2026-09-08 change to `criteria_executable_*` stays RECONSTRUCTIBLE rather than a silent
+        # step in the ledger: before that date those criteria were counted as executable, so the
+        # comparable older figure is this count added back to the new one. The metric was wrong,
+        # not redefined -- the probe path always abstained on them -- but a reader comparing rows
+        # across the boundary needs the addend, not an assurance.
+        echo "criteria_ungroundable_input=$(sed -n 's/.*criteria executability — .* \([0-9]*\) name an input nothing can ground.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         # T4-DD: the exit-status channel, reported SEPARATELY rather than folded into the fields
         # above. Those measure "how many criteria name an ENDPOINT", which is the web target's
         # question and the basis of every comparison in the 79-run ledger — redefining them would

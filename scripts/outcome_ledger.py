@@ -100,7 +100,11 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            # sibling, so a row read as a ratio and gave 500%. Both are now carried under names
            # that say which they are; the old field is left on historical rows rather than
            # redefined, so no earlier row changes meaning.
-           "criteria_executable_pct", "criteria_executable_count")
+           "criteria_executable_pct", "criteria_executable_count",
+           # T1-FW (2026-09-08): criteria that parse but name an input nothing can ground. Until
+           # this date they were counted as executable, so a row from before the boundary compares
+           # to a later one only as `executable + ungroundable`. Absent on earlier rows.
+           "criteria_ungroundable_input")
 
 
 def read_summary(run_dir):

@@ -210,8 +210,9 @@ public class CriterionProbeSynthesizer {
             // the strength of a criterion the loop invented — the very failure this ticket is
             // about. The disagreement is real and worth surfacing, but as a criterion that does
             // not follow from the seed (T4-DA), never as an artifact defect.
-            log.debug("T1-FW: [{}] names an input pattern that cannot be grounded — not probed",
-                    assertion.describe());
+            log.info("T1-FW: [{}] names the input {} as a pattern that cannot be grounded — "
+                            + "abstaining rather than exercising a different input",
+                    assertion.describe(), component);
             return Optional.empty();
         }
         List<ProbeRequest> out = new ArrayList<>(sequence);
@@ -220,12 +221,6 @@ public class CriterionProbeSynthesizer {
         out.set(out.size() - 1, new ProbeRequest(last.method(), last.path() + "?" + component, last.body()));
         return Optional.of(List.copyOf(out));
     }
-
-    /** The status a requirement uses to say a named reference resolves to nothing. */
-    private static final int ABSENT_REFERENCE_STATUS = 404;
-
-    /** An id no resource is created with, matching the value the path-variable builder uses. */
-    private static final String UNUSED_REFERENCE = "999999999";
 
     /**
      * The model-driven path: asks for an input, never a verdict, and rejects any answer whose final
@@ -254,7 +249,13 @@ public class CriterionProbeSynthesizer {
         }
         if (response == null || response.isBlank()) return Optional.empty();
 
-        List<ProbeRequest> parsed = parse(response);
+        List<ProbeRequest> parsed = parse(response, assertion);
+        if (parsed.isEmpty()) {
+            // parse() has already said WHICH refusal this was, naming the criterion. Falling
+            // through to the endpoint check would report every one of them as a drifted answer.
+            cache.put(key, List.of());
+            return Optional.empty();
+        }
         if (!isUsable(parsed, assertion)) {
             log.info("T4-CU: synthesized probe for [{}] does not end on the asserted endpoint — not probed",
                     assertion.describe());
@@ -294,8 +295,17 @@ public class CriterionProbeSynthesizer {
      *
      * <p>Abstaining costs one criterion. Raising the cap instead would trade a false contradiction
      * for an unbounded probe budget, which is the thing the cap exists to prevent.
+     *
+     * <p><b>The refusal NAMES the criterion, 2026-09-08.</b> Read back over the post-fix corpus,
+     * the abstention was the only refusal in this class that did not say what it was about, so a
+     * log could show fifteen honest abstentions without saying which fifteen criteria went
+     * unverified — the census line was the only way to recover it. Worse, an empty sequence then
+     * fell through to the endpoint check and was reported as an answer that "does not end on the
+     * asserted endpoint", which is a different failure and not the one that happened. Both
+     * refusals now state their own reason against the criterion they refused.
      */
-    List<ProbeRequest> parse(String raw) {
+    List<ProbeRequest> parse(String raw, BehaviouralCriterionParser.Assertion assertion) {
+        String subject = assertion == null ? "an unnamed criterion" : assertion.describe();
         List<ProbeRequest> out = new ArrayList<>();
         Matcher m = REQUEST_LINE.matcher(raw);
         while (m.find()) {
@@ -306,11 +316,15 @@ public class CriterionProbeSynthesizer {
                     path,
                     body.isEmpty() || "-".equals(body) ? null : body));
             if (out.size() > MAX_REQUESTS) {
-                log.info("T1-FU: the synthesized sequence needs more than {} requests — abstaining "
+                log.info("T1-FU: the sequence for [{}] needs more than {} requests — abstaining "
                         + "rather than truncating, because a shortened setup tests a different situation",
-                        MAX_REQUESTS);
+                        subject, MAX_REQUESTS);
                 return List.of();
             }
+        }
+        if (out.isEmpty()) {
+            log.info("T4-CU: the synthesized answer for [{}] contained no request line — not probed",
+                    subject);
         }
         return out;
     }

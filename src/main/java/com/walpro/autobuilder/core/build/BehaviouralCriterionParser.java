@@ -65,14 +65,12 @@ public final class BehaviouralCriterionParser {
 
     /**
      * The input this requirement names beyond the path it addresses — the component identity
-     * normalization drops. Empty when the requirement names none, or when what it names is a
-     * pattern rather than a value. WHETHER it can be exercised is the synthesizer's call, because
-     * that depends on the status the requirement asserts — a pattern standing for a reference that
-     * must NOT resolve is groundable; one standing for a reference that must resolve is not.
+     * normalization drops. Empty when the requirement names none.
      *
-     * <p>ONE HOME for the rule: {@link #parse} consults it to decide whether the requirement is
-     * exercisable, and the probe synthesizer consults it to carry the component into the request.
-     * Deriving it twice is how the two would drift apart.
+     * <p>Reading it is separate from deciding what to do with it. {@link #exercisable} decides
+     * whether the requirement can be probed at all, and the probe synthesizer carries the
+     * component into the request it builds. Both derive it from HERE rather than re-deriving it,
+     * which is how the two would drift apart.
      */
     public static Optional<String> statedInput(String criterion) {
         if (criterion == null) return Optional.empty();
@@ -82,6 +80,36 @@ public final class BehaviouralCriterionParser {
             if (stated.isPresent()) return stated;
         }
         return Optional.empty();
+    }
+
+    /**
+     * The assertion a probe can actually be built from — {@link #parse}, minus the requirements
+     * whose stated input cannot be grounded.
+     *
+     * <p><b>Why this is separate from {@link #parse}.</b> Parsing READS a criterion; it is right
+     * that it reads a pattern like {@code GET /loans?memberId={id}} and reports the endpoint the
+     * requirement addresses. Exercisability is a different question with a different answer, and
+     * before T1-FW three callers asked the reading question while meaning the exercise one:
+     * {@code CriteriaExecutabilityReadout} counted such a criterion as executable and reported it
+     * in {@code criteria_executable_pct}, and {@code BehaviouralClosureVerifier} put it in the
+     * list that buys a package and a boot before anything is probed. Both then found that the
+     * synthesizer abstains on it, having already spent the run's time saying so.
+     *
+     * <p><b>What cannot be grounded, and why it is the pattern rather than the status.</b> A
+     * component stated as a VALUE ({@code ?memberId=1}) rides into the request unchanged. One
+     * stated as a PATTERN needs a resource created first and the collection to create it in read
+     * off the handler's own parameter declaration — the capability {@code T1-FV} names and this
+     * project does not have. Grounding a pattern with an unused id was built and then WITHDRAWN on
+     * measurement: it is safe only where the requirement asserts the reference resolves to
+     * nothing, and the specification never said that — see the synthesizer, which holds that
+     * finding in full.
+     */
+    public static Optional<Assertion> exercisable(String criterion) {
+        Optional<Assertion> parsed = parse(criterion);
+        if (parsed.isEmpty()) return parsed;
+        return statedInput(criterion).filter(c -> c.contains("{")).isPresent()
+                ? Optional.empty()
+                : parsed;
     }
 
     /** Verb-qualified path mention; same shape the endpoint surface query reads out of spec prose. */
@@ -128,12 +156,14 @@ public final class BehaviouralCriterionParser {
         String path = null;
         Matcher em = ENDPOINT.matcher(criterion);
         while (em.find()) {
-            // T1-FW: a requirement that names part of its own input which identity
-            // normalization discards cannot be exercised from the normalized form — doing so
-            // tests a DIFFERENT input, and the artifact's correct refusal of it was recorded as a
-            // failure in 12 of 29 archived runs across 190 refused closure attempts. Where the
-            // component is stated LITERALLY the probe carries it through unchanged; where it is a
-            // pattern there is no machinery to ground it, and the honest answer is no opinion.
+            // T1-FW: the path is normalized for IDENTITY here, which discards any input
+            // component the requirement named. That is correct for saying WHICH endpoint this
+            // criterion addresses, and wrong for exercising it — a criterion about
+            // /loans?memberId={id} exercised as bare /loans tests a different input, and the
+            // artifact's correct refusal of it was recorded as a failure in 12 of 29 archived
+            // runs across 190 refused closure attempts. The component is not lost: statedInput
+            // reads it back, exercisable() decides whether it can be grounded, and the probe
+            // synthesizer carries it into the request. Nothing is decided in this loop.
             String normalized = EndpointSurfaceQuery.normalizePath(em.group(2));
             if (normalized == null) continue;
             String key = em.group(1).toUpperCase() + " " + normalized;

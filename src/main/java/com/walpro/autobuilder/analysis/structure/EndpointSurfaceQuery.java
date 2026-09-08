@@ -60,14 +60,11 @@ public class EndpointSurfaceQuery {
     private static final Pattern SPEC_ENDPOINT = Pattern.compile(
             "\\b(GET|POST|PUT|PATCH|DELETE)\\s+(/[A-Za-z0-9_\\-{}/.?=&]*)");
 
-    // Request-mapping vocabulary (ecosystem knowledge as data rows — T4-BM territory).
-    private static final Map<String, String> VERB_MAPPING_ANNOTATIONS = Map.of(
-            "GetMapping", "GET",
-            "PostMapping", "POST",
-            "PutMapping", "PUT",
-            "PatchMapping", "PATCH",
-            "DeleteMapping", "DELETE");
-    private static final String GENERIC_MAPPING_ANNOTATION = "RequestMapping";
+    // Request-mapping vocabulary (ecosystem knowledge as data rows — T4-BM territory). Held in
+    // AnnotationVocabularies since 2026-09-08, because RequestBodyContractQuery reads the same
+    // handlers and a second private copy is how the two would drift.
+    private static final Map<String, String> VERB_MAPPING_ANNOTATIONS = AnnotationVocabularies.VERB_MAPPING;
+    private static final String GENERIC_MAPPING_ANNOTATION = AnnotationVocabularies.GENERIC_MAPPING;
     private static final String ANY_VERB = "*";
 
     /**

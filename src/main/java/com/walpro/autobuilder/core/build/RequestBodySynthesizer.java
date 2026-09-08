@@ -1,5 +1,10 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.analysis.structure.RequestBodyContractQuery;
+import com.walpro.autobuilder.analysis.structure.RequestBodyContractQuery.AcceptedBody;
+import com.walpro.autobuilder.analysis.structure.RequestBodyContractQuery.KeyedValues;
+import com.walpro.autobuilder.analysis.structure.RequestBodyContractQuery.NamedType;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,7 +28,22 @@ import java.util.stream.Stream;
  * harmless: a validation 400 on a placeholder value proves the endpoint is alive and handled,
  * which is all the gate claims. {@code {}} is always the last candidate — it exercises binding
  * and the validation surface even when no model class is derivable.
+ *
+ * <p><b>T1-FV: the model is where the components come from; the handler's own declaration is what
+ * decides which of them survive.</b> What an artifact STORES and what its interface ACCEPTS are
+ * different shapes — identifiers, timestamps and derived state exist in the entity and are refused
+ * at the door. Every field here was derived from the entity, so a body could carry a component the
+ * handler was never going to bind; the artifact refused the call before the requirement was
+ * reached, and the refusal was recorded as the artifact failing. {@link RequestBodyContractQuery}
+ * supplies the declaration, and it is consulted for BOTH halves: which type to read the components
+ * from, and which of them can bind.
+ *
+ * <p><b>Where the declaration cannot be read, today's behaviour stands.</b> Declining outright
+ * would trade a wrong body for no probe at all, which reads as success and is the failure mode
+ * T1-FW nearly reintroduced. The abstention is logged so its population can be counted before
+ * anyone decides to make it binding.
  */
+@lombok.extern.slf4j.Slf4j
 public final class RequestBodySynthesizer {
 
     private static final Pattern PRIVATE_FIELD =
@@ -39,9 +59,9 @@ public final class RequestBodySynthesizer {
     public static List<String> candidateBodies(String path, Path artifactRoot) {
         List<String> candidates = new ArrayList<>();
         try {
-            lastStaticSegment(path)
-                    .flatMap(segment -> findModelSource(segment, artifactRoot))
-                    .flatMap(source -> synthesizeFromSource(source, Map.of()))
+            Optional<AcceptedBody> accepted = acceptedBody(path, artifactRoot);
+            componentSource(path, artifactRoot, accepted)
+                    .flatMap(source -> synthesizeFromSource(source, Map.of(), accepted))
                     .ifPresent(candidates::add);
         } catch (RuntimeException e) {
             // synthesis is best-effort; the {} fallback below always stands
@@ -67,15 +87,39 @@ public final class RequestBodySynthesizer {
      * than a contradiction.
      */
     public static Optional<String> acceptableBody(String path, Path artifactRoot) {
-        Optional<Path> model = lastStaticSegment(path).flatMap(segment -> findModelSource(segment, artifactRoot));
+        Optional<AcceptedBody> accepted = acceptedBody(path, artifactRoot);
+        Optional<Path> model = componentSource(path, artifactRoot, accepted);
         if (model.isEmpty()) return Optional.empty();
         Map<String, FieldConstraintDiscovery.Constraint> constraints =
                 FieldConstraintDiscovery.discover(artifactRoot);
         try {
-            return synthesizeFromSource(model.get(), constraints);
+            return synthesizeFromSource(model.get(), constraints, accepted);
         } catch (RuntimeException e) {
             return Optional.empty();
         }
+    }
+
+    /** The handler's declaration, with the read attempt logged so its reach can be counted. */
+    private static Optional<AcceptedBody> acceptedBody(String path, Path artifactRoot) {
+        Optional<AcceptedBody> accepted = RequestBodyContractQuery.acceptedBodyFor(path, artifactRoot);
+        if (accepted.isEmpty()) {
+            log.info("T1-FV: no readable body declaration for {} — deriving from the model alone", path);
+        }
+        return accepted;
+    }
+
+    /**
+     * Which type the components come from. The declaration wins when it names a type the artifact
+     * declares -- that is the request object, and it may be narrower than the entity. Otherwise
+     * the path segment picks the model, which is what this class always did.
+     */
+    private static Optional<Path> componentSource(String path, Path artifactRoot,
+                                                  Optional<AcceptedBody> accepted) {
+        if (accepted.orElse(null) instanceof NamedType named) {
+            Optional<Path> declared = findModelSource(named.simpleName(), artifactRoot);
+            if (declared.isPresent()) return declared;
+        }
+        return lastStaticSegment(path).flatMap(segment -> findModelSource(segment, artifactRoot));
     }
 
     /** The last path segment that is not a normalized path variable ({@code {}}). */
@@ -125,7 +169,8 @@ public final class RequestBodySynthesizer {
      * can create anything, however correct its other fields are.
      */
     private static Optional<String> synthesizeFromSource(Path source,
-                                                         Map<String, FieldConstraintDiscovery.Constraint> constraints) {
+                                                         Map<String, FieldConstraintDiscovery.Constraint> constraints,
+                                                         Optional<AcceptedBody> accepted) {
         String text;
         try {
             text = Files.readString(source);
@@ -140,6 +185,12 @@ public final class RequestBodySynthesizer {
             String value = placeholderFor(m.group(1));
             if (value == null) continue; // unknown/nested type — omit rather than guess
             if ("serialVersionUID".equals(field)) continue;
+            if (!bindable(value, accepted)) {
+                // T1-FV: the model holds it, the declaration will not take it. Sending it anyway
+                // draws a refusal that says nothing about the requirement under test.
+                log.info("T1-FV: dropping {} — the handler's declaration does not accept its type", field);
+                continue;
+            }
             FieldConstraintDiscovery.Constraint constraint = constraints.get(field);
             if (constraint != null) {
                 // Only a textual value can be shaped to a pattern or a length; a constrained
@@ -161,6 +212,30 @@ public final class RequestBodySynthesizer {
     /** JSON string literal for a generated value; the alphabet is narrow but not assumed. */
     private static String quote(String value) {
         return '"' + value.replace("\\", "\\\\").replace("\"", "\\\"") + '"';
+    }
+
+    /**
+     * Whether a component's value can bind to what the declaration accepts.
+     *
+     * <p>Compared by JSON KIND rather than by a table of type pairs, and the kinds come from
+     * {@link #placeholderFor} itself -- the same rows that produced the value. So a handler taking
+     * keyed integers accepts the model's numeric fields and refuses its booleans and its
+     * timestamps, which is exactly the observed case, without this class learning any new type
+     * vocabulary. A value type the placeholder table does not know yields no opinion, because a
+     * kind nobody can name is not a kind anything can be excluded from.
+     */
+    private static boolean bindable(String value, Optional<AcceptedBody> accepted) {
+        if (!(accepted.orElse(null) instanceof KeyedValues keyed)) return true;
+        String acceptedValue = placeholderFor(keyed.valueTypeSimpleName());
+        if (acceptedValue == null) return true;
+        return jsonKind(value).equals(jsonKind(acceptedValue));
+    }
+
+    /** The JSON kind of a rendered placeholder: what a reader would call it, not what Java calls it. */
+    private static String jsonKind(String rendered) {
+        if (rendered.startsWith("\"")) return "string";
+        if ("true".equals(rendered) || "false".equals(rendered)) return "boolean";
+        return "number";
     }
 
     /** JSON placeholder per Java type; null = omit the field (never guess at nested objects). */

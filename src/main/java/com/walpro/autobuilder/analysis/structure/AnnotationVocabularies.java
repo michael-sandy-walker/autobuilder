@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.AnnotationDeclaration;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -45,6 +46,22 @@ public final class AnnotationVocabularies {
 
     /** Binds a request body to a parameter. */
     public static final String REQUEST_BODY = "RequestBody";
+
+    /**
+     * Request-mapping vocabulary, moved here from {@code EndpointSurfaceQuery} on 2026-09-08 when
+     * a second reader needed it (T1-FV). Annotation names are declarative data rows and this is
+     * their home -- two private copies is how the surface query and the body-contract query would
+     * come to disagree about what a handler is.
+     */
+    public static final Map<String, String> VERB_MAPPING = Map.of(
+            "GetMapping", "GET",
+            "PostMapping", "POST",
+            "PutMapping", "PUT",
+            "PatchMapping", "PATCH",
+            "DeleteMapping", "DELETE");
+
+    /** A mapping that does not name its verb in the annotation itself. */
+    public static final String GENERIC_MAPPING = "RequestMapping";
 
     /** Requests bean validation of an annotated binding. */
     public static final Set<String> VALIDATION_TRIGGER = Set.of("Valid", "Validated");

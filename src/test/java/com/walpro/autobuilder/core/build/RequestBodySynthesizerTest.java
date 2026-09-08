@@ -21,6 +21,108 @@ class RequestBodySynthesizerTest {
         Files.writeString(p, content);
     }
 
+    private void controller(String name, String content) throws IOException {
+        Path p = tempDir.resolve("src/main/java/com/example/" + name);
+        Files.createDirectories(p.getParent());
+        Files.writeString(p, content);
+    }
+
+    /**
+     * T1-FV, verbatim from run {@code 2026-08-28_21-47-39}: the artifact scored 23/23 and was
+     * refused closure by ONE contradiction, because the body was derived from what the artifact
+     * STORES rather than from what its interface ACCEPTS. The handler declares keyed {@code Long}
+     * values; the entity carries {@code boolean returned}; the request was refused with 400 before
+     * the requirement was reached and the refusal was recorded as the artifact failing.
+     *
+     * <p>RED against the pre-fix code, which emitted {@code "returned":true} and drew the 400.
+     * Verified on the preserved artifact itself: the old body draws 400, this one draws the
+     * specified {@code 404 {"message":"Book not found"}}.
+     */
+    @Test
+    void dropsAComponentTheHandlersDeclarationWillNotBind() throws IOException {
+        model("Loan.java", """
+                public class Loan {
+                    private Long id;
+                    private Long bookId;
+                    private Long memberId;
+                    private boolean returned;
+                }
+                """);
+        controller("LoanController.java", """
+                @RestController
+                @RequestMapping("/loans")
+                public class LoanController {
+                    @PostMapping
+                    public ResponseEntity<Loan> create(@RequestBody Map<String, Long> body) {
+                        return null;
+                    }
+                }
+                """);
+
+        List<String> bodies = RequestBodySynthesizer.candidateBodies("/loans", tempDir);
+
+        assertThat(bodies.get(0))
+                .contains("\"bookId\":1")
+                .contains("\"memberId\":1")
+                .doesNotContain("returned");
+    }
+
+    /**
+     * The same reading drops a server-assigned identifier STRUCTURALLY when the declaration is
+     * narrower than the entity -- here the handler takes keyed strings, so a numeric {@code id}
+     * cannot bind. The ticket closed the name-based route ("extending the stripped-name list would
+     * hardcode domain vocabulary"); this reaches the same result by reading the declaration, and
+     * it generalises to any component the interface refuses rather than to the one field somebody
+     * remembered to name.
+     */
+    @Test
+    void aNarrowerDeclarationExcludesTheAssignedIdentifierWithoutNamingIt() throws IOException {
+        model("Book.java", """
+                public class Book {
+                    private Long id;
+                    private String title;
+                    private String isbn;
+                }
+                """);
+        controller("BookController.java", """
+                @RestController
+                @RequestMapping("/books")
+                public class BookController {
+                    @PostMapping
+                    public ResponseEntity<Book> create(@RequestBody Map<String, String> body) {
+                        return null;
+                    }
+                }
+                """);
+
+        assertThat(RequestBodySynthesizer.candidateBodies("/books", tempDir).get(0))
+                .contains("\"title\":\"value\"")
+                .contains("\"isbn\":\"value\"")
+                .doesNotContain("\"id\"");
+    }
+
+    /**
+     * No readable declaration means today's behaviour, deliberately. Declining here would trade a
+     * wrong body for no probe at all, and no probe reads as success -- the failure mode T1-FW
+     * nearly reintroduced. The abstention is logged instead, so its population can be counted
+     * before anyone makes it binding.
+     */
+    @Test
+    void anUnreadableDeclarationLeavesTheDerivedBodyAlone() throws IOException {
+        model("Widget.java", """
+                public class Widget {
+                    private Long id;
+                    private String name;
+                    private boolean active;
+                }
+                """);
+        // No controller at all: nothing declares what /widgets accepts.
+
+        assertThat(RequestBodySynthesizer.candidateBodies("/widgets", tempDir).get(0))
+                .contains("\"name\":\"value\"")
+                .contains("\"active\":true");
+    }
+
     @Test
     void derivesBodyFromMatchingModelSource() throws IOException {
         model("Order.java", """

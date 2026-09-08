@@ -86,6 +86,7 @@ False completions and diagnosis lenses:
 - `project_false_completion_4.md`: the first by BOOKKEEPING — the closure ledger counts dispositions, never the seed. Taints the GOAL_FULFILLED population until audited. (reviewed 2026-08-28)
 - `project_invented_facts_have_authorities.md`: every defect is an INVENTED FACT whose cheap authority sat unconsulted. Triage question: what fact was invented, what is its authority, who consulted it? (reviewed 2026-08-28)
 - `project_capability_outruns_routing.md`: assume a missing behaviour is UNREACHED, not unbuilt. Trace to the link that does not fire before writing code. (reviewed 2026-08-24)
+- `project_ticket_premises_expire.md`: a ticket's stated BLOCKER is a claim with a date on it; three expired unnoticed on 2026-09-08. Grep before designing, and fix the index line in the same edit. (reviewed 2026-09-08)
 - `project_detector_went_silent_as_the_fault_spread.md`: a majority rule stopped firing when the anomaly became the majority. Ask any majority rule what it does then. (reviewed 2026-09-03)
 - `project_completion_edge_gates.md`: completion edge is coverage then package then test; every diagnosis needs an actuator; brakes must count every evidence class. (reviewed 2026-07-09)
 - `project_grounding_night_insight.md`: prefer belief-to-verification moves in triage. (reviewed 2026-07-09)

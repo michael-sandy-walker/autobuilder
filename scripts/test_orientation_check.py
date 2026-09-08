@@ -150,8 +150,12 @@ class LiveIndexTest(unittest.TestCase):
         # 97 -> 96 later on 2026-09-08: the GSD isolation-sentinel line was de-indexed when the
         # milestone cut deleted the apparatus it described, and its memory file removed with it.
         # The pin did its job again -- it is what surfaced that the index had moved at all.
+        #
+        # 96 -> 97 the same evening: project_ticket_premises_expire.md indexed. Third movement in
+        # one day, each one caught here rather than noticed later, which is the whole argument for
+        # pinning a count nobody would otherwise check.
         entries = oc.parse_index(LIVE_MEMORY)
-        self.assertEqual(len(entries), 96)
+        self.assertEqual(len(entries), 97)
         entry_pointers = [e["line"] for e in entries if oc.POINTER_PHRASE.search(e["text"])]
         self.assertEqual(entry_pointers, [])  # the four former markers are all demoted now
         with open(LIVE_MEMORY, errors="replace") as fh:

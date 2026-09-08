@@ -34,6 +34,19 @@ class DeterministicProbeSynthesizerTest {
         return artifactRoot;
     }
 
+    /**
+     * T1-FV: a served endpoint. {@code acceptableBody} declines when nothing declares what the
+     * path accepts, so a fixture omitting the controller is a tree whose endpoint does not exist,
+     * and a success probe there fails for a reason having nothing to do with the body. Measured
+     * over 112 mid-run checkpoints that shape is 10 of 281 derivations, and every one is a tree
+     * the loop had not yet given a controller. The constraint behaviour under test is unchanged.
+     */
+    private void servedByController() throws IOException {
+        Path dir = artifactRoot.resolve("src/main/java/com/example");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("BookController.java"), "@RestController\n@RequestMapping(\"/books\")\npublic class BookController {\n    @PostMapping\n    public ResponseEntity<Book> create(@RequestBody Book book) { return null; }\n}\n");
+    }
+
     private static List<ProbeRequest> sequence(Optional<List<ProbeRequest>> result) {
         assertThat(result).isPresent();
         return result.get();
@@ -75,6 +88,7 @@ class DeterministicProbeSynthesizerTest {
         // is read from the artifact's own validation, so the body is one it will accept.
         Path root = withModel("Book", "public class Book { private Long id; private String title; private String isbn; }");
         withModel("BookService", BOOK_SERVICE);
+        servedByController();
 
         List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
                 assertion("POST /books returns HTTP 201 with the created book"), root));
@@ -115,6 +129,7 @@ class DeterministicProbeSynthesizerTest {
         // refused — and BootGate reads a refusal of the asserted request as an abstention rather
         // than a contradiction. That guard is what makes probing here safe rather than reckless.
         Path root = withModel("Book", "public class Book { private String title; private String isbn; }");
+        servedByController();
 
         List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
                 assertion("POST /books returns HTTP 201 with the created book"), root));

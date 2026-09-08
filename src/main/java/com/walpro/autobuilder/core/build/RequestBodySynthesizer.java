@@ -38,10 +38,20 @@ import java.util.stream.Stream;
  * supplies the declaration, and it is consulted for BOTH halves: which type to read the components
  * from, and which of them can bind.
  *
- * <p><b>Where the declaration cannot be read, today's behaviour stands.</b> Declining outright
- * would trade a wrong body for no probe at all, which reads as success and is the failure mode
- * T1-FW nearly reintroduced. The abstention is logged so its population can be counted before
- * anyone decides to make it binding.
+ * <p><b>An unreadable declaration splits the two entry points, because they promise different
+ * things.</b> {@link #acceptableBody} promises a body the application will ACCEPT, and a
+ * derivation with nothing to check itself against cannot promise that -- so it DECLINES and its
+ * caller abstains, the same trade {@code FieldConstraintDiscovery} already makes one step earlier.
+ * {@link #candidateBodies} only ever promised "no 5xx", and its {@code {}} fallback answers that
+ * with or without a declaration -- so it stays best-effort.
+ *
+ * <p><b>Measured before the decline was made binding, on mid-run trees rather than finished
+ * ones.</b> An earlier reading over 70 preserved artifacts found every declaration readable, but
+ * those are FINAL trees and all of them have controllers because they reached the end. Over 112
+ * archived mid-run checkpoints the real figure is 271 of 281 derivations readable, and all ten
+ * exceptions are trees where the endpoint is NOT SERVED YET -- nine carry no controller at all.
+ * A success probe there fails for an unrelated reason whatever body it sends, so declining loses
+ * no verification and stops the synthesizer inventing a body for an endpoint that does not exist.
  */
 @lombok.extern.slf4j.Slf4j
 public final class RequestBodySynthesizer {
@@ -88,6 +98,11 @@ public final class RequestBodySynthesizer {
      */
     public static Optional<String> acceptableBody(String path, Path artifactRoot) {
         Optional<AcceptedBody> accepted = acceptedBody(path, artifactRoot);
+        // T1-FV DoD: where the declaration cannot be read, decline. This method's whole promise is
+        // a body the application will ACCEPT, and a derivation with nothing to check itself
+        // against cannot make it. Measured over 112 mid-run checkpoints: 271 of 281 readable, and
+        // every one of the ten exceptions is a tree whose endpoint is not served yet.
+        if (accepted.isEmpty()) return Optional.empty();
         Optional<Path> model = componentSource(path, artifactRoot, accepted);
         if (model.isEmpty()) return Optional.empty();
         Map<String, FieldConstraintDiscovery.Constraint> constraints =

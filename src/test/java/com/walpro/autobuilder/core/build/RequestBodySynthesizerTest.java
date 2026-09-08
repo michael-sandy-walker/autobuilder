@@ -102,13 +102,20 @@ class RequestBodySynthesizerTest {
     }
 
     /**
-     * No readable declaration means today's behaviour, deliberately. Declining here would trade a
-     * wrong body for no probe at all, and no probe reads as success -- the failure mode T1-FW
-     * nearly reintroduced. The abstention is logged instead, so its population can be counted
-     * before anyone makes it binding.
+     * T1-FV DoD: the two entry points split on an unreadable declaration, because they promise
+     * different things. {@code acceptableBody} promises a body the application will ACCEPT and
+     * cannot promise it here, so it declines; {@code candidateBodies} only ever promised "no 5xx"
+     * and its {@code {}} fallback answers that either way, so it stays best-effort.
+     *
+     * <p>The decline was measured before it was made binding, on the population it acts on rather
+     * than the one that was easy to enumerate: over 112 archived MID-RUN checkpoints, 271 of 281
+     * derivations have a readable declaration, and all ten exceptions are trees whose endpoint is
+     * not served yet -- nine carry no controller at all. A success probe there fails whatever body
+     * it sends. An earlier count over 70 FINAL artifacts found 142 of 142 readable and was the
+     * wrong population for exactly this reason.
      */
     @Test
-    void anUnreadableDeclarationLeavesTheDerivedBodyAlone() throws IOException {
+    void anUnreadableDeclarationDeclinesForTheSuccessProbeButNotForLiveness() throws IOException {
         model("Widget.java", """
                 public class Widget {
                     private Long id;
@@ -118,9 +125,12 @@ class RequestBodySynthesizerTest {
                 """);
         // No controller at all: nothing declares what /widgets accepts.
 
+        // Liveness keeps its best-effort body...
         assertThat(RequestBodySynthesizer.candidateBodies("/widgets", tempDir).get(0))
                 .contains("\"name\":\"value\"")
                 .contains("\"active\":true");
+        // ...while the success probe, which needs a body the application will accept, declines.
+        assertThat(RequestBodySynthesizer.acceptableBody("/widgets", tempDir)).isEmpty();
     }
 
     @Test
@@ -189,6 +199,7 @@ class RequestBodySynthesizerTest {
 
     @Test
     void acceptableBodyAppliesTheArtifactsOwnConstraintsToTheValues() throws IOException {
+        controller("BookController.java", "@RestController\n@RequestMapping(\"/books\")\npublic class BookController {\n    @PostMapping\n    public ResponseEntity<Book> create(@RequestBody Book book) { return null; }\n}\n");
         model("Book.java", "public class Book { private String title; private String isbn; }");
         model("BookService.java", """
                 import java.util.regex.Pattern;
@@ -208,6 +219,7 @@ class RequestBodySynthesizerTest {
     void oneUnsatisfiableConstraintFailsTheWholeBody() throws IOException {
         // A body carrying one value the application rejects is not a body that can create
         // anything, however correct its other fields are — so this must be empty, not partial.
+        controller("BookController.java", "@RestController\n@RequestMapping(\"/books\")\npublic class BookController {\n    @PostMapping\n    public ResponseEntity<Book> create(@RequestBody Book book) { return null; }\n}\n");
         model("Book.java", "public class Book { private String title; private String isbn; }");
         model("BookService.java", """
                 import java.util.regex.Pattern;
@@ -226,6 +238,7 @@ class RequestBodySynthesizerTest {
     void aConstrainedNonTextualFieldIsDeclinedRatherThanShaped() throws IOException {
         // Only a textual value can be shaped to a pattern or a length; anything else is a shape
         // this class does not model, and guessing would send a body that gets refused.
+        controller("BookController.java", "@RestController\n@RequestMapping(\"/books\")\npublic class BookController {\n    @PostMapping\n    public ResponseEntity<Book> create(@RequestBody Book book) { return null; }\n}\n");
         model("Book.java", "public class Book { private int copies; }");
         model("BookService.java", """
                 public class BookService {
@@ -248,6 +261,7 @@ class RequestBodySynthesizerTest {
     void anUnconstrainedProjectStillYieldsPlaceholders() throws IOException {
         // No discovered constraint is not evidence of no validation — the probe may still be
         // refused, and BootGate reads that refusal as an abstention rather than a contradiction.
+        controller("BookController.java", "@RestController\n@RequestMapping(\"/books\")\npublic class BookController {\n    @PostMapping\n    public ResponseEntity<Book> create(@RequestBody Book book) { return null; }\n}\n");
         model("Book.java", "public class Book { private String title; }");
 
         assertThat(RequestBodySynthesizer.acceptableBody("/books", tempDir))

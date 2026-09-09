@@ -42,7 +42,9 @@ import java.util.Map;
 public class RunEndReportService {
 
     public static final String END_REPORT_FILE = "meta/run-end-report.json";
-    static final String SCHEMA_VERSION = "1";
+    // T3-CC slice 2: bumped when the criteria tier counts were added. A reader of a version-1
+    // report must not assume the fields are absent because the run had no elaboration.
+    static final String SCHEMA_VERSION = "2";
 
     private final FileService fileService;
     private final GoalPlannerService goalPlannerService;
@@ -77,7 +79,18 @@ public class RunEndReportService {
             List<String> lastRejectionReasons,
             boolean entryPointPresent,
             String preservedFromCycle,
-            String preservedVerifiedBuild) {}
+            String preservedVerifiedBuild,
+            /*
+             * T3-CC: the two tiers of fulfilment, per run rather than per cycle.
+             *
+             * `criteriaDeclared` is every acceptance criterion in the tree; `criteriaElaboration`
+             * is the subset the loop AUTHORED beyond the specification, which is reported and
+             * never asserted against the artifact. Recorded so the elaboration RATE is watchable
+             * across runs -- and deliberately not turned into a score, because rewarding it would
+             * pay the loop to invent obligations it already invents often enough.
+             */
+            int criteriaDeclared,
+            int criteriaElaboration) {}
 
     /**
      * Writes the end report for the pause episode that just reached its terminal. Call AFTER
@@ -124,6 +137,10 @@ public class RunEndReportService {
                 preservedVerified = provenance.verifiedBuildResult();
             }
 
+            // Reuses the readout rather than recounting: it is the one place that knows how a
+            // criterion is classified, and a second count here would drift from the T2-EX line.
+            var criteriaCounts = com.walpro.autobuilder.observability.CriteriaExecutabilityReadout
+                    .over(goalPlannerService.getAllGoals());
             RunEndReport endReport = new RunEndReport(
                     SCHEMA_VERSION,
                     terminalReason,
@@ -142,11 +159,15 @@ public class RunEndReportService {
                             ? List.copyOf(context.rejectionFeedback()) : List.of(),
                     entryPoint,
                     preservedFrom,
-                    preservedVerified);
+                    preservedVerified,
+                    criteriaCounts.authored(),
+                    criteriaCounts.elaboration());
             fileService.writeJson(END_REPORT_FILE, endReport);
-            log.info("T4-CD: run end report written ({} — openWork={}, blockers={}, dominantDefect={}).",
+            log.info("T4-CD: run end report written ({} — openWork={}, blockers={}, dominantDefect={}, "
+                            + "criteria={} of which {} elaboration).",
                     terminalReason, openWork.size(), blockers.size(),
-                    defect != null ? defect.missingToken() : "none");
+                    defect != null ? defect.missingToken() : "none",
+                    criteriaCounts.authored(), criteriaCounts.elaboration());
         } catch (Exception e) {
             log.warn("T4-CD: run end report write failed (run state untouched): {}", e.getMessage());
         }

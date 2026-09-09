@@ -255,7 +255,7 @@ class RunResumeServiceTest {
         var endReport = new com.walpro.autobuilder.core.persistence.RunEndReportService.RunEndReport(
                 "1", "exhaustion-runaway", "cycle-halt", Instant.now(), "root-1", "Evolve the app",
                 "GIVEN_UP", 3, 5, 2, java.util.List.of(), java.util.List.of(), null,
-                java.util.List.of(), true, "cycle-42", "COMPILE_OK");
+                java.util.List.of(), true, "cycle-42", "COMPILE_OK", 0, 0);
         when(endReportService.readForLineage("root-1")).thenReturn(java.util.Optional.of(endReport));
         when(endReportService.renderPromptBlock(endReport)).thenReturn("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\n...");
         service.setRunEndReportService(endReportService);

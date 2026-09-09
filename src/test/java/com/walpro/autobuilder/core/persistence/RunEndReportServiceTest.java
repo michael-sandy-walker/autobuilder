@@ -200,7 +200,7 @@ class RunEndReportServiceTest {
                         List.of("lists all loans"), "exhausted")),
                 new RunEndReportService.DefectShape("LoanRepository", 0.8, 3, true),
                 List.of("the change does not persist the loan"),
-                true, "cycle-50", "COMPILE_OK");
+                true, "cycle-50", "COMPILE_OK", 12, 3);
 
         String block = service.renderPromptBlock(t);
 

@@ -294,7 +294,7 @@
 - [x] `T2-EN` — Injection recurrence needs a run-level brake
 - [x] `T2-H3` — Propagate InterpretationAgent summary/directives to next-cycle agent prompts
 
-## Tier 3 — Feature completion (41)
+## Tier 3 — Feature completion (42)
 
 - [x] `T3-CA` — A type that carries NO annotation at all is invisible to the odd-one-out rule, so the one defect that stops the application starting is the one nothing reports — BUILT+CALIBRATED 2026-08-24 (1 firing across 12 real trees, both false positives found by replay); CLOSED 2026-08-30: actuator shipped (InjectedTypeRegistrationRepair) and proven on the failing run's own artifact — rebuilt jar boots and serves
 - [x] `T3-BZ` — A type placed differently from its own structural peers is never noticed (Book in `domain`, Loan/Member in `domain.model`); derive the norm from the project's majority among code-established peers, never a convention table — SHIPPED: slice 1 (the fact) 2026-08-23 + marker 08-24, slice 2 (the mover) 2026-08-30 on the watch (fired in 9 runs, zero relocations); proven on all 9 archived trees — 9/9 moved, 9/9 still compile, the booted one still scores 23/23 (a NO-HARM check on a tree already at 23/23, never an achievement - the run where the mover fired scored 21/23); **FIELD DoD MET 2026-08-30** — moved Book in a live merge, build green 17 s later, no recurrence in 67 cycles
@@ -337,6 +337,7 @@
 - [x] `T3-BU` — `WellKnownPackageRegistry` framework-version jargon removal
 - [x] `T3-BV` — Fix-chain convergence refit
 - [ ] `T3-CB` — A requirement whose stated input is a PATTERN is read, reported, then never exercised — the reference must RESOLVE and nothing creates what it resolves to; filed 2026-09-09 carrying `T1-FW`'s one unmet clause. 37 criteria abstain (of 58 naming an input beyond the path). **10 of the 37 MUST NOT be grounded** — they assert a 404 the seed never states and probing them accuses a correct artifact (that trap already withdrew one attempt; they are T4-DA's). Missing: query/path-variable vocabulary, a route from the declaration read into `ground()`, and a setup for the collection-read shape. **Unify the two handler-declaration walks here — this is the third consumer T1-FV named**
+- [ ] `T3-CC` — The loop may elaborate beyond the spec and that elaboration is graded as an OBLIGATION: `isAuthoredCriterion` is consulted at 4 closure-side sites and **0 verification-side sites**, so an authored criterion cannot block closure but IS still probed and can record a contradiction against correct code. Filed 2026-09-09 from the "more tiers of fulfilment" question. Graph-measured (not logs): 97 distinct pattern criteria, 51 success / 27 error-the-seed-never-states / 13 none; pass 63% vs 54% vs 48% — **the blocks-resolution reading is NOT supported**, the harm is a correct artifact reported defective. Tiers: meets-spec binding, elaboration reported. **Do NOT score the second tier** — the loop already over-authors. May SUBSUME T3-CB's exclusion rule
 
 ## Tier 4 — New systems (109)
 

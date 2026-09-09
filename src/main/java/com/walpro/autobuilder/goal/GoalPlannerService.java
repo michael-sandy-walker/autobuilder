@@ -3595,15 +3595,25 @@ public class GoalPlannerService {
                         // next verification blocks on the blob itself — recursively re-injecting
                         // (run 4, 2026-07-03: verification #4 blocked on verification #1's work item).
                         for (String id : injected.injectedIds()) {
-                            setAcceptanceCriteria(id, completionVerification.unconfirmedCriteria());
                             // The criteria on this item are the SPECIFICATION's unmet requirements,
                             // not build-status facts — stamped so the three sites that read the
                             // [BUILD_FIX] tag as "gate-owned build health" can tell them apart.
                             // Unstamped, a COMPILE_OK observation retired this item 48 seconds
                             // after it was raised (run 2026-08-30_00-06-00) and the root completed
                             // with the multi-line-row requirement still unmet.
+                            //
+                            // ⚠ MARKER FIRST, CRITERIA SECOND, AND THE ORDER IS THE WHOLE POINT.
+                            // setAcceptanceCriteria stamps the per-criterion binding, and that
+                            // stamp asks isFromCriteriaGate(metadata). Written the other way round
+                            // the guard read a map that did not carry the marker yet, concluded
+                            // "gate-owned BUILD_FIX", and stamped the SPECIFICATION's own words
+                            // AUTHORED — observed in run 2026-09-09_23-39-58 on "GET /books/{id}
+                            // returns HTTP 404 when the book is absent", which the seed states
+                            // verbatim. A correct guard consulted before its input exists is an
+                            // absent guard.
                             setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
                                     com.walpro.autobuilder.core.build.BlockerTypes.GATE_CRITERIA);
+                            setAcceptanceCriteria(id, completionVerification.unconfirmedCriteria());
                         }
                         log.warn("T4-BP-3: root closure blocked — {}; work item injected", unconfirmed.get());
                         return;

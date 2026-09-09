@@ -1312,4 +1312,57 @@ public class GoalPlannerServiceClosureTest {
         assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
+
+    @Test
+    void setAcceptanceCriteria_criteriaGateItem_keepsTheSpecificationsOwnWordsBinding() throws IOException {
+        // T3-CC field defect, run 2026-09-09_23-39-58. The criteria gate injects a [BUILD_FIX]
+        // item whose criteria ARE the specification's unmet requirements, verbatim -- in that run
+        // "GET /books/{id} returns HTTP 404 when the book is absent", which the seed states word
+        // for word. The gate-owned pre-pass stamped them AUTHORED, so slice 1 then declined to
+        // verify the specification's own words.
+        //
+        // The guard for this existed and was inert: setAcceptanceCriteria stamps the binding, and
+        // the stamp asks isFromCriteriaGate(metadata), but the caller wrote the marker on the NEXT
+        // line. A correct guard consulted before its input exists is an absent guard.
+        //
+        // ⚠ WHAT THIS TEST DOES AND DOES NOT COVER, because the distinction is the whole defect.
+        // It builds the goal with the marker ALREADY set, so it pins the GUARD: given the marker,
+        // the spec's words stay binding. It does NOT pin the ORDERING at the injection site --
+        // it never drives that site, and it would pass against the buggy code too. The ordering
+        // is held by the comment at the call site and by nothing else. Pinning it properly needs
+        // a test that drives the T4-BP-3 closure block end to end, which is why the residual is
+        // named here rather than left for someone to assume this test covers it.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        when(goalPlannerConfig.isCriteriaGroundingEnabled()).thenReturn(true);
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+
+        GoalEntity root = new GoalEntity("G", "root spec", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity item = new GoalEntity("C", "[BUILD_FIX] Implement the unconfirmed acceptance criteria",
+                "planner", GoalType.SUBGOAL, "G");
+        item.setStatus(GoalStatus.ACTIVE);
+        item.getMetadata().put(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX);
+        // The marker the injection site must write BEFORE handing over the criteria.
+        item.getMetadata().put(com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.GATE_CRITERIA);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(item.getId(), item);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.setAcceptanceCriteria("C", java.util.List.of(
+                "GET /books/{id} returns HTTP 404 with {\"message\":\"<reason>\"} when the book is absent"));
+
+        // No AUTHORED stamp: the criteria gate's item is exempt from the gate-owned pre-pass, so
+        // the specification's own words stay binding and keep being verified.
+        Object binding = service.getGoalById("C").getMetadata().get("criteriaBinding");
+        if (binding instanceof Map<?, ?> m) {
+            assertThat(m.get("1"))
+                    .as("a criteria-gate item carries the spec's words; they must not be demoted")
+                    .isNotEqualTo("AUTHORED");
+        }
+    }
 }

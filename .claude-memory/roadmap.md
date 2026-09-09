@@ -7562,22 +7562,33 @@ Work whose subject is the measurement/driving apparatus AROUND the loop. See `ti
 
 - [ ] **T6-R: what separates a run that SURVIVES the grind from one that collapses? — the compile-diagnostic count is measured to be the wrong discriminator, and nothing names the right one** (`scripts/run_outcomes.json`, the per-run logs) — **filed 2026-09-09 out of a 23/23 run that carried 232 grind diagnostics.**
   - **THE QUESTION:** runs on one build, one target and one seed split into near-perfect and near-zero with little in between ([[project-first-perfect-smoke-score]] records the perfect side as routine). **Nothing predicts which a run will be**, and two candidate predictors are now measured and REFUTED. This ticket is to find one that holds, or to record that none of the cheap ones do.
-  - **📋 MEASURED 2026-09-09 over the 15 ledger runs whose logs survive and that carry the diagnostic at all.** Hits of `inference variable T has incompatible bounds` against strict smoke:
+  - **📋 WHAT IS MEASURED, STATED SO THE TABLE CAN BE CHECKED.** A **hit** is one log line containing `inference variable T has incompatible bounds` — a Java compiler diagnostic from the TARGET project's build, emitted once per diagnostic each time proposed code fails to type-check that way. It counts failed compile attempts of one kind; it is not a decision the loop made.
+  - **📋 THE POPULATION AND ITS FILTER, both stated because the first write-up of this gave neither.** Of **122** ledger runs: **99 excluded because the log no longer exists on disk** (logs rotate, the ledger is durable), **8 excluded because the log is present and the diagnostic never appears**, leaving **15 retained**. Of the 15, **11 carry a strict score** and **4 are unscorable** (the run produced nothing the yardstick could score). **So the usable set for "does hit count predict score" is ELEVEN runs.**
 
-    | run | hits | strict | merges | terminal |
+    | run | hits | strict | merges | min |
     |---|---|---|---|---|
-    | `2026-09-08_23-52-13` | **232** | **23/23** | 9 | GOAL_FULFILLED |
-    | `2026-08-30_21-59-30` | 299 | 20/23 | 12 | deadline |
-    | `2026-08-31_05-47-22` | 292 | **0/23** | 3 | exhaustion-runaway |
-    | `2026-08-28_21-47-39` | 152 | **23/23** | 10 | deadline |
-    | `2026-09-01_23-11-25` | 182 | **0/23** | 5 | deadline |
-    | `2026-09-01_02-50-15` | 119 | **23/23** | 9 | GOAL_FULFILLED |
-    | `2026-09-08_22-32-37` | **10** | **0/23** | 3 | deadline |
+    | `2026-08-30_21-59-30` | 299 | 20/23 | 12 | 88.9 |
+    | `2026-08-31_05-47-22` | 292 | **0/23** | 3 | 82.8 |
+    | `2026-09-08_23-52-13` | 232 | **23/23** | 9 | 71.3 |
+    | `2026-08-30_18-44-37` | 193 | none | 4 | 26.9 |
+    | `2026-09-01_23-11-25` | 182 | **0/23** | 5 | 59.2 |
+    | `2026-08-28_21-47-39` | 152 | **23/23** | 10 | 74.0 |
+    | `2026-09-01_02-50-15` | 119 | **23/23** | 9 | 38.8 |
+    | `2026-09-03_19-05-02` | 70 | none | 13 | 43.8 |
+    | `2026-09-03_10-38-08` | 53 | none | 3 | 18.2 |
+    | `2026-09-01_01-47-47` | 46 | **23/23** | 15 | 60.0 |
+    | `2026-09-02_23-42-24` | 33 | **23/23** | 6 | 31.2 |
+    | `2026-09-02_22-49-53` | 15 | none | 3 | 19.6 |
+    | `2026-08-28_23-29-25` | 11 | **23/23** | 16 | 19.2 |
+    | `2026-09-08_22-32-37` | **10** | **0/23** | 3 | 19.4 |
+    | `2026-08-30_19-42-35` | 1 | **23/23** | 17 | 35.6 |
 
-  - **🔴 THE DIAGNOSTIC COUNT IS REFUTED AS A PREDICTOR, IN BOTH DIRECTIONS.** 232 hits reached a perfect strict score; 10 hits collapsed to zero. **A run can carry three hundred of these and converge, and carry ten and die.** The count measures the loop TRYING — proposing, failing, rolling back safely — which is [[feedback-activity-not-progress]] exactly: a mechanism firing is not the same as harm.
+    - **⚠ THE FIRST VERSION OF THIS TICKET SHOWED SEVEN OF THESE ROWS AND THE FIRST REPORT OF IT SHOWED FIVE**, chosen because they carried the argument, with neither the filter nor the definition of a hit written down. **That is cherry-picking and it was caught by the reader, not by me.** The whole retained set is above; anything drawn from it must be drawn from all of it.
+  - **🔴 THE DIAGNOSTIC COUNT IS REFUTED AS A PREDICTOR, IN BOTH DIRECTIONS.** 232 hits reached a perfect strict score; 10 hits collapsed to zero. **A run can carry three hundred of these and converge, and carry ten and die.** **Eleven runs is thin for establishing a predictor and sufficient for killing one** — a monotone relationship dies on counterexamples, and there are three in each direction, so more runs cannot rescue it. The count measures the loop TRYING — proposing, failing, rolling back safely — which is [[feedback-activity-not-progress]] exactly: a mechanism firing is not the same as harm.
     - **⚠ AND IT RETIRES A CLAIM THIS PROJECT HAS MADE FOUR TIMES.** `2026-09-08_22-32-37` was recorded as the fourth member of an "incompatible-bounds grind family" alongside `08-31_05-47-22` and `09-01_23-11-25`. **It carries 10 hits, the second-lowest in the table** — it is not a member of that family and the grouping was made on a shared description rather than a measured mechanism ([[feedback-dont-group-defects-by-vocabulary]]). The two genuine high-hit collapses remain; the family is smaller and less explanatory than recorded.
   - **⚠ DURATION IS ALSO REFUTED** (measured over the whole 121-run ledger): **15-25 minute runs are 26% perfect against 33% for runs over 70 minutes** — indistinguishable. A short budget does not explain a bad score and must stop being offered as one.
-  - **📋 THE ONE CANDIDATE THAT SURVIVES THIS CUT, stated as a hypothesis and NOT as a finding: FINAL MERGE COUNT.** In the table above every strict-23/23 run has **>=6** merges (min 6) and every failure has **<=5**, with one unscored exception at 13. Across the whole ledger, all twelve runs with **<=3** final merges scored badly. **But this is close to a tautology and must be treated as one until broken apart** — merging is how the artifact acquires the code the checks score, so "few merges, low score" may be a restatement rather than a cause. **The ticket's real question is what SUPPRESSES merges**, which this does not answer.
+  - **⚠ NO SURVIVING PREDICTOR — and the merge-count candidate is NOT one, at this n.** In the table every strict-23/23 run has **>=6** merges and every strict-0/23 has **<=5**. That is **6 good runs against 3 bad ones**, and `2026-09-03_19-05-02` already sits against it with 13 merges and no score at all. **Nine scored runs cannot establish a threshold**, and the first draft of this ticket called it "the only candidate left standing" as though it had survived a test rather than merely not yet failed one. It is a thing to look at, not a finding.
+    - **And even if it holds it may be a restatement rather than a cause:** merging is how the artifact acquires the code the checks score, so "few merges, low score" is close to a tautology. **The question this ticket exists to answer is what SUPPRESSES merges**, and nothing here answers it.
   - **Why T6 and not T2** ([[feedback-ticket-tiering]], step 0): the subject is what we KNOW about runs, not what runs do. It changes selection and diagnosis, and it ships no loop behaviour. **If it finds an actuator, that actuator is a separate ticket in its own tier** ([[feedback-instrument-needs-an-actuator]] — the readout-first split must be argued, and here it is: there is no candidate mechanism to wire yet, because the two obvious ones are refuted).
   - **DoD:** a discriminator computed from the retained corpus that separates the strict-perfect population from the strict-zero one, stated with its rule and its errors on the runs above — **or a recorded NEGATIVE result naming the cheap features that were tried and do not separate**, which is the more likely outcome and is worth as much. Whichever it is, `2026-09-08_23-52-13` (232 hits, perfect) and `2026-09-08_22-32-37` (10 hits, zero) are the two cases any answer must get right.
   - **Do not commission runs for this.** The corpus is the instrument ([[feedback-replay-over-batches]]); at the observed base rate a run costs an hour and returns one sample. `scripts/run_outcomes.json` plus the retained logs already hold the population.

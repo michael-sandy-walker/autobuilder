@@ -518,7 +518,7 @@
 - [x] `T6-E` — Run outcomes were written to `/tmp` and lost — durable outcome ledger — SHIPPED 2026-07-26 (`scripts/outcome_ledger.py` + `run_outcomes.json` + 14 tests); not retroactive (history unrecoverable)
 
 ---
-- [ ] `T6-R` — What separates a run that SURVIVES the grind from one that collapses? Filed 2026-09-09: the compile-diagnostic count is MEASURED AND REFUTED as a predictor in both directions (232 hits -> 23/23 strict; 10 hits -> 0/23), which also retires the "incompatible-bounds grind family" grouping for 2026-09-08_22-32-37 — it has 10 hits, not a family member. Duration refuted too (26% perfect at 15-25 min vs 33% over 70). Only surviving candidate is final merge count (>=6 perfect / <=5 failed), treated as near-tautological until broken apart; the real question is what SUPPRESSES merges. Corpus is the instrument, do not commission runs
+- [ ] `T6-R` — What separates a run that SURVIVES the grind from one that collapses? Filed 2026-09-09. **Population: 122 ledger runs -> 99 have no surviving log, 8 have zero hits, 15 retained, of which 11 carry a strict score.** A "hit" is one `inference variable T has incompatible bounds` line, a compiler diagnostic from the TARGET build. The count is REFUTED as a predictor by counterexamples in both directions (232/152/119 -> 23/23; 292/182/10 -> 0/23) — thin n is enough to KILL a monotone relationship, not to establish one. Also retires the "grind family" label on 2026-09-08_22-32-37, which has 10 hits. Duration refuted over the full 121. **No surviving predictor**; merge count is 6-good-vs-3-bad with a counterexample and is near-tautological anyway. Corpus is the instrument, do not commission runs
 
 ## Maintaining this index
 

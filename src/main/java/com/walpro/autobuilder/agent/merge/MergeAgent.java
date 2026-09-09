@@ -79,12 +79,15 @@ public class MergeAgent implements ExecutionAgent {
     private BehaviourLogger behaviourLogger;
 
     /**
-     * The structural facts about how types are supplied to one another. Optional so existing
-     * constructions keep working; when absent the registration repair below simply does not run.
+     * T4-DR: the one home for tree-property repairs, shared with the start-of-run pass. Optional
+     * so existing constructions keep working; when absent the repairs simply do not run.
+     *
+     * <p>This replaced a direct {@code WiringFactsAnalyzer} field. The analyzer is now the
+     * repair's own collaborator, because the merge is no longer the only caller.
      */
     @Setter
     @Autowired(required = false)
-    private com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer wiringFactsAnalyzer;
+    private com.walpro.autobuilder.core.build.StructuralTreeRepair structuralTreeRepair;
 
     /** T2-EW: keep test sources out of the artifact on goals whose spec never asked for tests. */
     @Setter
@@ -401,13 +404,10 @@ public class MergeAgent implements ExecutionAgent {
                 // is not an end-stage property: it needs an annotated peer in the type's own
                 // package (one, since 2026-09-03 — requiring two hid the defect exactly as it
                 // spread), so a project that annotates nothing produces nothing.
-                applyInjectedTypeRegistrationRepair(outputPath);
-
-                // T3-BZ slice 2: a type sitting apart from the peers that named it. The fact was
-                // stated for the whole life of nine archived runs and moved nothing, because its
-                // only consumer was a paragraph in a prompt. Runs after the move, so a type this
-                // cycle just repaired is relocated with the repair already in it.
-                applyPeerPlacementRelocation(outputPath);
+                // T4-DR: both repairs assert a property of the TREE, so they live in one home
+                // that the start-of-run pass calls too. A merge is the right trigger for a defect
+                // a merge introduces, and no trigger at all for one a run inherits.
+                if (structuralTreeRepair != null) structuralTreeRepair.repairTree(outputPath);
 
                 // T2-EQ (revised 2026-07-27, user call): packaging is NOT verified here. A merge
                 // mid-run leaves a partial skeleton, and "the classes compile" is the right bar
@@ -673,114 +673,4 @@ public class MergeAgent implements ExecutionAgent {
         return BasicSignals.MERGE_SIGNALS;
     }
 
-    /**
-     * Gives an injected-but-unregistered type the registration its own package peers share.
-     *
-     * <p>The plan is plotted against the cycle's source map but every write is produced from the
-     * file's CURRENT content, so a plan made one merge stale cannot overwrite fresher text: the
-     * repair returns empty when the declaration has moved or the annotation is already there.
-     * Best-effort throughout — a failure here must never fail a merge that has already landed.
-     */
-    /**
-     * Moves a type to the package its own peers established, and repairs every reference to it.
-     *
-     * <p>Reads the tree from DISK rather than the cycle's source map: the map is a cycle-start
-     * snapshot, and a move rewrites files this merge (and the registration repair above) may have
-     * just changed. Best-effort throughout — a failure here must never fail a merge that has
-     * already landed.
-     */
-    private void applyPeerPlacementRelocation(String outputPath) {
-        if (wiringFactsAnalyzer == null || outputPath == null) return;
-        try {
-            java.nio.file.Path root = java.nio.file.Path.of(outputPath);
-            java.util.Map<String, String> sources = fileService.readFolderContentsResolved(root);
-            if (sources == null || sources.isEmpty()) return;
-            var findings = wiringFactsAnalyzer.peerPlacementFindings(sources);
-            if (findings.isEmpty()) return;
-            var plan = com.walpro.autobuilder.core.build.PeerPlacementRelocation.plan(sources, findings);
-            // A refusal must be as visible as a move. The structured path does not go through the
-            // analyzer's own announce line (that one serves the prompt), so without this a finding
-            // that is made and then declined leaves no trace at all — indistinguishable from a
-            // rule that never fired, which is precisely what cost slice 1 its first watch reading.
-            for (var finding : findings) {
-                boolean planned = plan.stream().anyMatch(r -> r.typeName().equals(finding.typeName()));
-                if (!planned) {
-                    log.info("T3-BZ: {} sits in {} while its peers sit in {}, but the move was refused "
-                                    + "(no entry point declared, a destination outside the entry point's own "
-                                    + "subtree, an occupied destination, or no declaring file) — reporting only.",
-                            finding.typeName(),
-                            finding.actualPackage().isEmpty() ? "the default package" : finding.actualPackage(),
-                            finding.majorityPackage());
-                }
-            }
-            for (var relocation : plan) {
-                var applied = com.walpro.autobuilder.core.build.PeerPlacementRelocation
-                        .apply(sources, relocation);
-                if (applied.isEmpty()) continue;
-                for (var write : applied.get().writes().entrySet()) {
-                    java.nio.file.Path file = root.resolve(write.getKey());
-                    java.nio.file.Files.createDirectories(file.getParent());
-                    java.nio.file.Files.writeString(file, write.getValue());
-                }
-                java.nio.file.Files.deleteIfExists(root.resolve(applied.get().vacatedPath()));
-                // The tree is now consistent, but the loop's own bookkeeping still points at the
-                // file's old home. Measured in the field: a banked criterion reading "A Java class
-                // `Book` exists at .../domain/Book.java" outlived the move that falsified it, and
-                // the three runs in which the mover acted all scored below the ceiling while ten
-                // of eleven without a move were perfect. Repairing the tree is only half a move.
-                goalPlannerService.rewriteRelocatedFileReferences(relocation.fromPath(), relocation.toPath());
-                sources = fileService.readFolderContentsResolved(root);
-                log.warn("T3-BZ: {} sat in {} while the peers that name it sit in {} — moved it there, "
-                                + "rewriting {} file(s). {} -> {}",
-                        relocation.typeName(), relocation.fromPackage().isEmpty()
-                                ? "the default package" : relocation.fromPackage(),
-                        relocation.toPackage(), applied.get().writes().size(),
-                        relocation.fromPath(), relocation.toPath());
-            }
-        } catch (Exception e) {
-            log.warn("T3-BZ: placement relocation could not be applied — {}", e.toString());
-        }
-    }
-
-    /**
-     * Gives a type that must be supplied to a constructor the registration its package peers
-     * carry, when it has none.
-     *
-     * <p>Reads the tree from DISK rather than the cycle's source map, for the same reason the
-     * relocation below does: the map is a cycle-start snapshot, and a project only ever acquires
-     * an unregistered injected type from a merge — which lands after that snapshot is taken.
-     * Detecting on the snapshot deferred every repair by one cycle, and skipped it altogether
-     * when the merge that introduced the defect was a run's last, which is the stall shape the
-     * ticket was filed on (run {@code 2026-08-30_18-44-37} ended unstartable with the diagnosis
-     * in hand). The lag was visible in the field the one time the repair fired: run
-     * {@code 2026-08-31_19-50-35} named the fact at 20:25:40 and repaired it at 20:26:28.
-     *
-     * <p>Costs one whole-tree read per post-merge COMPILE_OK on top of the relocation's own,
-     * which cannot be shared: that one must see this repair's writes.
-     */
-    void applyInjectedTypeRegistrationRepair(String outputPath) {
-        if (wiringFactsAnalyzer == null || outputPath == null) return;
-        try {
-            java.nio.file.Path root = java.nio.file.Path.of(outputPath);
-            java.util.Map<String, String> sources = fileService.readFolderContentsResolved(root);
-            if (sources == null || sources.isEmpty()) return;
-            var findings = wiringFactsAnalyzer.unregisteredInjectedTypes(sources);
-            if (findings.isEmpty()) return;
-            for (var repair : com.walpro.autobuilder.core.build.InjectedTypeRegistrationRepair
-                    .plan(sources, findings)) {
-                java.nio.file.Path file = root.resolve(repair.path());
-                if (!java.nio.file.Files.isRegularFile(file)) continue;
-                String current = java.nio.file.Files.readString(file);
-                var repaired = com.walpro.autobuilder.core.build.InjectedTypeRegistrationRepair
-                        .apply(current, repair);
-                if (repaired.isEmpty()) continue;
-                java.nio.file.Files.writeString(file, repaired.get());
-                log.warn("T3-CA: {} is injected but registered nowhere — added @{}, the registration "
-                                + "its package peers all carry. {}",
-                        repair.typeName(), repair.annotation(), repair.path());
-            }
-        } catch (Exception e) {
-            log.warn("T3-CA: registration repair could not be applied — {}", e.toString());
-        }
-    }
 }

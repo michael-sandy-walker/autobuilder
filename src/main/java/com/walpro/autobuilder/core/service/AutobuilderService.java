@@ -107,6 +107,14 @@ public class AutobuilderService implements CheckpointableState {
     @Autowired(required = false)
     @lombok.Setter
     private com.walpro.autobuilder.core.init.StartModeService startModeService;
+
+    /**
+     * T4-DR: the tree-property repairs, shared with the merge path. Applied once to the tree a
+     * CONTINUE_LINEAGE run is handed, because a merge is an event that run may never have.
+     */
+    @Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.build.StructuralTreeRepair structuralTreeRepair;
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
     private final com.walpro.autobuilder.goal.GoalConsolidationService goalConsolidationService;
@@ -608,7 +616,43 @@ public class AutobuilderService implements CheckpointableState {
                             ? startModeService.situation() : "this tree");
             return;
         }
+        repairInheritedTree(startedAs);
         runAutobuilderCycle();
+    }
+
+    /**
+     * T4-DR: applies the structural repairs the loop already owns to the tree it was HANDED,
+     * before the run spends a cycle on anything else.
+     *
+     * <p><b>Why this is not the merge hook's job.</b> Those repairs assert a property of the tree
+     * — "a type that is asked for must be obtainable", "a type sits with the peers that name it" —
+     * and a property of the tree is true or false whether or not this cycle wrote to it. A run
+     * that inherits its tree starts with the property already false and may never merge at all:
+     * {@code 2026-09-03_20-25-22} named its own unstartable tree in its goal text, rendered the
+     * diagnosis eight times, and ran 44 cycles with zero merges, so the repair for that exact tree
+     * was never entered. Measured over the whole corpus, that run and one pre-{@code T1-FX} run
+     * are the only two whose finding the merge hook could never reach.
+     *
+     * <p><b>Only {@link StartMode#CONTINUE_LINEAGE}.</b> {@code NEW_PROJECT} clears the tree, so
+     * there is nothing inherited to repair. {@code ADOPT_PROJECT} is a codebase the loop did not
+     * write and has not yet been given a goal — rewriting someone else's source before anyone has
+     * asked for work is not a repair, it is an uninvited edit, and {@code T4-CQ}'s cold read is
+     * where an adopted tree's findings belong. {@code ASK} touches nothing by definition.
+     */
+    void repairInheritedTree(StartMode startedAs) {
+        if (structuralTreeRepair == null || startedAs != StartMode.CONTINUE_LINEAGE) return;
+        try {
+            // The same derivation the cycle context uses, so the pass and the cycles that follow
+            // it cannot disagree about which tree is the tree.
+            String outputPath = fileService.resolveSecurePath("output").toString();
+            log.info("T4-DR: continuing a lineage — checking the tree as found for structural "
+                    + "findings the loop can already repair, before the first cycle.");
+            structuralTreeRepair.repairTree(outputPath);
+        } catch (Exception e) {
+            // Best-effort, exactly as on the merge path: a repair that cannot run must never stop
+            // a run from starting.
+            log.warn("T4-DR: start-of-run tree repair could not run — {}", e.toString());
+        }
     }
 
     /** T4-CQ: a goal arrived for an adopted project, so it may start working. */

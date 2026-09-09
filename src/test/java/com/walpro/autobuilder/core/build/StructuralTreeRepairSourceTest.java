@@ -1,14 +1,8 @@
-package com.walpro.autobuilder.agent.merge;
+package com.walpro.autobuilder.core.build;
 
 import com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer;
-import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
-import com.walpro.autobuilder.core.merge.MergeRollbackService;
 import com.walpro.autobuilder.core.service.FileService;
-import com.walpro.autobuilder.core.service.merge.CycleMergeTracker;
-import com.walpro.autobuilder.core.service.merge.FileVariantCollector;
-import com.walpro.autobuilder.core.service.merge.MergeProcessor;
 import com.walpro.autobuilder.goal.GoalPlannerService;
-import com.walpro.autobuilder.graph.merge.MergeActionRegistrar;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -38,25 +32,20 @@ import static org.mockito.ArgumentMatchers.any;
  * <p>Field evidence for the lag: run {@code 2026-08-31_19-50-35} announced the fact at 20:25:40
  * and repaired it at 20:26:28 — the next cycle, not the one that introduced it.
  *
- * <p>The sibling relocation hook two lines further on already reads from disk for exactly this
- * reason, and its javadoc names this repair as something that changes files the snapshot lacks.
+ * <p>The sibling relocation hook already reads from disk for exactly this reason, and its javadoc
+ * names this repair as something that changes files the snapshot lacks.
+ *
+ * <p>T4-DR moved the repair out of {@code MergeAgent} into {@link StructuralTreeRepair} so the
+ * start-of-run pass could call the same code; this test moved with its subject. The behaviour it
+ * pins is unchanged — which tree the repair reads.
  */
 @ExtendWith(MockitoExtension.class)
-class MergeAgentRegistrationRepairSourceTest {
+class StructuralTreeRepairSourceTest {
 
     @Mock private FileService fileService;
-    @Mock private FileVariantCollector fileVariantCollector;
-    @Mock private MergeProcessor mergeProcessor;
-    @Mock private CycleMergeTracker cycleMergeTracker;
-    @Mock private MergeActionRegistrar mergeActionRegistrar;
     @Mock private GoalPlannerService goalPlannerService;
-    @Mock private com.walpro.autobuilder.core.build.BuildExecutor buildExecutor;
-    @Mock private com.walpro.autobuilder.core.persistence.MutationSnapshotService mutationSnapshotService;
-    @Mock private com.walpro.autobuilder.core.build.CompileProbeService compileProbeService;
-    @Mock private com.walpro.autobuilder.core.build.BuildErrorClassifierAgent buildErrorClassifierAgent;
-    @Mock private com.walpro.autobuilder.core.build.PackageFragmentationCheck packageFragmentationCheck;
 
-    private MergeAgent agent;
+    private StructuralTreeRepair repair;
 
     private static final String PLAIN_REPOSITORY = """
             package com.example.library.domain.repository;
@@ -115,16 +104,8 @@ class MergeAgentRegistrationRepairSourceTest {
 
     @BeforeEach
     void setUp() {
-        BlockerSubgoalInjector injector = new BlockerSubgoalInjector(
-                goalPlannerService, buildErrorClassifierAgent, fileService,
-                com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
-        agent = new MergeAgent(
-                fileService, fileVariantCollector, mergeProcessor, cycleMergeTracker,
-                mergeActionRegistrar, goalPlannerService, buildExecutor, injector,
-                new MergeRollbackService(), mutationSnapshotService, compileProbeService,
-                buildErrorClassifierAgent, packageFragmentationCheck,
-                com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
-        agent.setWiringFactsAnalyzer(new WiringFactsAnalyzer());
+        repair = new StructuralTreeRepair(fileService, goalPlannerService);
+        repair.setWiringFactsAnalyzer(new WiringFactsAnalyzer());
     }
 
     /** The peers and the injection site, without the type whose registration is in question. */
@@ -162,7 +143,7 @@ class MergeAgentRegistrationRepairSourceTest {
 
         // The cycle-start snapshot holds only the peers — the merge is what introduced the
         // unregistered type, so the snapshot cannot name it and the repair must not depend on one.
-        agent.applyInjectedTypeRegistrationRepair(root.toString());
+        repair.applyInjectedTypeRegistrationRepair(root.toString());
 
         assertThat(Files.readString(root.resolve(REPOSITORY_PATH)))
                 .contains("@Repository")
@@ -177,7 +158,7 @@ class MergeAgentRegistrationRepairSourceTest {
         org.mockito.Mockito.lenient().when(fileService.readFolderContentsResolved(any(Path.class)))
                 .thenThrow(new IOException("tree unreadable"));
 
-        agent.applyInjectedTypeRegistrationRepair(root.toString());
+        repair.applyInjectedTypeRegistrationRepair(root.toString());
 
         assertThat(Files.readString(root.resolve(REPOSITORY_PATH))).isEqualTo(PLAIN_REPOSITORY);
     }
@@ -189,7 +170,7 @@ class MergeAgentRegistrationRepairSourceTest {
         writeTree(root, onDisk);
         stubDiskRead(root, onDisk);
 
-        agent.applyInjectedTypeRegistrationRepair(root.toString());
+        repair.applyInjectedTypeRegistrationRepair(root.toString());
 
         assertThat(Files.readString(root.resolve(REPOSITORY_PATH))).isEqualTo(ANNOTATED_REPOSITORY);
     }

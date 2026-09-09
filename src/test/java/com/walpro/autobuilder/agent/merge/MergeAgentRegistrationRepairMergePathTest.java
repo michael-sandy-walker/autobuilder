@@ -133,7 +133,13 @@ class MergeAgentRegistrationRepairMergePathTest {
                 mock(com.walpro.autobuilder.core.build.CompileProbeService.class), classifierAgent,
                 new com.walpro.autobuilder.core.build.PackageFragmentationCheck(fileService),
                 com.walpro.autobuilder.core.build.TestBuildToolRegistry.classifier());
-        agent.setWiringFactsAnalyzer(new WiringFactsAnalyzer());
+        // T4-DR: the repair now lives in its own home so the start-of-run pass can call it too.
+        // Wired here with the REAL FileService, because what this test exists to prove is which
+        // tree the repair reads -- mocking the read would mock the behaviour in question.
+        var structuralTreeRepair = new com.walpro.autobuilder.core.build.StructuralTreeRepair(
+                fileService, goalPlannerService);
+        structuralTreeRepair.setWiringFactsAnalyzer(new WiringFactsAnalyzer());
+        agent.setStructuralTreeRepair(structuralTreeRepair);
 
         // THIS merge is what creates the finding: the injection site and both annotated peers
         // arrive together with the plain type, exactly as they did at 18:51:20 in the run the

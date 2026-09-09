@@ -132,6 +132,13 @@ autobuilder:
     # or join completion verification). Abstain keeps SPEC. Corpus eval 2026-07-07 (18 labeled
     # fixtures from runs 12/15/17/18/19): demotion precision 1.00 (no spec criterion wrongly
     # demoted), authored recall 0.78 (misses fail safe) — enabled on that basis.
+    #
+    # T3-CC widened what this gate controls: an AUTHORED criterion is also no longer ASSERTED
+    # against the artifact, so correct code is not recorded as contradicting an obligation
+    # nobody stated, and a claim of only authored criteria buys no package build and no boot.
+    # The loop still AUTHORS them and still works toward them — what is withheld is judgement,
+    # not permission. Turn this off and every criterion defaults to SPEC, i.e. elaboration is
+    # binding again, which is the pre-2026-07-07 behaviour.
     criteria-grounding-enabled: true
     # T4-AJ Part B: catch-up consolidation of equivalent goals (shared reviewer).
     consolidation:

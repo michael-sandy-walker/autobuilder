@@ -101,4 +101,51 @@ class CriteriaExecutabilityReadoutTest {
                 goal("POST /loans returns 404 Not Found when book or member does not exist")))
                 .executable()).isEqualTo(1);
     }
+
+    /** A goal whose criteria carry the T3-CC binding stamp; 1-based, as the writer stamps it. */
+    private static GoalEntity stampedGoal(Map<String, String> binding, String... criteria) {
+        GoalEntity g = goal(criteria);
+        Map<String, Object> meta = new HashMap<>(g.getMetadata());
+        meta.put("criteriaBinding", binding);
+        g.setMetadata(meta);
+        return g;
+    }
+
+    @Test
+    void countsElaborationSeparatelyFromWhatTheSpecificationAsked() {
+        // T3-CC slice 2: the readout could not tell a criterion the specification stated from one
+        // the loop added, so criteria_executable_pct counted obligations that are never asserted.
+        var counts = CriteriaExecutabilityReadout.over(List.of(
+                stampedGoal(Map.of("2", "AUTHORED"),
+                        "GET /loans?memberId=1 returns HTTP 200 with the member's loans", // spec
+                        "GET /loans?memberId=1 returns HTTP 404 for an unknown member")));  // ours
+
+        assertThat(counts.authored()).as("both are declared").isEqualTo(2);
+        assertThat(counts.elaboration()).as("one of them is ours").isEqualTo(1);
+    }
+
+    @Test
+    void theExecutableShareKeepsEveryDeclaredCriterionInItsDenominator() {
+        // Deliberate: criteria_executable_pct already changed meaning on 2026-09-08 under T1-FW,
+        // and moving it again immediately would leave no window in which run rows compare. The
+        // elaboration count is emitted beside it so the specification-only share is derivable.
+        var counts = CriteriaExecutabilityReadout.over(List.of(
+                stampedGoal(Map.of("2", "AUTHORED"),
+                        "GET /loans?memberId=1 returns HTTP 200 with the member's loans",
+                        "GET /loans?memberId=1 returns HTTP 404 for an unknown member")));
+
+        assertThat(counts.executable()).isEqualTo(2);
+        assertThat(counts.executableShare()).isEqualTo(1.0);
+        // and the reader can still get the specification-only view from the addend
+        assertThat(counts.authored() - counts.elaboration()).isEqualTo(1);
+    }
+
+    @Test
+    void anUnstampedGoalReportsNoElaboration() {
+        // Absence of a stamp means SPEC — the safe direction, and the common one for pre-gate
+        // goals, abstained classifications and runs with grounding disabled.
+        assertThat(CriteriaExecutabilityReadout.over(List.of(
+                goal("POST /books returns HTTP 400 when the title is missing")))
+                .elaboration()).isZero();
+    }
 }

@@ -532,6 +532,12 @@ except Exception:
         # not redefined -- the probe path always abstained on them -- but a reader comparing rows
         # across the boundary needs the addend, not an assurance.
         echo "criteria_ungroundable_input=$(sed -n 's/.*criteria executability — .* \([0-9]*\) name an input nothing can ground.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        # T3-CC: the elaboration addend. criteria_executable_pct keeps every declared
+        # criterion in its denominator on purpose -- it already changed meaning on
+        # 2026-09-08 and moving it twice leaves no comparable window -- so the
+        # specification-only share is reconstructible as
+        # criteria_executable_count / (criteria_authored - criteria_elaboration).
+        echo "criteria_elaboration=$(sed -n 's/.*criteria executability — .* \([0-9]*\) are elaboration beyond.*/\1/p' "$run_dir/autobuilder.log" | tail -1)"
         # T4-DD: the exit-status channel, reported SEPARATELY rather than folded into the fields
         # above. Those measure "how many criteria name an ENDPOINT", which is the web target's
         # question and the basis of every comparison in the 79-run ledger — redefining them would

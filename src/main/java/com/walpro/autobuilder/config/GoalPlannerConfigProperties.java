@@ -61,8 +61,16 @@ public class GoalPlannerConfigProperties {
      * stamped SPEC or AUTHORED. Authored criteria stay visible as guidance but cannot block root
      * closure, burn retry budget, or join the completion-verification set — the loop can no
      * longer kill a run over a requirement it invented from transient state (runs 17/18/19 all
-     * died this way). Abstain keeps the SPEC default. Off by default pending the corpus
-     * precision eval.
+     * died this way). Abstain keeps the SPEC default.
+     *
+     * <p>T3-CC widened the gate: an authored criterion is also not asserted against the artifact,
+     * so correct code is not recorded as contradicting an obligation nobody stated and a claim of
+     * only authored criteria buys no package build and no boot. Judgement is withheld, not
+     * permission — the loop still authors such criteria and still works toward them.
+     *
+     * <p>Field default is ON (see {@code application.yml}); the corpus precision eval that this
+     * once waited on was done on 2026-07-07 — demotion precision 1.00, authored recall 0.78. The
+     * {@code false} here is the conservative value for a context that sets no property.
      */
     private boolean criteriaGroundingEnabled = false;
 

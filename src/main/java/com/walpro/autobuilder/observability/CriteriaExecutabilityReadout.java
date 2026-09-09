@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.observability;
 
 import com.walpro.autobuilder.core.build.BehaviouralCriterionParser;
+import com.walpro.autobuilder.goal.CriteriaBinding;
 import com.walpro.autobuilder.goal.GoalEntity;
 
 import java.util.Collection;
@@ -49,14 +50,31 @@ public final class CriteriaExecutabilityReadout {
      * @param ungroundableInput those that parse but name an input component nothing can ground —
      *                          counted apart because their owner is a capability gap (T1-FV), not
      *                          the wording and not the parser
+     * @param elaboration       those the loop AUTHORED beyond the specification (T3-CC). Reported
+     *                          alongside rather than removed from {@code authored}: the two words
+     *                          collide unhappily and mean different things here — {@code authored}
+     *                          is "written down at all", {@code elaboration} is "written down by
+     *                          us rather than asked for".
      */
-    public record Counts(int authored, int namingEndpoint, int executable, int ungroundableInput) {
+    public record Counts(int authored, int namingEndpoint, int executable, int ungroundableInput,
+                         int elaboration) {
 
         public boolean isEmpty() {
             return authored == 0;
         }
 
-        /** The share that reaches the probe path, or 0 when nothing was authored. */
+        /**
+         * The share that reaches the probe path, or 0 when nothing was authored.
+         *
+         * <p><b>Denominator deliberately unchanged by T3-CC.</b> It stays every declared
+         * criterion, elaboration included. {@code criteria_executable_pct} already changed
+         * meaning on 2026-09-08 under T1-FW, and moving it twice in two days would leave no
+         * window in which rows are comparable at all
+         * ([[feedback-dont-evaluate-a-build-with-older-runs]]). {@link #elaboration()} is emitted
+         * beside it so a reader who wants the specification-only share can compute it —
+         * {@code executable / (authored - elaboration)} — rather than being handed a third
+         * silently-redefined figure.
+         */
         public double executableShare() {
             return authored == 0 ? 0.0 : (double) executable / authored;
         }
@@ -75,14 +93,19 @@ public final class CriteriaExecutabilityReadout {
     }
 
     public static Counts over(Collection<GoalEntity> goals) {
-        if (goals == null || goals.isEmpty()) return new Counts(0, 0, 0, 0);
+        if (goals == null || goals.isEmpty()) return new Counts(0, 0, 0, 0, 0);
         int authored = 0;
         int namingEndpoint = 0;
         int executable = 0;
         int ungroundableInput = 0;
+        int elaboration = 0;
         for (GoalEntity goal : goals) {
-            for (String criterion : criteriaOf(goal)) {
+            List<String> criteria = criteriaOf(goal);
+            for (int i = 0; i < criteria.size(); i++) {
+                String criterion = criteria.get(i);
                 authored++;
+                // T3-CC: the stamp is 1-based, and CriteriaBinding is its single reader.
+                if (CriteriaBinding.isAuthored(goal, i + 1)) elaboration++;
                 if (NAMES_ENDPOINT.matcher(criterion).find()) namingEndpoint++;
                 if (BehaviouralCriterionParser.exercisable(criterion).isPresent()) {
                     executable++;
@@ -91,7 +114,7 @@ public final class CriteriaExecutabilityReadout {
                 }
             }
         }
-        return new Counts(authored, namingEndpoint, executable, ungroundableInput);
+        return new Counts(authored, namingEndpoint, executable, ungroundableInput, elaboration);
     }
 
     private static List<String> criteriaOf(GoalEntity goal) {

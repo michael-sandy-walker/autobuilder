@@ -1766,9 +1766,9 @@ public class GoalPlannerService {
      * conservative default for pre-gate goals, abstained classifications, and disabled runs.
      */
     private boolean isAuthoredCriterion(GoalEntity g, int oneBasedIndex) {
-        Object raw = g.getMetadata() != null ? g.getMetadata().get("criteriaBinding") : null;
-        if (!(raw instanceof Map<?, ?> m)) return false;
-        return "AUTHORED".equals(m.get(String.valueOf(oneBasedIndex)));
+        // T3-CC slice 2: the read moved to CriteriaBinding when the observability readout became
+        // its fifth caller. This stays as the in-class name the four closure-side sites use.
+        return CriteriaBinding.isAuthored(g, oneBasedIndex);
     }
 
     /**

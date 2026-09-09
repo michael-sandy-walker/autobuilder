@@ -34,8 +34,8 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked; sole orchestrator since the T4-AI-2+5 meta-lane deletion) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-09)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-09)
+- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-10)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-10)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: the live ordering is the appended 2026-08-23 REORDER section at the end of the file; the S1-S6 sections above it are kept for their reasoning, not their sequence. Rationale, never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. (reviewed 2026-09-09)
+- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. (reviewed 2026-09-10)
 - `project_wave2_structure.md`: wave 2's five layers (substrate -> portability -> reconciliation -> consultation -> yardsticks) and gate-driven sequence; widening what the loop SEES must follow scoping what it CONSULTS. Rationale only. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
@@ -112,7 +112,7 @@ How to work:
 - `feedback_no_heavy_mvn_beside_a_live_run.md`: the scratch-FILE_BASE_PATH unlock covers live LOGS, not resource contention -- a full suite beside a live run starves the box and kills the run via Neo4j timeouts. (reviewed 2026-09-08)
 - `feedback_flag_ceremony_cost_early.md`: when the process around a task costs more than the task, say so BEFORE running it; measure delivered code against process artifacts rather than defending the workflow. (reviewed 2026-09-08)
 - `feedback_sonnet_for_batch_tickets.md`: batch/mechanical tickets go to a Sonnet subagent (Agent tool model override); design and validation stay on the main model. (reviewed 2026-07-14)
-- `feedback_roadmap_is_the_queue.md`: work comes from roadmap-overview/roadmap.md ONLY; direction notes are rationale, never a parallel queue — never listed under Roadmap in this file, never the source of "what's next". (reviewed 2026-09-08)
+- `feedback_roadmap_is_the_queue.md`: work comes from roadmap-overview/roadmap.md ONLY; direction notes are rationale, never a parallel queue — never listed under Roadmap in this file, never the source of "what's next". (reviewed 2026-09-10)
 - `feedback_no_per_run_memory_files.md`: no new memory file per field run; fold into `project_resume_state.md`; separate files only for durable cross-run insights. (reviewed 2026-07-09)
 
 Evidence discipline:

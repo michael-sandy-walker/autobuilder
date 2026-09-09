@@ -14,11 +14,9 @@
 
 ---
 
-## Tier 1 — Correctness (132)
+## Tier 1 — Correctness (143)
 
-- [ ] `T5-BK` — Six integration-test classes holding 20 passing tests never run in `mvn test` (surefire defaults do not match `*IT.java`, no failsafe configured); all 20 pass when named explicitly, so this is invisibility not rot — fix deferred because 3 need Docker
 - [x] `T1-FX` — A repair for a defect that only a MERGE can introduce detects on the pre-merge snapshot, so it can never fire in the cycle that introduces it — cost T3-CA's actuator the very run it was filed from; FIXED 2026-09-01 (detection moved to the tree on disk, parameter removed); CLOSED 2026-09-08 on the deterministic merge-path test, the passive watch read over 25 post-fix runs / 60 merges with NO opportunity; the trigger-side residue went to T4-DR
-- [ ] `T1-FW` — A requirement loses part of itself between being READ and being EXERCISED — whatever the specification names as part of the request must survive into it; probe drops the query string, 10 of 14 archived runs — value half SHIPPED 2026-08-26 (no field was added; the stale re-derive caveat is retired 2026-09-08, along with three defects in the shipped half: a DEBUG-level abstention, two dead constants, and an exercisability rule two callers had to guess at); the 37 pattern criteria remain and are T1-FV's capability, so work this THROUGH T1-FV
 - [x] `T1-FV` — A probe's input is built from what the implementation STORES rather than from what the interface ACCEPTS — proven 2026-08-28 as the SOLE blocker of a 23/23 run's only closure attempt (not "rare"); retry mitigation SHIPPED, then the CAUSE fixed 2026-09-08 by `RequestBodyContractQuery` in `analysis/structure` (the reader was never missing — `WiringFactsAnalyzer` has read handler parameters since T3-BX; and the rejected home was `core/build`, not the seam): 400 -> 404 on the filing run's own artifact, 96 component drops over 70 archived artifacts, 142/142 on final artifacts and 271/281 on mid-run trees (all 10 exceptions unserved endpoints); CLOSED 2026-09-08 on all four DoD clauses, generality met by CommandExerciseSynthesizer's independent conformance
 - [x] `T1-FU` — A probe sequence longer than the request budget is TRUNCATED and then judged, so the setup that establishes the precondition is silently dropped and correct code is accused — fix SHIPPED 2026-08-25 (over budget now abstains); CLOSED 2026-09-08 on a passive read of 39 post-fix runs: 59 field contradictions, ZERO asserting a 422, criterion now counted unprobeable; the abstention also learned to name what it dropped instead of borrowing the drifted-endpoint reason
 - [x] `T1-FT` — The analysis contract's own response-format placeholder is admitted to the goal tree as a subgoal, worked, and marked COMPLETED — FIXED 2026-08-24; predicts no outcome; CLOSED 2026-09-01: field clause met, 0 placeholder nodes in 51 post-fix goal stacks (48 archived runs + 3 live)
@@ -160,8 +158,9 @@
 - [x] `T1-FL` — A breaker-caused pause is permanent although the breaker is timed
 - [x] `T1-FM` — Resume adopts an unowned root
 - [x] `T1-I2` — Fix meta intention not reaching Planner/Evolution agents
+- [x] `T1-FW` — A requirement loses part of itself between being READ and being EXERCISED — whatever the specification names as part of the request must survive into it; probe drops the query string, 12 of 29 runs / 190 refused closure attempts — value half SHIPPED 2026-08-26 (three defects in it fixed 2026-09-08), clause 4 (generality) MET 2026-08-29 by `CommandExerciseSynthesizer`'s CLI fix (13 blocks -> 0, credited 2026-09-08); CLOSED 2026-09-09 on its T1 scope — 17 probed / **0 contradicted** / 41 abstained, so nothing is reported defective any more — with the ONE UNMET CLAUSE (*no new silence*) carried to `T3-CB`, not dropped
 
-## Tier 2 — Steering quality (120)
+## Tier 2 — Steering quality (131)
 
 - [ ] `T2-FH` — The convergence brake halts on a fixed cycle count, so it cannot tell grinding from accelerating, and stops with most of the budget unspent — BOTH HALVES BUILT 2026-08-30 (merge-trend + declared budget); replay over all 13 recorded stalls divides 6 halt / 7 hold, and the 7 held runs scored up to 23/23; field DoD open (2026-08-30 run reached 19/20 and recovered - third near-miss, no evidence either way)
 - [x] `T2-FG` — The evolution prompt's worked examples name a package and a framework, so every target inherits one project's shape — CLOSED 2026-08-28: examples now carry no ecosystem (rendered contract has 0 framework references, locked by 17 checks); a green test had asserted `spring-boot-starter-parent` as REQUIRED — the suite was protecting the leak
@@ -295,7 +294,7 @@
 - [x] `T2-EN` — Injection recurrence needs a run-level brake
 - [x] `T2-H3` — Propagate InterpretationAgent summary/directives to next-cycle agent prompts
 
-## Tier 3 — Feature completion (39)
+## Tier 3 — Feature completion (41)
 
 - [x] `T3-CA` — A type that carries NO annotation at all is invisible to the odd-one-out rule, so the one defect that stops the application starting is the one nothing reports — BUILT+CALIBRATED 2026-08-24 (1 firing across 12 real trees, both false positives found by replay); CLOSED 2026-08-30: actuator shipped (InjectedTypeRegistrationRepair) and proven on the failing run's own artifact — rebuilt jar boots and serves
 - [x] `T3-BZ` — A type placed differently from its own structural peers is never noticed (Book in `domain`, Loan/Member in `domain.model`); derive the norm from the project's majority among code-established peers, never a convention table — SHIPPED: slice 1 (the fact) 2026-08-23 + marker 08-24, slice 2 (the mover) 2026-08-30 on the watch (fired in 9 runs, zero relocations); proven on all 9 archived trees — 9/9 moved, 9/9 still compile, the booted one still scores 23/23 (a NO-HARM check on a tree already at 23/23, never an achievement - the run where the mover fired scored 21/23); **FIELD DoD MET 2026-08-30** — moved Book in a live merge, build green 17 s later, no recurrence in 67 cycles
@@ -337,8 +336,9 @@
 - [x] `T3-BT` — Re-probe complexity escalation in `DeferredMutationRestager`
 - [x] `T3-BU` — `WellKnownPackageRegistry` framework-version jargon removal
 - [x] `T3-BV` — Fix-chain convergence refit
+- [ ] `T3-CB` — A requirement whose stated input is a PATTERN is read, reported, then never exercised — the reference must RESOLVE and nothing creates what it resolves to; filed 2026-09-09 carrying `T1-FW`'s one unmet clause. 37 criteria abstain (of 58 naming an input beyond the path). **10 of the 37 MUST NOT be grounded** — they assert a 404 the seed never states and probing them accuses a correct artifact (that trap already withdrew one attempt; they are T4-DA's). Missing: query/path-variable vocabulary, a route from the declaration read into `ground()`, and a setup for the collection-read shape. **Unify the two handler-declaration walks here — this is the third consumer T1-FV named**
 
-## Tier 4 — New systems (88)
+## Tier 4 — New systems (109)
 
 - [x] `T4-DH` — A build that fails because a DECLARED dependency cannot be RESOLVED is classified UNKNOWN, so the only repair is the model guessing another version — measured 29 failures / 6 invented coordinates in one run, the same one re-proposed 9x; CLOSED 2026-08-28: repository interface (versionsOf -> PRESENT/ABSENT/UNKNOWN) + DEPENDENCY_NOT_RESOLVABLE classified ahead of the cascades + a resolver that removes or re-pins; UNKNOWN never deletes; true population was 26 coordinates across 22 artifacts, not 6 — Maven emits two wordings and the list form is the commoner
 - [x] `T4-DN` — The boot gate discards the launcher's own refusal because it carries no ERROR keyword — 70 work items said "logged nothing diagnostic" about a jar whose output named the defect (`no main manifest attribute`); FIXED 2026-08-28, anti-chatter rule preserved for running processes
@@ -367,13 +367,11 @@
 - [ ] `T4-CT` — The loop CONSULTS accumulated cross-run knowledge before acting (the payoff layer; previously homeless across three tickets' slices)
 - [s] `T4-CU` — The loop EXECUTES its own acceptance criteria against the booted artifact instead of asking the model whether they hold (shipped 2026-07-27) — PLACEMENT GAP CLOSED 2026-07-31: criteria are now checked when the SUBGOAL closes, not only at the run's closure edge, via the `ClosureClaimVerifier` port (T4-DD's first exercise); field DoD needs a refused closure
 - [s] `T4-CV` — Forward-looking requirement for a runnable entry point (shipped + FIELD-VERIFIED 2026-07-27: gate fired at min 5, loop wrote the entry point in ~60s)
-- [x] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals — MEASURED+BUILT 2026-08-24 (6,057 DbHits for 96 rows at 3,028 goals; T6-J's `goal_id_idx` indexed the wrong property); after-measurement pending a free box
 - [x] `T4-CX` — Startup-wiring forecast no longer precedes the gate that measures it (shipped 2026-07-28)
 - [x] `T4-CY` — Loop observes its own running behaviour mid-run: PROVEN, disabled on cost until probe synthesis is deterministic
 - [ ] `T4-DQ` — The loop cannot return to a state it was in: no checkpoint, rewind or backtracking, so a run down a bad path can only grind to death; tree+context snapshots already run every cycle, blockers are goal status mutated in place and 5 decision-bearing trackers never persisted — design note first
-- [ ] `T5-BL` — A deletion session: the apparatus only ever grows and nothing argues for its own removal; delete on measured zero-firing, nothing gets built, net line count must be negative
 - [x] `T4-DP` — How a run STARTS is an accident of five flags: no explicit start mode, so "continue someone else's project" and "wipe it and begin again" are one careless default apart; recommendation is runtime not wrapper, chooser UI last
-- [ ] `T4-DR` — Every structural repair is reachable only from a MERGE, so a run that INHERITS a defective tree names the defect for its whole life and is never offered the fix it already computed; observed on 2026-09-03_20-25-22 (44 cycles, 0 merges, unstartable from cycle 1); a start-of-run pass, NOT a per-cycle sweep; count the inherited-finding population first
+- [x] `T4-DR` — Every structural repair is reachable only from a MERGE, so a run that INHERITS a defective tree names the defect for its whole life and is never offered the fix it already computed — MEASURED FIRST (`scripts/inherited_finding_report.py`, whole 39-run corpus): 1 run inherited a finding, and exactly 2 carried one the merge hook could never reach, ONE ON EACH SIDE OF T1-FX — those two fixes are the two ends of one gap with nothing between them; BUILT+CLOSED 2026-09-08 — `core/build/StructuralTreeRepair` is now the one home both the merge path and a CONTINUE_LINEAGE start-of-run pass call (ADOPT_PROJECT deliberately excluded: an uninvited edit is not a repair), DoD demonstrated on 2026-09-03_20-25-22's own frozen first checkpoint — both repositories repaired with zero merges, where the run itself spent 44 cycles and 35 minutes never reaching it
 - [ ] `T4-CQ` — Import and continue an existing project (cold read; with or without a graph)
 - [ ] `T4-CR` — Portable project+graph bundle: store a phase, restore it elsewhere (unblocked by T1-D lineage separation)
 - [ ] `T4-CS` — Code-layer merge across lineages (code-side sibling of T4-CM; gated on an overlap measurement)
@@ -452,7 +450,7 @@
 - [x] `T4-CH` — Lineage campaign driver
 - [x] `T4-CK` — Second foreign target
 
-## Tier 5 — Quality / observability (41)
+## Tier 5 — Quality / observability (44)
 
 - [x] `T5-BH` — Disposition pass on `analysis/pattern/` (keep/recalibrate/delete per rule); gated on T6-D, now unblocked
 - [ ] `T5-BI` — Narrate what the loop SAID (model prose) instead of event templates
@@ -495,8 +493,11 @@
 - [x] `T5-BG` — Orchestration-graph explorer (full persisted graph, provenance-filtered)
 - [x] `T5-BF` — Mission-control cockpit tells the run's story
 - [x] `T5-P2` — Unify cycle reference field name across artifact types
+- [ ] `T5-BK` — Six integration-test classes holding 20 passing tests never run in `mvn test` (surefire defaults do not match `*IT.java`, no failsafe configured); all 20 pass when named explicitly, so this is invisibility not rot — fix deferred because 3 need Docker
+- [x] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals — MEASURED+BUILT 2026-08-24 (6,057 DbHits for 96 rows at 3,028 goals; T6-J's `goal_id_idx` indexed the wrong property); after-measurement pending a free box
+- [ ] `T5-BL` — A deletion session: the apparatus only ever grows and nothing argues for its own removal; delete on measured zero-firing, nothing gets built, net line count must be negative
 
-## Tier 6 — Harness & yardsticks (12)
+## Tier 6 — Harness & yardsticks (17)
 
 - [x] `T6-Q` — Does 2026-08-24's work regress the loop? — a paired A/B screening series with N and the decision rule fixed BEFORE the runs — ANSWERED 2026-08-25: no evidence of regression (pairs +4/0/0/+1 against a rule needing ≥3 of 4); ⚠ screened for a LARGE effect only
 - [x] `T6-P` — The yardstick fails a correct artifact for choosing UUID identifiers — nine of twenty-three checks, and the defect is in the suite's own JSON — CLOSED 2026-08-25, proven by booting the artifact

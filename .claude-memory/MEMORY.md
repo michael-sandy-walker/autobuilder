@@ -34,8 +34,8 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked; sole orchestrator since the T4-AI-2+5 meta-lane deletion) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-08)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-08)
+- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-09)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-09)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: the live ordering is the appended 2026-08-23 REORDER section at the end of the file; the S1-S6 sections above it are kept for their reasoning, not their sequence. Rationale, never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. (reviewed 2026-09-08)
+- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. (reviewed 2026-09-09)
 - `project_wave2_structure.md`: wave 2's five layers (substrate -> portability -> reconciliation -> consultation -> yardsticks) and gate-driven sequence; widening what the loop SEES must follow scoping what it CONSULTS. Rationale only. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
@@ -86,7 +86,7 @@ False completions and diagnosis lenses:
 - `project_false_completion_4.md`: the first by BOOKKEEPING — the closure ledger counts dispositions, never the seed. Taints the GOAL_FULFILLED population until audited. (reviewed 2026-08-28)
 - `project_invented_facts_have_authorities.md`: every defect is an INVENTED FACT whose cheap authority sat unconsulted. Triage question: what fact was invented, what is its authority, who consulted it? (reviewed 2026-08-28)
 - `project_capability_outruns_routing.md`: assume a missing behaviour is UNREACHED, not unbuilt. Trace to the link that does not fire before writing code. (reviewed 2026-08-24)
-- `project_ticket_premises_expire.md`: a ticket's stated BLOCKER is a claim with a date on it; three expired unnoticed on 2026-09-08. Grep before designing, and fix the index line in the same edit. (reviewed 2026-09-08)
+- `project_ticket_premises_expire.md`: a ticket's stated BLOCKER is a claim with a date on it; four expired unnoticed on 2026-09-08, and the fourth hid COMPLETED work credited under another ticket. Grep in both directions before designing, and fix the index line in the same edit. (reviewed 2026-09-08)
 - `project_detector_went_silent_as_the_fault_spread.md`: a majority rule stopped firing when the anomaly became the majority. Ask any majority rule what it does then. (reviewed 2026-09-03)
 - `project_completion_edge_gates.md`: completion edge is coverage then package then test; every diagnosis needs an actuator; brakes must count every evidence class. (reviewed 2026-07-09)
 - `project_grounding_night_insight.md`: prefer belief-to-verification moves in triage. (reviewed 2026-07-09)
@@ -96,7 +96,7 @@ False completions and diagnosis lenses:
 - `project_meta_concrete_target_hint_idea.md`: historical note; read only if reintroducing a concrete-target hint via a non-LLM path. (reviewed 2026-07-09)
 
 Operations:
-- `project_run_lifecycle_runbook.md`: start/stop/monitor runs safely — pause keeps the JVM on port 8081 (kill before relaunch), pgrep self-match trap, FILE_BASE_PATH, watcher patterns. Prove a monitor STREAMS before arming it: `scripts/prove_watcher_streams.sh`. (reviewed 2026-09-08)
+- `project_run_lifecycle_runbook.md`: start/stop/monitor runs safely — pause keeps the JVM on port 8081 (kill before relaunch), pgrep self-match trap, FILE_BASE_PATH, watcher patterns. Ten watcher variants now: `pgrep -x java` also matches the loop's own compile JVMs, `budget-minutes` caps the loop not the JVM, and the target's build output shares the log. Prove a monitor STREAMS before arming it: `scripts/prove_watcher_streams.sh`. (reviewed 2026-09-08)
 - `project_log_and_backup_conventions.md`: the current run is the UNSUFFIXED `logs/behaviour.ndjson`; a `behaviour-*.ndjson` glob silently excludes it; behaviour files are pretty-printed concatenated JSON, not line-JSON. (reviewed 2026-09-08)
 - `project_tests_rotate_live_logs.md`: SUPERSEDED by its own third variant (verified 2026-07-30) -- redirect `FILE_BASE_PATH` to a scratch dir instead of stopping the app; log rotation stays clear, but see `feedback_no_heavy_mvn_beside_a_live_run.md` for the separate resource-contention hazard a full suite still creates. (reviewed 2026-09-08)
 

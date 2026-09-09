@@ -27,6 +27,17 @@ Three expired on 2026-09-08, each of which had changed what work looked possible
   about `analysis/structure/`, which already reads the artifact's web surface and which the
   seam report counts as behind the seam. The objection was about placement and had an answer
   nobody had gone looking for.
+- **`T1-FW`'s "none of these have been run"** (2026-09-08, the fourth) — the filed body listed
+  the non-HTTP shapes the invariant would take and said the project had only ever driven REST
+  targets. By then `clitarget` had run, the invariant had appeared there (a criterion naming
+  `column <file> salary`, a probe running `check <absent_path>`), the fix had shipped, and the
+  field had confirmed it: **13 closure blocks to 0**. The ticket's generality clause was
+  satisfied and its body still said the case had never arisen.
+  - **⚠ THIS ONE EXPIRED IN THE OPPOSITE DIRECTION, WHICH IS THE MORE EXPENSIVE ONE.** The first
+    three hid work that was still to do, so the cost was a re-derivation. This hid work that was
+    already DONE, so the cost is re-BUILDING a clause someone already satisfied. **The credit had
+    landed under a different ticket's section** — the clitarget run was written up under `T4-DK`
+    — so nothing pointed back, and a grep for the ticket id would not have found it.
 
 **Why:** an append-only ticket record ([[feedback-append-dont-rewrite-tickets]]) keeps the
 filed body visible on purpose, which is right — but it means the oldest sentence and the
@@ -38,5 +49,7 @@ to.
 Ask what the blocker asserts about the CODE, then check that assertion — `grep` for the
 capability said to be missing, and read what a rejection actually rejected rather than what it
 is remembered as rejecting. When a design read supersedes a caveat, **fix the index line in the
-same edit**, since that is the surface selection reads. Related:
+same edit**, since that is the surface selection reads. And check the clause in BOTH directions:
+before building to satisfy a DoD clause, grep the corpus for the clause's own subject, because the
+work may already have been done under another ticket's write-up and credited there. Related:
 [[feedback-dont-evaluate-a-build-with-older-runs]] is the same hazard for measurements.

@@ -497,7 +497,7 @@
 - [x] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals — MEASURED+BUILT 2026-08-24 (6,057 DbHits for 96 rows at 3,028 goals; T6-J's `goal_id_idx` indexed the wrong property); after-measurement pending a free box
 - [ ] `T5-BL` — A deletion session: the apparatus only ever grows and nothing argues for its own removal; delete on measured zero-firing, nothing gets built, net line count must be negative
 
-## Tier 6 — Harness & yardsticks (17)
+## Tier 6 — Harness & yardsticks (18)
 
 - [x] `T6-Q` — Does 2026-08-24's work regress the loop? — a paired A/B screening series with N and the decision rule fixed BEFORE the runs — ANSWERED 2026-08-25: no evidence of regression (pairs +4/0/0/+1 against a rule needing ≥3 of 4); ⚠ screened for a LARGE effect only
 - [x] `T6-P` — The yardstick fails a correct artifact for choosing UUID identifiers — nine of twenty-three checks, and the defect is in the suite's own JSON — CLOSED 2026-08-25, proven by booting the artifact
@@ -518,6 +518,7 @@
 - [x] `T6-E` — Run outcomes were written to `/tmp` and lost — durable outcome ledger — SHIPPED 2026-07-26 (`scripts/outcome_ledger.py` + `run_outcomes.json` + 14 tests); not retroactive (history unrecoverable)
 
 ---
+- [ ] `T6-R` — What separates a run that SURVIVES the grind from one that collapses? Filed 2026-09-09: the compile-diagnostic count is MEASURED AND REFUTED as a predictor in both directions (232 hits -> 23/23 strict; 10 hits -> 0/23), which also retires the "incompatible-bounds grind family" grouping for 2026-09-08_22-32-37 — it has 10 hits, not a family member. Duration refuted too (26% perfect at 15-25 min vs 33% over 70). Only surviving candidate is final merge count (>=6 perfect / <=5 failed), treated as near-tautological until broken apart; the real question is what SUPPRESSES merges. Corpus is the instrument, do not commission runs
 
 ## Maintaining this index
 

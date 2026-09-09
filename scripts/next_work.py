@@ -174,7 +174,13 @@ def parse(path):
             current = {"id": tid, "marker": marker, "title": title, "line": n, "body": []}
             tickets.append(current)
         elif current is not None:
-            if line.startswith("- ["):        # a header we do not recognise ends the body
+            # A header we do not recognise ends the body -- and so does a markdown
+            # heading. Without the heading case the LAST ticket of a section absorbs
+            # everything after it: an open T6-R filed at the end of Tier 6 picked up
+            # `## Proposed chains`' mention of T2-CR and was reported as depending on
+            # it. Closed tickets hid the bug, because the dependency scan only reads
+            # live ones. Every col-0 `#` in roadmap.md is a heading.
+            if line.startswith("- [") or line.startswith("#"):
                 current = None
             else:
                 current["body"].append(line)

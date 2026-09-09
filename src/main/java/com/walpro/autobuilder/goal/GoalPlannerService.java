@@ -2207,7 +2207,36 @@ public class GoalPlannerService {
             log.debug("T4-CU: {} declares no acceptance criteria — nothing to check", goalId);
             return Optional.empty();
         }
-        List<String> criteria = l.stream().map(String::valueOf).toList();
+        // T3-CC: an AUTHORED criterion may be reported, never asserted against the artifact.
+        //
+        // The binding stamp was consulted at four closure-side sites and none on the verification
+        // side, so a criterion the loop wrote beyond the specification could not block closure and
+        // was still probed -- and a correct artifact that answers the SPECIFIED behaviour is then
+        // recorded as contradicting an obligation nobody stated. Measured on the graph: of 97
+        // distinct criteria naming a pattern input, 27 assert an error status the seed never
+        // states for that endpoint.
+        //
+        // Filtered HERE rather than inside the verifier: this class already owns the stamp and its
+        // one reader, so the invariant keeps its single home and the verifier stays ignorant of
+        // goal metadata. Index is 1-based to match stampCriteriaBinding.
+        List<String> all = l.stream().map(String::valueOf).toList();
+        List<String> criteria = new ArrayList<>();
+        List<String> elaboration = new ArrayList<>();
+        for (int i = 0; i < all.size(); i++) {
+            (isAuthoredCriterion(g, i + 1) ? elaboration : criteria).add(all.get(i));
+        }
+        if (!elaboration.isEmpty()) {
+            // Reported, so the elaboration rate can be watched. Deliberately NOT scored: rewarding
+            // it would pay the loop to invent obligations, which it already does often enough.
+            log.info("T3-CC: {} — {} of {} criterion(s) are AUTHORED beyond the specification and "
+                            + "are reported rather than exercised: {}",
+                    goalId, elaboration.size(), all.size(), elaboration);
+        }
+        if (criteria.isEmpty()) {
+            log.info("T3-CC: {} declares only AUTHORED criteria — nothing the specification "
+                    + "requires is left to check, so no package build and no boot is bought", goalId);
+            return Optional.empty();
+        }
         try {
             return closureClaimVerifier.refute(goalId, criteria);
         } catch (RuntimeException e) {

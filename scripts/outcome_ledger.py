@@ -104,7 +104,15 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            # T1-FW (2026-09-08): criteria that parse but name an input nothing can ground. Until
            # this date they were counted as executable, so a row from before the boundary compares
            # to a later one only as `executable + ungroundable`. Absent on earlier rows.
-           "criteria_ungroundable_input")
+           "criteria_ungroundable_input",
+           # T3-CC (2026-09-09): criteria the loop AUTHORED beyond the specification, which are
+           # reported and never asserted against the artifact. `criteria_executable_pct` keeps
+           # every declared criterion in its denominator on purpose -- it had already changed
+           # meaning the day before, and moving it twice leaves no window in which rows compare --
+           # so the specification-only share is reconstructed here as
+           # `criteria_executable_count / (criteria_authored - criteria_elaboration)`.
+           # Absent on earlier rows. First row carrying it: 2026-09-09_23-39-58 (21 of 33).
+           "criteria_elaboration")
 
 
 def read_summary(run_dir):

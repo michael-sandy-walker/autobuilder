@@ -314,6 +314,14 @@ public class CycleContextCoordinator {
         return depth;
     }
 
+    /**
+     * T4-DK: the same exercisability question the probe path asks. Injected rather than reached
+     * for statically, so the readout cannot drift back to a serving-only answer.
+     */
+    @Autowired(required = false)
+    @Setter
+    private com.walpro.autobuilder.core.build.ExercisableCriterionQuery exercisableCriterionQuery;
+
     /** T2-EX: last reported counts, so a steady plan does not repeat the same line every cycle. */
     private com.walpro.autobuilder.observability.CriteriaExecutabilityReadout.Counts lastExecutability;
 
@@ -323,14 +331,16 @@ public class CycleContextCoordinator {
      * to say and a per-cycle repeat would bury it.
      */
     private void reportCriteriaExecutability() {
+        var specRoot = goalPlannerService.getRootGoal();
         var counts = com.walpro.autobuilder.observability.CriteriaExecutabilityReadout
-                .over(goalPlannerService.getAllGoals());
+                .over(goalPlannerService.getAllGoals(), exercisableCriterionQuery,
+                        specRoot == null ? null : specRoot.getDescription());
         if (counts.isEmpty() || counts.equals(lastExecutability)) return;
         lastExecutability = counts;
-        log.info("T2-EX: criteria executability — {} authored, {} name an endpoint, {} executable ({}%);"
-                        + " {} name one but do not parse, {} name an input nothing can ground,"
+        log.info("T2-EX: criteria executability — {} authored, {} address the surface, {} executable ({}%);"
+                        + " {} address it but do not parse, {} name an input nothing can ground,"
                         + " {} are elaboration beyond the specification",
-                counts.authored(), counts.namingEndpoint(), counts.executable(),
+                counts.authored(), counts.addressingSurface(), counts.executable(),
                 Math.round(counts.executableShare() * 100), counts.namedButUnparsed(),
                 counts.ungroundableInput(), counts.elaboration());
     }

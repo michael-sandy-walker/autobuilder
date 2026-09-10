@@ -55,6 +55,15 @@ public class RunEndReportService {
     @Autowired(required = false)
     private RecurringDefectTracker recurringDefectTracker;
 
+    /**
+     * T4-DK: the same exercisability question the probe path asks. Optional on the same grounds as
+     * the tracker above; when it is absent the readout reports empty rather than reporting a
+     * serving-only number as though it were the observed one.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.ExercisableCriterionQuery exercisableCriterionQuery;
+
     /** One open or abandoned work item with the criteria the parent run could not verify met. */
     public record OpenItem(String goalId, String status, String description,
                            List<String> unmetCriteria, String resolution) {}
@@ -139,8 +148,10 @@ public class RunEndReportService {
 
             // Reuses the readout rather than recounting: it is the one place that knows how a
             // criterion is classified, and a second count here would drift from the T2-EX line.
+            var specRootForCriteria = goalPlannerService.getRootGoal();
             var criteriaCounts = com.walpro.autobuilder.observability.CriteriaExecutabilityReadout
-                    .over(goalPlannerService.getAllGoals());
+                    .over(goalPlannerService.getAllGoals(), exercisableCriterionQuery,
+                            specRootForCriteria == null ? null : specRootForCriteria.getDescription());
             RunEndReport endReport = new RunEndReport(
                     SCHEMA_VERSION,
                     terminalReason,

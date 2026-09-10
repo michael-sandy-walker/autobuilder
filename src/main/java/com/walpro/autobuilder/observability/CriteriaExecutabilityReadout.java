@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.observability;
 
 import com.walpro.autobuilder.core.build.BehaviouralCriterionParser;
+import com.walpro.autobuilder.core.build.ExercisableCriterionQuery;
 import com.walpro.autobuilder.goal.CriteriaBinding;
 import com.walpro.autobuilder.goal.GoalEntity;
 
@@ -33,19 +34,39 @@ import java.util.regex.Pattern;
  * <p><b>T1-FW: that last sentence was false for one class of criterion and is now true again.</b>
  * The count asked {@code parse(...).isPresent()}, which succeeds for a requirement naming an
  * input pattern the probe path always abstains on — so the figure reported an upper bound and
- * called it the observed one. It now asks {@link BehaviouralCriterionParser#exercisable}, and
- * those criteria are counted under their own cause rather than folded into the wording shortfall,
- * because the shortfall is neither the wording nor the parser: it is a missing capability.
+ * called it the observed one. It now asks whether the criterion is exercisable, and those criteria
+ * are counted under their own cause rather than folded into the wording shortfall, because the
+ * shortfall is neither the wording nor the parser: it is a missing capability.
+ *
+ * <p><b>T4-DK: it went false a second time, for a whole class of TARGET, and the fix is the same
+ * one word — ask what the probe path asks.</b> The count kept asking
+ * {@link BehaviouralCriterionParser#exercisable} after the probe path moved to
+ * {@link ExercisableCriterionQuery}, which answers for a target that does not serve HTTP as well as
+ * one that does. So on a command-line target the figure was a structural ZERO: run
+ * {@code 2026-09-10_12-33-26} recorded {@code criteria_executable_count=0} in the durable ledger
+ * while three closures were refuted by executing those very criteria. Measured over five archived
+ * runs, moving to the query leaves both firestarter rows exactly where they were (10 and 28) and
+ * turns three command-target zeros into 4, 8 and 8 — so no comparable row changes meaning, which
+ * is the objection {@link Counts#executableShare()} raises against redefining this figure.
  */
 public final class CriteriaExecutabilityReadout {
 
-    /** The same verb-qualified path shape the parser looks for, used only to separate the causes. */
+    /**
+     * A verb-qualified path mention — one way a criterion can address the target's surface, and
+     * the only one on a target that serves. Used solely to separate the causes below.
+     */
     private static final Pattern NAMES_ENDPOINT =
             Pattern.compile("\\b(GET|POST|PUT|PATCH|DELETE)\\s+/");
 
     /**
      * @param authored          acceptance criteria declared anywhere in the goal tree
-     * @param namingEndpoint    those addressed to an endpoint at all
+     * @param addressingSurface those addressed to the target's surface at all — a verb-qualified
+     *                          path on a target that serves, and anything a probe can be built
+     *                          from on one that does not. Deliberately a SUPERSET of
+     *                          {@code executable} by construction: it used to be the endpoint
+     *                          mention alone, which on a command-line target counted 0 while
+     *                          {@code executable} counted 4, and {@link Counts#namedButUnparsed()}
+     *                          subtracts one from the other — a wording shortfall of MINUS four
      * @param executable        those a probe can actually be built from
      * @param ungroundableInput those that parse but name an input component nothing can ground —
      *                          counted apart because their owner is a capability gap (T1-FV), not
@@ -56,7 +77,7 @@ public final class CriteriaExecutabilityReadout {
      *                          is "written down at all", {@code elaboration} is "written down by
      *                          us rather than asked for".
      */
-    public record Counts(int authored, int namingEndpoint, int executable, int ungroundableInput,
+    public record Counts(int authored, int addressingSurface, int executable, int ungroundableInput,
                          int elaboration) {
 
         public boolean isEmpty() {
@@ -85,17 +106,34 @@ public final class CriteriaExecutabilityReadout {
          * conflating them is the mistake this readout was written after making.
          */
         public int namedButUnparsed() {
-            return namingEndpoint - executable - ungroundableInput;
+            return addressingSurface - executable - ungroundableInput;
         }
     }
 
     private CriteriaExecutabilityReadout() {
     }
 
-    public static Counts over(Collection<GoalEntity> goals) {
-        if (goals == null || goals.isEmpty()) return new Counts(0, 0, 0, 0, 0);
+    /**
+     * @param query    the same question the probe path asks. Required rather than defaulted: a
+     *                 fallback to the serving-only predicate is exactly how this figure went dark
+     *                 on a whole class of target while continuing to report a number.
+     * @param specText the specification as stated, or null. The command half of {@code query}
+     *                 needs it to ground a criterion against the declared surface; the serving
+     *                 half never reads it, so null costs a serving target nothing.
+     */
+    public static Counts over(Collection<GoalEntity> goals, ExercisableCriterionQuery query,
+                              String specText) {
+        if (goals == null || goals.isEmpty() || query == null) return new Counts(0, 0, 0, 0, 0);
+
+        // The exercisable set is computed ONCE over every declared criterion rather than per
+        // criterion, because the command half parses the specification's surface to answer and
+        // doing that per criterion would re-parse the seed for every row of the readout.
+        List<String> all = new java.util.ArrayList<>();
+        for (GoalEntity goal : goals) all.addAll(criteriaOf(goal));
+        java.util.Set<String> exercisable = new java.util.HashSet<>(query.exercisable(all, specText));
+
         int authored = 0;
-        int namingEndpoint = 0;
+        int addressingSurface = 0;
         int executable = 0;
         int ungroundableInput = 0;
         int elaboration = 0;
@@ -106,15 +144,19 @@ public final class CriteriaExecutabilityReadout {
                 authored++;
                 // T3-CC: the stamp is 1-based, and CriteriaBinding is its single reader.
                 if (CriteriaBinding.isAuthored(goal, i + 1)) elaboration++;
-                if (NAMES_ENDPOINT.matcher(criterion).find()) namingEndpoint++;
-                if (BehaviouralCriterionParser.exercisable(criterion).isPresent()) {
+                boolean canProbe = exercisable.contains(criterion);
+                // Surface-addressing must contain the exercisable, or the cause decomposition
+                // reports a negative shortfall. On a serving target the OR adds nothing: being
+                // exercisable there already requires the verb-and-path mention.
+                if (canProbe || NAMES_ENDPOINT.matcher(criterion).find()) addressingSurface++;
+                if (canProbe) {
                     executable++;
                 } else if (BehaviouralCriterionParser.parse(criterion).isPresent()) {
                     ungroundableInput++;
                 }
             }
         }
-        return new Counts(authored, namingEndpoint, executable, ungroundableInput, elaboration);
+        return new Counts(authored, addressingSurface, executable, ungroundableInput, elaboration);
     }
 
     private static List<String> criteriaOf(GoalEntity goal) {

@@ -534,8 +534,11 @@ except Exception:
         # rather than "55%, of 11 authored". It misled its own author on 2026-08-04 within a minute
         # of being read. Both are emitted under unambiguous names now; the old field keeps its
         # historical meaning on existing rows rather than being silently redefined.
-        echo "criteria_executable_pct=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, [0-9]* executable (\([0-9]*\)%).*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
-        echo "criteria_executable_count=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* name an endpoint, \([0-9]*\) executable.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        # Accepts both wordings: the phrase moved from "name an endpoint" to "address the
+        # surface" when T4-DK made the count answer for targets that do not serve HTTP, and a
+        # re-analysis of an older run_dir must still extract rather than silently yield empty.
+        echo "criteria_executable_pct=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* \(name an endpoint\|address the surface\), [0-9]* executable (\([0-9]*\)%).*/\2/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
+        echo "criteria_executable_count=$(sed -n 's/.*criteria executability — [0-9]* authored, [0-9]* \(name an endpoint\|address the surface\), \([0-9]*\) executable.*/\2/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         echo "criteria_authored=$(sed -n 's/.*criteria executability — \([0-9]*\) authored.*/\1/p' "$run_dir/autobuilder.log" 2>/dev/null | tail -1)"
         # T1-FW: criteria that parse but name an input component nothing can ground. Emitted so the
         # 2026-09-08 change to `criteria_executable_*` stays RECONSTRUCTIBLE rather than a silent

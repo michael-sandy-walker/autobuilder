@@ -58,6 +58,14 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private CoverageRetrospectiveService coverageRetrospectiveService;
 
+    /**
+     * T4-DT: the same exercisability question the probe asks, used here only to give a refused
+     * closure's work item a done-when the probe can re-check.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.ExercisableCriterionQuery exercisableCriterionQuery;
+
     /** T1-DE: similarity dedup for coverage-review — optional, wired by Spring if present. */
     @Setter
     @Autowired(required = false)
@@ -3120,6 +3128,51 @@ public class GoalPlannerService {
      * 12/12 CLI run. Only the false completion used it, twice. Tightening it costs no archived
      * success.
      */
+    /**
+     * T4-DT: run the specification's uncovered obligations against the artifact, and report a
+     * contradiction if one is observed.
+     *
+     * <p>Abstains — empty — on everything the probe abstains on: no verifier wired, nothing stated,
+     * an unpackageable tree, no obligation a probe can be built for. Absence of evidence is not a
+     * refutation here any more than it is anywhere else in this chain.
+     */
+    private Optional<String> refuteUncoveredSeedByExecution(GoalEntity root, List<String> uncoveredSeed) {
+        if (closureClaimVerifier == null || uncoveredSeed == null || uncoveredSeed.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            return closureClaimVerifier.refute(root.getId(), uncoveredSeed, root.getDescription());
+        } catch (RuntimeException e) {
+            log.warn("T4-DT: execution check of the seed's obligations failed ({}) — treating as "
+                    + "unchecked, not as refuted", e.toString());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * The work item for a closure the artifact refuted, with a done-when the probe can re-check.
+     *
+     * <p><b>Its criteria are the EXERCISABLE subset, not everything offered.</b> An obligation no
+     * probe can judge would sit on the item unverifiable and keep it open for the run's life, which
+     * is walling — the failure this whole chain is built to avoid. The satisfied exercisable ones
+     * cost nothing: they verify met and the item closes when the refuted one is repaired.
+     */
+    private void injectExecutionRefutation(GoalEntity root, String refutation, List<String> uncoveredSeed) {
+        List<String> doneWhen = exercisableCriterionQuery == null ? List.of()
+                : exercisableCriterionQuery.exercisable(uncoveredSeed, root.getDescription());
+        CoverageReviewResult injected = injectCoverageGaps(root, List.of(
+                "[BUILD_FIX] The running artifact contradicts the specification — " + refutation));
+        if (injected.injected().isEmpty() || doneWhen.isEmpty()) return;
+        for (String id : injected.injectedIds()) {
+            // ⚠ MARKER FIRST, CRITERIA SECOND, for the reason recorded at the sibling site: the
+            // binding stamp consults isFromCriteriaGate(metadata), so written the other way round
+            // it reads a map without the marker and stamps the SPECIFICATION's own words AUTHORED.
+            setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                    com.walpro.autobuilder.core.build.BlockerTypes.GATE_CRITERIA);
+            setAcceptanceCriteria(id, doneWhen);
+        }
+    }
+
     private void refuseClosureUnrepairable(String gate, String detail) {
         log.warn("T4-DK: root closure REFUSED by {} — {}; the repair work item deduplicates against "
                 + "an already GIVEN_UP item, so the requirement is unmet and unfixable this cycle. "
@@ -3586,6 +3639,25 @@ public class GoalPlannerService {
                     log.info("T4-DK: {} seed requirement(s) are covered by no banked criterion — "
                             + "verifying them against the artifact too", uncoveredSeed.size());
                     toVerify.addAll(uncoveredSeed);
+                }
+                // T4-DT: offer the SPECIFICATION's own obligations to the EXECUTION probe before
+                // asking a model to read the source for them.
+                //
+                // The seed's worked example is a seed requirement, and seed requirements reached
+                // only `verifyCompletion` — a model reading the parser. Run 2026-09-10_21-46-44
+                // closed GOAL_FULFILLED at 15/19 with that model calling "a file containing
+                // a,"b,c","d""e" is parsed into one row with three fields" satisfied; running the
+                // artifact reports two. The oracle for that claim was in the seed the whole time.
+                //
+                // Where the probe speaks it OUTRANKS the reading, because it ran the tool. Where it
+                // abstains — no packageable artifact, nothing exercisable — nothing changes and the
+                // model is asked exactly as before.
+                Optional<String> refutedByExecution = refuteUncoveredSeedByExecution(root, uncoveredSeed);
+                if (refutedByExecution.isPresent()) {
+                    log.warn("T4-DT: root closure REFUSED by the running artifact — {}",
+                            refutedByExecution.get());
+                    injectExecutionRefutation(root, refutedByExecution.get(), uncoveredSeed);
+                    return;
                 }
                 var completionVerification = criteriaVerificationService.verifyCompletion(
                         root.getDescription(), toVerify, output);

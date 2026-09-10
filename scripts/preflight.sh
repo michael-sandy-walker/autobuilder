@@ -511,7 +511,12 @@ except Exception:
         echo "closure_attempts=$(grep -c 'root closure blocked' "$run_dir/autobuilder.log" 2>/dev/null)"
         echo "package_gate_runs=$(grep -c 'package gate result' "$run_dir/autobuilder.log" 2>/dev/null)"
         echo "boot_gate_runs=$(grep -c 'boot gate result' "$run_dir/autobuilder.log" 2>/dev/null)"
-        echo "criterion_probe_runs=$(grep -c 'T4-CU: behavioural criteria' "$run_dir/autobuilder.log" 2>/dev/null)"
+        # Counts probing on EITHER target shape. It used to grep only the serving path's
+        # marker ('T4-CU: behavioural criteria probed='), which the command path never emits —
+        # so it read 0 on run 2026-09-10_12-33-26 while 8 boot-gate runs probed and 3 closures
+        # were refuted, and 7-8 on firestarter runs doing less. A ledger field whose meaning
+        # silently differs per target is the same defect as the smoke denominator.
+        echo "criterion_probe_runs=$(grep -cE '(behavioural|exit-status) criteria probed=' "$run_dir/autobuilder.log" 2>/dev/null)"
         # T6-J: where the run's wall-clock went. Before this, LLM calls and builds together
         # explained under a quarter of a run's minutes and the gates that package and boot the
         # artifact were untimed, so 70 of 89 minutes had no owner. Last readout wins — it is

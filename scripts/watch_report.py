@@ -11,6 +11,8 @@ Results (type=watch):
                          needs attention
   NO-OPPORTUNITY         neither pattern matched; the watch keeps riding
   NOT-OBSERVED           no opportunity pattern defined and no firing
+  REGISTRY-ERROR         the watch names a log that does not exist in FILE_MAP, so it could
+                         never have matched anything — needs attention, and is NOT silence
 Results (type=tally):
   COUNT(n)               a metric, not a pass/fail
 
@@ -33,10 +35,31 @@ FILE_MAP = {
 }
 
 
+class UnknownWatchFile(Exception):
+    """A watch names a log this report cannot resolve. Loud on purpose — see below."""
+
+
 def count_matches(run_dir: Path, spec) -> int:
     if not spec:
         return -1  # no pattern defined
-    path = run_dir / FILE_MAP.get(spec.get("file", ""), spec.get("file", ""))
+    # An unknown file key is a REGISTRY ERROR, not a zero count.
+    #
+    # This used to fall back to the key itself, so `"file": "app"` (FILE_MAP has `applog`)
+    # resolved to a path that never exists, counted 0, and the watch reported NO-OPPORTUNITY
+    # -- which reads as "the mechanism had no chance to fire" rather than "this watch is
+    # blind". FOUR of seventeen watches carried that typo and had never been able to fire on
+    # any run: t2eq-halt-edge-rescue, t2eq-packaging-item-retired, t4cu-criterion-contradicted,
+    # t4cu-probe-synthesis-yield. It surfaced on 2026-09-10 when t4cu-criterion-contradicted
+    # reported NO-OPPORTUNITY on a run where its own fired pattern matched SIX times.
+    #
+    # The typo was the occasion; the silent default is the defect. A monitor whose failure mode
+    # is indistinguishable from good news is worse than no monitor ([[feedback-monitor-every-terminal]],
+    # [[project-detector-went-silent-as-the-fault-spread]]).
+    key = spec.get("file", "")
+    if key not in FILE_MAP:
+        raise UnknownWatchFile(
+            f"watch names file={key!r}, which is not one of {sorted(FILE_MAP)}")
+    path = run_dir / FILE_MAP[key]
     if not path.is_file():
         return 0
     try:
@@ -75,11 +98,19 @@ def main() -> int:
         if "fired" not in w and "opportunity" not in w:
             print(f"watch={w.get('id')} ticket={ticket} result=MANUAL")
             continue
-        fired = count_matches(run_dir, w.get("fired"))
+        try:
+            fired = count_matches(run_dir, w.get("fired"))
+            opp_count = count_matches(run_dir, w.get("opportunity"))
+        except UnknownWatchFile as e:
+            # Reported per watch and counted as needing attention, so one bad row cannot hide
+            # behind a clean-looking report -- and cannot stop the other sixteen being read.
+            print(f"watch={w['id']} ticket={ticket} result=REGISTRY-ERROR ({e})")
+            attention += 1
+            continue
         if w.get("type") == "tally":
             result = f"COUNT({fired})"
         else:
-            opp = count_matches(run_dir, w.get("opportunity"))
+            opp = opp_count
             if fired > 0:
                 result = f"FIRED({fired})"
             elif opp > 0:

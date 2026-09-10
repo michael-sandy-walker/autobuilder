@@ -89,11 +89,11 @@
       "description": "halt edge finds an unpackageable artifact and hands the repair to the loop instead of dying",
       "type": "watch",
       "fired": {
-        "file": "app",
+        "file": "applog",
         "pattern": "T2-EQ: the artifact does not package — repair work item injected at the"
       },
       "opportunity": {
-        "file": "app",
+        "file": "applog",
         "pattern": "T2-EQ: halt edge reached with an artifact the build tool cannot package"
       },
       "check": "the run must continue past the halt (more cycles after the line) and the repair item must not be re-created while it is open"
@@ -104,11 +104,11 @@
       "description": "packaging repair item retired by the gate that raised it (unit-covered, never yet seen in the field)",
       "type": "watch",
       "fired": {
-        "file": "app",
+        "file": "applog",
         "pattern": "packaging now succeeds — marking (current|remaining) BUILD_FIX subgoal"
       },
       "opportunity": {
-        "file": "app",
+        "file": "applog",
         "pattern": "T2-EQ: halt edge reached with an artifact the build tool cannot package"
       },
       "check": "only the package gate may retire a package-gate item; a compile-OK cleanup must not"
@@ -119,12 +119,12 @@
       "description": "a SPEC-bound acceptance criterion contradicted by the running artifact at the closure edge (unit-covered; the synthesis step has never met the local model in the field)",
       "type": "watch",
       "fired": {
-        "file": "app",
+        "file": "applog",
         "pattern": "acceptance criteria fail when exercised against it"
       },
       "opportunity": {
-        "file": "app",
-        "pattern": "T4-CU: behavioural criteria probed=[1-9]"
+        "file": "applog",
+        "pattern": "(?:behavioural|exit-status) criteria probed=[1-9]"
       },
       "check": "probed>0 with contradicted=0 across a run whose smoke score is below 23 means the probes are too weak, not that the artifact is right — compare the contradicted set against that run's smoke failures"
     },
@@ -134,8 +134,8 @@
       "description": "how many parseable criteria actually get a usable probe out of the local model",
       "type": "tally",
       "fired": {
-        "file": "app",
-        "pattern": "T4-CU: behavioural criteria probed=\\d+ skipped=\\d+ contradicted=\\d+"
+        "file": "applog",
+        "pattern": "(?:behavioural|exit-status) criteria probed=\\d+ skipped=\\d+"
       },
       "check": "skipped >> probed means synthesis or the drift guard is rejecting nearly everything — read the per-criterion INFO lines before tuning the parser"
     },

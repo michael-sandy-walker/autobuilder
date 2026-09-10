@@ -31,6 +31,17 @@ the distribution and carried nothing where the two populations actually differ.
 best rho in the study and be worse than a constant at the question being asked, and
 nothing but a holdout will show it.
 
+**4. What the denominator MEANS, because a normalisation is a claim about
+comparability.** T6-R's own analysis divided every target's strict score by 23 --
+firestarter's check count -- because that is the literal the ledger field carries.
+A clitarget run that passed 19 of 19 therefore read as 83% and filed as a mid-table
+run when it was a PERFECT one. Three such rows padded the middle of the
+distribution and **manufactured the analysis's only significant result**: fixing the
+denominator moved the ledger permutation p from 0.011 to 0.326. **The bug survived a
+permutation test, twelve unit tests and a written-up commit, because all of them ran
+downstream of it.** Before treating rows as one population, check that the ratio
+dividing them means the same thing in each.
+
 **Why:** this project keeps asking "does X predict a good run?", and every such
 question is an unbalanced, small-n, many-features problem -- the exact shape where
 an accuracy number is most flattering and least informative.

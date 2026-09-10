@@ -116,7 +116,7 @@ How to work:
 - `feedback_no_per_run_memory_files.md`: no new memory file per field run; fold into `project_resume_state.md`; separate files only for durable cross-run insights. (reviewed 2026-07-09)
 
 Evidence discipline:
-- `feedback_baseline_before_accuracy.md`: three ways a predictor-hunt lies — unstated baseline (79% by always saying 'good'), best-of-N reported as one test (permutation p), extremes-only comparison (rho +0.54 with leave-one-out BELOW baseline). A correlation and a discriminator are different claims. (reviewed 2026-09-10)
+- `feedback_baseline_before_accuracy.md`: FOUR ways a predictor-hunt lies — unstated baseline, best-of-N reported as one test (permutation p), extremes-only comparison (best rho with leave-one-out BELOW baseline), and a denominator that means different things per row (this one manufactured T6-R's only significant result and survived 12 tests). A correlation and a discriminator are different claims. (reviewed 2026-09-10)
 - `feedback_verify_population_before_claim.md`: before any all/most/never claim, scan the full corpus including backups and dedupe by timestamp. (reviewed 2026-07-09)
 - `feedback_count_events_not_log_lines.md`: count the EVENT, not log lines mentioning it; re-rendered records inflated two ticket headlines 23x and 3x. (reviewed 2026-08-01)
 - `feedback_dont_group_defects_by_vocabulary.md`: "N instances of the same pattern" is a claim about MECHANISM -- verify each member's mechanism before grouping; a shared description is not a shared cause. (reviewed 2026-08-29)

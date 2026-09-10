@@ -24,6 +24,27 @@ class StrictShareTest(unittest.TestCase):
     def test_zero_denominator_does_not_divide(self):
         self.assertIsNone(sr.strict_share({'smoke_strict': '0/0'}))
 
+    def test_a_smaller_target_is_scored_over_ITS_OWN_checks(self):
+        # THE BUG THIS SUITE MISSED FIRST TIME. smoke_strict states its denominator
+        # as 23 -- firestarter's size -- for every target, so a clitarget run that
+        # passed 19 of 19 records "19/23". Divided by the literal it reads 83% and
+        # files as a mid-table run; it is a PERFECT run. Three such runs padded the
+        # middle of the distribution and manufactured the analysis's only
+        # significant result (ledger p moved 0.011 -> 0.326 once fixed).
+        self.assertAlmostEqual(
+            sr.strict_share({'smoke_strict': '19/23 discounted=none', 'smoke_total': 19}), 1.0)
+        self.assertAlmostEqual(
+            sr.strict_share({'smoke_strict': '12/23 discounted=none', 'smoke_total': 12}), 1.0)
+
+    def test_falls_back_to_the_literal_when_the_target_size_is_unknown(self):
+        # Rows predating smoke_total must still score, and for firestarter the two
+        # denominators agree anyway.
+        self.assertAlmostEqual(sr.strict_share({'smoke_strict': '17/23'}), 17 / 23)
+
+    def test_an_unusable_target_size_does_not_crash_the_row(self):
+        self.assertAlmostEqual(
+            sr.strict_share({'smoke_strict': '17/23', 'smoke_total': 'none'}), 17 / 23)
+
 
 class PeakFractionTest(unittest.TestCase):
 

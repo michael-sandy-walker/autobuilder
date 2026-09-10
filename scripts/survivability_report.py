@@ -43,11 +43,28 @@ def load(path=LEDGER):
 
 
 def strict_share(r):
-    """Strict passes / total, the honest score. None when the run was not scored."""
+    """Strict passes over THE TARGET'S OWN CHECK COUNT. None when unscored.
+
+    ⚠ The denominator in `smoke_strict` is always 23 -- firestarter's size -- even
+    for a target with fewer checks, so a clitarget run that passed 19 of 19 records
+    "19/23". Dividing by that literal makes a PERFECT run read as 83% and lands it
+    in the middle of the distribution, where it silently pads the population the
+    whole analysis is about. Measured: 10 of 47 scored runs are non-firestarter and
+    two of them are perfect runs mis-ranked this way.
+
+    So the target's own `smoke_total` wins when present, and the literal denominator
+    is only the fallback for rows predating that field.
+    """
     m = re.match(r'\s*(\d+)/(\d+)', str(r.get('smoke_strict', '')))
-    if not m or not int(m.group(2)):
+    if not m:
         return None
-    return int(m.group(1)) / int(m.group(2))
+    passed = int(m.group(1))
+    total = r.get('smoke_total') or int(m.group(2))
+    try:
+        total = int(total)
+    except (TypeError, ValueError):
+        total = int(m.group(2))
+    return (passed / total) if total else None
 
 
 def peak_fraction(r):

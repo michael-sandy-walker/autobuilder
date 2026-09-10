@@ -163,6 +163,22 @@ def main(argv):
               f"{sum(1 for x in sh if x < 20):10} {sum(1 for x in sh if 20 <= x < 100):7} "
               f"{statistics.median(sh):6.0f}%")
 
+    # THE STRATIFIER BOTH EARLIER PASSES MISSED. A run that reaches its own goal and
+    # a run the harness stops are not one population, and pooling them is what made
+    # "perfect versus collapsed" look like a single question with a single answer.
+    print("\n=== BY TERMINAL — how the run ENDED ===")
+    by = {}
+    for k, v in scored.items():
+        by.setdefault((v.get('terminal') or '?').split(':')[0], []).append(strict_share(v) * 100)
+    print(f"  {'terminal':26} {'n':>4} {'median':>8} {'perfect':>8} {'<=40%':>7}")
+    for t in sorted(by, key=lambda x: -len(by[x])):
+        v = by[t]
+        print(f"  {t:26} {len(v):4} {statistics.median(v):7.0f}% "
+              f"{sum(1 for x in v if x >= 100):8} {sum(1 for x in v if x <= 40):7}")
+    print("  NOTE: no GOAL_FULFILLED run has ever collapsed. Every collapse is a run that was")
+    print("        stopped (deadline) or stopped itself (honest-halt), so 'collapse' is largely")
+    print("        what an INTERRUPTED run looks like -- not a distinct failure of the loop.")
+
     GOOD, BAD = 1.0, 0.40
     rows = [(features(v), strict_share(v) >= GOOD) for v in scored.values()
             if strict_share(v) >= GOOD or strict_share(v) <= BAD]

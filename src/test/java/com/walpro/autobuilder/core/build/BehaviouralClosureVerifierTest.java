@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,6 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -41,24 +43,25 @@ class BehaviouralClosureVerifierTest {
 
     @BeforeEach
     void setUp() {
-        verifier = new BehaviouralClosureVerifier(packageGate, bootGate);
+        verifier = new BehaviouralClosureVerifier(packageGate, bootGate,
+                new ExercisableCriterionQuery(new CommandSurfaceQuery()));
         lenient().when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
     }
 
     @Test
     void aCriterionTheArtifactRefutesBlocksTheClaim() {
-        when(bootGate.verifyBootsAndServes(anyString(), eq(""), any()))
+        when(bootGate.verifyBootsAndServes(anyString(), isNull(), any()))
                 .thenReturn(Optional.of("POST /books -> 400, but the running application answered 201"));
 
-        assertThat(verifier.refute("goal-1", List.of(EXECUTABLE)))
+        assertThat(verifier.refute("goal-1", List.of(EXECUTABLE), null))
                 .hasValueSatisfying(s -> assertThat(s).contains("answered 201"));
     }
 
     @Test
     void aCriterionTheArtifactUpholdsIsNotRefuted() {
-        when(bootGate.verifyBootsAndServes(anyString(), eq(""), any())).thenReturn(Optional.empty());
+        when(bootGate.verifyBootsAndServes(anyString(), isNull(), any())).thenReturn(Optional.empty());
 
-        assertThat(verifier.refute("goal-1", List.of(EXECUTABLE))).isEmpty();
+        assertThat(verifier.refute("goal-1", List.of(EXECUTABLE), null)).isEmpty();
     }
 
     /**
@@ -72,7 +75,7 @@ class BehaviouralClosureVerifierTest {
     void aClaimWhoseCriteriaNothingCanGroundBuysNoPackageAndNoBoot() {
         String ungroundable = "GET /loans?memberId={id} returns HTTP 200 with the member's loans";
 
-        assertThat(verifier.refute("goal-1", List.of(ungroundable))).isEmpty();
+        assertThat(verifier.refute("goal-1", List.of(ungroundable), null)).isEmpty();
 
         verify(packageGate, never()).verifyPackageable(anyString());
         verify(bootGate, never()).verifyBootsAndServes(anyString(), anyString(), any());
@@ -83,7 +86,7 @@ class BehaviouralClosureVerifierTest {
         // The common case — 302 of 452 closed subgoals across 32 corpora have only criteria like
         // this. If they reached the gates, the check would cost a package build and a boot on every
         // closure instead of a third of them.
-        assertThat(verifier.refute("goal-1", List.of(STRUCTURAL))).isEmpty();
+        assertThat(verifier.refute("goal-1", List.of(STRUCTURAL), null)).isEmpty();
 
         verify(packageGate, never()).verifyPackageable(anyString());
         verify(bootGate, never()).verifyBootsAndServes(anyString(), anyString(), any());
@@ -93,11 +96,11 @@ class BehaviouralClosureVerifierTest {
     void onlyTheExecutableSubsetIsSentToTheGate() {
         // A work item usually mixes both kinds. Passing the structural ones through would ask the
         // gate to execute something it cannot, and its abstention would read as a pass.
-        when(bootGate.verifyBootsAndServes(anyString(), eq(""), any())).thenReturn(Optional.empty());
+        when(bootGate.verifyBootsAndServes(anyString(), isNull(), any())).thenReturn(Optional.empty());
 
-        verifier.refute("goal-1", List.of(STRUCTURAL, EXECUTABLE, STRUCTURAL));
+        verifier.refute("goal-1", List.of(STRUCTURAL, EXECUTABLE, STRUCTURAL), null);
 
-        verify(bootGate).verifyBootsAndServes(anyString(), eq(""), eq(List.of(EXECUTABLE)));
+        verify(bootGate).verifyBootsAndServes(anyString(), isNull(), eq(List.of(EXECUTABLE)));
     }
 
     @Test
@@ -106,7 +109,7 @@ class BehaviouralClosureVerifierTest {
         // a closure on an unrelated defect.
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.of("package failed"));
 
-        assertThat(verifier.refute("goal-1", List.of(EXECUTABLE))).isEmpty();
+        assertThat(verifier.refute("goal-1", List.of(EXECUTABLE), null)).isEmpty();
         verify(bootGate, never()).verifyBootsAndServes(anyString(), anyString(), any());
     }
 
@@ -115,24 +118,24 @@ class BehaviouralClosureVerifierTest {
         // An empty specification text is deliberate: the closure edge already asks whether the
         // artifact satisfies the spec. Folding the spec in here would decide one work item's fate
         // on requirements it never claimed.
-        when(bootGate.verifyBootsAndServes(anyString(), eq(""), any())).thenReturn(Optional.empty());
+        when(bootGate.verifyBootsAndServes(anyString(), isNull(), any())).thenReturn(Optional.empty());
 
-        verifier.refute("goal-1", List.of(EXECUTABLE));
+        verifier.refute("goal-1", List.of(EXECUTABLE), null);
 
-        verify(bootGate).verifyBootsAndServes(anyString(), eq(""), any());
+        verify(bootGate).verifyBootsAndServes(anyString(), isNull(), any());
     }
 
     @Test
     void noCriteriaMeansNoOpinion() {
-        assertThat(verifier.refute("goal-1", List.of())).isEmpty();
-        assertThat(verifier.refute("goal-1", null)).isEmpty();
+        assertThat(verifier.refute("goal-1", List.of(), null)).isEmpty();
+        assertThat(verifier.refute("goal-1", null, null)).isEmpty();
     }
 
     @Test
     void theSwitchRestoresTheOlderBehaviourExactly() {
         verifier.setEnabled(false);
 
-        assertThat(verifier.refute("goal-1", List.of(EXECUTABLE))).isEmpty();
+        assertThat(verifier.refute("goal-1", List.of(EXECUTABLE), null)).isEmpty();
         verify(packageGate, never()).verifyPackageable(anyString());
     }
 }

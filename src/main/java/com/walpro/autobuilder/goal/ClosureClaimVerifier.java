@@ -19,12 +19,13 @@ import java.util.Optional;
  * without merge}. The loop abandoned a repair it had correctly diagnosed because a leaf lied to it.
  *
  * <p><b>Why this is an interface and not a method on the planner.</b> Executing a criterion means
- * knowing what kind of thing the target is — today a web service, so a request and a response
- * status. The goal tree must not learn that; it is already the largest single accumulation of
- * target-domain knowledge in the codebase (T4-DD's inventory). So the planner states the question
- * in its own terms — "is this claim refuted?" — and an implementation that understands the target
- * answers it. This is the first real exercise of the T4-DD seam: requirement extraction and
- * execution live behind it, and nothing about endpoints or statuses crosses back.
+ * knowing what kind of thing the target is — a request and a response status for one that serves,
+ * an invocation and an exit status for one that does not. The goal tree must not learn that; it is
+ * already the largest single accumulation of target-domain knowledge in the codebase (T4-DD's
+ * inventory). So the planner states the question in its own terms — "is this claim refuted?" — and
+ * an implementation that understands the target answers it. This is the first real exercise of the
+ * T4-DD seam: requirement extraction and execution live behind it, and nothing about endpoints,
+ * statuses or command words crosses back.
  *
  * <p><b>It refutes; it never confirms.</b> Every implementation must return empty unless it has
  * positive evidence that a criterion is false. Absence of evidence — an unparseable criterion, an
@@ -39,9 +40,18 @@ public interface ClosureClaimVerifier {
     /**
      * @param goalId   the work item about to be closed, for logging and attribution
      * @param criteria its declared acceptance criteria, verbatim
+     * @param specText the specification as stated, or null when the caller has none. Still not
+     *                 target-domain knowledge crossing back into the planner: the planner passes
+     *                 the words it was given and forms no opinion about them. An implementation
+     *                 needs them because a criterion naming a declared operation rather than a
+     *                 literal invocation ("count &lt;file&gt; prints … as a bare integer") can only
+     *                 be turned into a probe against the surface the specification itself states.
+     *                 T4-DK: passing the empty string here made every criterion on a target with no
+     *                 network surface unexercisable, so the check abstained at every closure and a
+     *                 model reading source was the only evidence left at the completion edge.
      * @return a description of the contradiction when the artifact demonstrably refutes one of
      *         {@code criteria} — phrased so the loop can act on it — or empty when it does not, or
      *         when nothing could be checked. Empty is "no opinion", never "verified".
      */
-    Optional<String> refute(String goalId, List<String> criteria);
+    Optional<String> refute(String goalId, List<String> criteria, String specText);
 }

@@ -69,13 +69,13 @@ class GoalPlannerServiceElaborationTierTest {
                 List.of("the coil reports ALIGNED after calibration",      // 1: specification
                         "the coil reports FAULTED for an unknown emitter"), // 2: the loop's own idea
                 Map.of("2", "AUTHORED"));
-        when(verifier.refute(anyString(), any())).thenReturn(Optional.empty());
+        when(verifier.refute(anyString(), any(), any())).thenReturn(Optional.empty());
 
         ReflectionTestUtils.invokeMethod(serviceWith(g), "refuteClosureClaim", "W");
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
-        verify(verifier).refute(anyString(), captor.capture());
+        verify(verifier).refute(anyString(), captor.capture(), any());
         assertThat(captor.getValue())
                 .as("only what the specification required may be asserted against the artifact")
                 .containsExactly("the coil reports ALIGNED after calibration");
@@ -95,7 +95,7 @@ class GoalPlannerServiceElaborationTierTest {
         assertThat(refutation).isEmpty();
         // The expensive half of the check is what this saves: nothing the specification asked for
         // is left to test, so no artifact is packaged and none is booted.
-        verify(verifier, never()).refute(anyString(), any());
+        verify(verifier, never()).refute(anyString(), any(), any());
     }
 
     @Test
@@ -105,13 +105,13 @@ class GoalPlannerServiceElaborationTierTest {
                 List.of("the coil reports ALIGNED after calibration",
                         "the coil holds alignment across a restart"),
                 null);
-        when(verifier.refute(anyString(), any())).thenReturn(Optional.empty());
+        when(verifier.refute(anyString(), any(), any())).thenReturn(Optional.empty());
 
         ReflectionTestUtils.invokeMethod(serviceWith(g), "refuteClosureClaim", "W");
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
-        verify(verifier).refute(anyString(), captor.capture());
+        verify(verifier).refute(anyString(), captor.capture(), any());
         assertThat(captor.getValue())
                 .as("absent evidence that we authored it, the specification is presumed to own it")
                 .hasSize(2);

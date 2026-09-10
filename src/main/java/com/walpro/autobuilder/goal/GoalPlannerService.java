@@ -2238,7 +2238,15 @@ public class GoalPlannerService {
             return Optional.empty();
         }
         try {
-            return closureClaimVerifier.refute(goalId, criteria);
+            // T4-DK: the specification travels with the question. A criterion naming a declared
+            // operation rather than a literal invocation can only be turned into a probe against
+            // the surface the specification itself states, and the verifier used to be handed an
+            // empty string — which left every criterion on a target with no network surface
+            // unexercisable and the check silently abstaining at every closure. The planner still
+            // forms no opinion about these words; it passes the ones it was given.
+            GoalEntity specRoot = getRootGoal();
+            String specText = specRoot == null ? null : specRoot.getDescription();
+            return closureClaimVerifier.refute(goalId, criteria, specText);
         } catch (RuntimeException e) {
             log.warn("T4-CU: closure-claim check for {} failed ({}) — treating as unchecked, not as refuted",
                     goalId, e.toString());

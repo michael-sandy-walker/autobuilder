@@ -43,30 +43,37 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
 
     private final PackageGate packageGate;
     private final BootGate bootGate;
+    private final ExercisableCriterionQuery exercisableCriterionQuery;
 
-    public BehaviouralClosureVerifier(PackageGate packageGate, BootGate bootGate) {
+    public BehaviouralClosureVerifier(PackageGate packageGate, BootGate bootGate,
+                                      ExercisableCriterionQuery exercisableCriterionQuery) {
         this.packageGate = packageGate;
         this.bootGate = bootGate;
+        this.exercisableCriterionQuery = exercisableCriterionQuery;
     }
 
     /** Test seam — production wires the field value. */
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     @Override
-    public Optional<String> refute(String goalId, List<String> criteria) {
+    public Optional<String> refute(String goalId, List<String> criteria, String specText) {
         if (!enabled || criteria == null || criteria.isEmpty()) return Optional.empty();
 
-        // Only criteria that state one endpoint's response status can be turned into a request.
-        // Filtering here rather than inside the gate keeps the expensive steps behind a decision
-        // made in memory: two thirds of closures stop at this line having spent nothing.
+        // Only criteria some probe can be BUILT for are worth booting the artifact. Filtering here
+        // rather than inside the gate keeps the expensive steps behind a decision made in memory:
+        // two thirds of closures stop at this line having spent nothing.
         //
-        // T1-FW: this asks `exercisable`, not `parse`. A requirement naming an input pattern
-        // nothing can ground parses cleanly and is then abstained on by the synthesizer — so
-        // asking `parse` let a claim whose criteria were ALL of that kind past this line and buy
-        // a package and a boot before probing nothing at all.
-        List<String> executable = criteria.stream()
-                .filter(c -> c != null && BehaviouralCriterionParser.exercisable(c).isPresent())
-                .toList();
+        // T1-FW: this asks whether the criterion is exercisable, not merely whether it parses. A
+        // requirement naming an input pattern nothing can ground parses cleanly and is then
+        // abstained on by the synthesizer — so asking `parse` let a claim whose criteria were ALL
+        // of that kind past this line and buy a package and a boot before probing nothing at all.
+        //
+        // T4-DK: the question is asked for EVERY target shape, through one home. It used to be
+        // `BehaviouralCriterionParser.exercisable` alone, which reads a verb-and-path mention and
+        // so can only answer for an artifact that serves. On a target with no network surface the
+        // list came back empty at every closure and this check abstained every time — while the
+        // capability to exercise exactly that target sat one call away inside the gate below.
+        List<String> executable = exercisableCriterionQuery.exercisable(criteria, specText);
         if (executable.isEmpty()) {
             // Two thirds of closures land here. Logged so a run with no closure checks can be read
             // as "nothing was executable" rather than "the check never ran".
@@ -83,19 +90,25 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
             return Optional.empty();
         }
 
-        // specText is empty on purpose: the question is not "does this artifact satisfy the
-        // specification" — the closure edge already asks that — but "does it satisfy the claims
-        // THIS work item is closing on". Passing the spec would fold unrelated requirements into
-        // one work item's verdict.
+        // The verdict stays scoped to THIS work item's criteria, which is why only `executable`
+        // is offered: the question is not "does this artifact satisfy the specification" — the
+        // closure edge already asks that — but "does it satisfy the claims this work item is
+        // closing on". The gate iterates the criteria it is handed and no others.
         //
-        // Checked rather than assumed, because a blank spec could easily have made this inert:
-        // BootGate derives its spec-declared endpoint set from specText, but that set only decides
-        // whether a non-serving artifact is reported as a failure. Criterion probing iterates the
-        // supplied criteria directly, and the deterministic synthesizer takes only the assertion
-        // and the artifact tree — it never reads the specification. So an artifact that serves gets
-        // these criteria exercised; one that does not yields no opinion, which is the intended
-        // abstention rather than a silent pass.
-        Optional<String> contradiction = bootGate.verifyBootsAndServes(checkId, "", executable);
+        // T4-DK: specText is now PASSED, where an empty string used to be. The reasoning for the
+        // empty string was checked rather than assumed, and it was checked against one half of the
+        // gate — "the deterministic synthesizer takes only the assertion and the artifact tree, it
+        // never reads the specification" is true of the request synthesizer and false of the
+        // command one, which derives the declared surface and the worked input example from the
+        // specification and can build nothing without them. So a blank spec did not merely lose a
+        // little context on a non-serving target; it made the whole command half inert.
+        //
+        // Passing the real text does not widen the verdict. The spec-declared endpoint set BootGate
+        // derives from it decides only whether a NON-SERVING artifact counts as a failure, and a
+        // specification with no endpoints in it declares none — so a target that was never meant to
+        // serve still yields no opinion on that axis. The expectation self-gates on the
+        // specification's own markers rather than on a flag anyone has to remember to set.
+        Optional<String> contradiction = bootGate.verifyBootsAndServes(checkId, specText, executable);
         if (contradiction.isEmpty()) {
             // Deliberately NOT phrased as "the criteria hold". An empty result means no
             // contradiction was FOUND, which includes the case where the gate could construct no

@@ -70,7 +70,7 @@ class GoalPlannerServiceClosureClaimTest {
 
     /** Answers whatever it is told to, so the test controls the one fact under examination. */
     private void withVerifier(Optional<String> verdict) {
-        service.setClosureClaimVerifier((goalId, criteria) -> verdict);
+        service.setClosureClaimVerifier((goalId, criteria, specText) -> verdict);
     }
 
     @Test
@@ -168,7 +168,7 @@ class GoalPlannerServiceClosureClaimTest {
     void aVerifierThatThrowsIsTreatedAsUncheckedRatherThanAsRefuted() {
         // A check that can fail closed would block closure on its own defects. The worst case has
         // to be that the check did not run, which is where the loop already was.
-        service.setClosureClaimVerifier((goalId, criteria) -> {
+        service.setClosureClaimVerifier((goalId, criteria, specText) -> {
             throw new IllegalStateException("boot timed out");
         });
 
@@ -180,7 +180,7 @@ class GoalPlannerServiceClosureClaimTest {
     @Test
     void aGoalWithNoCriteriaIsNeverSentToTheVerifier() {
         service.getGoalById("A").getMetadata().remove("acceptanceCriteria");
-        service.setClosureClaimVerifier((goalId, criteria) -> {
+        service.setClosureClaimVerifier((goalId, criteria, specText) -> {
             throw new AssertionError("nothing to check, so nothing should have been asked");
         });
 

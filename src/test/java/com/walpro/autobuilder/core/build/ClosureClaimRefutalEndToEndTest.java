@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery;
 import com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -74,12 +75,13 @@ class ClosureClaimRefutalEndToEndTest {
         PackageGate packageGate = mock(PackageGate.class);
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
 
-        return new BehaviouralClosureVerifier(packageGate, bootGate);
+        return new BehaviouralClosureVerifier(packageGate, bootGate,
+                new ExercisableCriterionQuery(new CommandSurfaceQuery()));
     }
 
     @Test
     void aClaimTheRunningApplicationContradictsIsRefuted() throws Exception {
-        Optional<String> refuted = verifier().refute("goal-1", List.of(FALSE_CLAIM));
+        Optional<String> refuted = verifier().refute("goal-1", List.of(FALSE_CLAIM), null);
 
         assertThat(refuted).as("an empty spec text must not neuter the criterion probe").isPresent();
         assertThat(refuted.get()).contains("/orders");
@@ -89,13 +91,13 @@ class ClosureClaimRefutalEndToEndTest {
     void aClaimTheRunningApplicationUpholdsIsNotRefuted() throws Exception {
         // The control. Without it, a verifier that refuted everything — the far more damaging
         // failure, since it would block every closure — would pass the test above.
-        assertThat(verifier().refute("goal-1", List.of(TRUE_CLAIM))).isEmpty();
+        assertThat(verifier().refute("goal-1", List.of(TRUE_CLAIM), null)).isEmpty();
     }
 
     @Test
     void aTrueClaimAlongsideAFalseOneStillRefutes() throws Exception {
         // A work item usually carries several criteria and only one of them is wrong.
-        Optional<String> refuted = verifier().refute("goal-1", List.of(TRUE_CLAIM, FALSE_CLAIM));
+        Optional<String> refuted = verifier().refute("goal-1", List.of(TRUE_CLAIM, FALSE_CLAIM), null);
 
         assertThat(refuted).isPresent();
         assertThat(refuted.get()).contains("/orders");

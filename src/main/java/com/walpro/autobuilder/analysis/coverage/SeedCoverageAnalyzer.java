@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.analysis.coverage;
 
 import com.walpro.autobuilder.goal.GoalEntity;
+import com.walpro.autobuilder.goal.SeedRequirements;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -44,11 +45,7 @@ import java.util.regex.Pattern;
 @Component
 public class SeedCoverageAnalyzer {
 
-    /**
-     * Clause boundaries: line breaks, and sentence/clause terminators followed by whitespace.
-     * Splitting aggressively is safe because a clause is judged on its terms collectively.
-     */
-    private static final Pattern CLAUSE_BREAK = Pattern.compile("(?<=[.;])\\s+");
+
 
     /** Everything that is not a term character. Braces and backslashes stay: a spec may state patterns. */
     private static final Pattern NON_TERM = Pattern.compile("[^A-Za-z0-9{}\\\\]+");
@@ -149,13 +146,34 @@ public class SeedCoverageAnalyzer {
         return termsOf(description).equals(termsOf(seed));
     }
 
+    /**
+     * Clause boundaries, delegated to {@link SeedRequirements#sentencesOf} rather than re-derived.
+     *
+     * <p><b>T6-S.</b> This used to split on {@code \R} and then on a bare {@code (?<=[.;])\s+},
+     * which is wrong twice over on the prose this project actually has. Every seed is hard-wrapped,
+     * so the line split tore sentences in half — the clitarget seed yielded {@code "differs from
+     * the header's."} as a clause of its own, and one that had lost its own {@code "Exit 5 when
+     * the"}. And the terminator split was not bracket-aware, so it cut at the semicolons INSIDE
+     * the firestarter seed's parentheticals: {@code "Books: POST /books (create;"} ·
+     * {@code "title required, max 120 chars;"}. Joining the lines alone makes those fragments
+     * LONGER rather than whole, which is why the two had to be fixed together.
+     *
+     * <p>{@code SeedRequirements} had already met and fixed exactly this, on exactly this
+     * sentence. Sharing that pipeline is the point: a second copy is how the fix failed to arrive
+     * here the first time ([[feedback-one-invariant-one-home]]).
+     *
+     * <p>BOTH of its stages are needed. Taking the bracket-aware sentence scan alone swung the
+     * error the other way — the whole Loans paragraph became one 250-character clause, and a goal
+     * covering one of its several obligations could no longer clear it. The second stage splits a
+     * sentence long enough to be bundling obligations back into separable ones.
+     */
     private List<String> clausesOf(String seed) {
         List<String> out = new ArrayList<>();
-        for (String line : seed.split("\\R")) {
-            for (String fragment : CLAUSE_BREAK.split(line)) {
-                String clause = fragment.trim();
-                if (termsOf(clause).size() >= MIN_CLAUSE_TERMS) out.add(clause);
-            }
+        for (String sentence : SeedRequirements.clausesOf(seed)) {
+            // Whitespace is normalised because a clause reaches three prompts verbatim, and a
+            // sentence rejoined across a wrap otherwise carries its line breaks into them.
+            String clause = sentence.strip().replaceAll("\\s+", " ");
+            if (termsOf(clause).size() >= MIN_CLAUSE_TERMS) out.add(clause);
         }
         return out;
     }

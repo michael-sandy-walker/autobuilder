@@ -30,27 +30,80 @@ public final class SeedRequirements {
      * required...)" — splicing list items into dangling-paren fragments that then sat at the
      * closure edge as unconfirmable requirements. Found by running the extractor over the three
      * real seeds, not by reading it.
+     *
+     * <p><b>T6-S: this is the ONE HOME for the question, and it has a second caller now.</b>
+     * {@code SeedCoverageAnalyzer} split the same seeds with a bare {@code (?<=[.;])\s+} and made
+     * the identical mistake on the identical sentence, four months apart — the fix was written
+     * once and not shared, so the second copy never got it ([[feedback-one-invariant-one-home]]).
+     * A single newline is deliberately NOT a boundary: every seed here is hard-wrapped prose, so
+     * treating one as a break tears a sentence in half. A blank line still separates paragraphs,
+     * which keeps a heading off the prose beneath it.
      */
-    private static List<String> sentences(String text) {
+    /**
+     * Specification prose split the way this class splits it: bracket- and quote-aware sentences,
+     * then clause boundaries for any sentence long enough to be bundling several obligations. No
+     * obligation or meta filtering — that part is this class's own question, not a shared one.
+     *
+     * <p><b>T6-S: shared because the second copy of this logic had the bug the first one fixed.</b>
+     * {@code SeedCoverageAnalyzer} split the same seeds with a bare {@code (?<=[.;])\s+} over
+     * physical lines and made both mistakes this class had already met — cutting at the semicolons
+     * inside the firestarter seed's parentheticals, and tearing hard-wrapped sentences in half.
+     * Taking only the sentence half swung it the other way: the whole Loans paragraph became ONE
+     * 250-character clause, and a goal covering one of its obligations could no longer clear it.
+     * Both stages together are what produce clauses that are whole AND separable.
+     */
+    public static List<String> clausesOf(String specText) {
+        if (specText == null || specText.isBlank()) return List.of();
+        List<String> out = new ArrayList<>();
+        for (String sentence : sentences(specText)) out.addAll(clauses(sentence, false));
+        return out;
+    }
+
+    /**
+     * Split specification prose at the given separator characters, but only where they are OUTSIDE
+     * brackets and quotes; a blank line always separates. The depth-tracking scan is the shared
+     * part — the separator SET and what a caller does with the pieces are its own policy.
+     *
+     * <p><b>Why the granularity is not shared.</b> This class wants whole obligations, because a
+     * fragment reaching the closure edge becomes a requirement the verifier can never confirm and
+     * walls the run; it therefore splits a bundled sentence only at boundaries that open a new item.
+     * {@code SeedCoverageAnalyzer} wants the opposite trade: its readout is advisory prompt text, a
+     * spurious line costs a reader a glance, and a clause covering three endpoints at once can
+     * never be cleared by a plan that implements one of them. Sharing the SCAN and not the POLICY
+     * is what lets both be right.
+     */
+    public static List<String> splitOutsideBracketsAndQuotes(String text, String separators) {
+        if (text == null || text.isBlank()) return List.of();
         List<String> out = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         int depth = 0; boolean inQuote = false;
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
-            if (c == '\n') inQuote = false;   // a quote never spans lines here; one odd quote must not desync the rest of the document
+            if (c == '\n') inQuote = false;
             if (c == '"') inQuote = !inQuote;
             else if (!inQuote && (c == '(' || c == '[' || c == '{')) depth++;
             else if (!inQuote && (c == ')' || c == ']' || c == '}')) depth = Math.max(0, depth - 1);
             current.append(c);
-            boolean terminator = !inQuote && depth == 0 && (c == '.' || c == ';' || c == '!' || c == '?');
+            // A separator separates only when whitespace or end-of-text follows it. Without that,
+            // the "?" in "GET /loans?memberId={id}" ends a sentence and the requirement is
+            // truncated to "GET /loans?" — which the T6-S audit found on the verifier side as a
+            // yardstick check with no licence behind it, and which reappeared here verbatim the
+            // moment the analyzer started using the same scan. It also protects a decimal point
+            // and an abbreviation from ending a clause.
+            boolean followedByBreak = i + 1 >= text.length() || Character.isWhitespace(text.charAt(i + 1));
+            boolean separator = !inQuote && depth == 0 && separators.indexOf(c) >= 0 && followedByBreak;
             boolean paragraph = c == '\n' && i + 1 < text.length() && text.charAt(i + 1) == '\n';
-            if (terminator || paragraph) {
+            if (separator || paragraph) {
                 out.add(current.toString());
                 current.setLength(0);
             }
         }
         if (!current.isEmpty()) out.add(current.toString());
         return out;
+    }
+
+    private static List<String> sentences(String text) {
+        return splitOutsideBracketsAndQuotes(text, ".;!?");
     }
 
     /** The verbs a specification uses to place an obligation on the artifact. */
@@ -82,6 +135,22 @@ public final class SeedRequirements {
      * boundaries; short ones are left intact, since splitting them only manufactures fragments.
      */
     private static List<String> clauses(String sentence) {
+        return clauses(sentence, true);
+    }
+
+    /**
+     * @param wholeItemsOnly this class's own precision policy. A comma or "and" that does not open
+     *                       a new noun phrase continues the current requirement, so "may contain
+     *                       commas and newlines" stays one obligation and "a simple (i.e.,
+     *                       polygonic), randomly generated environment" is not cut in half.
+     *                       <p>{@code false} for a consumer that wants SEPARABLE clauses rather
+     *                       than whole obligations. The firestarter seed states three endpoints as
+     *                       one comma-separated list — "…\\d{13}), GET /books (list all), GET
+     *                       /books/{id} (single; 404 if absent)" — and each is a requirement a plan
+     *                       can address on its own. Kept whole, a plan implementing one of them can
+     *                       never clear the clause, so it is reported for the life of the run.
+     */
+    private static List<String> clauses(String sentence, boolean wholeItemsOnly) {
         if (sentence == null) return List.of();
         String s = sentence.strip();
         if (s.length() <= BUNDLED_LENGTH) return List.of(s);
@@ -108,11 +177,11 @@ public final class SeedRequirements {
             // the operative word, and the closure edge's seed backstop then licensed neither of
             // the two yardstick checks that the T4-DK false completion actually failed.
             boolean atAnd = depth == 0 && !inQuote && s.startsWith(" and ", i)
-                    && opensNewItem(s.substring(Math.min(i + 5, s.length())));
+                    && (!wholeItemsOnly || opensNewItem(s.substring(Math.min(i + 5, s.length()))));
             // A comma directly after a closing parenthesis usually CONTINUES the same noun phrase
             // — "a simple (i.e., polygonic), randomly generated environment" is one requirement —
             // unless what follows starts a new item ("..., the flight simulator itself").
-            if (atComma && i > 0 && s.charAt(i - 1) == ')'
+            if (wholeItemsOnly && atComma && i > 0 && s.charAt(i - 1) == ')'
                     && !opensNewItem(s.substring(Math.min(i + 1, s.length())))) {
                 current.append(c);
                 continue;

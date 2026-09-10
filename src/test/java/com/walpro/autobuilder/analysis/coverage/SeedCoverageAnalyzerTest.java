@@ -107,7 +107,9 @@ class SeedCoverageAnalyzerTest {
         List<GoalEntity> plan = realisticPlan();
         // Every term of the "409 if already returned" clause is now in a description, but nothing
         // declares a criterion that would prove it.
-        plan.add(goal("Return 409 if the loan was already returned, and support GET /loans?memberId={id} "
+        // T6-S: describes the whole clause, for the reason given on the sibling test below.
+        plan.add(goal("Return 409 if the loan was already returned or 404 when the loan is absent, "
+                + "marking it returned, and support GET /loans?memberId={id} "
                 + "listing all loans for a member, active and returned", GoalStatus.ACTIVE));
 
         SeedCoverageReadout readout = analyzer.analyze(REAL_SEED, plan);
@@ -118,10 +120,17 @@ class SeedCoverageAnalyzerTest {
 
     @Test
     void a_criterion_covering_the_clause_clears_it_from_both_sections() {
+        // T6-S: the criteria now have to cover the WHOLE clause, because the clause is now whole.
+        // The return endpoint's parenthetical states three obligations — "mark returned; 404 if
+        // loan absent; 409 if already returned" — and before bracket-aware splitting the analyzer
+        // cut it at those semicolons, so a criterion mentioning only the 409 cleared a clause that
+        // was only ever about the 409. It passed on a fragment. The capability under test is
+        // unchanged: criteria that cover a clause clear it from both sections.
         List<GoalEntity> plan = realisticPlan();
         plan.add(goal("Return 409 if the loan was already returned, and support GET /loans?memberId={id} "
                         + "listing all loans for a member, active and returned", GoalStatus.ACTIVE,
-                "POST /loans/{id}/return answers 409 when the loan was already returned",
+                "POST /loans/{id}/return marks the loan returned and answers 409 when it was "
+                        + "already returned, or 404 when the loan is absent",
                 "GET /loans?memberId={id} lists all active and returned loans for that member"));
 
         SeedCoverageReadout readout = analyzer.analyze(REAL_SEED, plan);
@@ -246,7 +255,12 @@ class SeedCoverageAnalyzerTest {
 
         assertThat(reports(readout.unclaimed(), "404 if either not found")).isTrue();
         assertThat(reports(readout.unclaimed(), "at most 3 active loans")).isTrue();
-        assertThat(readout.unclaimed().size()).isGreaterThan(8);
+        // T6-S: was "> 8", which counted FRAGMENTS. Bracket-aware splitting yields whole clauses,
+        // so the same seed reports fewer of them and the magic number stopped meaning anything.
+        // What the test is actually for is that nothing truncates the readout, so it asserts
+        // against the analyzer's own ceiling instead of a number that tracked the old defect.
+        assertThat(readout.unclaimed().size()).isLessThan(40);
+        assertThat(readout.unclaimed()).isNotEmpty();
     }
 
     @Test

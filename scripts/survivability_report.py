@@ -45,15 +45,20 @@ def load(path=LEDGER):
 def strict_share(r):
     """Strict passes over THE TARGET'S OWN CHECK COUNT. None when unscored.
 
-    ⚠ The denominator in `smoke_strict` is always 23 -- firestarter's size -- even
-    for a target with fewer checks, so a clitarget run that passed 19 of 19 records
-    "19/23". Dividing by that literal makes a PERFECT run read as 83% and lands it
-    in the middle of the distribution, where it silently pads the population the
-    whole analysis is about. Measured: 10 of 47 scored runs are non-firestarter and
-    two of them are perfect runs mis-ranked this way.
+    ⚠ HISTORICAL ROWS LIE ABOUT THEIR DENOMINATOR. Rows written before 2026-09-10
+    state `smoke_strict` as N/23 -- firestarter's size -- for every target, so a
+    clitarget run that passed 19 of 19 records "19/23". Dividing by that literal
+    makes a PERFECT run read as 83% and lands it in the middle of the distribution,
+    where it silently pads the population the whole analysis is about. Measured:
+    10 of 47 scored runs are non-firestarter and two of them are perfect runs
+    mis-ranked this way.
 
-    So the target's own `smoke_total` wins when present, and the literal denominator
-    is only the fallback for rows predating that field.
+    Fixed at the source on 2026-09-10 -- `smoke_strict.py` now reports the sheet's
+    own check count and `preflight.sh` prints it -- so new rows are self-describing
+    and their stated denominator is already right. This function keeps working
+    across both eras: the target's own `smoke_total` wins when present, and the
+    stated denominator is the fallback. Do NOT simplify it to trust the stated
+    denominator until the pre-fix rows have aged out of the ledger.
     """
     m = re.match(r'\s*(\d+)/(\d+)', str(r.get('smoke_strict', '')))
     if not m:

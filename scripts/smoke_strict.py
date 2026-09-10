@@ -30,8 +30,14 @@ the two scores is always explainable check by check.
 Usage:
   smoke_strict.py [run-dir-glob ...]      default: /tmp/preflight_runs/*
   smoke_strict.py --json
+
+Both the score and its denominator are the SHEET'S own. The witness table below is the 23-check
+library suite's, and it self-gates on that suite's check labels -- a sheet from another target
+carries none of them and collects no discount, rather than being judged by another suite's
+check numbering.
 """
 import argparse
+import collections
 import glob
 import json
 import os
@@ -49,8 +55,15 @@ LABELS = {7: "GET /books absent", 12: "GET /members absent", 14: "POST /loans ba
           15: "POST /loans bad member", 22: "POST return absent"}
 
 
+# The label is carried beside the result because a check NUMBER means nothing on its own: check
+# [7] is "GET /books absent" in the 23-check library suite and "a row spanning physical lines is
+# well formed" in the 19-check CLI suite. Without the text, the witness map below would silently
+# apply one suite's reasoning to another's sheet.
+Check = collections.namedtuple("Check", "passed status label")
+
+
 def read_sheet(path):
-    """{check -> (passed, observed_status_or_None)}."""
+    """{check -> Check(passed, observed_status_or_None, label)}."""
     results = {}
     try:
         with open(path, errors="replace") as fh:
@@ -58,11 +71,12 @@ def read_sheet(path):
                 m = FAIL_RE.match(line)
                 if m:
                     got = GOT_RE.search(line)
-                    results[int(m.group(1))] = (False, int(got.group(1)) if got else None)
+                    results[int(m.group(1))] = Check(
+                        False, int(got.group(1)) if got else None, line[m.end():].strip())
                     continue
                 m = PASS_RE.match(line)
                 if m:
-                    results[int(m.group(1))] = (True, None)
+                    results[int(m.group(1))] = Check(True, None, line[m.end():].strip())
     except OSError:
         return None
     return results or None
@@ -81,21 +95,47 @@ def endpoint_exists(results, witness):
     entry = results.get(witness)
     if entry is None:
         return False
-    passed, status = entry
-    if passed:
+    if entry.passed:
         return True
-    return status is not None and status != 404
+    return entry.status is not None and entry.status != 404
+
+
+def is_own_suite(results, check):
+    """Is this sheet the suite WITNESS was calibrated against?
+
+    The map is keyed by check NUMBER, and numbers are per-suite. Applied blind, the 19-check CLI
+    suite would have its check [7] ("a row spanning physical lines is well formed") withheld
+    because its check [6] failed -- two checks with no 404 and no endpoint between them. Worse, a
+    CLI FAIL line reads `got [2]`, which the three-digit GOT_RE cannot parse, so the witness looks
+    unobserved and the rule withholds by default: on a foreign suite it fails toward the strict
+    side, which is the direction that quietly demotes good runs.
+
+    So each rule proves it is on its own sheet by the check's own label before it may withhold
+    anything. This is the self-gating [[feedback-ecosystem-gated-heuristics]] asks for -- a
+    heuristic with no opinion on a suite that carries none of its markers -- and it needs no new
+    parameter threaded from the harness, because the sheet already says what it measured.
+    """
+    entry = results.get(check)
+    return bool(entry and entry.label.startswith(LABELS[check]))
 
 
 def score(results):
-    """(lenient, strict, [discounted checks]) for one run's per-check sheet."""
-    lenient = sum(1 for passed, _ in results.values() if passed)
+    """(lenient, strict, [discounted checks], total) for one run's per-check sheet.
+
+    `total` is THE SHEET'S OWN check count. It is returned beside the score rather than left to
+    the caller because every consumer so far has had to guess it, and the guess was firestarter's
+    23 for every target -- which ranked a perfect 19-of-19 CLI run as 83% and filed it mid-table.
+    A score whose denominator has to be supplied from elsewhere is half a measurement.
+    """
+    lenient = sum(1 for c in results.values() if c.passed)
     discounted = []
     for check, witness in WITNESS.items():
         entry = results.get(check)
-        if entry and entry[0] and not endpoint_exists(results, witness):
+        if not (entry and entry.passed and is_own_suite(results, check)):
+            continue
+        if not endpoint_exists(results, witness):
             discounted.append(check)
-    return lenient, lenient - len(discounted), sorted(discounted)
+    return lenient, lenient - len(discounted), sorted(discounted), len(results)
 
 
 # Which summary field each sheet is the companion of. The two sheets score DIFFERENT TREES —
@@ -107,7 +147,7 @@ SHEETS = {"artifact-smoke.txt": "artifact", "preserved-smoke.txt": "preserved"}
 
 
 def score_dir(run_dir):
-    """{'artifact': (lenient, strict, discounted), 'preserved': (...)} for whichever sheets exist."""
+    """{'artifact': (lenient, strict, discounted, total), 'preserved': (...)} per sheet present."""
     out = {}
     for name, label in SHEETS.items():
         sheet = read_sheet(os.path.join(run_dir, name))
@@ -152,8 +192,9 @@ def main():
                 per = score_dir(d)
                 if per:
                     payload[os.path.basename(d.rstrip("/"))] = {
-                        label: {"smoke": l, "smoke_strict": st, "discounted": disc}
-                        for label, (l, st, disc) in per.items()}
+                        label: {"smoke": l, "smoke_strict": st, "discounted": disc,
+                                "total": tot}
+                        for label, (l, st, disc, tot) in per.items()}
         json.dump(payload, sys.stdout, indent=1, sort_keys=True)
         print()
         return 0
@@ -161,7 +202,7 @@ def main():
     affected = {n: r for n, r in rows.items() if r[2]}
     print(f"T6-K strict score — {len(runs)} runs with a per-check sheet\n")
     print(f"{'run':<24}{'smoke':>7}{'strict':>8}   points withheld")
-    for name, (lenient, strict, disc) in sorted(rows.items()):
+    for name, (lenient, strict, disc, _total) in sorted(rows.items()):
         if not disc:
             continue
         why = ", ".join(f"[{c}] {LABELS[c]}" for c in disc)

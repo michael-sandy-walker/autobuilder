@@ -472,6 +472,13 @@ run_live() {
         # above keeps its meaning so the ledger stays readable (the T6-A precedent); this is the
         # second number, and the two belong together. Emitted only when a per-check sheet exists,
         # absent rather than zero otherwise.
+        #
+        # The denominator is THE SHEET'S OWN, reported by smoke_strict.py rather than written
+        # here. It used to be the literal 23 — firestarter's size — for every target, so a CLI
+        # run that passed 19 of 19 was recorded "19/23" and a 12-check run "12/23". Any consumer
+        # dividing by that literal ranked perfect runs on smaller targets at 83% and 52% and
+        # filed them mid-table; one did, and it manufactured the only significant result in a
+        # survivability analysis (permutation p 0.011 -> 0.326 once corrected).
         if [ -s "$run_dir/preserved-smoke.txt" ] || [ -s "$run_dir/artifact-smoke.txt" ]; then
             # One line per TREE. `smoke` scores the final files and `smoke_preserved` the best
             # saved copy, so a single strict number beside both is ambiguous — the first wiring
@@ -485,7 +492,7 @@ try:
     for label,field in (("artifact","smoke_strict"),("preserved","smoke_preserved_strict")):
         if label in r:
             e=r[label]
-            print("%s=%d/23 discounted=%s" % (field, e["smoke_strict"],
+            print("%s=%d/%d discounted=%s" % (field, e["smoke_strict"], e["total"],
                                               ",".join(map(str, e["discounted"])) or "none"))
 except Exception:
     pass' 2>/dev/null

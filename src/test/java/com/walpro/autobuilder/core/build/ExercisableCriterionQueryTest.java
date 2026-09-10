@@ -90,13 +90,28 @@ class ExercisableCriterionQueryTest {
                 .containsExactlyElementsOf(SURFACE_CRITERIA);
     }
 
+    /**
+     * T4-DT INVERTED THIS. It was {@code theContentCriteriaStillAbstainAndThatIsTheRemainingGap},
+     * asserting none of the four could be probed and naming format synthesis as what would close
+     * it. The ticket named this test as its own acceptance criterion, so it flips here rather than
+     * being deleted: a claim about a PARSE is now exercised against the specification's own worked
+     * example.
+     */
     @Test
-    void theContentCriteriaStillAbstainAndThatIsTheRemainingGap() {
-        // The four that actually failed. Synthesising a fixture for them needs the input format
-        // to be read, not merely echoed, and the synthesizer refuses to guess — a fixture whose
-        // header and data row are the same line miscounts both identically and passes against a
-        // defective artifact. Routing does not close this; format synthesis would.
-        assertThat(query.exercisable(CONTENT_CRITERIA, CLI_SPEC)).isEmpty();
+    void aClaimAboutTheParseIsNowProbedAgainstTheSpecificationsWorkedExample() {
+        String parseClaim = CONTENT_CRITERIA.get(0);   // "…is parsed as a single logical row"
+        assertThat(query.exercisable(List.of(parseClaim), CLI_SPEC)).containsExactly(parseClaim);
+    }
+
+    @Test
+    void theOtherContentCriteriaStillAbstainAndEachHasItsOwnReason() {
+        // Not one residual shape. "The reader correctly tracks the physical line number" and
+        // "count <file> prints the number of logical data rows" assert no parse the specification
+        // ever wrote out, and the check-prints-a-message criterion names a ONE-argument operation,
+        // so there is no column to read a value from. Each abstains for its own stated reason
+        // rather than for want of the capability T4-DT added.
+        assertThat(query.exercisable(CONTENT_CRITERIA.subList(1, CONTENT_CRITERIA.size()), CLI_SPEC))
+                .isEmpty();
     }
 
     @Test

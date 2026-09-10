@@ -474,6 +474,22 @@ public class BootGate {
                     failures.add("\"" + e.criterionText() + "\" — " + e.describe()
                             + ", and it exited " + observed.get().exitStatus()
                             + " but never said \"" + want.get() + "\"");
+                    continue;
+                }
+                // T4-DT: the value the SPECIFICATION says the tool should print for its own worked
+                // example.
+                //
+                // ⚠ EQUALITY, NOT CONTAINMENT, and that is the whole detecting power here. The
+                // artifact of run 2026-09-10_21-46-44 printed "b,c,de" where the seed states
+                // "b,c" — and "b,c,de".contains("b,c") is TRUE, so a containment check would have
+                // called the defect satisfied exactly as the source-reading verifier did.
+                if (e.expectedStdout().isPresent()) {
+                    String printed = observed.get().output().strip();
+                    if (!printed.equals(e.expectedStdout().get())) {
+                        failures.add("\"" + e.criterionText() + "\" — " + e.describe()
+                                + ", but it printed \"" + printed + "\" where the specification "
+                                + "states \"" + e.expectedStdout().get() + "\"");
+                    }
                 }
             }
         } catch (IOException io) {
@@ -528,9 +544,18 @@ public class BootGate {
         if (e.column().isPresent()) {
             if (format.isEmpty()) return Optional.empty();
             var names = format.get().headerNames();
-            out.add(e.column().get() == CommandExerciseSynthesizer.ColumnChoice.PRESENT
-                    ? names.get(0)
-                    : absentName(names));
+            switch (e.column().get()) {
+                case PRESENT -> out.add(names.get(0));
+                case ABSENT -> out.add(absentName(names));
+                // T4-DT: the column holding the part that contains the separator. Any other column
+                // is printed correctly by naive splitting too, so this is the only one whose value
+                // separates a correct reader from a careless one.
+                case DISCRIMINATING -> {
+                    OptionalInt i = format.get().discriminatingPartIndex();
+                    if (i.isEmpty()) return Optional.empty();
+                    out.add(names.get(i.getAsInt()));
+                }
+            }
         }
         return Optional.of(List.copyOf(out));
     }

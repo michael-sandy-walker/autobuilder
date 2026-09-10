@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -58,7 +59,13 @@ public final class CommandExerciseSynthesizer {
         /** A name the built fixture's header really carries. */
         PRESENT,
         /** A name it definitely does not. */
-        ABSENT
+        ABSENT,
+        /**
+         * T4-DT: the name of the column holding the part that CONTAINS the separator — the one a
+         * careless reader merges with its neighbour. Any other column would be printed correctly
+         * by naive splitting too, so asserting one would add coverage with no power to detect.
+         */
+        DISCRIMINATING
     }
 
     /**
@@ -68,7 +75,16 @@ public final class CommandExerciseSynthesizer {
      */
     public record Exercise(String criterionText, List<String> args, Fixture fixture,
                            Optional<ColumnChoice> column,
-                           int expectedExitStatus, Optional<String> expectedMessage) {
+                           int expectedExitStatus, Optional<String> expectedMessage,
+                           Optional<String> expectedStdout) {
+
+        /** Every exercise whose verdict is a status, and optionally a message it must have said. */
+        public Exercise(String criterionText, List<String> args, Fixture fixture,
+                        Optional<ColumnChoice> column, int expectedExitStatus,
+                        Optional<String> expectedMessage) {
+            this(criterionText, args, fixture, column, expectedExitStatus, expectedMessage,
+                    Optional.empty());
+        }
         public String describe() {
             List<String> shown = new ArrayList<>();
             for (String a : args) shown.add(a == null ? "<" + fixture.name().toLowerCase() + ">" : a);
@@ -112,6 +128,60 @@ public final class CommandExerciseSynthesizer {
             "\\bon\\s+success\\b|\\bsucceeds?\\b|\\bwhen\\s+the\\s+\\w+\\s+exists\\b",
             Pattern.CASE_INSENSITIVE);
 
+    /**
+     * A claim about what the tool should PRINT for the specification's own worked example.
+     *
+     * <p>The expected value comes from the SPECIFICATION, never from the criterion: the seed states
+     * "the line {@code a,"b,c","d""e"} has THREE fields: a / b,c / d"e", so a correct reader asked
+     * for the second column of a file whose single row is that sample must print {@code b,c}. The
+     * artifact of run {@code 2026-09-10_21-46-44} prints {@code b,c,de} -- it merges the second and
+     * third fields and drops the escaped quote -- while the source-reading verifier called the
+     * same claim satisfied.
+     *
+     * <p><b>Abstains unless everything is pinned.</b> The specification must spell the parts out,
+     * one of them must contain the separator (any other column a careless reader also gets right,
+     * so asserting it detects nothing), the criterion must be about the parse, and exactly one
+     * two-argument operation must be available to print a column. A criterion stating a NON-ZERO
+     * exit status is left to the status path, since it is asserting a failure rather than a value.
+     */
+    private static Optional<Exercise> valueExercise(String criterion,
+                                                    Map<String, CommandSurfaceQuery.Command> surface,
+                                                    Optional<InputFormatExample.Example> format,
+                                                    java.util.Set<Integer> statedCodes) {
+        if (format.isEmpty() || !PARSE_RESULT.matcher(criterion).find()) return Optional.empty();
+        if (statedCodes.size() == 1 && statedCodes.iterator().next() != 0) return Optional.empty();
+        InputFormatExample.Example example = format.get();
+        OptionalInt discriminating = example.discriminatingPartIndex();
+        if (discriminating.isEmpty()) return Optional.empty();
+
+        // The named operation when the criterion names one, else the sole two-argument operation.
+        // The unnamed fallback is legitimate here for the reason T4-DK left it in place: it applies
+        // only when NOTHING is named, and it declines when the surface offers a choice.
+        List<CommandSurfaceQuery.Command> binaries = surface.values().stream()
+                .filter(c -> c.arity() == 2).toList();
+        Optional<CommandSurfaceQuery.Command> op = surface.keySet().stream()
+                .filter(w -> Pattern.compile("(?i)(?:^|[^a-z0-9_-])" + Pattern.quote(w) + "(?:[^a-z0-9_-]|$)")
+                        .matcher(criterion).find())
+                .map(surface::get)
+                .filter(c -> c.arity() == 2)
+                .findFirst()
+                .or(() -> binaries.size() == 1 ? Optional.of(binaries.get(0)) : Optional.empty());
+        if (op.isEmpty()) return Optional.empty();
+
+        List<String> args = new ArrayList<>();
+        args.add(op.get().word());
+        args.add(null);
+        return Optional.of(new Exercise(criterion.strip(), args, Fixture.WELL_FORMED_FILE,
+                Optional.of(ColumnChoice.DISCRIMINATING), 0, Optional.empty(),
+                Optional.of(example.parts().get(discriminating.getAsInt()))));
+    }
+
+    /** A claim about how an input PARSES, rather than about a status the tool exits with. */
+    private static final Pattern PARSE_RESULT = Pattern.compile(
+            "\\bparses?\\s+(?:in)?to\\b|\\bis\\s+parsed\\b|\\bfields?\\s*:"
+                    + "|\\bevery\\s+value\\b|\\bvalues?\\s+of\\s+the\\b|\\bquoting\\s+removed\\b",
+            Pattern.CASE_INSENSITIVE);
+
     private static Exercise fileExercise(String criterion, CommandSurfaceQuery.Command op,
                                          Fixture fixture, Optional<ColumnChoice> column,
                                          int expected, Optional<String> message) {
@@ -151,6 +221,15 @@ public final class CommandExerciseSynthesizer {
         java.util.Set<Integer> codes = new java.util.LinkedHashSet<>();
         Matcher sm = EXIT_STATUS.matcher(criterion);
         while (sm.find()) codes.add(Integer.parseInt(sm.group(1)));
+
+        // T4-DT: a claim about the PARSE is judged before the exit-status path, because everything
+        // below assumes the verdict IS a status and returns empty when the criterion states none.
+        // "A file containing a,"b,c","d""e" is parsed into one row with three fields: a, b,c, d"e"
+        // states no status at all, so it fell out here and the only judge left was a model reading
+        // the parser -- which read it and answered wrong, twice in twelve days.
+        Optional<Exercise> value = valueExercise(criterion, surface, format, codes);
+        if (value.isPresent()) return value;
+
         if (codes.size() != 1) return Optional.empty();
         int expected = codes.iterator().next();
 

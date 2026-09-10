@@ -181,4 +181,36 @@ class SeedRequirementsTest {
                 .anySatisfy(r -> assertThat(r).contains("exit 2"))
                 .anySatisfy(r -> assertThat(r).contains("exit 0"));
     }
+
+    /**
+     * T6-S. " and " separates two ITEMS but not a compound OBJECT of one verb, and splitting blind
+     * cost the operative word: the clitarget seed's "a quoted field may contain commas and
+     * newlines" became "a quoted field may contain commas". The closure edge's seed backstop then
+     * licensed neither of the two yardstick checks the T4-DK false completion actually failed.
+     */
+    @Test
+    void aCompoundObjectOfOneVerbIsNotSplitIntoTwoRequirements() {
+        String spec = "A field MAY be wrapped in double quotes, and a quoted field may contain "
+                + "commas and newlines, which are then part of the value and NOT separators.";
+
+        assertThat(SeedRequirements.statedIn(spec))
+                .anySatisfy(r -> assertThat(r).contains("commas and newlines"));
+        assertThat(SeedRequirements.statedIn(spec))
+                .noneSatisfy(r -> assertThat(r).isEqualTo("a quoted field may contain commas"));
+    }
+
+    /**
+     * The other half of the same rule, and the reason the split exists at all: the flight-simulator
+     * seed states five obligations in one sentence, and judged whole, covering any part marks all of
+     * it covered — which is how a HUD no subgoal addressed read as satisfied.
+     */
+    @Test
+    void twoDistinctItemsJoinedByAndAreStillSplit() {
+        String spec = "The application should include a start menu, the flight simulator itself "
+                + "and a simple cockpit HUD and a randomly generated environment.";
+
+        assertThat(SeedRequirements.statedIn(spec))
+                .anySatisfy(r -> assertThat(r).contains("cockpit HUD"))
+                .anySatisfy(r -> assertThat(r).contains("randomly generated environment"));
+    }
 }

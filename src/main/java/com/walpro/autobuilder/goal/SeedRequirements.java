@@ -97,13 +97,23 @@ public final class SeedRequirements {
             // format string — "line <n>: expected <h> fields, found <f>" — was being cut at its
             // interior comma, leaving half a quotation as a requirement.
             boolean atComma = depth == 0 && !inQuote && c == ',';
-            boolean atAnd = depth == 0 && !inQuote && s.startsWith(" and ", i);
+            // " and " separates two ITEMS ("a cockpit HUD and a randomly generated environment")
+            // but not a compound OBJECT of one verb ("may contain commas and newlines"). The
+            // difference is whether what follows opens a new noun phrase, which is the same test
+            // the comma-after-parenthesis branch below already makes — reused rather than
+            // re-invented so the two cannot drift.
+            //
+            // T6-S measured what splitting blind costs: the clitarget seed's "a quoted field may
+            // contain commas and newlines" became "a quoted field may contain commas", dropping
+            // the operative word, and the closure edge's seed backstop then licensed neither of
+            // the two yardstick checks that the T4-DK false completion actually failed.
+            boolean atAnd = depth == 0 && !inQuote && s.startsWith(" and ", i)
+                    && opensNewItem(s.substring(Math.min(i + 5, s.length())));
             // A comma directly after a closing parenthesis usually CONTINUES the same noun phrase
             // — "a simple (i.e., polygonic), randomly generated environment" is one requirement —
             // unless what follows starts a new item ("..., the flight simulator itself").
             if (atComma && i > 0 && s.charAt(i - 1) == ')'
-                    && !s.substring(Math.min(i + 1, s.length())).stripLeading()
-                          .matches("(?is)(a|an|the|some)\\s.*")) {
+                    && !opensNewItem(s.substring(Math.min(i + 1, s.length())))) {
                 current.append(c);
                 continue;
             }
@@ -133,6 +143,18 @@ public final class SeedRequirements {
             kept.add(p);
         }
         return kept.isEmpty() ? List.of(s) : kept;
+    }
+
+    /**
+     * Does what follows a separator START A NEW ITEM, rather than continue the current one?
+     *
+     * <p>A determiner is the signal: "…, the flight simulator itself" and "and a randomly generated
+     * environment" each begin a fresh requirement, while "and newlines" and ", polygonic" continue
+     * the phrase they belong to. One home for the test because both separators need it and a second
+     * copy would drift ([[feedback-one-invariant-one-home]]).
+     */
+    private static boolean opensNewItem(String rest) {
+        return rest.stripLeading().matches("(?is)(a|an|the|some)\\s.*");
     }
 
     /** Above this, a sentence is treated as bundling several obligations rather than stating one. */

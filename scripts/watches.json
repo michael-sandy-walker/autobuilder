@@ -245,6 +245,31 @@
         "pattern": "T4-DK: \\d+ seed requirement\\(s\\) are covered by no banked criterion"
       },
       "check": "OPPORTUNITY-NO-FIRE is the EXPECTED reading against a correct artifact and is not a defect: distinguish it from a blind probe by the verifier's own line -- 'closure claim not contradicted -- N criterion(s) offered' means it spoke and passed, 'none of its N criterion(s) can be executed' means it abstained. On a fire, confirm the injected work item carries ORIGINATING_GATE_KEY=GATE_CRITERIA and a non-empty done-when, since an empty one would hold the item open for the run's life."
+    },
+    {
+      "id": "t2fi-confirmed-on-incomplete-evidence",
+      "ticket": "T2-FI",
+      "type": "watch",
+      "description": "The deferral T2-FI added: every criterion came back confirmed, but the prompt could not carry all the evidence, so the closure attempt defers instead of completing. This is the guard, not the goal -- with the budget sized as measured it should almost never fire.",
+      "fired": {
+        "file": "applog",
+        "pattern": "T2-FI: every criterion came back confirmed, but the prompt did"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "completion verification LLM call"
+      },
+      "check": "A FIRING IS NOT GOOD NEWS HERE -- it means evidence was still cropped, so check the budget against the project's actual source size before assuming the guard did its job. Repeated firings on one closure are the walling shape the asymmetry was designed to avoid: confirm the run still reaches a terminal rather than deferring forever."
+    },
+    {
+      "id": "t2fi-evidence-cropped",
+      "ticket": "T2-FI",
+      "type": "tally",
+      "description": "How often any verification prompt failed to carry all the evidence. Expected 0 on every target the project has: their entire Java sources are 8.3k-15.8k characters against a 120000-character budget. A non-zero count means the budget needs re-measuring, not raising by taste.",
+      "fired": {
+        "file": "applog",
+        "pattern": "T2-FI: the verification prompt does not carry all the evidence"
+      }
     }
   ]
 }

@@ -413,6 +413,10 @@ public class BootGate {
         // to check is precisely about content — so the field could not answer its own question.
         int valueProbed = 0;
         int valueContradicted = 0;
+        // T4-DU: counted apart again, for the same reason the value probe was -- a figure that
+        // pools shapes cannot answer whether THIS shape was judged.
+        int messageProbed = 0;
+        int messageContradicted = 0;
         for (String criterion : behaviouralCriteria) {
             if (failures.size() >= MAX_NAMED_FAILURES) break;
             Optional<CommandCriterionParser.CommandAssertion> parsed =
@@ -454,12 +458,12 @@ public class BootGate {
                 if (ex.isEmpty()) continue;
                 CommandExerciseSynthesizer.Exercise e = ex.get();
                 if (fixtureDir == null) fixtureDir = Files.createTempDirectory("boot-gate-fixture");
-                Optional<List<String>> grounded = ground(e, fixtureDir, format);
+                Optional<Grounded> grounded = ground(e, fixtureDir, format);
                 if (grounded.isEmpty()) {
                     unobserved++;
                     continue;
                 }
-                Optional<Invocation> observed = invoke(artifact, grounded.get());
+                Optional<Invocation> observed = invoke(artifact, grounded.get().args());
                 if (observed.isEmpty()) {
                     unobserved++;
                     continue;
@@ -474,13 +478,29 @@ public class BootGate {
                 // A right status with a wrong answer is the defect an exit code cannot see, so the
                 // message is checked too — but only when the criterion quoted one AND its
                 // placeholder can be grounded in the value actually passed.
-                Optional<String> want = groundedMessage(e, grounded.get());
+                Optional<String> want = groundedMessage(e, grounded.get().args());
                 if (want.isPresent() && !observed.get().output().contains(want.get())) {
                     failures.add("\"" + e.criterionText() + "\" — " + e.describe()
                             + ", and it exited " + observed.get().exitStatus()
                             + " but never said \"" + want.get() + "\"");
                     continue;
                 }
+                // T4-DU: a stated message carrying MORE THAN ONE placeholder is never substituted —
+                // see groundedMessage for the walling that caused. But the fixture knows one thing
+                // about it regardless of which placeholder means what: the line its bad row is on.
+                // Asserting that the tool MENTIONS that number needs no opinion about the words
+                // around it, so no target vocabulary enters this class
+                // ([[feedback-no-target-domain-in-framework-strings]]).
+                //
+                // Applied ONLY where grounding already abstains, so no existing verdict can change.
+                Optional<String> unmentioned = lineNumberNotMentioned(e, grounded.get(), observed.get());
+                if (unmentioned.isPresent()) {
+                    messageProbed++;
+                    messageContradicted++;
+                    failures.add(unmentioned.get());
+                    continue;
+                }
+                if (judgesLineNumber(e, grounded.get())) messageProbed++;
                 // T4-DT: the value the SPECIFICATION says the tool should print for its own worked
                 // example.
                 //
@@ -506,6 +526,8 @@ public class BootGate {
         // reached the probe on this closure", which is a different fact from the line being absent.
         // Silence that reads as good news is what left four watches blind until 2026-09-10.
         log.info("T4-DT: value criteria probed={} contradicted={}", valueProbed, valueContradicted);
+        log.info("T4-DU: stated-message line numbers probed={} contradicted={}",
+                messageProbed, messageContradicted);
         return failures;
     }
 
@@ -515,14 +537,68 @@ public class BootGate {
      * per-exercise bound — a tool that hangs has told us nothing about the criterion, and the
      * process is destroyed rather than left behind.
      */
+
+    /**
+     * T4-DU: whether this exercise can judge a stated message's line number at all.
+     *
+     * <p>True only when the specification quoted a message with more than one placeholder — the
+     * case {@link #groundedMessage} refuses to substitute — and the fixture established which line
+     * its bad row sits on. A single-placeholder message is already judged by substitution and must
+     * keep that verdict.
+     */
+    private boolean judgesLineNumber(CommandExerciseSynthesizer.Exercise e, Grounded g) {
+        if (g.malformedRowLine().isEmpty() || e.expectedMessage().isEmpty()) return false;
+        Matcher m = MESSAGE_PLACEHOLDER.matcher(e.expectedMessage().get());
+        int placeholders = 0;
+        while (m.find()) placeholders++;
+        return placeholders > 1;
+    }
+
+    /**
+     * The contradiction when a tool prints the specification's message shape but never names the
+     * line the fixture put the bad row on, or empty when there is none.
+     *
+     * <p><b>Containment of a bare number, deliberately, and leniently.</b> The point is to detect a
+     * tool that reports a CONSTANT where the specification asks it to count — run
+     * {@code 2026-09-11_16-27-02} printed {@code line 1} for every malformed row, at 17/19, twice
+     * in two days. Formatting is not this rule's business: {@code line 6}, {@code line#6} and
+     * {@code 6:} all satisfy it. Anything stricter would refuse correct tools over punctuation,
+     * which is the failure mode this whole chain is built to avoid.
+     */
+    private Optional<String> lineNumberNotMentioned(CommandExerciseSynthesizer.Exercise e, Grounded g,
+                                                    Invocation observed) {
+        if (!judgesLineNumber(e, g)) return Optional.empty();
+        String output = observed.output();
+        if (output == null) return Optional.empty();
+        int line = g.malformedRowLine().getAsInt();
+        // Not a substring match: "6" must not be found inside "16" or "60".
+        if (Pattern.compile("(?<!\\d)" + line + "(?!\\d)").matcher(output).find()) return Optional.empty();
+        return Optional.of("\"" + e.criterionText() + "\" — " + e.describe()
+                + ", and its bad row is on line " + line
+                + ", but nothing it printed names that line: \"" + output.strip() + "\"");
+    }
+
+    /**
+     * T4-DU: what the staged fixture established, beside the arguments it produced.
+     *
+     * <p>The probe writes the fixture, so it knows things about it that no amount of reading the
+     * criterion can supply — here, which physical line the malformed row landed on. Before this,
+     * grounding read values off {@code args} by POSITION, which is a guess: it is right only when
+     * the exercise varied exactly one value and the message names that one. Carrying the fact
+     * instead of re-deriving it is what lets a multi-placeholder message be judged at all.
+     */
+    private record Grounded(List<String> args, OptionalInt malformedRowLine) {
+    }
+
     /**
      * Put the exercise's fixture on disk and substitute its path. Empty when the fixture cannot be
      * staged — no observation rather than an invented argument.
      */
-    private Optional<List<String>> ground(CommandExerciseSynthesizer.Exercise e, Path dir,
+    private Optional<Grounded> ground(CommandExerciseSynthesizer.Exercise e, Path dir,
                                          Optional<com.walpro.autobuilder.analysis.structure
                                                  .InputFormatExample.Example> format) throws IOException {
         List<String> out = new ArrayList<>();
+        OptionalInt malformedRowLine = OptionalInt.empty();
         for (String a : e.args()) {
             if (a != null) { out.add(a); continue; }
             switch (e.fixture()) {
@@ -539,9 +615,22 @@ public class BootGate {
                 case MALFORMED_FILE -> {
                     if (format.isEmpty()) return Optional.empty();
                     var f = format.get();
-                    String wide = String.join(String.valueOf(f.separator()),
-                            java.util.Collections.nCopies(f.trueParts() + 1, "x"));
-                    out.add(write(dir, "malformed", f.headerLine() + "\n" + wide + "\n"));
+                    String sep = String.valueOf(f.separator());
+                    String wide = String.join(sep, java.util.Collections.nCopies(f.trueParts() + 1, "x"));
+                    String ok = String.join(sep, java.util.Collections.nCopies(f.trueParts(), "x"));
+                    // T4-DU: the bad row is padded DOWN to a line whose number collides with nothing
+                    // else the specification's own message can carry. The stated message names the
+                    // header's width and the row's width; placing the row at trueParts + 3 keeps its
+                    // line number distinct from both, so finding that number in the output means the
+                    // tool counted lines rather than printed a constant. Same principle as the
+                    // discriminating column: a fixture a careless implementation also gets right is
+                    // coverage with no power to detect.
+                    int line = f.trueParts() + 3;
+                    StringBuilder content = new StringBuilder(f.headerLine()).append("\n");
+                    for (int i = 2; i < line; i++) content.append(ok).append("\n");
+                    content.append(wide).append("\n");
+                    out.add(write(dir, "malformed", content.toString()));
+                    malformedRowLine = OptionalInt.of(line);
                 }
                 case NONE -> {
                     return Optional.empty();
@@ -564,7 +653,7 @@ public class BootGate {
                 }
             }
         }
-        return Optional.of(List.copyOf(out));
+        return Optional.of(new Grounded(List.copyOf(out), malformedRowLine));
     }
 
     /** A name the header definitely does not carry, extended until it collides with nothing. */

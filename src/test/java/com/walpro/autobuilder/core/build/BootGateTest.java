@@ -243,18 +243,85 @@ class BootGateTest {
      * status matches, so a message check that cannot ground itself must stay silent — an
      * ungrounded message is compared against text the run never chose.
      */
-    @Test
-    void terminatingArtifact_aMessageNamingValuesTheExerciseNeverChoseIsNotChecked() throws Exception {
+    private static final String MULTI_PLACEHOLDER_CRITERION =
+            "check on a file with a malformed row prints "
+                    + "\"line <n>: expected <h> fields, found <f>\" to stdout and exits 2";
+
+    /** Reports the malformed row at the physical line it is really on, as the specification asks. */
+    private void lineCountingArtifact() throws Exception {
         Path target = tempDir.resolve("target");
         Files.createDirectories(target);
-        // Exits 2 for check, as the criterion requires, and prints nothing.
-        Files.writeString(target.resolve("app.jar"), "#!/bin/sh\n[ \"$1\" = check ] || exit 3\nexit 2\n");
+        Files.writeString(target.resolve("app.jar"), """
+                #!/bin/sh
+                [ "$1" = check ] || exit 3
+                awk -F, 'NR==1{h=NF;next} NF!=h{print "line " NR ": expected " h " fields, found " NF; b=1} END{exit b?2:0}' "$2"
+                """);
+    }
+
+    /**
+     * ⚠ FIELD DEFECT, run 2026-08-26_14-53-24, and the property it left behind: a message
+     * describing values the exercise never chose had the FIXTURE PATH substituted into a LINE
+     * NUMBER, and the nonsense that produced blocked closure six times on an artifact that answered
+     * the criterion correctly. The criterion below is verbatim from that run.
+     *
+     * <p><b>The artifact here PRINTS THE CORRECT MESSAGE</b>, which is what makes this a walling
+     * guard at all. It previously exited 2 and printed nothing — an artifact that does not answer
+     * the criterion, so its silence could not distinguish "the probe declines to judge this" from
+     * "the probe judges it and finds it correct". T4-DU makes that distinction load-bearing, so the
+     * guard has to state which one it is asserting.
+     */
+    @Test
+    void terminatingArtifact_aMessageNamingValuesTheExerciseNeverChose_doesNotWallACorrectArtifact()
+            throws Exception {
+        lineCountingArtifact();
 
         assertThat(gate(true, "sh {artifact}", "", 2000)
                 .verifyBootsAndServes("c", CLI_SPEC_WITH_EXAMPLE,
-                        List.of("check on a file with a malformed row prints "
-                                + "\"line <n>: expected <h> fields, found <f>\" to stdout and exits 2"),
-                        false)).isEmpty();
+                        List.of(MULTI_PLACEHOLDER_CRITERION), false)).isEmpty();
+    }
+
+    /**
+     * T4-DU, the measured defect: runs {@code 2026-09-11_16-27-02} and {@code 2026-09-11_00-58-42}
+     * both closed GOAL_FULFILLED at 17/19 printing {@code line 1} for every malformed row where the
+     * seed states the physical line. The message SHAPE is right, so nothing structural catches it;
+     * only the number is wrong, and the fixture is the only thing that knows what it should be.
+     */
+    @Test
+    void terminatingArtifact_reportsAConstantLineNumber_blocks() throws Exception {
+        Path target = tempDir.resolve("target");
+        Files.createDirectories(target);
+        Files.writeString(target.resolve("app.jar"), """
+                #!/bin/sh
+                [ "$1" = check ] || exit 3
+                awk -F, 'NR==1{h=NF;next} NF!=h{print "line 1: expected " h " fields, found " NF; b=1} END{exit b?2:0}' "$2"
+                """);
+
+        Optional<String> blocker = gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC_WITH_EXAMPLE,
+                        List.of(MULTI_PLACEHOLDER_CRITERION), false);
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("names that line");
+    }
+
+    /**
+     * ⚠ The rule is about a number, not about formatting. A tool that counts correctly but writes
+     * the line differently is NOT refused — anything stricter would refuse correct work over
+     * punctuation, which is the failure this chain exists to avoid.
+     */
+    @Test
+    void terminatingArtifact_namesTheLineInItsOwnFormat_passes() throws Exception {
+        Path target = tempDir.resolve("target");
+        Files.createDirectories(target);
+        Files.writeString(target.resolve("app.jar"), """
+                #!/bin/sh
+                [ "$1" = check ] || exit 3
+                awk -F, 'NR==1{h=NF;next} NF!=h{print "row#" NR " -> want " h ", got " NF; b=1} END{exit b?2:0}' "$2"
+                """);
+
+        assertThat(gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC_WITH_EXAMPLE,
+                        List.of(MULTI_PLACEHOLDER_CRITERION), false)).isEmpty();
     }
 
     /**

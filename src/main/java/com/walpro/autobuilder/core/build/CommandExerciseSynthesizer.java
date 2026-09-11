@@ -119,12 +119,53 @@ public final class CommandExerciseSynthesizer {
         }
     }
 
+
+    /**
+     * T1-FY: every exit status the criterion states, INCLUDING the ones English elides.
+     *
+     * <p>"exits with code 2 if any malformed rows are found, or 0 if all rows are well-formed"
+     * states two, and the second has no verb in front of it — {@link #EXIT_STATUS} requires an
+     * {@code exit…} word before the number, so it saw only the 2. One status parsed meant the
+     * {@code codes.size() != 1} abstention never fired, and the synthesizer paired the malformed
+     * half's status with the well-formed half's fixture: {@code check <well_formed_file>} expecting
+     * exit 2. In run {@code 2026-09-11_19-58-35} that refused a CORRECT artifact four times across
+     * 24 minutes and injected a work item each time, while the run scored 19/19.
+     *
+     * <p><b>Counting is the whole fix, rather than a fourth pattern for the phrasing.</b> There were
+     * already three guards for this — the status count, {@link #DISJUNCTION}, and a lookahead on one
+     * {@link #WELL_FORMED} alternative — and each was defeated by where the words happened to sit.
+     * A criterion that states two outcomes cannot become one exercise no matter how it is phrased,
+     * so that is what gets tested ([[feedback-one-invariant-one-home]]).
+     *
+     * <p>The elided form only counts AFTER a real status mention: "or 3" in "one of the three
+     * above" is not a status, and a bare number elsewhere in a criterion is not one either.
+     */
+    static java.util.Set<Integer> statusesIn(String criterion) {
+        java.util.Set<Integer> codes = new java.util.LinkedHashSet<>();
+        Matcher sm = EXIT_STATUS.matcher(criterion);
+        int firstStatusAt = -1;
+        while (sm.find()) {
+            codes.add(Integer.parseInt(sm.group(1)));
+            if (firstStatusAt < 0) firstStatusAt = sm.start();
+        }
+        if (firstStatusAt >= 0) {
+            Matcher em = ELIDED_STATUS.matcher(criterion);
+            while (em.find()) {
+                if (em.start() > firstStatusAt) codes.add(Integer.parseInt(em.group(1)));
+            }
+        }
+        return codes;
+    }
+
     private static final Pattern EXIT_STATUS = Pattern.compile(
             "\\bexit(?:s|ed|ing)?\\s+(?:with\\s+)?(?:status\\s+|code\\s+)?(?:is\\s+)?(\\d{1,3})\\b",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern DISJUNCTION = Pattern.compile(
             "\\bexit\\w*\\s+(?:with\\s+)?(?:status\\s+|code\\s+)?(?:is\\s+)?\\d{1,3}\\s+or\\b",
             Pattern.CASE_INSENSITIVE);
+    /** T1-FY: "…, or 0 if all rows are well-formed" — a status whose verb the sentence elided. */
+    private static final Pattern ELIDED_STATUS = Pattern.compile(
+            "\\bor\\s+(\\d{1,3})\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern NEGATION = Pattern.compile("\\bnever\\b", Pattern.CASE_INSENSITIVE);
 
     /** The message a criterion quotes, with its placeholder left in place for grounding. */
@@ -243,9 +284,7 @@ public final class CommandExerciseSynthesizer {
         if (DISJUNCTION.matcher(criterion).find() || NEGATION.matcher(criterion).find()) {
             return Optional.empty();
         }
-        java.util.Set<Integer> codes = new java.util.LinkedHashSet<>();
-        Matcher sm = EXIT_STATUS.matcher(criterion);
-        while (sm.find()) codes.add(Integer.parseInt(sm.group(1)));
+        java.util.Set<Integer> codes = statusesIn(criterion);
 
         // T4-DT: a claim about the PARSE is judged before the exit-status path, because everything
         // below assumes the verdict IS a status and returns empty when the criterion states none.

@@ -32,6 +32,67 @@ class CommandExerciseSynthesizerTest {
         return CommandExerciseSynthesizer.synthesize(criterion, surface, QUERY.unrecognisedWord(SPEC));
     }
 
+    /**
+     * ⚠ The format-bearing variant, and it is not interchangeable with the one above. Whole
+     * branches of synthesis — the absent-column exercise among them — live inside
+     * {@code if (format.isPresent())}, so a criterion routed through {@link #synth} alone cannot
+     * reach them and comes back empty for a reason that has nothing to do with the criterion.
+     * A test written that way passes or fails on the harness rather than on the behaviour, which
+     * is the same trap {@code T4-DU} fell into one layer up ([[feedback-llm-probe-realistic-context]]).
+     */
+    private static Optional<CommandExerciseSynthesizer.Exercise> synthWithFormat(String criterion) {
+        String spec = SPEC + "\nSo the line  a,\"b,c\",\"d\"\"e\"  has THREE fields: a / b,c / d\"e.\n";
+        return CommandExerciseSynthesizer.synthesize(criterion, QUERY.declaredInSpec(spec),
+                QUERY.unrecognisedWord(spec),
+                com.walpro.autobuilder.analysis.structure.InputFormatExample.readFrom(spec));
+    }
+
+    /**
+     * T1-FY, and the criterion text is VERBATIM from run {@code 2026-09-11_19-58-35} rather than
+     * written for the test — the run where it made the probe demand exit 2 from a well-formed file,
+     * refuse a 19/19 artifact four times, and inject a work item each time.
+     *
+     * <p>Three guards already existed for this and each was defeated by where the words sat: the
+     * status count saw one status because the second is a bare number, {@code DISJUNCTION} needs the
+     * {@code or} adjacent to the digits, and the {@code well-formed} lookahead is on a different
+     * alternative than the one that matched. The fix counts the elided status instead of adding a
+     * fourth pattern.
+     */
+    @Test
+    void aCriterionStatingTwoOutcomesSynthesizesNothing() {
+        assertThat(synth("The `check` command reads a file, reports malformed rows to stdout in the "
+                + "format \"line <n>: expected <h> fields, found <f>\", and exits with code 2 if any "
+                + "malformed rows are found, or 0 if all rows are well-formed.")).isEmpty();
+    }
+
+    @Test
+    void theElidedSecondStatusIsCounted() {
+        assertThat(CommandExerciseSynthesizer.statusesIn("exits with code 2 if any malformed rows "
+                + "are found, or 0 if all rows are well-formed")).containsExactlyInAnyOrder(2, 0);
+    }
+
+    /**
+     * ⚠ The counterweight, measured before it was written: over the 357 distinct criteria the
+     * clitarget corpus has actually banked, this change removed exactly ONE exercise (125 → 124).
+     * Eight others pair a well-formed fixture with a non-zero status quite legitimately — an absent
+     * COLUMN in a perfectly good file — and every one of them still synthesizes. A guard that also
+     * silenced those would have traded one false refusal for eight lost checks.
+     */
+    @Test
+    void aSingleOutcomeCriterionNamingBothShapesStillSynthesizes() {
+        var e = synthWithFormat("column <file> <name> exits 4 when the named column is not present in the "
+                + "header, printing \"no such column: <name>\" to stderr");
+        assertThat(e).isPresent();
+        assertThat(e.get().expectedExitStatus()).isEqualTo(4);
+    }
+
+    /** "one of the three above" is not a status, so a bare number without a prior mention is ignored. */
+    @Test
+    void aBareNumberWithNoStatusMentionIsNotAStatus() {
+        assertThat(CommandExerciseSynthesizer.statusesIn(
+                "the command word is not one of the three above")).isEmpty();
+    }
+
     @Test
     void anUnrecognisedOperationIsBuiltFromTheDeclaredSurface() {
         var e = synth("Running with an unrecognised command word prints \"unknown command: <word>\" "

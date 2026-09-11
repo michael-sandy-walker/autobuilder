@@ -408,6 +408,11 @@ public class BootGate {
         int probed = 0;
         int unparsed = 0;
         int unobserved = 0;
+        // T4-DT: counted apart from `probed`, which lumps every shape together. A run could report
+        // probed=8 while no CONTENT criterion was among them, and the claim this mechanism exists
+        // to check is precisely about content — so the field could not answer its own question.
+        int valueProbed = 0;
+        int valueContradicted = 0;
         for (String criterion : behaviouralCriteria) {
             if (failures.size() >= MAX_NAMED_FAILURES) break;
             Optional<CommandCriterionParser.CommandAssertion> parsed =
@@ -483,7 +488,12 @@ public class BootGate {
                 // artifact of run 2026-09-10_21-46-44 printed "b,c,de" where the seed states
                 // "b,c" — and "b,c,de".contains("b,c") is TRUE, so a containment check would have
                 // called the defect satisfied exactly as the source-reading verifier did.
-                e.contradictedBy(observed.get().output()).ifPresent(failures::add);
+                if (e.expectedStdout().isPresent() && observed.get().output() != null) valueProbed++;
+                Optional<String> contradiction = e.contradictedBy(observed.get().output());
+                if (contradiction.isPresent()) {
+                    valueContradicted++;
+                    failures.add(contradiction.get());
+                }
             }
         } catch (IOException io) {
             log.info("T4-DD: could not stage a fixture ({}) — those criteria are not judged", io.getMessage());
@@ -492,6 +502,10 @@ public class BootGate {
         }
         log.info("T4-DD: exit-status criteria probed={} skipped={} (unparsed={} unobserved={}) contradicted={}",
                 probed, unparsed + unobserved, unparsed, unobserved, failures.size());
+        // Emitted even at zero, and that is the point: a zero here says "no content criterion
+        // reached the probe on this closure", which is a different fact from the line being absent.
+        // Silence that reads as good news is what left four watches blind until 2026-09-10.
+        log.info("T4-DT: value criteria probed={} contradicted={}", valueProbed, valueContradicted);
         return failures;
     }
 

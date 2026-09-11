@@ -215,6 +215,36 @@
         "file": "applog",
         "pattern": "closure ledger clear: \\d+ subgoal\\(s\\) accounted for \\(\\d+ subsumed\\)"
       }
+    },
+    {
+      "id": "t4dt-value-criterion-probed",
+      "ticket": "T4-DT",
+      "type": "watch",
+      "description": "The open half of T4-DT's DoD: a closure where a CONTENT criterion -- a claim about the value the tool prints for the specification's own worked example -- is probed by execution rather than abstained on. The exit-status counter beside it lumps every shape together, so probed=8 could not previously answer whether a content claim was among them.",
+      "fired": {
+        "file": "applog",
+        "pattern": "T4-DT: value criteria probed=[1-9]"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "T4-DD: exit-status criteria probed="
+      },
+      "check": "Read the probed criterion by eye: it must be a claim about a PRINTED VALUE, and its verdict must match what the artifact actually prints when run by hand on the seed's worked example. A contradiction against a CORRECT artifact is walling and is the failure this watch exists to catch -- contradicted=0 beside probed>=1 is the healthy reading on a correct tree."
+    },
+    {
+      "id": "t4dt-seed-obligation-reaches-the-probe",
+      "ticket": "T4-DT",
+      "type": "watch",
+      "description": "The routing gap closed on 2026-09-11: uncovered seed obligations go to the execution probe BEFORE a model is asked to read the source for them. Fires when the running artifact refutes a root closure claim. The opportunity is the seed requirements being gathered at the closure edge at all, so NO-OPPORTUNITY means the root never reached closure -- not that the probe stayed silent.",
+      "fired": {
+        "file": "applog",
+        "pattern": "T4-DT: root closure REFUSED by the running artifact"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "T4-DK: \\d+ seed requirement\\(s\\) are covered by no banked criterion"
+      },
+      "check": "OPPORTUNITY-NO-FIRE is the EXPECTED reading against a correct artifact and is not a defect: distinguish it from a blind probe by the verifier's own line -- 'closure claim not contradicted -- N criterion(s) offered' means it spoke and passed, 'none of its N criterion(s) can be executed' means it abstained. On a fire, confirm the injected work item carries ORIGINATING_GATE_KEY=GATE_CRITERIA and a non-empty done-when, since an empty one would hold the item open for the run's life."
     }
   ]
 }

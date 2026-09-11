@@ -346,6 +346,71 @@ class BootGateTest {
                         List.of("check exits 0 when every row is well formed"), false)).isEmpty();
     }
 
+    /**
+     * T4-DT at the GATE, rather than on {@code Exercise} alone. The frozen-artifact replay proves
+     * the verdict; nothing proved the gate reaches it, so the branch that counts a probed CONTENT
+     * criterion — the figure the field watch reads — had no test behind it.
+     *
+     * <p>The specification declares a two-argument operation and works an example of its format, so
+     * the fixture is {@code col1,col2,col3} over the sample and the probe asks for the column
+     * holding the part that contains the separator. This artifact prints the naive split.
+     */
+    private static final String CLI_SPEC_WITH_A_VALUE_OPERATION = """
+            Produce a delimited-text checking tool.
+
+            Commands:
+
+            check <file> — read the file and report malformed rows. Exit 0 when well formed.
+
+            column <file> <name> — print every value of the named column, one per line, with
+            quoting removed. Exit 0.
+
+            A field may be wrapped in quotes and then carry a separator inside it.
+            So the line  a,"b,c","d""e"  has THREE fields: a / b,c / d"e.
+            """;
+
+    private static final String PARSE_CRITERION =
+            "a file containing a,\"b,c\",\"d\"\"e\" is parsed into one row with three fields";
+
+    /** An artifact whose {@code column} merges the quoted field with its neighbour. */
+    private void valuePrintingArtifact(String printed) throws Exception {
+        Path target = tempDir.resolve("target");
+        Files.createDirectories(target);
+        Files.writeString(target.resolve("app.jar"), """
+                #!/bin/sh
+                [ "$1" = column ] || exit 3
+                echo '%s'
+                exit 0
+                """.formatted(printed));
+    }
+
+    @Test
+    void terminatingArtifact_printedValueContradictsTheWorkedExample_blocks() throws Exception {
+        valuePrintingArtifact("b,c,de");
+
+        Optional<String> blocker = gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC_WITH_A_VALUE_OPERATION,
+                        List.of(PARSE_CRITERION), false);
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("b,c,de").contains("b,c");
+    }
+
+    /**
+     * ⚠ The walling guard, and the reason equality is applied to the STRIPPED output rather than
+     * containment: an artifact that agrees with the specification must pass. {@code "b,c,de"}
+     * contains {@code "b,c"}, so a containment rule would pass BOTH of these tests and detect
+     * nothing.
+     */
+    @Test
+    void terminatingArtifact_printedValueAgreesWithTheWorkedExample_passes() throws Exception {
+        valuePrintingArtifact("b,c");
+
+        assertThat(gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC_WITH_A_VALUE_OPERATION,
+                        List.of(PARSE_CRITERION), false)).isEmpty();
+    }
+
     @Test
     void nonZeroExit_whenSpecNamesNoEndpoints_abstains() throws Exception {
         // The exit code itself is immaterial here, which is the point: with no served surface

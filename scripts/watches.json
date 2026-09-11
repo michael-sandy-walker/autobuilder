@@ -270,6 +270,21 @@
         "file": "applog",
         "pattern": "T2-FI: the verification prompt does not carry all the evidence"
       }
+    },
+    {
+      "id": "t1fy-well-formed-fixture-demanded-failure",
+      "ticket": "T1-FY",
+      "type": "watch",
+      "description": "REGRESSION watch. T1-FY's fix is an absence, so what is watchable is the defect coming back: an exercise pairing a well-formed fixture with a non-zero expected status. In run 2026-09-11_19-58-35 that refused a 19/19 artifact four times across 24 minutes.",
+      "fired": {
+        "file": "applog",
+        "pattern": "check <well_formed_file> → exit [1-9]"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "T4-DD: exit-status criteria probed="
+      },
+      "check": "ANY firing is a regression, not an observation to interpret -- the run's artifact does not matter, because exit 0 on a well-formed file is what the specification requires. Compare against the archived run, where this fired four times."
     }
   ]
 }

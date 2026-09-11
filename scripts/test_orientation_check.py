@@ -154,8 +154,15 @@ class LiveIndexTest(unittest.TestCase):
         # 96 -> 97 the same evening: project_ticket_premises_expire.md indexed. Third movement in
         # one day, each one caught here rather than noticed later, which is the whole argument for
         # pinning a count nobody would otherwise check.
+        #
+        # 97 -> 98 on 2026-09-10: feedback_baseline_before_accuracy.md indexed by the T6-R session,
+        # which did not update this pin -- so the suite carried a failing test into 2026-09-11 and
+        # the movement was recorded nowhere. Identified by diffing the index against the commit
+        # that last set this number rather than by bumping it: six of the seven changed lines were
+        # restamped review dates and exactly one was a new entry. The pin did its job; the session
+        # that moved the index did not do its half, which is the failure mode worth naming.
         entries = oc.parse_index(LIVE_MEMORY)
-        self.assertEqual(len(entries), 97)
+        self.assertEqual(len(entries), 98)
         entry_pointers = [e["line"] for e in entries if oc.POINTER_PHRASE.search(e["text"])]
         self.assertEqual(entry_pointers, [])  # the four former markers are all demoted now
         with open(LIVE_MEMORY, errors="replace") as fh:

@@ -84,7 +84,7 @@ False completions and diagnosis lenses:
 - `project_false_completion_2.md`: unbootable jar; abstain is not pass at the completion edge; a gate can be satisfied instead of its requirement. (reviewed 2026-07-09)
 - `project_false_completion_3.md`: DI-wiring defect invisible to compile gates; a correct REJECTED vote averaged away. (reviewed 2026-07-09)
 - `project_false_completion_4.md`: the first by BOOKKEEPING — the closure ledger counts dispositions, never the seed. Taints the GOAL_FULFILLED population until audited. (reviewed 2026-08-28)
-- `project_invented_facts_have_authorities.md`: every defect is an INVENTED FACT whose cheap authority sat unconsulted. Triage question: what fact was invented, what is its authority, who consulted it? (reviewed 2026-08-28)
+- `project_invented_facts_have_authorities.md`: every defect is an INVENTED FACT whose cheap authority sat unconsulted -- or, 2026-09-11, one the loop CROPPED and then trusted. Ask what the consultation actually SAW before concluding the model cannot read. (reviewed 2026-09-11)
 - `project_capability_outruns_routing.md`: assume a missing behaviour is UNREACHED, not unbuilt. Trace to the link that does not fire before writing code. (reviewed 2026-08-24)
 - `project_ticket_premises_expire.md`: a ticket's stated BLOCKER is a claim with a date on it; four expired unnoticed on 2026-09-08, and the fourth hid COMPLETED work credited under another ticket. Grep in both directions before designing, and fix the index line in the same edit. (reviewed 2026-09-08)
 - `project_detector_went_silent_as_the_fault_spread.md`: a majority rule stopped firing when the anomaly became the majority. Ask any majority rule what it does then. (reviewed 2026-09-03)

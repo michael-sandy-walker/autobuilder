@@ -1,11 +1,11 @@
 ---
 name: project-invented-facts-have-authorities
-description: "2026-08-28 session lens: every defect found tonight is the loop INVENTING a fact whose cheap, consultable AUTHORITY sat unconsulted — and the session's own method errors were the same shape one level up. Triage question: 'what is the authority for this fact, and who consulted it?'"
+description: "2026-08-28 session lens, extended 2026-09-11 with a sharper variant -- an authority the loop CROPPED and then trusted (a 150-line cap cut the method the requirement was about; the same model answers correctly on the full file, proven by controlled ablation, so ask what it actually SAW before concluding it cannot read): every defect found tonight is the loop INVENTING a fact whose cheap, consultable AUTHORITY sat unconsulted — and the session's own method errors were the same shape one level up. Triage question: 'what is the authority for this fact, and who consulted it?'"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 08a0057e-31eb-4f9d-a1db-8717c69fbf03
-  modified: 2026-08-28T04:35:27.677Z
+  modified: 2026-09-11T19:05:00.000Z
 ---
 
 # Invented facts have authorities
@@ -22,10 +22,39 @@ it, while a **cheap, deterministic authority** for that fact sat unconsulted:
 | that all files belong under `model/` | the seed + the project's own tree | correct file rejected at 0.42 for obeying it | `T4-DJ` filed |
 | what a pom should contain | the target's own declarations | a flight simulator made a Spring Boot app | `T4-DI` filed |
 | that the goal is FULFILLED | **the seed itself** | fourth false completion, by ledger dissolution | `T4-DK` filed |
+| what `countPhysicalLines` returns | **the method body, on disk** | sixth false completion, 17/19 | `T2-FI` filed |
 
 The last row is the family's apex: "accounted for" is an invented completion-fact, and the seed —
 the one authority the whole system exists to serve — is the only party never consulted at the
 closure edge.
+
+## 2026-09-11 — a sharper variant: the loop CROPPED its own authority, then trusted the answer
+
+The rows above are authorities that sat unconsulted. This one was consulted and **cut off
+mid-sentence**. `CriteriaVerificationService` crops every file to `MAX_LINES_PER_FILE = 150`
+before asking the model whether the code satisfies a requirement. `Main.java` is 215 lines, and
+`countPhysicalLines` -- the method computing the number the requirement is about -- lives at 200.
+The model saw the call site, never the body.
+
+**Measured as a controlled ablation, not inferred:** the run's own closure prompt, replayed against
+the same local model, 5 samples per arm at temperature 0, one variable changed.
+
+| prompt | answer | correct? |
+|---|---|---|
+| cropped to 150 lines (what the run sent) | `line 2: expected 3 fields, found 2` | no -- that is the SPEC's value |
+| the whole file | `line 1: expected 3 fields, found 2` | yes -- that is what the artifact prints |
+
+**So the triage question needs a second half.** Not only *"what is the authority for this fact, and
+who consulted it?"* but *"and did the consultation actually reach it?"* A cropped authority reads
+exactly like a consulted one at the receiving end: the answer comes back confident, formatted
+correctly, and wrong. The model filled the hole from the requirement text, which is the most
+plausible thing it could have done and the least detectable.
+
+**And it retires a tempting hypothesis.** "The local model cannot verify code by reading" is the
+explanation this project has reached for repeatedly. On this instance it is FALSE: shown the whole
+file, the model reported the real behaviour 5 times out of 5. The ceiling here was input, not
+capability -- which does not make reading reliable in general, and does not demote the execution
+probe, but does mean a wrong verdict deserves "what did it actually see?" before "it cannot do it".
 
 **The pattern generalizes the existing lenses rather than replacing them.**
 [[project-grounding-night-insight]] said belief→verification recurs at every scale;

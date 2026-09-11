@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
@@ -53,7 +54,30 @@ import java.util.regex.Pattern;
 public class CriteriaVerificationService {
 
     static final int MAX_FILES = 25;
-    static final int MAX_LINES_PER_FILE = 150;
+
+    /**
+     * T2-FI: a budget for the whole FILES block, not a per-file line count.
+     *
+     * <p>The cap it replaces was {@code MAX_LINES_PER_FILE = 150}, and it manufactured a false
+     * completion. Run {@code 2026-09-11_16-27-02} asked whether the tool prints the malformed row's
+     * physical line; {@code Main.java} is 215 lines and {@code countPhysicalLines} — the method that
+     * computes the number — is at 200, so the model saw the CALL SITE and never the body. It filled
+     * the gap from the requirement text and answered met. Proven by ablation, same model, same
+     * prompt, temperature 0, 5 samples each way: cropped it says {@code line 2} (the specification's
+     * value), whole it says {@code line 1} (what the artifact really prints).
+     *
+     * <p><b>Why a character budget and why this default.</b> A per-file line cap crops the largest
+     * file, which is the one a behavioural criterion is usually about, while leaving small files
+     * whole — it spends the allowance in exactly the wrong order. The default is set against
+     * measured facts rather than taste: the four targets' entire Java sources are 8.3k, 15.8k, 8.1k
+     * and 7.3k characters, so this is roughly eight times the largest project the loop has ever
+     * evolved, and about 30k tokens against the configured model's measured 262,144-token context.
+     * Truncation should therefore be rare — which is what makes refusing to close on it safe rather
+     * than a wall ([[feedback-relative-thresholds]]).
+     */
+    @Value("${autobuilder.verification.file-budget-chars:120000}")
+    @Setter
+    private int fileBudgetChars = 120_000;
 
     private static final Pattern ASSESSMENT_LINE =
             Pattern.compile("(?m)^\\s*(\\d+)\\.\\s*([✓✗])\\s*(.+)$");
@@ -132,7 +156,17 @@ public class CriteriaVerificationService {
         // completion gate fixed this exact class by supplying wiring facts; same facts here.
         String structuralNotes = wiringFactsAnalyzer != null
                 ? wiringFactsAnalyzer.asPromptBlock(output) : null;
-        Map<Integer, Boolean> passMap = verifyFeatures(description, criteria, output, structuralNotes);
+        Assessment assessment = verifyFeatures(description, criteria, output, structuralNotes);
+        // T2-FI: same rule as the completion edge, for the same reason one level down. These
+        // verdicts are BANKED — recorded to the graph as this subgoal's per-criterion truth — so a
+        // pass formed on a cropped file would outlive the prompt that produced it and be read later
+        // as a verified observation. Empty is this method's contract for "nothing observed".
+        if (!assessment.evidenceComplete()) {
+            log.warn("T2-FI: not banking criteria for {} — the prompt did not carry all the evidence ({})",
+                    subGoalId, assessment.gaps());
+            return Map.of();
+        }
+        Map<Integer, Boolean> passMap = assessment.passMap();
         if (passMap.isEmpty()) return Map.of();
 
         recordToGraph(context, subGoalId, criteria, passMap);
@@ -152,37 +186,59 @@ public class CriteriaVerificationService {
      */
     public Map<Integer, Boolean> verifyFeatures(String subjectDescription, List<String> features,
                                                 Map<String, String> outputFiles) {
-        return verifyFeatures(subjectDescription, features, outputFiles, null);
+        Assessment a = verifyFeatures(subjectDescription, features, outputFiles, null);
+        // T2-FI: a verdict on cropped evidence is not an observation. Empty is this method's own
+        // contract for "nothing observed", and every caller already treats it that way, so an
+        // incomplete view degrades to silence instead of arriving as a confident answer.
+        return a.evidenceComplete() ? a.passMap() : Map.of();
     }
 
     /**
      * T4-BS: as {@link #verifyFeatures(String, List, Map)} but with an optional structural-wiring
      * notes block appended to the prompt (the completion gate supplies it; other consumers pass null).
      */
-    private Map<Integer, Boolean> verifyFeatures(String subjectDescription, List<String> features,
+    private Assessment verifyFeatures(String subjectDescription, List<String> features,
                                                 Map<String, String> outputFiles, String structuralNotes) {
         if (features == null || features.isEmpty()
                 || outputFiles == null || outputFiles.isEmpty()) {
-            return Map.of();
+            return Assessment.none();
+        }
+        Evidence evidence = buildPrompt(subjectDescription, features, outputFiles, structuralNotes);
+        if (!evidence.complete()) {
+            log.warn("T2-FI: the verification prompt does not carry all the evidence — {}. "
+                    + "Verdicts formed on it cannot confirm a criterion.", evidence.describeGaps());
         }
         String response;
         try {
             List<Message> messages = List.of(
                     new Message("system", SYSTEM_PROMPT),
-                    new Message("user", buildPrompt(subjectDescription, features, outputFiles, structuralNotes)));
+                    new Message("user", evidence.prompt()));
             ResponseEntity<ChatResponse> r = llmClient.ask(messages);
             response = r.getBody() != null ? r.getBody().getFirstContent() : null;
         } catch (Exception e) {
             log.warn("T4-BP-1: verification LLM call failed ({}) — no observation recorded", e.getMessage());
-            return Map.of();
+            return Assessment.none();
         }
-        if (response == null || response.isBlank()) return Map.of();
+        if (response == null || response.isBlank()) return Assessment.none();
 
         Map<Integer, Boolean> passMap = parse(response, features.size());
         if (passMap.isEmpty()) {
             log.warn("T4-BP-1: unparseable verification response — no observation recorded");
         }
-        return passMap;
+        return new Assessment(passMap, evidence.complete(), evidence.describeGaps());
+    }
+
+    /**
+     * T2-FI: verdicts, plus whether the evidence they were formed on was whole.
+     *
+     * <p>Kept together deliberately. The two facts are only useful in combination — a pass means one
+     * thing about a complete view of the code and something quite different about a cropped one, and
+     * separating them is how the second fact went missing for as long as it did.
+     */
+    private record Assessment(Map<Integer, Boolean> passMap, boolean evidenceComplete, String gaps) {
+        static Assessment none() {
+            return new Assessment(Map.of(), true, "");
+        }
     }
 
     /**
@@ -248,6 +304,8 @@ public class CriteriaVerificationService {
             if (!cachedByKey.containsKey(CriterionResultEntity.keyOf(c))) uncached.add(c);
         }
         Map<String, Boolean> freshByCriterion = new java.util.HashMap<>();
+        boolean evidenceComplete = true;
+        String evidenceGaps = "";
         if (uncached.isEmpty()) {
             log.info("T4-BP-3: completion verification fully cache-hit at this code state — no LLM call ({} criteria)",
                     requiredCriteria.size());
@@ -255,17 +313,29 @@ public class CriteriaVerificationService {
             // T4-BS: give the verifier concrete wiring facts for THIS code state alongside the files.
             String structuralNotes = wiringFactsAnalyzer != null
                     ? wiringFactsAnalyzer.asPromptBlock(outputFiles) : null;
-            Map<Integer, Boolean> passMap = verifyFeatures(rootDescription, uncached, outputFiles, structuralNotes);
+            Assessment assessment = verifyFeatures(rootDescription, uncached, outputFiles, structuralNotes);
+            Map<Integer, Boolean> passMap = assessment.passMap();
+            evidenceComplete = assessment.evidenceComplete();
+            evidenceGaps = assessment.gaps();
             int n = completionVerificationCalls.incrementAndGet();
-            log.info("T4-BP-3: completion verification LLM call #{} this run ({} verified, {} cached, {} output files)",
-                    n, uncached.size(), requiredCriteria.size() - uncached.size(), outputFiles.size());
+            log.info("T4-BP-3: completion verification LLM call #{} this run ({} verified, {} cached, {} output files, evidence={})",
+                    n, uncached.size(), requiredCriteria.size() - uncached.size(), outputFiles.size(),
+                    evidenceComplete ? "complete" : "INCOMPLETE");
             if (passMap.isEmpty()) {
                 // No answer (LLM failure / unparseable). Previously an all-clear ("no observation
                 // is never treated as failure") — after false completion #2 the completion edge
                 // distinguishes abstain from pass: the caller defers the closure attempt.
                 return CompletionVerification.abstained();
             }
-            recordCompletionResults(uncached, passMap, codeDigest);
+            // T2-FI: a verdict formed on cropped evidence must not become the cache's answer for
+            // this code state. Caching it would let one incomplete prompt speak for every later
+            // closure at the same digest, long after the file that was cut has been forgotten.
+            if (evidenceComplete) {
+                recordCompletionResults(uncached, passMap, codeDigest);
+            } else {
+                log.warn("T2-FI: not caching {} completion verdict(s) — they were formed on incomplete evidence ({})",
+                        passMap.size(), evidenceGaps);
+            }
             for (int i = 0; i < uncached.size(); i++) {
                 freshByCriterion.put(uncached.get(i), Boolean.TRUE.equals(passMap.get(i + 1)));
             }
@@ -279,7 +349,27 @@ public class CriteriaVerificationService {
                     : freshByCriterion.get(c);
             if (ok == null || !ok) unconfirmed.add(c);
         }
-        if (unconfirmed.isEmpty()) return CompletionVerification.allClear();
+        if (unconfirmed.isEmpty()) {
+            // T2-FI: THE ASYMMETRY IS THE WHOLE POINT, and it is deliberate rather than uniform.
+            //
+            // An all-clear on cropped evidence closes the root, and closing on a requirement nobody
+            // checked is the worst outcome this system has — it produced the 2026-09-11 false
+            // completion, where the method computing the value sat in the 66 lines the prompt cut.
+            // So an all-clear demands a complete view and otherwise defers, which is a delay.
+            //
+            // A BLOCKED verdict is left alone. Its cost is the loop working a criterion that may
+            // already be met — wasted cycles, recoverable. Refusing both directions equally would
+            // trade a rare severe failure for a frequent mild one, and the frequent one is what
+            // walls a run ([[project-completion-edge-gates]]: absence of evidence is not a pass,
+            // and it is not a failure either).
+            if (!evidenceComplete) {
+                log.warn("T4-BP-3 / T2-FI: every criterion came back confirmed, but the prompt did "
+                        + "not carry all the evidence ({}) — deferring this closure attempt rather "
+                        + "than completing on an unexamined requirement", evidenceGaps);
+                return CompletionVerification.abstained();
+            }
+            return CompletionVerification.allClear();
+        }
         String head = unconfirmed.stream().limit(5).reduce((a, b) -> a + "; " + b).orElse("");
         String tail = unconfirmed.size() > 5 ? " …and " + (unconfirmed.size() - 5) + " more" : "";
         return CompletionVerification.blocked(
@@ -328,7 +418,7 @@ public class CriteriaVerificationService {
         completionVerificationCalls.set(0);
     }
 
-    private String buildPrompt(String subjectDescription, List<String> criteria, Map<String, String> output,
+    private Evidence buildPrompt(String subjectDescription, List<String> criteria, Map<String, String> output,
                                String structuralNotes) {
         StringBuilder sb = new StringBuilder();
         sb.append("GOAL:\n").append(
@@ -342,13 +432,30 @@ public class CriteriaVerificationService {
         }
         sb.append("\nCURRENT PROJECT FILES:\n");
         int files = 0;
+        int omitted = 0;
+        int remaining = fileBudgetChars > 0 ? fileBudgetChars : Integer.MAX_VALUE;
+        List<String> cropped = new ArrayList<>();
         for (Map.Entry<String, String> e : output.entrySet()) {
             if (files++ >= MAX_FILES) {
-                sb.append("... (").append(output.size() - MAX_FILES).append(" more files omitted)\n");
+                omitted = output.size() - MAX_FILES;
+                sb.append("... (").append(omitted).append(" more files omitted)\n");
                 break;
             }
+            String content = e.getValue() != null ? e.getValue() : "";
             sb.append("=== ").append(e.getKey()).append(" ===\n");
-            sb.append(capLines(e.getValue())).append("\n");
+            if (content.length() <= remaining) {
+                sb.append(content).append("\n");
+                remaining -= content.length();
+            } else {
+                // Spend what is left rather than dropping the file outright: a partial view is
+                // still worth something to a criterion about another part of it. What it must NOT
+                // do is pass silently, which is what `cropped` exists to prevent.
+                sb.append(content, 0, Math.max(0, remaining))
+                        .append("\n... (").append(content.length() - Math.max(0, remaining))
+                        .append(" characters truncated)\n");
+                cropped.add(e.getKey());
+                remaining = 0;
+            }
         }
         sb.append("""
 
@@ -356,15 +463,28 @@ public class CriteriaVerificationService {
                 <requirement number>. ✓ <requirement text>   (when the current files satisfy it)
                 <requirement number>. ✗ <requirement text>   (when they do not)
                 """);
-        return sb.toString();
+        return new Evidence(sb.toString(), List.copyOf(cropped), omitted);
     }
 
-    private static String capLines(String content) {
-        if (content == null) return "";
-        String[] lines = content.split("\\R", -1);
-        if (lines.length <= MAX_LINES_PER_FILE) return content;
-        return String.join("\n", java.util.Arrays.copyOf(lines, MAX_LINES_PER_FILE))
-                + "\n... (" + (lines.length - MAX_LINES_PER_FILE) + " lines truncated)";
+    /**
+     * T2-FI: the prompt, and what it could not fit.
+     *
+     * <p>The gaps travel WITH the prompt because the caller is the only party that can act on them.
+     * Before this the service knew it had cropped a file — it wrote "… (N lines truncated)" into the
+     * text — and told nobody, so a verdict formed on cropped evidence was indistinguishable from one
+     * formed on all of it.
+     */
+    private record Evidence(String prompt, List<String> croppedFiles, int omittedFiles) {
+        boolean complete() {
+            return croppedFiles.isEmpty() && omittedFiles == 0;
+        }
+
+        String describeGaps() {
+            List<String> parts = new ArrayList<>();
+            if (!croppedFiles.isEmpty()) parts.add("cropped " + String.join(", ", croppedFiles));
+            if (omittedFiles > 0) parts.add(omittedFiles + " file(s) omitted entirely");
+            return String.join("; ", parts);
+        }
     }
 
     /** Parses {@code <n>. ✓/✗ <text>} lines; indices outside [1, criterionCount] are ignored. */

@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +49,15 @@ class CriteriaVerificationServiceTest {
         ChatResponse body = mock(ChatResponse.class);
         when(body.getFirstContent()).thenReturn(content);
         when(llmClient.ask(anyList())).thenReturn(ResponseEntity.ok(body));
+    }
+
+    /** The user half of the single prompt this service sends. */
+    private String promptSent() {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<com.walpro.autobuilder.client.dto.Message>> captor =
+                ArgumentCaptor.forClass(List.class);
+        verify(llmClient).ask(captor.capture());
+        return captor.getValue().get(1).getContent();
     }
 
     @Test
@@ -254,6 +264,65 @@ class CriteriaVerificationServiceTest {
 
         assertThat(unconfirmed).isPresent();
         assertThat(unconfirmed.get()).contains("not confirmed").contains("checkout returns an OrderResponse");
+    }
+
+    /**
+     * T2-FI: the regression that started the ticket. `Main.java` was 215 lines and the old cap was
+     * 150, so the method computing the value the requirement asked about was cut out of the prompt
+     * and the model answered from the requirement text instead. A file this size must now arrive
+     * whole.
+     */
+    @Test
+    void aFileLongerThanTheOldLineCapIsSentWhole() {
+        String main = ("line\n".repeat(214) + "int line = 1; // the part the old cap cut");
+        stubLlm("1. ✓ it counts physical lines");
+
+        service.verifyCompletion("CLI", List.of("it counts physical lines"), Map.of("Main.java", main));
+
+        assertThat(promptSent()).contains("the part the old cap cut").doesNotContain("truncated");
+    }
+
+    /**
+     * ⚠ THE ASYMMETRY, and it is the point of the fix rather than a detail. An all-clear on evidence
+     * the prompt could not carry is what closes a root on a requirement nobody checked, so it defers
+     * instead. A BLOCKED verdict is left alone below, because its cost is recoverable.
+     */
+    @Test
+    void verifyCompletion_abstains_whenEveryCriterionPassesButTheEvidenceWasCropped() {
+        service.setFileBudgetChars(200);
+        stubLlm("1. ✓ it counts physical lines");
+
+        var result = service.verifyCompletion("CLI", List.of("it counts physical lines"),
+                Map.of("Main.java", "x".repeat(5_000)));
+
+        assertThat(result.answered()).isFalse();
+        assertThat(result.unconfirmed()).isEmpty();
+        verify(agentGraphService, never()).recordCompletionResults(anyList());
+    }
+
+    @Test
+    void verifyCompletion_stillBlocks_whenACriterionFailsOnCroppedEvidence() {
+        service.setFileBudgetChars(200);
+        stubLlm("1. ✗ it counts physical lines");
+
+        var result = service.verifyCompletion("CLI", List.of("it counts physical lines"),
+                Map.of("Main.java", "x".repeat(5_000)));
+
+        assertThat(result.answered()).isTrue();
+        assertThat(result.unconfirmed()).isPresent();
+    }
+
+    /** The banking path refuses for the same reason: a cropped pass would outlive its prompt. */
+    @Test
+    void verifyAndRecord_banksNothing_whenTheEvidenceWasCropped() {
+        service.setFileBudgetChars(200);
+        stubLlm("1. ✓ it counts physical lines");
+
+        var out = service.verifyAndRecord(
+                ctx(List.of("it counts physical lines"), Map.of("Main.java", "x".repeat(5_000))), "sg-1");
+
+        assertThat(out).isEmpty();
+        verifyNoInteractions(agentGraphService);
     }
 
     @Test

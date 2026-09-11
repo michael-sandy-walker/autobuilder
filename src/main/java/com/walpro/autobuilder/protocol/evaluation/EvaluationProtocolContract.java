@@ -524,6 +524,7 @@ public class EvaluationProtocolContract {
         return String.format("%s (latest of %d, best %.2f)", rendered, history.size(), best);
     }
 
+    /** {@code maxLines} is now a CHARACTER budget for each file -- see T2-FI below. */
     private static String buildFileContentBlock(CycleContextData context, int maxLines) {
         if (context.projectDiff() == null || context.projectDiff().changedFiles() == null
                 || context.projectDiff().changedFiles().isEmpty()) {
@@ -536,19 +537,28 @@ public class EvaluationProtocolContract {
                 sb.append("(empty)\n\n");
                 return;
             }
+            // T2-FI, second home. This cropped at 150 lines OR 4000 characters, whichever came
+            // first -- roughly a hundred lines of Java -- and then asked the model to SCORE the
+            // mutation. The closure verifier's identical cap produced a false completion the same
+            // day: shown a call site but not the method behind it, the model answered from the
+            // requirement text and was confidently wrong (proven by ablation, 5 samples each way).
+            // The evaluator is the same question one layer down, and its answer is `llmScore`.
             String[] lines = content.split("\n", -1);
-            int lineLimit = Math.min(lines.length, maxLines);
+            int budget = Math.max(0, maxLines);
             int charCount = 0;
             int i = 0;
-            while (i < lineLimit && charCount < 4000) {
+            while (i < lines.length && charCount < budget) {
                 String line = lines[i];
-                if (charCount + line.length() > 4000) break;
+                if (charCount + line.length() > budget) break;
                 sb.append(line).append("\n");
                 charCount += line.length() + 1;
                 i++;
             }
             if (i < lines.length) {
-                sb.append("... (truncated, ").append(lines.length - i).append(" more lines)\n");
+                // Named so a reader can tell a cropped judgement from a whole one. Silence here is
+                // what made the closure-edge version invisible for as long as it was.
+                sb.append("... (truncated, ").append(lines.length - i)
+                        .append(" more lines -- this file was NOT fully shown)\n");
             }
             sb.append("\n");
         });

@@ -29,7 +29,8 @@ import java.util.Set;
  *   (EvolutionAgent's decision; its fourth leg, isRegressing(ctx), is score-history-driven and
  *   held constant — fixture states carry no score history), interpretation from ctx, default headroom.
  * - planner: depthFirst=false (application.yml default).
- * - evaluation: fileContentMaxLines=150 (adapter @Value default).
+ * - evaluation: fileContentBudgetChars=40000 (adapter @Value default; T2-FI replaced a
+ *   150-line cap that was in practice a 4000-character one).
  * - interpretation: empty artifact list.
  * Held constant, documented: SymbolGroundingService.refreshGoalAnnotations (adapters refresh
  * [UNDEFINED] markers against disk before rendering — fixture states carry none), the capability

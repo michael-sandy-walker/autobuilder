@@ -26,7 +26,15 @@ public class EvaluationLLMAdapter {
     private final LLMClient llmClient;
     private final LLMAgentProtocolInvoker protocolInvoker;
 
-    @Value("${autobuilder.evaluation.fileContentMaxLines:150}")
+    /**
+     * T2-FI: a per-file CHARACTER budget for the evaluation prompt, replacing a 150-line cap that
+     * was in practice a 4000-character one. Sized against measured fact rather than taste: the four
+     * targets' entire Java sources are 8.3k, 15.8k, 8.1k and 7.3k characters, and this applies per
+     * CHANGED file, so 40000 leaves every realistic file whole while still bounding a pathological
+     * one. The old value cropped `Main.java` -- 7kB -- to roughly its first hundred lines before
+     * asking the model to score the mutation.
+     */
+    @Value("${autobuilder.evaluation.fileContentBudgetChars:40000}")
     private int fileContentMaxLines;
 
     public ParsedEvaluation evaluate(CycleContextData context) {

@@ -76,14 +76,21 @@ public final class CommandExerciseSynthesizer {
     public record Exercise(String criterionText, List<String> args, Fixture fixture,
                            Optional<ColumnChoice> column,
                            int expectedExitStatus, Optional<String> expectedMessage,
-                           Optional<String> expectedStdout) {
+                           Optional<String> expectedStdout, boolean assertsExitStatus) {
 
         /** Every exercise whose verdict is a status, and optionally a message it must have said. */
         public Exercise(String criterionText, List<String> args, Fixture fixture,
                         Optional<ColumnChoice> column, int expectedExitStatus,
                         Optional<String> expectedMessage) {
             this(criterionText, args, fixture, column, expectedExitStatus, expectedMessage,
-                    Optional.empty());
+                    Optional.empty(), true);
+        }
+
+        public Exercise(String criterionText, List<String> args, Fixture fixture,
+                        Optional<ColumnChoice> column, int expectedExitStatus,
+                        Optional<String> expectedMessage, Optional<String> expectedStdout) {
+            this(criterionText, args, fixture, column, expectedExitStatus, expectedMessage,
+                    expectedStdout, true);
         }
         /**
          * T4-DT: the contradiction between what the specification says this exercise should print
@@ -114,7 +121,8 @@ public final class CommandExerciseSynthesizer {
             List<String> shown = new ArrayList<>();
             for (String a : args) shown.add(a == null ? "<" + fixture.name().toLowerCase() + ">" : a);
             column.ifPresent(c -> shown.add("<" + c.name().toLowerCase() + "-name>"));
-            return String.join(" ", shown) + " → exit " + expectedExitStatus
+            return String.join(" ", shown)
+                    + (assertsExitStatus ? " → exit " + expectedExitStatus : "")
                     + expectedMessage.map(m -> " saying \"" + m + "\"").orElse("");
         }
     }
@@ -242,6 +250,77 @@ public final class CommandExerciseSynthesizer {
                 Optional.of(example.parts().get(discriminating.getAsInt()))));
     }
 
+
+    /**
+     * T4-DU: an exercise for a criterion that quotes the specification's message and states no
+     * status, so the verdict is what the tool PRINTS rather than what it exits with.
+     *
+     * <p>Deliberately narrow. It requires a quoted message with more than one placeholder — the
+     * case {@link BootGate} cannot ground by substitution and therefore judges by the fixture's own
+     * line number — and it requires the criterion to NAME its operation. The unnamed fallback that
+     * serves other branches is refused here on purpose: {@code check} and {@code count} are both
+     * one-argument commands, so "Print one line per malformed row to stdout as …" is genuinely
+     * ambiguous about which tool it describes, and guessing is how a probe asserts the wrong
+     * contract against a correct artifact.
+     *
+     * <p>It asserts NO status, because the criterion states none. Inventing one is exactly the
+     * defect {@code T1-FY} was filed for hours earlier: the malformed half's status paired with the
+     * well-formed half's fixture refused a 19/19 artifact four times.
+     */
+    private static Optional<Exercise> messageOnlyExercise(String criterion,
+                                                          Map<String, CommandSurfaceQuery.Command> surface,
+                                                          Optional<InputFormatExample.Example> format,
+                                                          java.util.Set<Integer> statedCodes) {
+        if (!statedCodes.isEmpty() || format.isEmpty()) return Optional.empty();
+        if (!MALFORMED.matcher(criterion).find()) return Optional.empty();
+        Matcher qm = QUOTED_MESSAGE.matcher(criterion);
+        if (!qm.find()) return Optional.empty();
+        String msg = qm.group(1);
+        Matcher pm = MESSAGE_PLACEHOLDERS.matcher(msg);
+        int placeholders = 0;
+        while (pm.find()) placeholders++;
+        if (placeholders < 2) return Optional.empty();
+
+        Optional<CommandSurfaceQuery.Command> op = surface.keySet().stream()
+                .filter(w -> usedAsCommand(criterion, w))
+                .map(surface::get)
+                .filter(c -> c.arity() == 1)
+                .findFirst();
+        if (op.isEmpty()) return Optional.empty();
+
+        List<String> args = new ArrayList<>();
+        args.add(op.get().word());
+        args.add(null);
+        return Optional.of(new Exercise(criterion.strip(), args, Fixture.MALFORMED_FILE,
+                Optional.empty(), 0, Optional.of(msg), Optional.empty(), false));
+    }
+
+
+    /**
+     * Whether the criterion uses {@code word} AS a command rather than as an ordinary English noun.
+     *
+     * <p>Caught by corpus measurement before it ever ran: a plain word-boundary match bound
+     * <em>"For each malformed row, stdout contains a line matching "line &lt;n&gt;: …" where n is
+     * the 1-based line number, h is the header field <b>count</b>, and f is the row's field
+     * <b>count</b>"</em> to the {@code count} COMMAND. That exercise would have run {@code count} on
+     * a malformed file and refused it for not printing a message {@code count} never prints —
+     * refusing a correct artifact, which is exactly what {@code T1-FY} was filed for hours earlier.
+     *
+     * <p>The three forms below are how the corpus's genuine command references actually read
+     * ("check on a file…", "check &lt;file&gt; prints…", "The `check` command…"), so the rule is
+     * drawn from the population rather than from taste.
+     */
+    private static boolean usedAsCommand(String criterion, String word) {
+        String w = Pattern.quote(word);
+        return Pattern.compile("(?i)(?:^\\s*" + w + "\\b"          // leads the sentence
+                        + "|`\\s*" + w + "\\b"                      // quoted as code
+                        + "|\\b" + w + "\\s*<)",                    // takes an argument placeholder
+                Pattern.CASE_INSENSITIVE).matcher(criterion).find();
+    }
+
+    /** Placeholders inside a quoted message, counted to tell a groundable one from a positional one. */
+    private static final Pattern MESSAGE_PLACEHOLDERS = Pattern.compile("<[^>]+>");
+
     /** A claim about how an input PARSES, rather than about a status the tool exits with. */
     private static final Pattern PARSE_RESULT = Pattern.compile(
             "\\bparses?\\s+(?:in)?to\\b|\\bis\\s+parsed\\b|\\bfields?\\s*:"
@@ -293,6 +372,15 @@ public final class CommandExerciseSynthesizer {
         // the parser -- which read it and answered wrong, twice in twelve days.
         Optional<Exercise> value = valueExercise(criterion, surface, format, codes);
         if (value.isPresent()) return value;
+
+        // T4-DU: a criterion that QUOTES the message the specification states, without stating a
+        // status alongside it, falls out below for the same structural reason the parse claim did
+        // — everything past this point assumes the verdict IS a status. The seed states the message
+        // and the statuses in two different sentences, so the criteria the loop banks carry one or
+        // the other and never both. Built and green on 2026-09-11, it went 10 opportunities and 0
+        // probes in run 2026-09-11_19-58-35 because nothing ever synthesized for it.
+        Optional<Exercise> messageOnly = messageOnlyExercise(criterion, surface, format, codes);
+        if (messageOnly.isPresent()) return messageOnly;
 
         if (codes.size() != 1) return Optional.empty();
         int expected = codes.iterator().next();

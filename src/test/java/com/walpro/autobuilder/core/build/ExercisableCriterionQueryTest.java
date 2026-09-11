@@ -103,15 +103,36 @@ class ExercisableCriterionQueryTest {
         assertThat(query.exercisable(List.of(parseClaim), CLI_SPEC)).containsExactly(parseClaim);
     }
 
+    /**
+     * T4-DU INVERTED THIS FURTHER, hours after T4-DT inverted the test above it, and the reason the
+     * old comment gave is the one that expired. It read: <em>"the check-prints-a-message criterion
+     * names a ONE-argument operation, so there is no column to read a value from"</em>. True, and
+     * beside the point — the message names the physical line its bad row sits on, and the fixture
+     * knows that number because it wrote the file. No column is needed.
+     *
+     * <p>So the residual is now TWO criteria, not three, and both remaining ones abstain for the
+     * same stated reason: they assert a parse the specification never wrote out.
+     */
+    @Test
+    void aQuotedMessageCriterionIsNowProbedToo() {
+        String message = CONTENT_CRITERIA.stream()
+                .filter(c -> c.contains("line <n>"))
+                .findFirst().orElseThrow();
+        assertThat(query.exercisable(List.of(message), CLI_SPEC)).containsExactly(message);
+    }
+
     @Test
     void theOtherContentCriteriaStillAbstainAndEachHasItsOwnReason() {
-        // Not one residual shape. "The reader correctly tracks the physical line number" and
-        // "count <file> prints the number of logical data rows" assert no parse the specification
-        // ever wrote out, and the check-prints-a-message criterion names a ONE-argument operation,
-        // so there is no column to read a value from. Each abstains for its own stated reason
-        // rather than for want of the capability T4-DT added.
-        assertThat(query.exercisable(CONTENT_CRITERIA.subList(1, CONTENT_CRITERIA.size()), CLI_SPEC))
-                .isEmpty();
+        // What is LEFT after T4-DT and T4-DU: "The reader correctly tracks the physical line
+        // number" and "count <file> prints the number of logical data rows" assert no parse the
+        // specification ever wrote out, so there is nothing for a fixture to be built from. That is
+        // a real residual and not a want of either capability — it is the ceiling
+        // [[project-yardstick-must-not-outrun-the-spec]] describes, and no probe closes it.
+        List<String> stillUnprobeable = CONTENT_CRITERIA.stream()
+                .filter(c -> !c.equals(CONTENT_CRITERIA.get(0)) && !c.contains("line <n>"))
+                .toList();
+        assertThat(stillUnprobeable).hasSize(2);
+        assertThat(query.exercisable(stillUnprobeable, CLI_SPEC)).isEmpty();
     }
 
     @Test

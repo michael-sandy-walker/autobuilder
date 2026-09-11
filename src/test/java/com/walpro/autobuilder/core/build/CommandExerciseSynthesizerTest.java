@@ -58,6 +58,50 @@ class CommandExerciseSynthesizerTest {
      * alternative than the one that matched. The fix counts the elided status instead of adding a
      * fourth pattern.
      */
+    /**
+     * T4-DU reachability. Criterion text VERBATIM from run {@code 2026-09-11_19-58-35}, which is the
+     * whole point: the mechanism was built, green, and validated against three real artifacts, then
+     * went 10 opportunities and 0 probes in the field because nothing synthesized for the criteria
+     * the loop actually banks. The seed states the message and the statuses in different sentences,
+     * so a banked criterion carries one or the other and the status path bailed on all of them.
+     */
+    @Test
+    void aQuotedMessageWithNoStatedStatusIsStillExercised() {
+        var e = synthWithFormat("check <file> prints one line per malformed row to stdout as "
+                + "\"line <n>: expected <h> fields, found <f>\" in ascending physical-line order");
+        assertThat(e).isPresent();
+        assertThat(e.get().fixture()).isEqualTo(CommandExerciseSynthesizer.Fixture.MALFORMED_FILE);
+        assertThat(e.get().expectedMessage()).contains("line <n>: expected <h> fields, found <f>");
+        // ⚠ It must assert NO status: the criterion states none, and inventing one is T1-FY.
+        assertThat(e.get().assertsExitStatus()).isFalse();
+        assertThat(e.get().describe()).doesNotContain("exit");
+    }
+
+    /**
+     * ⚠ THE WALLING GUARD, and corpus measurement is what found it — this exercise was being built
+     * before the rule tightened. The criterion names no command; "count" appears twice as an
+     * ordinary English noun ("the header field count"). A plain word-boundary match bound it to the
+     * {@code count} COMMAND, which would have run count on a malformed file and refused it for not
+     * printing a message count never prints. Verbatim from the corpus.
+     */
+    @Test
+    void aCommandWordUsedAsAnOrdinaryNounDoesNotBindTheExercise() {
+        assertThat(synthWithFormat("For each malformed row, stdout contains a line matching "
+                + "\"line <n>: expected <h> fields, found <f>\" where n is the 1-based line number, "
+                + "h is the header field count, and f is the row's field count")).isEmpty();
+    }
+
+    /**
+     * And the ambiguous one still declines: with no command named at all, {@code check} and
+     * {@code count} are both one-argument commands and guessing which is described is how a probe
+     * asserts the wrong contract against a correct artifact.
+     */
+    @Test
+    void aMessageCriterionNamingNoCommandDeclines() {
+        assertThat(synthWithFormat("Print one line per malformed row to stdout as "
+                + "\"line <n>: expected <h> fields, found <f>\"")).isEmpty();
+    }
+
     @Test
     void aCriterionStatingTwoOutcomesSynthesizesNothing() {
         assertThat(synth("The `check` command reads a file, reports malformed rows to stdout in the "

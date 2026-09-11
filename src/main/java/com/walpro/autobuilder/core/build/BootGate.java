@@ -470,7 +470,10 @@ public class BootGate {
                 }
                 unparsed--;   // it did not parse as a literal invocation, but it WAS exercised
                 probed++;
-                if (observed.get().exitStatus() != e.expectedExitStatus()) {
+                // T4-DU: an exercise built from a criterion that states no status asserts none.
+                // Comparing against the record's default 0 would refuse `check` on a malformed file
+                // for exiting 2 -- the specification's own answer -- which is T1-FY's defect rebuilt.
+                if (e.assertsExitStatus() && observed.get().exitStatus() != e.expectedExitStatus()) {
                     failures.add("\"" + e.criterionText() + "\" — " + e.describe()
                             + ", but running it exited " + observed.get().exitStatus());
                     continue;

@@ -51,6 +51,15 @@ public class GraphExplorerController {
     }
 
     /** One node plus its relationship neighborhood in both directions. */
+    /** T5-BM: what was done about one goal, so the answer does not require reading the log. */
+    @GetMapping("/goals/{goalId}/activity")
+    public ResponseEntity<OrchestrationGraphExplorerService.GoalActivity> goalActivity(
+            @PathVariable String goalId) {
+        return explorerService.goalActivity(goalId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/nodes/{elementId}/neighbors")
     public ResponseEntity<NodeNeighborhood> neighbors(@PathVariable String elementId) {
         return explorerService.neighbors(elementId)

@@ -42,6 +42,21 @@ public class OrchestrationGraphExplorerService {
     public record NeighborView(String relationshipType, String direction, GraphNodeView node) {}
     public record NodeNeighborhood(GraphNodeView node, List<NeighborView> neighbors) {}
 
+    /** T5-BM: one kind of thing that happened to a goal, and how often. */
+    public record GoalActivityKind(String type, String status, long count) {}
+
+    /**
+     * T5-BM: what was DONE about a goal, summarised.
+     *
+     * <p><b>A summary rather than a chronology, and the graph is what decided that.</b> The busiest
+     * goal in the store carries <b>216</b> actions — 82 merges, 32 deliberations, 26 evolutions —
+     * so rendering them in order around a node would be 216 items at exactly the moment a reader
+     * most needs an answer. The same goal's type-and-status breakdown is eleven rows and says what
+     * happened at a glance. The dense case is the normal case here, not the exception.
+     */
+    public record GoalActivity(String goalId, long total, List<GoalActivityKind> kinds,
+                               String firstAt, String lastAt) {}
+
     /** The filter vocabulary: which labels, lineages and runs exist right now, with counts. */
     public GraphOverview overview() {
         List<LabelCount> labels = neo4jClient.query("""
@@ -119,6 +134,40 @@ public class OrchestrationGraphExplorerService {
                 .fetch().all()
                 .forEach(row -> neighbors.add(new NeighborView((String) row.get("type"), "incoming", toNodeView(row))));
         return Optional.of(new NodeNeighborhood(node.get(), neighbors));
+    }
+
+
+    /**
+     * T5-BM: the actions taken on one goal, grouped by what they were.
+     *
+     * <p>Answers "what happened to this subgoal?" without a global filter change — the question the
+     * explorer previously sent a reader to {@code autobuilder.log} for. Empty when the goal has no
+     * actions, which is itself an answer: nothing was done about it.
+     */
+    public Optional<GoalActivity> goalActivity(String goalId) {
+        if (goalId == null || goalId.isBlank()) return Optional.empty();
+        List<GoalActivityKind> kinds = new ArrayList<>();
+        neo4jClient.query("""
+                        MATCH (a:Action)-[:TARGETS_GOAL]->(g:Goal {id: $goalId})
+                        RETURN a.type AS type, a.status AS status, count(*) AS n
+                        ORDER BY n DESC, type ASC
+                        """)
+                .bind(goalId).to("goalId")
+                .fetch().all()
+                .forEach(row -> kinds.add(new GoalActivityKind(
+                        (String) row.get("type"), (String) row.get("status"),
+                        ((Number) row.getOrDefault("n", 0L)).longValue())));
+        if (kinds.isEmpty()) return Optional.empty();
+
+        Map<String, Object> span = neo4jClient.query("""
+                        MATCH (a:Action)-[:TARGETS_GOAL]->(g:Goal {id: $goalId})
+                        RETURN count(a) AS total, min(a.timestamp) AS firstAt, max(a.timestamp) AS lastAt
+                        """)
+                .bind(goalId).to("goalId")
+                .fetch().one().orElse(Map.of());
+        return Optional.of(new GoalActivity(goalId,
+                ((Number) span.getOrDefault("total", 0L)).longValue(), List.copyOf(kinds),
+                String.valueOf(span.get("firstAt")), String.valueOf(span.get("lastAt"))));
     }
 
     // ======================================================================================

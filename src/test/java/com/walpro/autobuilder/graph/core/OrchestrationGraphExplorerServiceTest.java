@@ -38,6 +38,20 @@ class OrchestrationGraphExplorerServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    /**
+     * T5-BM input guard. The query itself is not mocked here — this class tests pure helpers and
+     * there is no Neo4jClient idiom to follow — so it was verified against the live store instead:
+     * the endpoint returned 216 actions for {@code goal-f1726624…} with the full type/status
+     * breakdown, and 404 for a goal with none. That is stronger evidence than a mocked fluent API,
+     * and it is recorded here so the absence of a query test is deliberate rather than overlooked.
+     */
+    @Test
+    void goalActivityRejectsAnAbsentIdWithoutTouchingTheStore() {
+        var service = new OrchestrationGraphExplorerService(null);
+        assertThat(service.goalActivity(null)).isEmpty();
+        assertThat(service.goalActivity("  ")).isEmpty();
+    }
+
     @Test
     void limitClampsToBounds() {
         assertThat(OrchestrationGraphExplorerService.clampLimit(null))

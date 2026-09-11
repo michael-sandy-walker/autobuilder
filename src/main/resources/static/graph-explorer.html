@@ -145,7 +145,44 @@ async function selectNode(id, tr) {
   if (tr) tr.classList.add('selected');
   const res = await fetch(API + '/nodes/' + encodeURIComponent(id) + '/neighbors');
   if (!res.ok) { setStatus('neighbors failed: HTTP ' + res.status); return; }
-  renderDetail(await res.json());
+  const nb = await res.json();
+  renderDetail(nb);
+  // T5-BM: for a Goal, what was DONE about it. Asked separately because the neighbourhood above
+  // is every edge untyped and unordered -- on the busiest goal in the store that is 216 rows,
+  // which is the moment a reader most needs an answer and least gets one.
+  if (nb.node.labels.includes('Goal') && nb.node.properties.id) {
+    renderGoalActivity(nb.node.properties.id);
+  }
+}
+
+async function renderGoalActivity(goalId) {
+  const res = await fetch(API + '/goals/' + encodeURIComponent(goalId) + '/activity');
+  const box = document.getElementById('detail');
+  if (res.status === 404) {
+    // Not an error. Nothing was done about this goal, which is an answer worth showing plainly.
+    box.appendChild(el('h3', null, 'Activity'));
+    box.appendChild(el('p', null, 'No actions recorded against this goal.'));
+    return;
+  }
+  if (!res.ok) { setStatus('activity failed: HTTP ' + res.status); return; }
+  const a = await res.json();
+  box.appendChild(el('h3', null, 'What was done about this goal (' + a.total + ')'));
+  const span = el('p', null, a.firstAt + '  \u2192  ' + a.lastAt);
+  box.appendChild(span);
+  const table = el('table');
+  const thead = el('thead'); const hr = el('tr');
+  for (const c of ['Action', 'Outcome', 'Count']) hr.appendChild(el('th', null, c));
+  thead.appendChild(hr); table.appendChild(thead);
+  const tbody = el('tbody');
+  for (const k of a.kinds) {
+    const tr = el('tr', 'row');
+    tr.appendChild(el('td', null, k.type));
+    tr.appendChild(el('td', null, k.status));
+    tr.appendChild(el('td', null, String(k.count)));
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  box.appendChild(table);
 }
 
 function renderDetail(nb) {

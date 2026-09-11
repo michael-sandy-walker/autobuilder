@@ -275,16 +275,16 @@
       "id": "t1fy-well-formed-fixture-demanded-failure",
       "ticket": "T1-FY",
       "type": "watch",
-      "description": "REGRESSION watch. T1-FY's fix is an absence, so what is watchable is the defect coming back: an exercise pairing a well-formed fixture with a non-zero expected status. In run 2026-09-11_19-58-35 that refused a 19/19 artifact four times across 24 minutes.",
+      "description": "REGRESSION watch. T1-FY's fix is an absence, so what is watchable is the defect coming back: an exercise pairing a well-formed fixture with a non-zero expected status. In run 2026-09-11_19-58-35 that refused a 19/19 artifact four times across 24 minutes. ANCHORED to a live gate decision: the bare string also appears in INHERITED work-item descriptions, which a later run reprints in its startup goal-stack dump -- that fired twice on run 3 from text run 2 had written, and it is not a regression.",
       "fired": {
         "file": "applog",
-        "pattern": "check <well_formed_file> → exit [1-9]"
+        "pattern": "root closure blocked.*check <well_formed_file> . exit [1-9]"
       },
       "opportunity": {
         "file": "applog",
         "pattern": "T4-DD: exit-status criteria probed="
       },
-      "check": "ANY firing is a regression, not an observation to interpret -- the run's artifact does not matter, because exit 0 on a well-formed file is what the specification requires. Compare against the archived run, where this fired four times."
+      "check": "ANY firing is a regression, not an observation to interpret -- the run's artifact does not matter, because exit 0 on a well-formed file is what the specification requires. Count CLOSURES, not log lines: the archived run shows 4 blocked closures against 188 matches of the bare string ([[feedback-count-events-not-log-lines]])."
     }
   ]
 }

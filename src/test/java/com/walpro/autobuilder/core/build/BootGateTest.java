@@ -301,7 +301,36 @@ class BootGateTest {
                         List.of(MULTI_PLACEHOLDER_CRITERION), false);
 
         assertThat(blocker).isPresent();
-        assertThat(blocker.get()).contains("names that line");
+        assertThat(blocker.get()).contains("names that").contains("establishes 6");
+    }
+
+    /**
+     * T4-DU, second pass: the ticket's filed DoD asked that EVERY placeholder be grounded in a value
+     * the fixture established, and I first amended that away as impossible without teaching this
+     * class what {@code <h>} and {@code <f>} mean. The amendment was wrong. The values need not be
+     * MATCHED to placeholders to be required — the fixture establishes the bad row's line (6), the
+     * header's width (3) and that row's width (4), and a three-placeholder message that names all
+     * three satisfies the rule with no opinion here about which is which.
+     *
+     * <p>This artifact counts the line correctly and gets the widths wrong, so the line-only rule
+     * passed it and this one does not.
+     */
+    @Test
+    void terminatingArtifact_rightLineButWrongWidths_blocks() throws Exception {
+        Path target = tempDir.resolve("target");
+        Files.createDirectories(target);
+        Files.writeString(target.resolve("app.jar"), """
+                #!/bin/sh
+                [ "$1" = check ] || exit 3
+                awk -F, 'NR==1{next} NF!=3{print "line " NR ": expected 99 fields, found 98"; b=1} END{exit b?2:0}' "$2"
+                """);
+
+        Optional<String> blocker = gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", CLI_SPEC_WITH_EXAMPLE,
+                        List.of(MULTI_PLACEHOLDER_CRITERION), false);
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("establishes");
     }
 
     /**

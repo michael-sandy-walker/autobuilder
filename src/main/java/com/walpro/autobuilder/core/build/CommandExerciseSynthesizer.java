@@ -444,6 +444,18 @@ public final class CommandExerciseSynthesizer {
         // an example, because that is what pins the format; see the class note for why repeating
         // a sample instead was measured to detect nothing.
         if (format.isPresent()) {
+            // T1-FY, second half. The fixture branches below are tested in order, so a criterion
+            // naming BOTH shapes takes whichever is checked first rather than the one it means.
+            // With the status count fixed a two-outcome criterion no longer reaches here, which
+            // closed the observed defect -- but the ordering is still what decides an ambiguous
+            // one, and "whichever branch comes first" is not a reading of the criterion.
+            //
+            // Declining is the whole guard: one structural test, not a fourth phrasing pattern.
+            // Measured to cost nothing -- over the 357 criteria the clitarget corpus has banked,
+            // no exercise changes -- so it removes a latent mispick at no loss of coverage.
+            if (WELL_FORMED.matcher(criterion).find() && MALFORMED.matcher(criterion).find()) {
+                return Optional.empty();
+            }
             Optional<CommandSurfaceQuery.Command> unary = named.map(surface::get).filter(c -> c.arity() == 1);
             if (WELL_FORMED.matcher(criterion).find() && unary.isPresent()) {
                 return Optional.of(fileExercise(criterion, unary.get(), Fixture.WELL_FORMED_FILE,

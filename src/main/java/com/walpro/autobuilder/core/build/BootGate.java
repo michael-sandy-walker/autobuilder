@@ -573,12 +573,36 @@ public class BootGate {
         if (!judgesLineNumber(e, g)) return Optional.empty();
         String output = observed.output();
         if (output == null) return Optional.empty();
-        int line = g.malformedRowLine().getAsInt();
-        // Not a substring match: "6" must not be found inside "16" or "60".
-        if (Pattern.compile("(?<!\\d)" + line + "(?!\\d)").matcher(output).find()) return Optional.empty();
-        return Optional.of("\"" + e.criterionText() + "\" — " + e.describe()
-                + ", and its bad row is on line " + line
-                + ", but nothing it printed names that line: \"" + output.strip() + "\"");
+
+        // T4-DU, second pass: the ticket's filed DoD asked that EVERY placeholder be grounded in a
+        // value the fixture established. That was first amended away as impossible without teaching
+        // this class what <h> and <f> mean — and the amendment was wrong. The values do not have to
+        // be MATCHED to placeholders to be required: the fixture establishes the bad row's line, the
+        // header's width and that row's width, and a message with three placeholders that names all
+        // three is satisfied without this class holding an opinion about which is which.
+        //
+        // Asserted only when the message has room for them all, so a two-placeholder message keeps
+        // the weaker line-only verdict rather than being refused for a value it never claimed.
+        List<Integer> required = g.knownValues();
+        boolean namesThemAll = placeholderCount(e) >= required.size();
+        for (int value : required) {
+            if (!namesThemAll && value != g.malformedRowLine().orElse(Integer.MIN_VALUE)) continue;
+            // Not a substring match: "6" must not be found inside "16" or "60".
+            if (Pattern.compile("(?<!\\d)" + value + "(?!\\d)").matcher(output).find()) continue;
+            return Optional.of("\"" + e.criterionText() + "\" — " + e.describe()
+                    + ", and its fixture establishes " + value
+                    + ", but nothing it printed names that: \"" + output.strip() + "\"");
+        }
+        return Optional.empty();
+    }
+
+    /** How many placeholders the criterion's quoted message carries. */
+    private int placeholderCount(CommandExerciseSynthesizer.Exercise e) {
+        if (e.expectedMessage().isEmpty()) return 0;
+        Matcher m = MESSAGE_PLACEHOLDER.matcher(e.expectedMessage().get());
+        int n = 0;
+        while (m.find()) n++;
+        return n;
     }
 
     /**
@@ -590,7 +614,21 @@ public class BootGate {
      * the exercise varied exactly one value and the message names that one. Carrying the fact
      * instead of re-deriving it is what lets a multi-placeholder message be judged at all.
      */
-    private record Grounded(List<String> args, OptionalInt malformedRowLine) {
+    private record Grounded(List<String> args, OptionalInt malformedRowLine,
+                            OptionalInt headerWidth, OptionalInt malformedRowWidth) {
+
+        /**
+         * T4-DU: every number the staged fixture established, in no particular order and with no
+         * claim about which placeholder names which. That ignorance is the point — deciding that
+         * {@code <h>} means a header width would put one target's vocabulary in this class.
+         */
+        java.util.List<Integer> knownValues() {
+            java.util.List<Integer> v = new ArrayList<>();
+            malformedRowLine.ifPresent(v::add);
+            headerWidth.ifPresent(v::add);
+            malformedRowWidth.ifPresent(v::add);
+            return v;
+        }
     }
 
     /**
@@ -602,6 +640,8 @@ public class BootGate {
                                                  .InputFormatExample.Example> format) throws IOException {
         List<String> out = new ArrayList<>();
         OptionalInt malformedRowLine = OptionalInt.empty();
+        OptionalInt headerWidth = OptionalInt.empty();
+        OptionalInt malformedRowWidth = OptionalInt.empty();
         for (String a : e.args()) {
             if (a != null) { out.add(a); continue; }
             switch (e.fixture()) {
@@ -634,6 +674,8 @@ public class BootGate {
                     content.append(wide).append("\n");
                     out.add(write(dir, "malformed", content.toString()));
                     malformedRowLine = OptionalInt.of(line);
+                    headerWidth = OptionalInt.of(f.trueParts());
+                    malformedRowWidth = OptionalInt.of(f.trueParts() + 1);
                 }
                 case NONE -> {
                     return Optional.empty();
@@ -656,7 +698,8 @@ public class BootGate {
                 }
             }
         }
-        return Optional.of(new Grounded(List.copyOf(out), malformedRowLine));
+        return Optional.of(new Grounded(List.copyOf(out), malformedRowLine,
+                headerWidth, malformedRowWidth));
     }
 
     /** A name the header definitely does not carry, extended until it collides with nothing. */

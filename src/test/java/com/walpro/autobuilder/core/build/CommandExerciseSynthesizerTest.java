@@ -109,6 +109,19 @@ class CommandExerciseSynthesizerTest {
                 + "malformed rows are found, or 0 if all rows are well-formed.")).isEmpty();
     }
 
+    /**
+     * T1-FY's second half, which this ticket first left unfixed on the grounds that the corpus held
+     * no instance. That reasoning was right about the risk and wrong about the cost: declining an
+     * ambiguous fixture is ONE structural test rather than a fourth phrasing pattern, and measured
+     * over the 357 criteria the corpus has banked it changes no exercise at all (130 before, 130
+     * after). A latent mispick removed for nothing is worth taking.
+     */
+    @Test
+    void aCriterionNamingBothRowShapesDeclinesRatherThanPickingByBranchOrder() {
+        assertThat(synthWithFormat("check reports malformed rows and confirms well-formed ones"))
+                .isEmpty();
+    }
+
     @Test
     void theElidedSecondStatusIsCounted() {
         assertThat(CommandExerciseSynthesizer.statusesIn("exits with code 2 if any malformed rows "

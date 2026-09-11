@@ -483,14 +483,7 @@ public class BootGate {
                 // artifact of run 2026-09-10_21-46-44 printed "b,c,de" where the seed states
                 // "b,c" — and "b,c,de".contains("b,c") is TRUE, so a containment check would have
                 // called the defect satisfied exactly as the source-reading verifier did.
-                if (e.expectedStdout().isPresent()) {
-                    String printed = observed.get().output().strip();
-                    if (!printed.equals(e.expectedStdout().get())) {
-                        failures.add("\"" + e.criterionText() + "\" — " + e.describe()
-                                + ", but it printed \"" + printed + "\" where the specification "
-                                + "states \"" + e.expectedStdout().get() + "\"");
-                    }
-                }
+                e.contradictedBy(observed.get().output()).ifPresent(failures::add);
             }
         } catch (IOException io) {
             log.info("T4-DD: could not stage a fixture ({}) — those criteria are not judged", io.getMessage());

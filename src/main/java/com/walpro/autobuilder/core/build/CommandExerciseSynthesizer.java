@@ -85,6 +85,31 @@ public final class CommandExerciseSynthesizer {
             this(criterionText, args, fixture, column, expectedExitStatus, expectedMessage,
                     Optional.empty());
         }
+        /**
+         * T4-DT: the contradiction between what the specification says this exercise should print
+         * and what the tool printed, or empty when there is none.
+         *
+         * <p>It lives on the exercise because the exercise is what carries the expectation, and it
+         * is a named function rather than inline gate logic so a frozen scenario can replay it: the
+         * artifacts of runs {@code 2026-09-10_21-46-44} and {@code 2026-09-10_12-33-26} are kept
+         * under {@code src/test/resources/scenarios/} with the observation each produces for the
+         * very fixture the gate stages. Untestable inline logic is how the T6-F defect survived.
+         *
+         * <p><b>⚠ EQUALITY, NOT CONTAINMENT, and that is the whole detecting power.</b> The broken
+         * artifact printed {@code b,c,de} where the specification states {@code b,c}, and
+         * {@code "b,c,de".contains("b,c")} is TRUE — so the containment rule the gate uses for a
+         * quoted MESSAGE would call that artifact satisfied, exactly as the source-reading verifier
+         * did. The two assertions look alike and must not be made alike.
+         */
+        public Optional<String> contradictedBy(String output) {
+            if (expectedStdout.isEmpty() || output == null) return Optional.empty();
+            String printed = output.strip();
+            if (printed.equals(expectedStdout.get())) return Optional.empty();
+            return Optional.of("\"" + criterionText + "\" — " + describe()
+                    + ", but it printed \"" + printed + "\" where the specification "
+                    + "states \"" + expectedStdout.get() + "\"");
+        }
+
         public String describe() {
             List<String> shown = new ArrayList<>();
             for (String a : args) shown.add(a == null ? "<" + fixture.name().toLowerCase() + ">" : a);

@@ -35,7 +35,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 ## Roadmap
 - `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-11)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-11)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-13)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: the live ordering is the appended 2026-08-23 REORDER section at the end of the file; the S1-S6 sections above it are kept for their reasoning, not their sequence. Rationale, never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. (reviewed 2026-09-11)
+- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. (reviewed 2026-09-13)
 - `project_wave2_structure.md`: wave 2's five layers (substrate -> portability -> reconciliation -> consultation -> yardsticks) and gate-driven sequence; widening what the loop SEES must follow scoping what it CONSULTS. Rationale only. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)

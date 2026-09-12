@@ -135,6 +135,38 @@ class ExercisableCriterionQueryTest {
         assertThat(query.exercisable(stillUnprobeable, CLI_SPEC)).isEmpty();
     }
 
+    /**
+     * The invariant `CriteriaExecutabilityReadout` depends on: addressing the surface is a SUPERSET
+     * of being exercisable, or its cause decomposition reports a negative shortfall. The readout's
+     * own javadoc records that near-miss, which is why the question moved here rather than being
+     * re-derived there from an HTTP regex.
+     */
+    @Test
+    void addressingTheSurfaceIsASupersetOfBeingExercisable() {
+        List<String> all = new java.util.ArrayList<>(SURFACE_CRITERIA);
+        all.addAll(CONTENT_CRITERIA);
+        assertThat(query.addressingSurface(all, CLI_SPEC))
+                .containsAll(query.exercisable(all, CLI_SPEC));
+    }
+
+    /**
+     * ⚠ The behaviour change this move carries, stated as a measurement rather than left implicit.
+     * The readout's old predicate was {@code exercisable || \b(GET|POST|…)\s+/}, which on a COMMAND
+     * target can never add anything — so {@code namedButUnparsed} was structurally 0 there and the
+     * readout was blind to criteria that address the surface but cannot be probed. Over the 357
+     * criteria the clitarget corpus has banked the count goes 130 to 260, and that bucket becomes
+     * reportable. Both consumers are readouts, not gates, so nothing acts on the number.
+     */
+    @Test
+    void aCommandCriterionAddressesTheSurfaceEvenWhenItCannotBeExercised() {
+        String namesTheCommandButStatesNothingProbeable =
+                "count is the command used to summarise a file for the reader";
+        assertThat(query.exercisable(List.of(namesTheCommandButStatesNothingProbeable), CLI_SPEC))
+                .isEmpty();
+        assertThat(query.addressingSurface(List.of(namesTheCommandButStatesNothingProbeable), CLI_SPEC))
+                .containsExactly(namesTheCommandButStatesNothingProbeable);
+    }
+
     @Test
     void withoutTheSpecificationTheCommandHalfStillCannotAnswer() {
         // The second half of the same defect: the verifier handed the gate an empty string, so a

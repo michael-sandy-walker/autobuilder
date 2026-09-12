@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * T4-DK: which of a work item's acceptance criteria some probe can actually exercise against the
@@ -67,5 +68,41 @@ public class ExercisableCriterionQuery {
                 .filter(c -> BehaviouralCriterionParser.exercisable(c).isPresent()
                         || CommandExerciseSynthesizer.synthesize(c, surface, unrecognised, format).isPresent())
                 .toList();
+    }
+
+    /**
+     * The criteria addressed to the target's SURFACE at all, exercisable or not — a superset of
+     * {@link #exercisable}.
+     *
+     * <p><b>Why this lives here and not in the reader that wants it.</b> `CriteriaExecutabilityReadout`
+     * answered it with its own {@code \b(GET|POST|PUT|PATCH|DELETE)\s+/} regex: HTTP vocabulary in
+     * an observability class, and a second derivation of a question this class already answers one
+     * way. Two homes for one question are free to disagree, and the readout's own javadoc records
+     * the near-miss — swapping its predicate naively would have produced a NEGATIVE shortfall.
+     *
+     * <p>The superset relation is the invariant to preserve: anything exercisable addresses the
+     * surface by construction, so the decomposition {@code addressingSurface - executable} can
+     * never go negative. Addressing WITHOUT being exercisable is the interesting middle — a REST
+     * criterion naming a path variable the probe cannot ground, or two endpoints at once.
+     */
+    public List<String> addressingSurface(List<String> criteria, String specText) {
+        if (criteria == null || criteria.isEmpty()) return List.of();
+        java.util.Set<String> canProbe = new java.util.HashSet<>(exercisable(criteria, specText));
+        Map<String, CommandSurfaceQuery.Command> surface =
+                specText == null || specText.isBlank() ? Map.of() : commandSurfaceQuery.declaredInSpec(specText);
+        return criteria.stream()
+                .filter(c -> c != null && !c.isBlank())
+                .filter(c -> canProbe.contains(c)
+                        || BehaviouralCriterionParser.mentionsSurface(c)
+                        || namesADeclaredCommand(c, surface))
+                .toList();
+    }
+
+    /** A criterion naming an operation the specification declares — the command half's equivalent. */
+    private static boolean namesADeclaredCommand(String criterion,
+                                                 Map<String, CommandSurfaceQuery.Command> surface) {
+        return surface.keySet().stream().anyMatch(w -> Pattern.compile(
+                        "(?i)(?:^|[^a-z0-9_-])" + Pattern.quote(w) + "(?:[^a-z0-9_-]|$)")
+                .matcher(criterion).find());
     }
 }

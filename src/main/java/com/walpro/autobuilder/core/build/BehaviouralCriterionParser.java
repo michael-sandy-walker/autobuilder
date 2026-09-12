@@ -113,6 +113,20 @@ public final class BehaviouralCriterionParser {
     }
 
     /** Verb-qualified path mention; same shape the endpoint surface query reads out of spec prose. */
+    /**
+     * Whether the criterion mentions the served surface at all — a verb-qualified path, without the
+     * stricter conditions {@link #parse} imposes (exactly one endpoint, a status, a groundable
+     * input).
+     *
+     * <p>Exists so `ExercisableCriterionQuery` can answer "addresses the surface" for both target
+     * shapes in one place. `CriteriaExecutabilityReadout` previously carried its own copy of this
+     * regex, which put HTTP vocabulary in an observability class and gave one question two homes.
+     * The ENDPOINT pattern below is that question's real owner.
+     */
+    public static boolean mentionsSurface(String criterion) {
+        return criterion != null && ENDPOINT.matcher(criterion).find();
+    }
+
     private static final Pattern ENDPOINT = Pattern.compile(
             "\\b(GET|POST|PUT|PATCH|DELETE)\\s+(/[A-Za-z0-9_\\-{}/.?=&]*)");
 

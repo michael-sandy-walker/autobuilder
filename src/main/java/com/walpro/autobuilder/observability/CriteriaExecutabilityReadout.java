@@ -7,7 +7,6 @@ import com.walpro.autobuilder.goal.GoalEntity;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * T2-EX: how much of a run is verifiable at all.
@@ -50,13 +49,6 @@ import java.util.regex.Pattern;
  * is the objection {@link Counts#executableShare()} raises against redefining this figure.
  */
 public final class CriteriaExecutabilityReadout {
-
-    /**
-     * A verb-qualified path mention — one way a criterion can address the target's surface, and
-     * the only one on a target that serves. Used solely to separate the causes below.
-     */
-    private static final Pattern NAMES_ENDPOINT =
-            Pattern.compile("\\b(GET|POST|PUT|PATCH|DELETE)\\s+/");
 
     /**
      * @param authored          acceptance criteria declared anywhere in the goal tree
@@ -131,6 +123,10 @@ public final class CriteriaExecutabilityReadout {
         List<String> all = new java.util.ArrayList<>();
         for (GoalEntity goal : goals) all.addAll(criteriaOf(goal));
         java.util.Set<String> exercisable = new java.util.HashSet<>(query.exercisable(all, specText));
+        // The surface question is asked of the same seam that answers exercisability, so the two
+        // cannot drift. This class used to carry its own HTTP regex for it -- target vocabulary in
+        // an observability class, and a second derivation of one question.
+        java.util.Set<String> addressing = new java.util.HashSet<>(query.addressingSurface(all, specText));
 
         int authored = 0;
         int addressingSurface = 0;
@@ -146,9 +142,8 @@ public final class CriteriaExecutabilityReadout {
                 if (CriteriaBinding.isAuthored(goal, i + 1)) elaboration++;
                 boolean canProbe = exercisable.contains(criterion);
                 // Surface-addressing must contain the exercisable, or the cause decomposition
-                // reports a negative shortfall. On a serving target the OR adds nothing: being
-                // exercisable there already requires the verb-and-path mention.
-                if (canProbe || NAMES_ENDPOINT.matcher(criterion).find()) addressingSurface++;
+                // reports a negative shortfall. The query guarantees that superset relation.
+                if (addressing.contains(criterion)) addressingSurface++;
                 if (canProbe) {
                     executable++;
                 } else if (BehaviouralCriterionParser.parse(criterion).isPresent()) {

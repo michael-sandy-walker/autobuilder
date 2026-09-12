@@ -454,7 +454,7 @@ public class BootGate {
                 if (failures.size() >= MAX_NAMED_FAILURES) break;
                 if (CommandCriterionParser.parse(criterion, launchTokens).isPresent()) continue;
                 Optional<CommandExerciseSynthesizer.Exercise> ex =
-                        CommandExerciseSynthesizer.synthesize(criterion, surface, unrecognised, format);
+                        CommandExerciseSynthesizer.synthesize(criterion, surface, unrecognised, format, specText);
                 if (ex.isEmpty()) continue;
                 CommandExerciseSynthesizer.Exercise e = ex.get();
                 if (fixtureDir == null) fixtureDir = Files.createTempDirectory("boot-gate-fixture");

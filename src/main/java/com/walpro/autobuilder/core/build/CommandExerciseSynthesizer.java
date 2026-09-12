@@ -321,6 +321,71 @@ public final class CommandExerciseSynthesizer {
     /** Placeholders inside a quoted message, counted to tell a groundable one from a positional one. */
     private static final Pattern MESSAGE_PLACEHOLDERS = Pattern.compile("<[^>]+>");
 
+
+    /**
+     * T1-FZ: the status the SPECIFICATION states for each input shape, read from the specification
+     * once, so an exercise can be checked against what the spec says rather than against how a
+     * criterion happens to be phrased.
+     *
+     * <p><b>Why this shape of fix.</b> Three guards already existed for "the fixture contradicts
+     * the status", each keyed to a phrasing: a status count, a disjunction pattern, a lookahead on
+     * one well-formed alternative. {@code T1-FY} closed one route by counting the status English
+     * elides. Within the hour the field produced a third: <em>"For the same file, the check command
+     * exits 0 (no malformed rows)"</em> — one status, one shape named, and the shape negated, so
+     * every guard passed it and the probe demanded exit 0 from a malformed file, refusing a correct
+     * artifact. A fourth predicate would have met a fifth phrasing.
+     *
+     * <p>The specification, meanwhile, simply says which status each shape yields. Checking an
+     * exercise against THAT is one question with one home, and it subsumes both known routes:
+     * malformed-with-0 and well-formed-with-2 are each a contradiction of a stated mapping.
+     *
+     * <p>Empty where the specification states no such mapping — then nothing is claimed and the
+     * exercise stands, exactly as before.
+     */
+    static Map<String, Map<Fixture, Integer>> statusByShapeIn(String specText) {
+        Map<String, Map<Fixture, Integer>> out = new java.util.LinkedHashMap<>();
+        if (specText == null || specText.isBlank()) return out;
+        Pattern declares = Pattern.compile("^\\s*([a-z][a-z0-9_-]*)\\s+<");
+        Pattern exitWhen = Pattern.compile(
+                "\\bexit(?:s|ed)?\\s+(?:with\\s+)?(?:status\\s+|code\\s+)?(\\d{1,3})\\s+when\\s+([^,.;]+)",
+                Pattern.CASE_INSENSITIVE);
+        String current = null;
+        for (String line : specText.split("\\R")) {
+            Matcher d = declares.matcher(line);
+            if (d.find()) current = d.group(1).toLowerCase();
+            if (current == null) continue;
+            // ⚠ PER COMMAND. "Exit 0 when every row is well formed" belongs to `check`; applying it
+            // to `column` abstained on eight legitimate absent-column exercises -- the very eight
+            // T1-FY measured and warned about. A sentence binds to the command whose declaration
+            // most recently preceded it, which is how these specifications are organised.
+            Matcher m = exitWhen.matcher(line);
+            while (m.find()) {
+                int status = Integer.parseInt(m.group(1));
+                String condition = m.group(2);
+                boolean well = WELL_FORMED.matcher(condition).find();
+                boolean mal = MALFORMED.matcher(condition).find();
+                if (well == mal) continue;
+                out.computeIfAbsent(current, k -> new java.util.LinkedHashMap<>())
+                        .putIfAbsent(well ? Fixture.WELL_FORMED_FILE : Fixture.MALFORMED_FILE, status);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Whether {@code exercise} demands a status the specification contradicts for the command it
+     * invokes and the shape it stages. The one check that replaces guessing from phrasing.
+     */
+    static boolean contradictsTheSpecification(Exercise e, Map<String, Map<Fixture, Integer>> byCommand) {
+        if (e == null || !e.assertsExitStatus() || e.args().isEmpty()) return false;
+        String command = e.args().get(0);
+        if (command == null) return false;
+        Map<Fixture, Integer> byShape = byCommand.get(command.toLowerCase());
+        if (byShape == null) return false;
+        Integer stated = byShape.get(e.fixture());
+        return stated != null && stated != e.expectedExitStatus();
+    }
+
     /** A claim about how an input PARSES, rather than about a status the tool exits with. */
     private static final Pattern PARSE_RESULT = Pattern.compile(
             "\\bparses?\\s+(?:in)?to\\b|\\bis\\s+parsed\\b|\\bfields?\\s*:"
@@ -357,6 +422,34 @@ public final class CommandExerciseSynthesizer {
                                                 Map<String, CommandSurfaceQuery.Command> surface,
                                                 Optional<String> unrecognisedWord,
                                                 Optional<InputFormatExample.Example> format) {
+        return synthesize(criterion, surface, unrecognisedWord, format, "");
+    }
+
+    /**
+     * T1-FZ: as above, with the specification text, so a built exercise is checked against the
+     * status the specification states for the shape it stages.
+     *
+     * <p>Applied HERE — at the single point every exercise leaves this class — rather than in each
+     * branch. Three guards keyed to phrasing were bypassed by three different phrasings; a check
+     * no branch can route around is the difference between closing a route and closing the
+     * category.
+     */
+    public static Optional<Exercise> synthesize(String criterion,
+                                                Map<String, CommandSurfaceQuery.Command> surface,
+                                                Optional<String> unrecognisedWord,
+                                                Optional<InputFormatExample.Example> format,
+                                                String specText) {
+        Optional<Exercise> built = build(criterion, surface, unrecognisedWord, format);
+        if (built.isPresent() && contradictsTheSpecification(built.get(), statusByShapeIn(specText))) {
+            return Optional.empty();
+        }
+        return built;
+    }
+
+    private static Optional<Exercise> build(String criterion,
+                                            Map<String, CommandSurfaceQuery.Command> surface,
+                                            Optional<String> unrecognisedWord,
+                                            Optional<InputFormatExample.Example> format) {
         if (criterion == null || criterion.isBlank() || surface == null || surface.isEmpty()) {
             return Optional.empty();
         }

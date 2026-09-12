@@ -122,6 +122,79 @@ class CommandExerciseSynthesizerTest {
                 .isEmpty();
     }
 
+    /** The clitarget seed's own Commands block, verbatim enough to carry its status statements. */
+    private static final String SPEC_WITH_STATUSES = """
+            Commands:
+
+            check <file> — read the file and report malformed rows.
+            Exit 0 when every row is well formed, exit 2 when at least one row is malformed.
+
+            count <file> — print the number of data rows. Exit 0.
+
+            column <file> <name> — print every value of the named column.
+            Exit 4 when the named column is not present in the header.
+
+            So the line  a,"b,c","d""e"  has THREE fields: a / b,c / d"e.
+            """;
+
+    private static Optional<CommandExerciseSynthesizer.Exercise> synthAgainstSpec(String criterion) {
+        return CommandExerciseSynthesizer.synthesize(criterion, QUERY.declaredInSpec(SPEC_WITH_STATUSES),
+                QUERY.unrecognisedWord(SPEC_WITH_STATUSES),
+                com.walpro.autobuilder.analysis.structure.InputFormatExample.readFrom(SPEC_WITH_STATUSES),
+                SPEC_WITH_STATUSES);
+    }
+
+    /**
+     * T1-FZ, verbatim from run {@code 2026-09-12_19-42-02}, where it made the probe demand exit 0
+     * from a malformed file and refuse an artifact that correctly exited 2.
+     *
+     * <p>Neither T1-FY guard reaches it: one status is stated, one shape is named, and the shape is
+     * NEGATED — "(no malformed rows)" — so a bare word match sees "malformed" and picks that
+     * fixture. Rather than a fourth predicate for negation, the exercise is checked against what
+     * the SPECIFICATION says the command yields for that shape.
+     */
+    @Test
+    void anExerciseContradictingTheSpecificationsOwnStatusIsRefused() {
+        assertThat(synthAgainstSpec("For the same file, the check command exits 0 (no malformed rows)"))
+                .isEmpty();
+    }
+
+    /** The mapping is read per COMMAND, because a status belongs to the command that states it. */
+    @Test
+    void theStatusMappingIsScopedToTheCommandThatStatesIt() {
+        assertThat(CommandExerciseSynthesizer.statusByShapeIn(SPEC_WITH_STATUSES))
+                .containsOnlyKeys("check");
+    }
+
+    /**
+     * ⚠ THE COUNTERWEIGHT, and it caught a real over-abstention while this was being built. Applied
+     * globally rather than per command, the check removed EIGHT legitimate exercises — an absent
+     * COLUMN in a perfectly good file expects exit 4, which contradicts `check`'s well-formed-is-0
+     * only if the two commands are confused. That is precisely the trade T1-FY measured and warned
+     * against: one false refusal bought at the cost of eight lost checks.
+     */
+    @Test
+    void anAbsentColumnInAWellFormedFileStillSynthesizes() {
+        var e = synthAgainstSpec("column <file> <name> exits 4 when the named column is not present "
+                + "in the header, printing \"no such column: <name>\" to stderr");
+        assertThat(e).isPresent();
+        assertThat(e.get().expectedExitStatus()).isEqualTo(4);
+        assertThat(e.get().fixture()).isEqualTo(CommandExerciseSynthesizer.Fixture.WELL_FORMED_FILE);
+    }
+
+    /**
+     * With no specification supplied the check claims nothing, so existing callers are unaffected.
+     *
+     * <p>⚠ Routed through the format-bearing helper on purpose: the malformed branch lives inside
+     * {@code if (format.isPresent())}, so a first cut of this test came back empty for want of a
+     * worked example and said nothing at all about the check — the same harness trap recorded on
+     * {@code synthWithFormat} and on T4-DU one layer up.
+     */
+    @Test
+    void withoutASpecificationNothingIsRefusedByThisCheck() {
+        assertThat(synthWithFormat("check on a file with a malformed row exits 2")).isPresent();
+    }
+
     @Test
     void theElidedSecondStatusIsCounted() {
         assertThat(CommandExerciseSynthesizer.statusesIn("exits with code 2 if any malformed rows "

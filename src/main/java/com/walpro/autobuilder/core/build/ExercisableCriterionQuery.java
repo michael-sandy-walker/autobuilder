@@ -66,7 +66,7 @@ public class ExercisableCriterionQuery {
         return criteria.stream()
                 .filter(c -> c != null && !c.isBlank())
                 .filter(c -> BehaviouralCriterionParser.exercisable(c).isPresent()
-                        || CommandExerciseSynthesizer.synthesize(c, surface, unrecognised, format).isPresent())
+                        || CommandExerciseSynthesizer.synthesize(c, surface, unrecognised, format, specText).isPresent())
                 .toList();
     }
 

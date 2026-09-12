@@ -173,8 +173,18 @@ public final class InputFormatExample {
     private static List<String> statedParts(String specText, int from, Example e) {
         String rest = specText.substring(Math.min(from, specText.length()));
         int stop = rest.length();
-        for (int i = 0; i < rest.length() - 1; i++) {
-            if (rest.charAt(i) == '.' && Character.isWhitespace(rest.charAt(i + 1))) { stop = i; break; }
+        for (int i = 0; i < rest.length(); i++) {
+            if (rest.charAt(i) != '.') continue;
+            // T6-S: a sentence also ends at the END of the text, not only before whitespace. The
+            // old bound stopped one character short, so a period with nothing after it was never
+            // examined and was absorbed into the last part -- "d\"e." instead of "d\"e".
+            //
+            // It never fired on a seed, where this sentence always has content after it. It fired
+            // the moment the obligations FILE was read as specification text and the example was
+            // its last line. A criterion asserting the final part would then have demanded the
+            // period and refused a correct artifact that printed the value without it.
+            boolean endsHere = i == rest.length() - 1 || Character.isWhitespace(rest.charAt(i + 1));
+            if (endsHere) { stop = i; break; }
         }
         rest = rest.substring(0, stop).strip();
         if (!rest.startsWith(":")) return List.of();

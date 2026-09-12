@@ -285,6 +285,21 @@
         "pattern": "T4-DD: exit-status criteria probed="
       },
       "check": "ANY firing is a regression, not an observation to interpret -- the run's artifact does not matter, because exit 0 on a well-formed file is what the specification requires. Count CLOSURES, not log lines: the archived run shows 4 blocked closures against 188 matches of the bare string ([[feedback-count-events-not-log-lines]])."
+    },
+    {
+      "id": "t6s-written-obligations-used",
+      "ticket": "T6-S",
+      "type": "watch",
+      "description": "The obligations FILE replacing the derived split in the field. Fires when a run reads the written obligations; the state it reports (PRISTINE / EDITED) says whose split the run is being judged against. clitarget's file is EDITED, so a live run there also exercises the hand-edit path for the first time.",
+      "fired": {
+        "file": "applog",
+        "pattern": "T6-S: using the \\d+ obligations written in"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "T4-DK: \\d+ seed requirement\\(s\\) are covered by no banked criterion|seed coverage"
+      },
+      "check": "Read the state in the line: EDITED means the run is judged against the operator's split, PRISTINE against the model's. A FALLING BACK line instead means the file did not belong to this seed -- check the seed hash before assuming the file is wrong."
     }
   ]
 }

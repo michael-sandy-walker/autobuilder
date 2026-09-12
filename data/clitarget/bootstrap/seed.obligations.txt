@@ -1,0 +1,36 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# seed-sha256: b910d72168e5b0f5cdde2d4db79d12873f3e83c0c4f32104f076687eef4f0139
+# body-sha256: 6533a88acbb1c7c40c35964db5b155506296321af5d7798dae5f9eb5ca11264e
+The application is a command-line tool with no network surface, no HTTP, and no long-running process.
+The application reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit status.
+The application is invoked as java -jar app.jar <command> [arguments].
+Fields in a delimited text file are separated by commas.
+A field in a delimited text file MAY be wrapped in double quotes.
+A quoted field in a delimited text file may contain commas and newlines, which are then part of the value and NOT separators.
+Inside a quoted field in a delimited text file, two consecutive double quotes mean one literal double quote.
+Quotes are removed from the value of a field in a delimited text file.
+The field parser must not use a naive split on commas.
+check <file> reads the file and reports malformed rows.
+A row is malformed when its field count differs from the header's field count.
+check prints one line per malformed row to stdout as "line <n>: expected <h> fields, found <f>".
+check prints malformed rows in ascending line order.
+check counts <n> as PHYSICAL lines from 1 including any newlines inside quoted fields.
+check exits 0 when every row is well formed.
+check exits 2 when at least one row is malformed.
+count <file> prints the number of data rows (excluding the header) to stdout as a bare integer.
+count treats a row spanning several physical lines inside a quoted field as ONE row.
+count exits 0.
+column <file> <name> prints every value of the named column, one per line, in file order, with quoting removed.
+column exits 0 on success.
+column exits 4 when the named column is not present in the header.
+column prints "no such column: <name>" to stderr when the named column is not present in the header.
+The application exits 1 when the file argument names a path that does not exist.
+The application prints "no such file: <path>" to stderr when the file argument names a path that does not exist.
+The application exits 3 when the command word is not one of check, count, or column.
+The application prints "unknown command: <word>" to stderr when the command word is not one of check, count, or column.
+Command words are case sensitive.
+The application exits 5 when the wrong number of arguments is given for a known command.
+The first line of a file is always its header.
+For an empty file (zero bytes), check exits 2.
+For an empty file (zero bytes), count prints 0.

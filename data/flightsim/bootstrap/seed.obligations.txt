@@ -1,0 +1,16 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# seed-sha256: fd161e34a5de308b64f874c7f8bd0fe941a21d0aad87b28a86bd62d2085cc5a2
+# body-sha256: ec0e52c81d01b790c2ad8dc749ba24fb2355585fde8ae353e8839c7392c2a908
+The application is implemented in Java.
+The application uses OpenGL.
+The application is a 3D flight simulator.
+The application includes a start menu.
+The start menu includes a Start option.
+The start menu includes a Pause option.
+The start menu includes an Exit option.
+The application includes the flight simulator.
+The flight simulator uses keyboard input for the controls.
+The application includes a simple cockpit HUD.
+The application includes a simple (i.e., polygonic) environment.
+The environment is randomly generated.

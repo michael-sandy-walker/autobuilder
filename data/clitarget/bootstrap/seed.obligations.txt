@@ -34,4 +34,4 @@ The application exits 5 when the wrong number of arguments is given for a known 
 The first line of a file is always its header.
 For an empty file (zero bytes), check exits 2.
 For an empty file (zero bytes), count prints 0.
-Quotes are removed from the value so the line  a,"b,c","d""e"  has THREE fields: a / b,c / d"e .
+Quotes are removed from the value so the line  a,"b,c","d""e"  has THREE fields: a / b,c / d"e.

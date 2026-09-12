@@ -140,7 +140,7 @@ public class CycleContextCoordinator {
             // call), so there is no interval to get wrong.
             com.walpro.autobuilder.analysis.coverage.SeedCoverageReadout seedCoverage =
                     seedCoverageEnabled && seedCoverageAnalyzer != null && goal != null
-                            ? seedCoverageAnalyzer.analyze(goal.getDescription(), goalPlannerService.getAllGoals())
+                            ? analyzeWithWrittenObligations(goal)
                             : null;
 
             // T2-EX: how much of this run is verifiable at all. Measurement only — nothing reads
@@ -394,4 +394,22 @@ public class CycleContextCoordinator {
                         + " cycles, worst {}x",
                 readout.created(), readout.preserved(), readout.rederived(), readout.worstFires());
     }
+
+    /**
+     * T6-S: hand the analyzer the target's written obligations, when it has them, so the coverage
+     * readout counts the reviewed split rather than one derived per run. Absent falls through to
+     * the derived split, unchanged.
+     */
+    private com.walpro.autobuilder.analysis.coverage.SeedCoverageReadout analyzeWithWrittenObligations(
+            com.walpro.autobuilder.goal.GoalEntity goal) {
+        String written = null;
+        try {
+            written = fileService.readFile(com.walpro.autobuilder.goal.SeedObligationsFile.PATH);
+        } catch (Exception ignored) {
+            // No file for this target -- the ordinary case, and the derived split still runs.
+        }
+        return seedCoverageAnalyzer.analyze(
+                goal.getDescription(), goalPlannerService.getAllGoals(), written);
+    }
+
 }

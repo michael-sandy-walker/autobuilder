@@ -47,6 +47,7 @@ public class SeedCoverageAnalyzer {
 
 
 
+
     /** Everything that is not a term character. Braces and backslashes stay: a spec may state patterns. */
     private static final Pattern NON_TERM = Pattern.compile("[^A-Za-z0-9{}\\\\]+");
 
@@ -71,11 +72,24 @@ public class SeedCoverageAnalyzer {
      *              their part of the seed just as active ones do
      */
     public SeedCoverageReadout analyze(String seed, Collection<GoalEntity> goals) {
+        return analyze(seed, goals, null);
+    }
+
+    /**
+     * T6-S: as above, with the target's written obligations when it has them.
+     *
+     * <p>A PARAMETER rather than a field. A settable field would have made this bean stateful — the
+     * T4-DQ registration contract failed the build for exactly that, correctly — and the
+     * set-then-call pattern is not safe to share either. The analyzer is already given its seed as
+     * text; its obligations belong in the same place.
+     */
+    public SeedCoverageReadout analyze(String seed, Collection<GoalEntity> goals,
+                                       String writtenObligations) {
         if (seed == null || seed.isBlank() || goals == null || goals.isEmpty()) {
             return SeedCoverageReadout.empty();
         }
 
-        List<String> clauses = clausesOf(seed);
+        List<String> clauses = clausesOf(seed, writtenObligations);
         if (clauses.isEmpty()) return SeedCoverageReadout.empty();
 
         Set<String> planTerms = new LinkedHashSet<>();
@@ -167,9 +181,12 @@ public class SeedCoverageAnalyzer {
      * covering one of its several obligations could no longer clear it. The second stage splits a
      * sentence long enough to be bundling obligations back into separable ones.
      */
-    private List<String> clausesOf(String seed) {
+    private List<String> clausesOf(String seed, String writtenObligations) {
         List<String> out = new ArrayList<>();
-        for (String sentence : SeedRequirements.clausesOf(seed)) {
+        // T6-S: the obligations file, when the target has one, IS the clause list -- reviewed,
+        // correctable, and identical on every run. Its absence falls through to the derived split,
+        // so a target without one behaves exactly as before.
+        for (String sentence : SeedRequirements.obligationsOrClauses(seed, writtenObligations)) {
             // Whitespace is normalised because a clause reaches three prompts verbatim, and a
             // sentence rejoined across a wrap otherwise carries its line breaks into them.
             String clause = sentence.strip().replaceAll("\\s+", " ");

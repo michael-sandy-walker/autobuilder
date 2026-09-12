@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.goal;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -22,6 +24,7 @@ import java.util.regex.Pattern;
  * are dropped, because a bad requirement here is the walling direction: it would block closure on
  * something the spec never asked for, which is the failure T1-FW records from the other side.
  */
+@Slf4j
 public final class SeedRequirements {
 
     /**
@@ -273,6 +276,73 @@ public final class SeedRequirements {
             if (OBLIGATION.matcher(r).find()) strict.add(r);
         }
         return strict;
+    }
+
+    /**
+     * T6-S: the obligations written down for this specification, or the rule's split when none are.
+     *
+     * <p><b>The file is an INPUT, the rule is a fallback.</b> Where {@code bootstrap/seed.obligations.txt}
+     * exists and belongs to this specification, its lines ARE the obligations — reviewed, correctable,
+     * and identical on every run. Where it does not, the rule below still runs and nothing changes,
+     * so a target without a file behaves exactly as before.
+     *
+     * <p>The verifiable filter still applies to the file's lines. A written obligation can be
+     * unverifiable ("Work inside the project as it is") just as a derived one can, and the closure
+     * edge's precision requirement does not soften because a human approved the wording.
+     */
+    public static List<String> obligationsOrSplit(String specText, String obligationsFileText) {
+        return written(specText, obligationsFileText, () -> statedIn(specText));
+    }
+
+    private static List<String> written(String specText, String obligationsFileText,
+                                        java.util.function.Supplier<List<String>> fallback) {
+        if (obligationsFileText != null && !obligationsFileText.isBlank()) {
+            var parsed = SeedObligationsFile.read(obligationsFileText, specText);
+            var written = SeedObligationsFile.obligationsFrom(parsed);
+            if (written.isPresent()) {
+                log.info("T6-S: using the {} obligations written in {} (state={})",
+                        written.get().size(), SeedObligationsFile.PATH, parsed.state());
+                return written.get();
+            }
+            log.info("T6-S: {} is {} — falling back to the derived split until it is regenerated",
+                    SeedObligationsFile.PATH, parsed.state());
+        }
+        return fallback.get();
+    }
+
+    /**
+     * The written obligations, or the CLAUSE split — the coverage readout's fallback.
+     *
+     * <p>⚠ The two fallbacks are not interchangeable and a first cut conflated them. `clausesOf`
+     * yields every clause (35 on the clitarget seed) because coverage asks what the plan has not
+     * engaged with at all; `statedIn` yields the stated requirements (12) because the closure edge
+     * asks what must be met. Falling back to the wrong one silently narrows whichever consumer
+     * inherits it — caught by `SeedCoverageAnalyzerTest`, which noticed clauses had stopped being
+     * reported as unclaimed.
+     */
+    public static List<String> obligationsOrClauses(String specText, String obligationsFileText) {
+        return written(specText, obligationsFileText, () -> clausesOf(specText));
+    }
+
+    /** {@link #obligationsOrSplit} narrowed to the clauses carrying an obligation verb. */
+    public static List<String> verifiableObligationsOrSplit(String specText, String obligationsFileText) {
+        List<String> strict = new ArrayList<>();
+        for (String r : obligationsOrSplit(specText, obligationsFileText)) {
+            if (OBLIGATION.matcher(r).find()) strict.add(r);
+        }
+        return strict;
+    }
+
+    /** {@link #notAlreadyCoveredVerifiable} over the written obligations when they exist. */
+    public static List<String> notAlreadyCoveredVerifiable(String specText, List<String> bankedCriteria,
+                                                           String obligationsFileText) {
+        List<String> stated = verifiableObligationsOrSplit(specText, obligationsFileText);
+        if (stated.isEmpty() || bankedCriteria == null || bankedCriteria.isEmpty()) return stated;
+        List<String> uncovered = new ArrayList<>();
+        for (String requirement : stated) {
+            if (bankedCriteria.stream().noneMatch(c -> overlaps(requirement, c))) uncovered.add(requirement);
+        }
+        return uncovered;
     }
 
     /** {@link #notAlreadyCovered} over the verifiable subset — the closure edge's entry point. */

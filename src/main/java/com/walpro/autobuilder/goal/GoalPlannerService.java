@@ -3173,6 +3173,23 @@ public class GoalPlannerService {
         }
     }
 
+
+    /**
+     * T6-S: the obligations file's text, or null when the target has none.
+     *
+     * <p>Read per call rather than cached: it is a small tracked file, and an operator correcting a
+     * split mid-run should see the correction take effect rather than on the next boot. Absent is
+     * the ordinary case for a target that has not had one generated, and it costs the caller
+     * nothing — the derived split runs exactly as before.
+     */
+    private String writtenObligations() {
+        try {
+            return fileService.readFile(SeedObligationsFile.PATH);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private void refuseClosureUnrepairable(String gate, String detail) {
         log.warn("T4-DK: root closure REFUSED by {} — {}; the repair work item deduplicates against "
                 + "an already GIVEN_UP item, so the requirement is unmet and unfixable this cycle. "
@@ -3634,7 +3651,7 @@ public class GoalPlannerService {
                 // the verifier is not asked the same question twice.
                 List<String> toVerify = new ArrayList<>(passingCriteria);
                 List<String> uncoveredSeed = SeedRequirements.notAlreadyCoveredVerifiable(
-                        root.getDescription(), toVerify);
+                        root.getDescription(), toVerify, writtenObligations());
                 if (!uncoveredSeed.isEmpty()) {
                     log.info("T4-DK: {} seed requirement(s) are covered by no banked criterion — "
                             + "verifying them against the artifact too", uncoveredSeed.size());

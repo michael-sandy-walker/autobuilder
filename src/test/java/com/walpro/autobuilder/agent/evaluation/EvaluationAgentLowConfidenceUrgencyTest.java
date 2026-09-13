@@ -3,6 +3,7 @@ package com.walpro.autobuilder.agent.evaluation;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.data.Offset.offset;
 
 /**
  * T2-FJ: tests for {@link EvaluationAgent#lowConfidenceUrgency} — the banded LOW_CONFIDENCE
@@ -15,6 +16,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class EvaluationAgentLowConfidenceUrgencyTest {
 
+    /** The untuned acceptance floor; the bands are gaps below whatever the caller passes. */
+    private static final double DEFAULT_FLOOR = 0.75;
+
     /** GoalExhaustionDetector counts LOW_CONFIDENCE toward exhaustion at this urgency. */
     private static final double EXHAUSTION_READS_AT = 0.80;
     /** DefaultProblemDetector raises a problem entry at this urgency. */
@@ -26,16 +30,16 @@ class EvaluationAgentLowConfidenceUrgencyTest {
 
     @Test
     void severeFailure_asksStronglyEnoughForEveryReader() {
-        assertThat(EvaluationAgent.lowConfidenceUrgency(0.0)).isEqualTo(EvaluationAgent.SEVERE_URGENCY);
-        assertThat(EvaluationAgent.lowConfidenceUrgency(0.55)).isEqualTo(EvaluationAgent.SEVERE_URGENCY);
-        assertThat(EvaluationAgent.lowConfidenceUrgency(0.59)).isEqualTo(EvaluationAgent.SEVERE_URGENCY);
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.0, DEFAULT_FLOOR)).isEqualTo(EvaluationAgent.SEVERE_URGENCY);
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.55, DEFAULT_FLOOR)).isEqualTo(EvaluationAgent.SEVERE_URGENCY);
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.59, DEFAULT_FLOOR)).isEqualTo(EvaluationAgent.SEVERE_URGENCY);
     }
 
     @Test
     void moderateFailure_elevatesWithoutRaisingAProblem() {
-        assertThat(EvaluationAgent.lowConfidenceUrgency(0.60)).isEqualTo(EvaluationAgent.MODERATE_URGENCY);
-        assertThat(EvaluationAgent.lowConfidenceUrgency(0.65)).isEqualTo(EvaluationAgent.MODERATE_URGENCY);
-        assertThat(EvaluationAgent.lowConfidenceUrgency(0.71)).isEqualTo(EvaluationAgent.MODERATE_URGENCY);
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.60, DEFAULT_FLOOR)).isEqualTo(EvaluationAgent.MODERATE_URGENCY);
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.65, DEFAULT_FLOOR)).isEqualTo(EvaluationAgent.MODERATE_URGENCY);
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.71, DEFAULT_FLOOR)).isEqualTo(EvaluationAgent.MODERATE_URGENCY);
     }
 
     /**
@@ -45,9 +49,9 @@ class EvaluationAgentLowConfidenceUrgencyTest {
      */
     @Test
     void nearMiss_asksForNothing_sinceNoReaderCouldActOnIt() {
-        assertThat(EvaluationAgent.lowConfidenceUrgency(0.72)).isNull();
-        assertThat(EvaluationAgent.lowConfidenceUrgency(0.74)).isNull();
-        assertThat(EvaluationAgent.lowConfidenceUrgency(0.7499)).isNull();
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.72, DEFAULT_FLOOR)).isNull();
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.74, DEFAULT_FLOOR)).isNull();
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.7499, DEFAULT_FLOOR)).isNull();
     }
 
     // --- the coupling the levels were chosen against ---
@@ -83,14 +87,28 @@ class EvaluationAgentLowConfidenceUrgencyTest {
      */
     @Test
     void bandEdgesMatchTheCrossingsOfTheFormulaTheyReplaced() {
-        assertThat((0.75 - EvaluationAgent.SEVERE_FAILURE_SCORE_CEILING) / 0.20)
-                .isGreaterThanOrEqualTo(EXHAUSTION_READS_AT);
-        assertThat((0.75 - EvaluationAgent.MODERATE_FAILURE_SCORE_CEILING) / 0.20)
-                .isGreaterThanOrEqualTo(ELEVATION_READS_AT);
-        // and one hundredth past each edge, the old formula fell below that reader
-        assertThat((0.75 - (EvaluationAgent.SEVERE_FAILURE_SCORE_CEILING + 0.01)) / 0.20)
-                .isLessThan(EXHAUSTION_READS_AT);
-        assertThat((0.75 - (EvaluationAgent.MODERATE_FAILURE_SCORE_CEILING + 0.01)) / 0.20)
-                .isLessThan(ELEVATION_READS_AT);
+        assertThat(EvaluationAgent.SEVERE_FAILURE_GAP / 0.20).isCloseTo(EXHAUSTION_READS_AT, offset(1e-9));
+        assertThat(EvaluationAgent.MODERATE_FAILURE_GAP / 0.20).isCloseTo(ELEVATION_READS_AT, offset(1e-9));
+        // and one hundredth shallower, the old formula fell below that reader
+        assertThat((EvaluationAgent.SEVERE_FAILURE_GAP - 0.01) / 0.20).isLessThan(EXHAUSTION_READS_AT);
+        assertThat((EvaluationAgent.MODERATE_FAILURE_GAP - 0.01) / 0.20).isLessThan(ELEVATION_READS_AT);
+    }
+
+    /**
+     * The bands are gaps below the caller's floor, so tuning
+     * {@code autobuilder.tuning.score.merge-acceptance-floor} moves them with it rather than
+     * leaving them stranded where the default used to be.
+     */
+    @Test
+    void bandsFollowATunedAcceptanceFloor() {
+        // 0.85 is chosen deliberately: 0.85 - 0.04 is 0.8099999999999999 in binary floating point,
+        // so a score of exactly 0.81 is the case the edge tolerance exists for.
+        double tuned = 0.85;
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.69, tuned)).isEqualTo(EvaluationAgent.SEVERE_URGENCY);
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.81, tuned)).isEqualTo(EvaluationAgent.MODERATE_URGENCY);
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.82, tuned)).isNull();
+        // the same scores against the default floor mean something different
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.69, DEFAULT_FLOOR)).isEqualTo(EvaluationAgent.MODERATE_URGENCY);
+        assertThat(EvaluationAgent.lowConfidenceUrgency(0.81, DEFAULT_FLOOR)).isNull();
     }
 }

@@ -21,6 +21,19 @@ public class EvaluationInterpreter {
 	@org.springframework.beans.factory.annotation.Autowired(required = false)
 	private com.walpro.autobuilder.core.tuning.TuningParameterStore tuningParameterStore;
 
+	/**
+	 * The floor a score must reach to count as a successful evaluation, tuned or defaulted.
+	 *
+	 * <p>Exposed because {@code EvaluationAgent} derives its LOW_CONFIDENCE bands from the same
+	 * number: if this moves and the bands do not follow it, they stop sitting where the signal's
+	 * readers are. Two constants for one boundary was the defect T2-FJ spent a session on.
+	 */
+	public double successThreshold() {
+		return tuningParameterStore != null
+				? tuningParameterStore.get("score.merge-acceptance-floor", SUCCESS_THRESHOLD_DEFAULT)
+				: SUCCESS_THRESHOLD_DEFAULT;
+	}
+
 	public InterpretationResult interpret(EvaluationOutcome outcome, Double lastScore, boolean fingerprintRepeated) {
 		GoalProgressState rawGoalProgress = outcome.goalProgress() != null
 				? outcome.goalProgress()
@@ -54,9 +67,7 @@ public class EvaluationInterpreter {
 	        log.info("Evaluation Score: Last=%s → Now=%.2f (Δ=%s)".formatted(lastScore, current, delta));
 	    }
 
-	    double successThreshold = tuningParameterStore != null
-	            ? tuningParameterStore.get("score.merge-acceptance-floor", SUCCESS_THRESHOLD_DEFAULT)
-	            : SUCCESS_THRESHOLD_DEFAULT;
+	    double successThreshold = successThreshold();
 	    boolean successful = current >= successThreshold && finalGoalProgress != GoalProgressState.STAGNATING;
 
 	    if (finalGoalProgress == GoalProgressState.STAGNATING) {

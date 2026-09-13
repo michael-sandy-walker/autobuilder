@@ -450,7 +450,7 @@ public class EvaluationAgent implements ExecutionAgent {
         // the low LLM score is recorded as background, not as an evaluation failure.
         if (!gateAccepted && !result.success() && result.goalProgress() != GoalProgressState.STAGNATING) {
             double score = finalOutcome.score() != null ? finalOutcome.score() : 0.0;
-            Double urgency = lowConfidenceUrgency(score);
+            Double urgency = lowConfidenceUrgency(score, evaluationInterpreter.successThreshold());
             if (urgency != null) {
                 context = context.issueRequest(ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, urgency,
                         "evaluation", ChannelRequest.horizonFromDecay(urgency, 0.15)));
@@ -1077,17 +1077,20 @@ public class EvaluationAgent implements ExecutionAgent {
      * the RAMP WIDTH (a divisor), not a threshold; it survives here as the band edges, which are
      * that ramp solved for each reader's threshold.
      *
-     * <p><b>⚠ Known coupling, filed as T4-DV:</b> these edges are derived from the literal 0.75,
-     * while the floor deciding whether this is called at all ({@code EvaluationInterpreter}'s
-     * success test) is tunable as {@code autobuilder.tuning.score.merge-acceptance-floor}. At the
-     * default they agree; under tuning the bands do NOT follow the floor. The replaced formula
-     * hardcoded 0.75 in the same way, so this is inherited, not introduced.
+     * <p>The edges are GAPS below the caller's acceptance floor, not absolute scores, so tuning
+     * {@code autobuilder.tuning.score.merge-acceptance-floor} moves the bands with it. The
+     * replaced formula hardcoded 0.75 and would have drifted; at the default floor the two agree
+     * exactly (0.59 and 0.71).
      */
-    static Double lowConfidenceUrgency(double score) {
-        if (score <= SEVERE_FAILURE_SCORE_CEILING) {
+    static Double lowConfidenceUrgency(double score, double acceptanceFloor) {
+        // The edges are compared with a tolerance because they are SUBTRACTED, and binary floating
+        // point does not land on them: 0.85 - 0.04 is 0.8099999999999999, which would drop a score
+        // of exactly 0.81 into the band below. Boundary values are not hypothetical here — 0.71 and
+        // 0.74 are among the commonest scores the model emits.
+        if (score <= acceptanceFloor - SEVERE_FAILURE_GAP + EDGE_TOLERANCE) {
             return SEVERE_URGENCY;
         }
-        if (score <= MODERATE_FAILURE_SCORE_CEILING) {
+        if (score <= acceptanceFloor - MODERATE_FAILURE_GAP + EDGE_TOLERANCE) {
             return MODERATE_URGENCY;
         }
         // Below every reader's threshold: the request would be inert on arrival and eligible for
@@ -1095,11 +1098,18 @@ public class EvaluationAgent implements ExecutionAgent {
         return null;
     }
 
-    /** Highest score still treated as a severe evaluation failure — the old formula's 0.80 crossing. */
-    static final double SEVERE_FAILURE_SCORE_CEILING = 0.59;
+    /**
+     * How far below the acceptance floor a score must fall to count as a SEVERE failure — the
+     * replaced formula's 0.80 crossing, which sat 0.80 x 0.20 = 0.16 under the floor.
+     * Expressed as a GAP so the bands follow a tuned floor instead of drifting away from it.
+     */
+    static final double SEVERE_FAILURE_GAP = 0.16;
 
-    /** Highest score that asks for anything at all — the old formula's 0.20 crossing. */
-    static final double MODERATE_FAILURE_SCORE_CEILING = 0.71;
+    /** Slack for comparing against a SUBTRACTED edge; see {@link #lowConfidenceUrgency}. */
+    static final double EDGE_TOLERANCE = 1e-9;
+
+    /** The gap at which a score asks for anything at all — the 0.20 crossing, 0.20 x 0.20 under. */
+    static final double MODERATE_FAILURE_GAP = 0.04;
 
     /**
      * Severe: must clear the exhaustion reader's 0.80 with room to decay. 99.8% of archived

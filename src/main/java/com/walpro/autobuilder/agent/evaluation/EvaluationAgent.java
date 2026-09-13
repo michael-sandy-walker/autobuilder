@@ -484,15 +484,26 @@ public class EvaluationAgent implements ExecutionAgent {
                 && ((probeResult.outcome().result() == BuildResult.COMPILE_ERROR && !probeResult.filesOnDisk())
                         || probeResult.outcome().result() == BuildResult.FRAGMENTATION_REJECTED);
         if (result.mutationState() == MutationAcceptanceState.REJECTED) {
+            // T1-GA: on a build failure the COMPILE DIAGNOSTICS travel through their own prompt
+            // block, so the outcome's own message is not relayed — but a heuristic that examined
+            // the candidate and found something ELSE must still be heard. Negotiation runs on
+            // every rejection, including the probe's short-circuit, and a CRITICAL opinion
+            // REPLACES the outcome's feedbackMessage; run 2026-09-13_09-44-03 is what that costs.
+            // Seven times the probe failed to compile, StoreCoherenceHeuristic separately found a
+            // parallel store, its text became the recorded reason, and the whole relay was then
+            // suppressed because the PROBE had failed. The loop fixed the compile error every
+            // cycle, never heard about the parallel store, and re-proposed it seven times.
             List<String> reasons = collectRejectionReasons(finalOutcome, negotiationResult);
+            List<String> relayable = buildFailureRejection
+                    ? collectHeuristicRejectionReasons(negotiationResult)
+                    : reasons;
             int relayedReasons = 0;
-            if (!buildFailureRejection && !reasons.isEmpty()) {
-                context = context.withRejectionFeedback(reasons);
-                relayedReasons = reasons.size();
-                log.info("T4-BX: relaying {} rejection reason(s) to the next evolution/planner prompt", reasons.size());
+            if (!relayable.isEmpty()) {
+                context = context.withRejectionFeedback(relayable);
+                relayedReasons = relayable.size();
+                log.info("T4-BX: relaying {} rejection reason(s) to the next evolution/planner prompt{}",
+                        relayedReasons, buildFailureRejection ? " (heuristic findings only — build failure)" : "");
             } else {
-                // T1-GA: the silent branch. Run 2026-09-13_09-44-03 took it seven times for one
-                // repeated defect and left no trace of which input caused it.
                 log.info("T4-BX: NOT relaying {} rejection reason(s) — buildFailureRejection={} (probe={}, filesOnDisk={})",
                         reasons.size(), buildFailureRejection,
                         probeResult != null && probeResult.outcome() != null ? probeResult.outcome().result() : null,
@@ -1102,6 +1113,30 @@ public class EvaluationAgent implements ExecutionAgent {
      * this band had a median of 0.358, so this is marginally more persistent than before.
      */
     static final double MODERATE_URGENCY = 0.45;
+
+    /**
+     * T1-GA: the dissenting HEURISTICS' own findings, without the outcome's message.
+     *
+     * <p>Used when the rejection is a build failure. The compile diagnostics reach the next prompt
+     * through their own block, so the outcome message is redundant there — but a heuristic that
+     * looked at the candidate and found a different defect has said something the compile output
+     * never will, and suppressing it costs the loop the chance to learn.
+     */
+    static List<String> collectHeuristicRejectionReasons(NegotiationResult negotiation) {
+        List<String> reasons = new ArrayList<>();
+        List<HeuristicOpinion> opinions = negotiation != null ? negotiation.allOpinions() : null;
+        if (opinions == null) return reasons;
+        for (HeuristicOpinion op : opinions) {
+            if (op == null) continue;
+            boolean dissenting = op.mutationState() == MutationAcceptanceState.REJECTED
+                    || op.goalProgress() == GoalProgressState.STAGNATING;
+            if (!dissenting) continue;
+            if (!isMeaningfulReason(op.rationale())) continue;
+            String line = op.name() + ": " + op.rationale().trim();
+            if (!reasons.contains(line)) reasons.add(line);
+        }
+        return reasons;
+    }
 
     static List<String> collectRejectionReasons(EvaluationOutcome finalOutcome, NegotiationResult negotiation) {
         List<String> reasons = new ArrayList<>();

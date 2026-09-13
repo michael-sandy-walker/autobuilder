@@ -80,7 +80,7 @@ public class DefaultMutationHeuristicAnalyzer implements MutationHeuristicAnalyz
         Map<String, Double> perFile = new HashMap<>();
 
         for (String path : newFiles.keySet()) {
-            double score = 0.75;
+            double score = HeuristicScoreScale.NEUTRAL;
 
             // Apply heuristic penalties/rewards
             for (HeuristicFinding finding : findings) {

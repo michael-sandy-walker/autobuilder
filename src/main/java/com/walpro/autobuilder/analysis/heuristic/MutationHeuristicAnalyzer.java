@@ -15,7 +15,8 @@ public interface MutationHeuristicAnalyzer {
                                              Map<String, String> newFiles,
                                              Set<String> deletedFiles,
                                              List<HeuristicFinding> findings) {
-        return newFiles.keySet().stream().collect(java.util.stream.Collectors.toMap(p -> p, p -> 0.75));
+        return newFiles.keySet().stream()
+                .collect(java.util.stream.Collectors.toMap(p -> p, p -> HeuristicScoreScale.NEUTRAL));
     }
 
     /**
@@ -26,6 +27,7 @@ public interface MutationHeuristicAnalyzer {
                                Set<String> deletedFiles,
                                List<HeuristicFinding> findings) {
         Map<String, Double> perFile = scorePerFile(oldFiles, newFiles, deletedFiles, findings);
-        return perFile.values().stream().mapToDouble(Double::doubleValue).average().orElse(0.75);
+        return perFile.values().stream().mapToDouble(Double::doubleValue)
+                .average().orElse(HeuristicScoreScale.NEUTRAL);
     }
 }

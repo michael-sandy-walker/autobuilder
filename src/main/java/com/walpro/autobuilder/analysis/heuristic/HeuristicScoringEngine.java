@@ -13,8 +13,8 @@ import java.util.stream.Collectors;
 public class HeuristicScoringEngine {
 
     public double score(DiffReport diffReport, List<HeuristicFinding> findings) {
-        // Neutral baseline instead of "perfect by default"
-        double score = 0.75;
+        // The scale's origin: no heuristic has said anything yet (HeuristicScoreScale.NEUTRAL).
+        double score = HeuristicScoreScale.NEUTRAL;
 
         List<DiffEntry> entries = diffReport.entries().stream()
                 .filter(entry -> !isNoise(entry.path()))

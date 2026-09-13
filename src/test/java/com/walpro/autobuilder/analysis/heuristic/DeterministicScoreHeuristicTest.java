@@ -2,13 +2,17 @@ package com.walpro.autobuilder.analysis.heuristic;
 
 import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.agent.evaluation.score.ScoringResult;
+import com.walpro.autobuilder.analysis.diff.ProjectDiffResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.core.tuning.TuningParameterStore;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Offset.offset;
@@ -52,11 +56,17 @@ class DeterministicScoreHeuristicTest {
 
     // --- mutationState derivation ---
 
+    /**
+     * T2-FJ: this test used to assert ACCEPTED here, under the comment "0.75 is the exact
+     * acceptance boundary". It was pinning the defect — 0.75 is the scale's ORIGIN, so this
+     * context is a mutation nobody found anything about and with no diff to show for itself.
+     * Absence of evidence is not a pass.
+     */
     @Test
-    void accepted_whenGlobalScoreAtThreshold() {
-        // 0.75 is the exact acceptance boundary
+    void rejected_whenScoreIsNeutralBaselineAndNothingWasEarned() {
         HeuristicOpinion opinion = heuristic.evaluate(contextWith(scoring(0.75, 0.75, Map.of())), DUMMY_OUTCOME);
-        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(opinion.rationale()).contains("No net evidence").contains("no meaningful diff");
     }
 
     @Test
@@ -232,5 +242,64 @@ class DeterministicScoreHeuristicTest {
                 0.7, MutationAcceptanceState.ACCEPTED, GoalProgressState.FULFILLED, "test", null);
         HeuristicOpinion opinion = heuristic.evaluate(contextWith(scoring(0.8, 0.8, Map.of())), outcome);
         assertThat(opinion.goalProgress()).isEqualTo(GoalProgressState.FULFILLED);
+    }
+
+    // --- T2-FJ: the neutral baseline is the scale's origin, not an acceptance threshold ---
+
+    @Test
+    void neutralBaseline_accepted_whenAcceptanceIsEarnedByDiffAndNoRegression() {
+        CycleContextData input = CycleContextData.builder()
+                .scoringResult(scoring(HeuristicScoreScale.NEUTRAL, HeuristicScoreScale.NEUTRAL, Map.of()))
+                .projectDiff(new ProjectDiffResult(null, Map.of("Book.java", "class Book {}"), Set.of()))
+                .build();
+
+        HeuristicOpinion opinion = heuristic.evaluate(input, DUMMY_OUTCOME);
+
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(opinion.rationale()).contains("No net evidence");
+    }
+
+    /**
+     * The defect was not only the verdict but its WEIGHT: a no-evidence acceptance used to carry
+     * the raw confidence, which can reach HIGH and outvote heuristics that did find something.
+     */
+    @Test
+    void neutralBaseline_acceptanceIsCappedBelowHigh_soTheNegotiatorCanOutvoteIt() {
+        CycleContextData input = CycleContextData.builder()
+                .scoringResult(scoring(HeuristicScoreScale.NEUTRAL, HeuristicScoreScale.NEUTRAL, Map.of()))
+                .projectDiff(new ProjectDiffResult(null, Map.of("Book.java", "class Book {}"), Set.of()))
+                .build();
+
+        HeuristicOpinion opinion = heuristic.evaluate(input, DUMMY_OUTCOME);
+
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(opinion.confidence()).isLessThan(ConfidenceLevel.HIGH.threshold());
+    }
+
+    /**
+     * The rule reads the scale's origin, not the cut, so it holds wherever the cut is tuned.
+     * With the acceptance floor moved below the baseline the old code accepted outright.
+     */
+    @Test
+    void neutralBaseline_stillHasToBeEarned_whenAcceptanceFloorIsTunedBelowIt() {
+        MockEnvironment env = new MockEnvironment();
+        env.setProperty("autobuilder.tuning.score.merge-acceptance-floor", "0.60");
+        DeterministicScoreHeuristic tuned = new DeterministicScoreHeuristic();
+        tuned.setTuningParameterStore(new TuningParameterStore(env));
+
+        HeuristicOpinion opinion = tuned.evaluate(
+                contextWith(scoring(HeuristicScoreScale.NEUTRAL, HeuristicScoreScale.NEUTRAL, Map.of())), DUMMY_OUTCOME);
+
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(opinion.rationale()).contains("No net evidence");
+    }
+
+    /** A score that is NOT the origin carries evidence and is untouched by the new rule. */
+    @Test
+    void scoreAboveBaseline_unaffected_acceptedAtRawConfidence() {
+        HeuristicOpinion opinion = heuristic.evaluate(contextWith(scoring(0.7925, 0.7925, Map.of())), DUMMY_OUTCOME);
+
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(opinion.rationale()).contains("Deterministic score from ScoringService");
     }
 }

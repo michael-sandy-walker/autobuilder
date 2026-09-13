@@ -67,6 +67,13 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
                 ? Math.max(SOFT_BAND_LOWER, lastAccepted - SUBGOAL_FLOOR_MARGIN)
                 : SOFT_BAND_LOWER;
 
+        // T2-FJ: a score sitting on the scale's origin carries no NET evidence — either no
+        // heuristic found anything or the findings cancelled. It must not buy acceptance on its
+        // own, which is what it did for as long as the origin and this cut were the same number.
+        if (HeuristicScoreScale.isNeutral(s)) {
+            return evaluateNoNetEvidence(input, s, rawConfidence, lastAccepted, original);
+        }
+
         if (s >= acceptanceThreshold()) {
             return accepted(s, rawConfidence, original, "Deterministic score from ScoringService.globalScore=%.3f confidence=%.2f".formatted(s, rawConfidence));
         }
@@ -77,6 +84,37 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
 
         // Below effective lower band: REJECTED at raw confidence (can reach CRITICAL)
         return rejected(s, rawConfidence, original, "Deterministic score from ScoringService.globalScore=%.3f confidence=%.2f".formatted(s, rawConfidence));
+    }
+
+    /**
+     * T2-FJ: the neutral baseline means the deterministic scorer has nothing to say about this
+     * mutation. Absence of evidence is not a pass, so acceptance has to be EARNED the same way
+     * the soft-veto band earns it — a real diff, no new blockers, no regression against the last
+     * accepted score — and it is capped below HIGH so the negotiator can outvote it.
+     *
+     * <p>This runs before the acceptance cut and is therefore independent of where that cut is
+     * tuned: the origin carries no evidence whether the cut sits above it or below it.
+     */
+    private HeuristicOpinion evaluateNoNetEvidence(
+            CycleContextData input, double s, double rawConfidence,
+            Double lastAccepted, EvaluationOutcome original) {
+
+        boolean hasMeaningfulDiff = hasMeaningfulDiff(input);
+        boolean noProblemRegression = noProblemRegression(input);
+        boolean noScoreRegression = lastAccepted == null || s >= lastAccepted - SCORE_REGRESSION_MARGIN;
+
+        String basis = "No net evidence: globalScore=%.3f is the neutral baseline".formatted(s);
+
+        if (hasMeaningfulDiff && noProblemRegression && noScoreRegression) {
+            double cappedConfidence = Math.min(rawConfidence, SOFT_BAND_ACCEPTED_CONFIDENCE_CAP);
+            return accepted(s, cappedConfidence, original,
+                    basis + " — accepted (meaningful diff, no regression, confidence=%.2f)".formatted(cappedConfidence));
+        }
+
+        StringBuilder sb = new StringBuilder(basis).append(" — rejected");
+        appendFailedConditions(sb, hasMeaningfulDiff, noProblemRegression, noScoreRegression, lastAccepted);
+        double cappedConfidence = Math.min(rawConfidence, SOFT_BAND_REJECTED_CONFIDENCE_CAP);
+        return rejected(s, cappedConfidence, original, sb.toString());
     }
 
     private HeuristicOpinion evaluateSoftBand(
@@ -105,10 +143,17 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
             double s, double effectiveLowerBand, double acceptanceThreshold, Double lastAccepted) {
         StringBuilder sb = new StringBuilder(
                 "Soft-veto band [%.2f,%.2f): globalScore=%.3f — rejected".formatted(effectiveLowerBand, acceptanceThreshold, s));
+        appendFailedConditions(sb, hasMeaningfulDiff, noProblemRegression, noScoreRegression, lastAccepted);
+        return sb.toString();
+    }
+
+    /** The three earn-it conditions, named identically wherever acceptance has to be earned. */
+    private static void appendFailedConditions(
+            StringBuilder sb, boolean hasMeaningfulDiff, boolean noProblemRegression,
+            boolean noScoreRegression, Double lastAccepted) {
         if (!hasMeaningfulDiff) sb.append("; no meaningful diff");
         if (!noProblemRegression) sb.append("; blocker count increased");
         if (!noScoreRegression) sb.append("; score regressed >%.2f vs lastAccepted=%.3f".formatted(SCORE_REGRESSION_MARGIN, lastAccepted));
-        return sb.toString();
     }
 
     private static HeuristicOpinion accepted(double s, double confidence, EvaluationOutcome original, String rationale) {

@@ -122,7 +122,10 @@ public class StoreCoherenceHeuristic implements EvaluationHeuristic {
                     MutationAcceptanceState.REJECTED,
                     GoalProgressState.STAGNATING,
                     rationale,
-                    Math.max(0.0, outcome.score() - 0.10)
+                    Math.max(0.0, outcome.score() - 0.10),
+                    new HeuristicOpinion.StructuralDefect(
+                            defectSubject(introduced),
+                            resolutionPaths(introduced, currentStores))
             );
         }
 
@@ -266,6 +269,49 @@ public class StoreCoherenceHeuristic implements EvaluationHeuristic {
             if (enclosing.size() >= 2) out.add(e.getKey());
         }
         return out;
+    }
+
+    /**
+     * T2-ES: the entities this finding is about, order-independent, so the same violation keys
+     * identically on every cycle it survives. Deliberately the WHOLE introduced set rather than
+     * one member: a finding about two entities is not the same finding as one about either alone,
+     * and over-keying costs a missed escalation where under-keying would escalate on a defect that
+     * had in fact changed.
+     */
+    static String defectSubject(Set<String> introduced) {
+        return introduced.stream().sorted().reduce((a, b) -> a + "," + b).orElse("");
+    }
+
+    /**
+     * T2-ES: one sufficient way out per declaring type — keep this one, route the others through
+     * it. The choice is what the loop cannot make for itself and what re-asking never offers: the
+     * warning "do not introduce a parallel store" leaves every rewrite of the file equally
+     * plausible, while "exactly one of these two declares it" narrows the next proposal to two
+     * concrete shapes. Names come from the parsed code, never from this codebase.
+     */
+    static List<String> resolutionPaths(Set<String> introduced,
+                                        Map<String, List<StoreLocation>> currentStores) {
+        List<String> paths = new ArrayList<>();
+        for (String entity : introduced.stream().sorted().toList()) {
+            List<StoreLocation> locations = currentStores.get(entity);
+            if (locations == null) continue;
+            List<String> holders = locations.stream()
+                    .map(StoreLocation::enclosingType)
+                    .distinct()
+                    .sorted()
+                    .toList();
+            if (holders.size() < 2) continue;
+            for (String survivor : holders) {
+                String others = holders.stream()
+                        .filter(h -> !h.equals(survivor))
+                        .reduce((a, b) -> a + " and " + b)
+                        .orElse("");
+                paths.add(survivor + " is the only type that declares a collection of '" + entity
+                        + "', and " + others + " read and write that collection through "
+                        + survivor + " instead of declaring their own");
+            }
+        }
+        return paths;
     }
 
     private static String formatViolation(String entity, List<StoreLocation> locations) {

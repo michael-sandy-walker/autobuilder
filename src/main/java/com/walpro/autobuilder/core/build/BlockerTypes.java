@@ -52,6 +52,16 @@ public final class BlockerTypes {
     public static final String GATE_CRITERIA = "criteria-gate";
 
     /**
+     * T2-ES: a work item raised because one deterministic heuristic reported the SAME structural
+     * defect on consecutive cycles. It wears a gate stamp for the reason the stamp exists — the
+     * defect it names compiles perfectly (a parallel store is invisible to javac), so without one
+     * the COMPILE_OK cleanup would retire it on the next merge, which is the T2-EQ Cause B defect
+     * arriving through a new door. Retired by the heuristic falling silent, or worked like any
+     * other subgoal.
+     */
+    public static final String GATE_STRUCTURAL_DEFECT = "structural-defect";
+
+    /**
      * True when the goal's work item was raised by the completion edge's acceptance-criteria
      * check, whose done-when is a requirement about the target application rather than a fact
      * about the build.

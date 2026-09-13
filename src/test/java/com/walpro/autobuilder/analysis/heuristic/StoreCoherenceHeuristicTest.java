@@ -255,6 +255,137 @@ class StoreCoherenceHeuristicTest {
         assertThat(StoreCoherenceHeuristic.extractStoredEntity("private Book current;")).isNull();
     }
 
+    /**
+     * T2-ES, the field shape made into a test. Run {@code 2026-09-13_09-44-03} rejected seven
+     * consecutive mutations for one parallel store, and the rationale moved with the model's
+     * rewrites — {@code BookStore:14}, then {@code :11}, then {@code :13}. Three strings, one
+     * defect, and a content fingerprint of the prose counted it as three different things.
+     *
+     * <p>So the assertion that matters is the PAIR: the rationale must differ between the two
+     * cycles (otherwise the test proves nothing about rewrites) while the identity key holds.
+     */
+    @Test
+    void sameDefectAcrossARewriteThatMovesTheDeclaration_keepsOneIdentity() {
+        String repository = """
+                package com.example.library.repository;
+                import com.example.library.model.Book;
+                import java.util.*;
+                public class BookRepository {
+                    private final List<Book> books = new ArrayList<>();
+                    public void save(Book b) { books.add(b); }
+                }
+                """;
+        String storeLowLine = """
+                package com.example.library.store;
+                import com.example.library.model.Book;
+                import java.util.*;
+                public class BookStore {
+                    private final List<Book> books = new ArrayList<>();
+                    public List<Book> all() { return books; }
+                }
+                """;
+        // The same class, rewritten: a javadoc block pushes the declaration further down the file.
+        String storeHighLine = """
+                package com.example.library.store;
+                import com.example.library.model.Book;
+                import java.util.*;
+
+                /**
+                 * Holds books.
+                 * Rewritten by a later cycle.
+                 */
+                public class BookStore {
+                    private final List<Book> books = new ArrayList<>();
+                    public List<Book> all() { return books; }
+                }
+                """;
+
+        Map<String, String> previousOutput = Map.of(
+                "src/main/java/com/example/library/model/Book.java", BOOK_ENTITY,
+                "src/main/java/com/example/library/repository/BookRepository.java", repository
+        );
+
+        HeuristicOpinion first = heuristic.evaluate(
+                CycleContextData.builder()
+                        .cycleName("c1")
+                        .previousOutput(previousOutput)
+                        .projectDiff(new ProjectDiffResult(null, Map.of(
+                                "src/main/java/com/example/library/store/BookStore.java", storeLowLine),
+                                Set.of()))
+                        .build(),
+                baseAcceptedOutcome(0.85));
+
+        HeuristicOpinion second = heuristic.evaluate(
+                CycleContextData.builder()
+                        .cycleName("c2")
+                        .previousOutput(previousOutput)
+                        .projectDiff(new ProjectDiffResult(null, Map.of(
+                                "src/main/java/com/example/library/store/BookStore.java", storeHighLine),
+                                Set.of()))
+                        .build(),
+                baseAcceptedOutcome(0.85));
+
+        assertThat(first.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(second.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+
+        // The prose moved, exactly as it did in the field.
+        assertThat(first.rationale()).isNotEqualTo(second.rationale());
+
+        // The identity did not.
+        assertThat(first.identityKey()).isEqualTo(second.identityKey());
+        assertThat(first.identityKey()).isEqualTo("StoreCoherenceHeuristic|Book");
+    }
+
+    /**
+     * T2-ES: the finding states the ways out, because only it knows the shape of its own defect.
+     * One path per declaring type — keep this one, route the others through it — which is the
+     * choice re-asking never offers.
+     */
+    @Test
+    void defectFinding_offersOneResolutionPathPerDeclaringType() {
+        Map<String, String> previousOutput = Map.of(
+                "src/main/java/com/example/library/model/Book.java", BOOK_ENTITY,
+                "src/main/java/com/example/library/controller/BookController.java", CONTROLLER_WITH_STORE,
+                "src/main/java/com/example/library/service/BookService.java", SERVICE_WITHOUT_STORE
+        );
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("c1")
+                .previousOutput(previousOutput)
+                .projectDiff(new ProjectDiffResult(null, Map.of(
+                        "src/main/java/com/example/library/service/BookService.java", SERVICE_WITH_STORE),
+                        Set.of()))
+                .build();
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx, baseAcceptedOutcome(0.85));
+
+        assertThat(opinion.defect()).isNotNull();
+        assertThat(opinion.defect().subject()).isEqualTo("Book");
+        assertThat(opinion.defect().resolutionPaths()).hasSize(2);
+        // Each path nominates a different survivor, and each mentions the other holder.
+        assertThat(opinion.defect().resolutionPaths())
+                .anySatisfy(p -> assertThat(p).startsWith("BookController is the only type")
+                        .contains("BookService"))
+                .anySatisfy(p -> assertThat(p).startsWith("BookService is the only type")
+                        .contains("BookController"));
+    }
+
+    /**
+     * T2-ES: a finding about two entities is not the same finding as one about either alone, so
+     * the subject is the whole set and is order-independent.
+     */
+    @Test
+    void defectSubject_isOrderIndependentAcrossTheWholeIntroducedSet() {
+        assertThat(StoreCoherenceHeuristic.defectSubject(new java.util.LinkedHashSet<>(
+                java.util.List.of("Member", "Book"))))
+                .isEqualTo("Book,Member");
+        assertThat(StoreCoherenceHeuristic.defectSubject(new java.util.LinkedHashSet<>(
+                java.util.List.of("Book", "Member"))))
+                .isEqualTo("Book,Member");
+        assertThat(StoreCoherenceHeuristic.defectSubject(new java.util.LinkedHashSet<>(
+                java.util.List.of("Book"))))
+                .isNotEqualTo("Book,Member");
+    }
+
     private static EvaluationOutcome baseAcceptedOutcome(double score) {
         return new EvaluationOutcome(score, MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING, null, null);

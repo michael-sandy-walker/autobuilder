@@ -232,6 +232,13 @@ public class BehaviourLogger {
                 missingToken, share, subgoalSpan, hadGreenFix));
     }
 
+    // T2-ES: a structural defect survived re-asking and was escalated to a work item.
+    public void structuralDefectEscalated(String cycleId, String heuristic, String subject,
+                                          int streak, List<String> resolutionPaths) {
+        emit(new BehaviourEvent.StructuralDefectEscalated(Instant.now(), cycleId, heuristic,
+                subject, streak, resolutionPaths));
+    }
+
     public void deliberationOutcome(String cycleId, String mode, List<String> signalAdjustments,
                                     String rationale) {
         emit(new BehaviourEvent.DeliberationOutcome(Instant.now(), cycleId, mode, signalAdjustments, rationale));

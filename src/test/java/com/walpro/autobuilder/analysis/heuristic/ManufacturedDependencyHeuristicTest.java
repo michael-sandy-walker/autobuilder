@@ -435,4 +435,32 @@ class ManufacturedDependencyHeuristicTest {
         assertThat(sites.get(0).manufacturedType()).isEqualTo("BookRepositoryImpl");
         assertThat(sites.get(0).line()).isGreaterThan(1);
     }
+
+    /**
+     * T2-ES: the sibling of the store-coherence identity. The site key already excludes the
+     * declaration line, so this finding survives a rewrite that moves the code — and the remedy
+     * the rationale used to state only as trailing advice is now a requirement about the code,
+     * which is what lets an escalated work item be confirmable once the defect is gone.
+     */
+    @Test
+    void defectFinding_carriesAStableSubjectAndTheWayOut() {
+        Map<String, String> previous = Map.of(
+                "src/main/java/com/example/library/domain/BookRepositoryImpl.java", REPOSITORY_IMPL,
+                "src/main/java/com/example/library/domain/BookServiceImpl.java", SERVICE_INJECTING
+        );
+        Map<String, String> changed = Map.of(
+                "src/main/java/com/example/library/domain/BookServiceImpl.java", SERVICE_MANUFACTURING
+        );
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx(previous, changed), baseAcceptedOutcome(0.85));
+
+        assertThat(opinion.defect()).isNotNull();
+        assertThat(opinion.defect().subject())
+                .isEqualTo("BookServiceImpl manufactures BookRepositoryImpl");
+        assertThat(opinion.identityKey())
+                .isEqualTo("ManufacturedDependencyHeuristic|BookServiceImpl manufactures BookRepositoryImpl");
+        assertThat(opinion.defect().resolutionPaths()).singleElement().asString()
+                .isEqualTo("BookServiceImpl receives its BookRepositoryImpl through its constructor, "
+                        + "and creates no BookRepositoryImpl of its own");
+    }
 }

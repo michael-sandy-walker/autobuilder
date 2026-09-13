@@ -486,6 +486,93 @@ class BlockerSubgoalInjectorTest {
         verify(goalPlannerService).addSubGoal(anyString(), anyString(), eq(true));
     }
 
+    // ── T2-ES: structural-defect redirection ─────────────────────────────────
+
+    /**
+     * The work item names the alternatives and forbids the repeat — the T2-DD divergence shape,
+     * for a defect the compiler cannot see. Each resolution path becomes its own criterion,
+     * because satisfying any ONE of them clears the defect.
+     */
+    @Test
+    void structuralDefect_injectsDivergenceNamingEveryResolutionPath() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        GoalEntity injected = goalEntityWithMeta(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        List<String> paths = List.of(
+                "BookRepository is the only type that declares a collection of 'Book', and BookStore "
+                        + "reads and writes that collection through BookRepository instead of declaring its own",
+                "BookStore is the only type that declares a collection of 'Book', and BookRepository "
+                        + "reads and writes that collection through BookStore instead of declaring its own");
+
+        injector.injectStructuralDefectRedirection("StoreCoherenceHeuristic", "Book", paths, 3);
+
+        ArgumentCaptor<String> idCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> descCaptor = ArgumentCaptor.forClass(String.class);
+        verify(goalPlannerService).addSubGoal(idCaptor.capture(), descCaptor.capture(), eq(true));
+
+        String description = descCaptor.getValue();
+        assertThat(description).startsWith(BlockerTypes.DIVERGENCE_DESCRIPTION_PREFIX);
+        assertThat(description).contains("3 consecutive proposals").contains("'Book'");
+        assertThat(description).contains(paths.get(0)).contains(paths.get(1));
+        assertThat(description).contains("Do NOT propose another edit");
+
+        // The description is a framework-generated instruction, so it must never be bankable as a
+        // criterion (the T1-FF/T1-FG hazard).
+        assertThat(BlockerTypes.isDiagnosticInstruction(description)).isTrue();
+
+        verify(goalPlannerService).setAcceptanceCriteria(idCaptor.getValue(), paths);
+    }
+
+    /**
+     * The defect compiles perfectly — a parallel store is invisible to javac — so without a gate
+     * stamp the COMPILE_OK cleanup would retire this item on the very next merge. That is T2-EQ's
+     * Cause B arriving through a new door, and the stamp is what closes it.
+     */
+    @Test
+    void structuralDefect_isStampedSoACompileObservationCannotRetireIt() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        GoalEntity injected = goalEntityWithMeta(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        injector.injectStructuralDefectRedirection(
+                "StoreCoherenceHeuristic", "Book", List.of("one type declares it"), 3);
+
+        assertThat(injected.getMetadata())
+                .containsEntry(BlockerTypes.ORIGINATING_GATE_KEY, BlockerTypes.GATE_STRUCTURAL_DEFECT);
+        assertThat(BlockerTypes.isFromGate(injected.getMetadata())).isTrue();
+
+        // And the compile-OK sweep leaves it alone.
+        injected.setStatus(GoalStatus.ACTIVE);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(injected);
+        injector.clearActiveBuildFixSubgoals();
+        verify(goalPlannerService, never()).transitionGoal(any(), eq(GoalStatus.SUBSUMED), any(), any());
+    }
+
+    /**
+     * A finder that cannot say what would clear its defect has nothing to add to the warning
+     * already in the prompt. Injecting anyway would re-ask through a more expensive channel,
+     * which is the thing this ticket exists to stop.
+     */
+    @Test
+    void structuralDefect_withNoResolutionPaths_doesNotInject() {
+        injector.injectStructuralDefectRedirection("SomeHeuristic", "Book", List.of(), 5);
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+    }
+
+    /** A broken build is the more urgent blocker; do not stack a second work item behind it. */
+    @Test
+    void structuralDefect_whenABuildFixIsAlreadyActive_doesNotInject() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(activeBuildFixGoal());
+
+        injector.injectStructuralDefectRedirection(
+                "StoreCoherenceHeuristic", "Book", List.of("one type declares it"), 4);
+
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+    }
+
     // ── helpers ──
 
     private static BuildOutcome buildOutcome(String stderr) {

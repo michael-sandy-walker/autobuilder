@@ -248,6 +248,81 @@ public class BlockerSubgoalInjector {
     }
 
     /**
+     * T2-ES: inject a divergence subgoal for a STRUCTURAL defect one deterministic heuristic has
+     * reported on {@code streak} consecutive cycles against the same subject. The third member of
+     * the divergence family, and the first whose defect the compiler cannot see: T2-DD is keyed on
+     * a failed file path ("stop editing file X"), T2-EF on a missing symbol ("create the type"),
+     * and this on a finding that survives every rewrite of a file that compiles cleanly.
+     *
+     * <p>Why it exists, measured. Run {@code 2026-09-13_09-44-03} rejected seven consecutive
+     * mutations over fifteen minutes for one parallel store. Detection worked and the relay
+     * worked — the persistent-warning block carried the finding, with file and line numbers, into
+     * the evolution prompt under the directive that the mutation MUST address it. The only thing
+     * that changed between the second attempt and the seventh was the integer in that warning.
+     * Escalation that means saying the same thing louder is what this replaces: the work item
+     * names the mutually sufficient ways out, so the next proposal chooses between shapes instead
+     * of re-deciding whether the warning is true.
+     *
+     * <p>{@code subject} and {@code resolutionPaths} are supplied by the finding heuristic and
+     * derived from the parsed target code — no framework or target-domain vocabulary enters here.
+     * This method renders them; it does not interpret them.
+     */
+    public void injectStructuralDefectRedirection(String heuristicName,
+                                                  String subject,
+                                                  java.util.List<String> resolutionPaths,
+                                                  int streak) {
+        if (subject == null || subject.isBlank()) return;
+        if (resolutionPaths == null || resolutionPaths.isEmpty()) {
+            // Without alternatives there is nothing to say that the warning has not already said,
+            // and injecting anyway would re-ask through a more expensive channel.
+            log.debug("T2-ES: {} reported '{}' for {} cycles but offered no resolution paths — "
+                    + "not escalating", heuristicName, subject, streak);
+            return;
+        }
+        if (hasActiveBuildFixSubgoal()) {
+            log.debug("T2-ES: a blocker subgoal is already active — skipping structural-defect "
+                    + "redirection for {}", subject);
+            return;
+        }
+
+        StringBuilder description = new StringBuilder(BlockerTypes.DIVERGENCE_DESCRIPTION_PREFIX)
+                .append(streak).append(" consecutive proposals were rejected for the same structural defect")
+                .append(" concerning '").append(subject).append("'. Re-proposing the same shape cannot clear it.")
+                .append(" Choose ONE of these and implement it completely:");
+        for (String path : resolutionPaths) {
+            description.append("\n  - ").append(path);
+        }
+        description.append("\nDo NOT propose another edit that leaves the defect in place.");
+
+        String newId = "goal-" + UUID.randomUUID();
+        try {
+            goalPlannerService.addSubGoal(newId, description.toString(), true);
+        } catch (RuntimeException e) {
+            log.warn("T2-ES: failed to inject structural-defect redirection subgoal: {}", e.getMessage());
+            return;
+        }
+
+        GoalEntity injected = goalPlannerService.getGoalById(newId);
+        if (injected != null) {
+            injected.getMetadata().put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
+            // The defect compiles, so a compile observation can attest to nothing about it. The
+            // stamp is what keeps the COMPILE_OK cleanup off this item (T2-EQ's carve-out).
+            injected.getMetadata().put(BlockerTypes.ORIGINATING_GATE_KEY,
+                    BlockerTypes.GATE_STRUCTURAL_DEFECT);
+            goalPlannerService.saveGoalMetadata(injected);
+        }
+
+        // Any ONE path clears the defect, so each is its own criterion — the same shape T2-DD uses
+        // for its creation/removal pair. Phrased as requirements about the code, never about the
+        // loop's own state, so they stay confirmable after the defect is gone.
+        goalPlannerService.setAcceptanceCriteria(newId, java.util.List.copyOf(resolutionPaths));
+
+        log.info("T2-ES: injected structural-defect redirection subgoal [{}] — {} reported '{}' for "
+                        + "{} consecutive cycles; offering {} resolution path(s)",
+                newId, heuristicName, subject, streak, resolutionPaths.size());
+    }
+
+    /**
      * T2-DD: best-effort extraction of the missing class/symbol name from a "cannot find symbol"
      * stderr summary. Returns the symbol simple name (e.g. {@code "BookAlreadyLoanedException"})
      * or {@code null} if no recognisable symbol appears in the summary.

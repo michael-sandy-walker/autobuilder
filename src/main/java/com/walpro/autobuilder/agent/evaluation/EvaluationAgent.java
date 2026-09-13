@@ -121,6 +121,31 @@ public class EvaluationAgent implements ExecutionAgent {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
 
+    /** T2-ES: actuator for a structural defect that has survived repeated re-asking. Null in
+     *  unit tests, in which case the streak is still counted and the warning still rendered —
+     *  pre-T2-ES behaviour. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector blockerSubgoalInjector;
+
+    /** T2-ES: escalation threshold, env-resolvable. Null in unit tests → code default. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.tuning.TuningParameterStore tuningParameterStore;
+
+    /**
+     * T2-ES: consecutive cycles one heuristic must report the SAME structural subject before the
+     * loop stops re-asking and injects the alternatives instead.
+     *
+     * <p>Three, because the warning surface already spends the first two: a finding raises no
+     * warning on its first cycle and the persistent-warning block fires from the second, so
+     * escalating at three gives re-asking exactly one chance to work before concluding it will
+     * not. Above the noise floor of a defect that appears and is fixed; far below the 20-cycle
+     * root convergence brake this ticket exists to stop being the thing that ends such runs.
+     */
+    static final String ESCALATION_THRESHOLD_PARAM = "escalation.structural-defect-repeat-cycles";
+    static final int ESCALATION_THRESHOLD_DEFAULT = 3;
+
     private static final String AGENT_ID = "StaticEvaluationAgent";
 
     @Override
@@ -1182,20 +1207,25 @@ public class EvaluationAgent implements ExecutionAgent {
      * (removed from the map). When a streak reaches ≥ 2, a human-readable warning is added to
      * {@code persistentHeuristicWarnings} so the evolution prompt can surface it as a directive.
      */
-    private static CycleContextData updateCriticalHeuristicStreaks(CycleContextData context,
-                                                                   List<HeuristicOpinion> criticalOpinions) {
+    private CycleContextData updateCriticalHeuristicStreaks(CycleContextData context,
+                                                            List<HeuristicOpinion> criticalOpinions) {
         Map<String, Integer> prevStreaks = context.criticalHeuristicStreaks();
         Map<String, Integer> newStreaks = new HashMap<>();
 
+        // T2-ES: keyed by what the finding is ABOUT, not merely by who reported it. A heuristic
+        // that fires on a different subject each cycle is not repeating itself, and one whose
+        // rationale changes while the subject does not — the model rewrote the file and kept the
+        // defect — is. Opinions without a structural subject key on their own name, unchanged.
         for (HeuristicOpinion op : criticalOpinions) {
-            int prev = prevStreaks != null ? prevStreaks.getOrDefault(op.name(), 0) : 0;
-            newStreaks.put(op.name(), prev + 1);
+            String key = op.identityKey();
+            int prev = prevStreaks != null ? prevStreaks.getOrDefault(key, 0) : 0;
+            newStreaks.put(key, prev + 1);
         }
 
         // Build warnings for heuristics with streak >= 2 (consistently repeating CRITICAL)
         List<String> warnings = new ArrayList<>();
         for (HeuristicOpinion op : criticalOpinions) {
-            int streak = newStreaks.get(op.name());
+            int streak = newStreaks.get(op.identityKey());
             if (streak >= 2) {
                 warnings.add("[%s] (critical for %d consecutive cycles): %s"
                         .formatted(op.name(), streak, op.rationale()));
@@ -1208,9 +1238,51 @@ public class EvaluationAgent implements ExecutionAgent {
                     String.join("\n", warnings));
         }
 
+        escalateRepeatedStructuralDefects(context, criticalOpinions, newStreaks);
+
         return context
                 .withCriticalHeuristicStreaks(newStreaks)
                 .withPersistentHeuristicWarnings(warnings);
+    }
+
+    /**
+     * T2-ES: when one heuristic has reported the same structural subject for enough consecutive
+     * cycles, change the question instead of repeating it louder — inject a work item naming the
+     * mutually sufficient ways out, through the injector that already owns blocker-subgoal
+     * lifecycle.
+     *
+     * <p>Only findings that carry resolution paths escalate. A defect whose finder cannot say what
+     * would clear it has nothing to offer beyond the warning already in the prompt, and injecting
+     * for it would re-ask through a more expensive channel.
+     */
+    private void escalateRepeatedStructuralDefects(CycleContextData context,
+                                                   List<HeuristicOpinion> criticalOpinions,
+                                                   Map<String, Integer> streaks) {
+        if (blockerSubgoalInjector == null) return;
+
+        int threshold = tuningParameterStore != null
+                ? (int) Math.round(tuningParameterStore.get(
+                        ESCALATION_THRESHOLD_PARAM, ESCALATION_THRESHOLD_DEFAULT))
+                : ESCALATION_THRESHOLD_DEFAULT;
+
+        for (HeuristicOpinion op : criticalOpinions) {
+            HeuristicOpinion.StructuralDefect defect = op.defect();
+            if (defect == null || defect.resolutionPaths().isEmpty()) continue;
+
+            int streak = streaks.getOrDefault(op.identityKey(), 0);
+            if (streak < threshold) continue;
+
+            if (behaviourLogger != null) {
+                behaviourLogger.structuralDefectEscalated(
+                        context.cycleName(),
+                        op.name(),
+                        defect.subject(),
+                        streak,
+                        defect.resolutionPaths());
+            }
+            blockerSubgoalInjector.injectStructuralDefectRedirection(
+                    op.name(), defect.subject(), defect.resolutionPaths(), streak);
+        }
     }
 
     @Override

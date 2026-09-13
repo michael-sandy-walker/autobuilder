@@ -155,7 +155,10 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
                     MutationAcceptanceState.REJECTED,
                     GoalProgressState.STAGNATING,
                     rationale,
-                    Math.max(0.0, outcome.score() - 0.10)
+                    Math.max(0.0, outcome.score() - 0.10),
+                    new HeuristicOpinion.StructuralDefect(
+                            defectSubject(introduced),
+                            resolutionPaths(introduced, currentSites, currentDupes))
             );
         }
 
@@ -319,5 +322,39 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
         Set<String> keys = new LinkedHashSet<>();
         for (FactoryDuplicate d : duplicates) keys.add(d.key());
         return keys;
+    }
+
+    /**
+     * T2-ES: what this finding is about, order-independent so it keys identically on every cycle
+     * it survives. The site keys already exclude the declaration line, so the subject is stable
+     * across a rewrite that moves the code — which is the condition the whole escalation rests on.
+     */
+    static String defectSubject(Set<String> introduced) {
+        return introduced.stream().sorted().reduce((a, b) -> a + "," + b).orElse("");
+    }
+
+    /**
+     * T2-ES: the way out of each introduced manufacture, phrased as a requirement about the code
+     * so it stays confirmable once the defect is gone. The remedies were already written into the
+     * rationale as trailing advice; stated here they can also become the acceptance criteria of an
+     * escalated work item, which is the difference between telling the model and asking it.
+     */
+    static List<String> resolutionPaths(Set<String> introduced,
+                                        List<ManufactureSite> sites,
+                                        List<FactoryDuplicate> duplicates) {
+        List<String> paths = new ArrayList<>();
+        sites.stream()
+                .filter(s -> introduced.contains(s.key()))
+                .sorted(java.util.Comparator.comparing(ManufactureSite::key))
+                .forEach(s -> paths.add(s.enclosingType() + " receives its " + s.manufacturedType()
+                        + " through its constructor, and creates no " + s.manufacturedType()
+                        + " of its own"));
+        duplicates.stream()
+                .filter(d -> introduced.contains(d.key()))
+                .sorted(java.util.Comparator.comparing(FactoryDuplicate::key))
+                .forEach(d -> paths.add(d.factoryType() + " builds one shared "
+                        + d.manufacturedType() + " that every one of " + d.methodNames()
+                        + " returns, rather than building a separate one in each"));
+        return paths;
     }
 }

@@ -237,6 +237,24 @@ public sealed interface BehaviourEvent {
     }
 
     /**
+     * T2-ES: one heuristic reported the same structural {@code subject} at CRITICAL confidence for
+     * {@code streak} consecutive cycles, and the loop stopped re-asking. Carries the subject so a
+     * repeat is countable across cycles in which the rationale text changed (line numbers move when
+     * the model rewrites the file), and the paths so a later reading can tell an escalation that
+     * offered real alternatives from one that offered none.
+     */
+    record StructuralDefectEscalated(
+            Instant timestamp,
+            String cycleId,
+            String heuristic,
+            String subject,
+            int streak,
+            List<String> resolutionPaths
+    ) implements BehaviourEvent {
+        public String event() { return "structural_defect_escalated"; }
+    }
+
+    /**
      * T4-CA: the best verified snapshot was copied to {@code meta/preserved-artifact/} at an
      * in-process halt. {@code fromCycle} names the snapshot that won selection;
      * {@code entryPointRequired} records whether the run's own history demanded an entry point.

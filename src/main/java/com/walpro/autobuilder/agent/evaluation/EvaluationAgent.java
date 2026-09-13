@@ -450,15 +450,15 @@ public class EvaluationAgent implements ExecutionAgent {
                 evaluationInterpreter.interpret(finalOutcome, comparisonBaseline, false);
 
         // Emit LOW_CONFIDENCE only for score-based failure; STAGNATING has its own signal below.
-        // Graduate strength by distance below the 0.75 threshold so near-misses don't accumulate.
         // T4-CC: not on a gate-checked acceptance — the fix measurably resolved its blocker, and
         // the low LLM score is recorded as background, not as an evaluation failure.
         if (!gateAccepted && !result.success() && result.goalProgress() != GoalProgressState.STAGNATING) {
             double score = finalOutcome.score() != null ? finalOutcome.score() : 0.0;
-            double strength = Math.min(1.0, (0.75 - score) / 0.20); // 1.0 at ≤0.55, ~0.25 at 0.70, ~0.05 at 0.74
-            double urgency = Math.max(0.05, strength);
-            context = context.issueRequest(ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, urgency,
-                    "evaluation", ChannelRequest.horizonFromDecay(urgency, 0.15)));
+            Double urgency = lowConfidenceUrgency(score);
+            if (urgency != null) {
+                context = context.issueRequest(ChannelRequest.of(BasicSignals.LOW_CONFIDENCE, urgency,
+                        "evaluation", ChannelRequest.horizonFromDecay(urgency, 0.15)));
+            }
         }
 
         // T1-DC: write mutationState/goalProgress here so same-cycle agents (planner, merge,
@@ -1019,6 +1019,66 @@ public class EvaluationAgent implements ExecutionAgent {
         // double-count a judgement that was made once.
         return out;
     }
+
+    /**
+     * T2-FJ: how strongly a failed evaluation asks for LOW_CONFIDENCE, or {@code null} for "do not ask".
+     *
+     * <p><b>Why this is banded rather than graduated.</b> Until 2026-09-13 this interpolated
+     * {@code min(1.0, (0.75 - score) / 0.20)}, commented "~0.25 at 0.70, ~0.05 at 0.74" under the
+     * stated intent that near-misses should not accumulate. Nothing downstream could read that
+     * resolution: LOW_CONFIDENCE has exactly three distinct strength thresholds on it, so the
+     * continuum collapsed to four outcomes — and over 4,972 archived emissions <b>96.6% landed in
+     * the top one</b>, 2.1% in the middle, 1.1% below every threshold, and <b>0.1% (5 emissions,
+     * none on the current build)</b> in the band the arithmetic existed to express, which is a
+     * score window two hundredths wide on a quantity whose source emits ~29 distinct values.
+     *
+     * <p><b>And the interpolation did the opposite of its stated intent.</b> Re-issue is additive
+     * ({@code ChannelRequest.raise}), so repeated near-misses accumulated toward the cap instead of
+     * staying quiet. Declining to emit is what actually delivers "near-misses don't accumulate".
+     *
+     * <p><b>The thresholds these levels are chosen against</b> (each is the reader's own constant —
+     * there is no shared home for them yet, so they are named here rather than imported):
+     * <ul>
+     *   <li>{@code GoalExhaustionDetector} counts LOW_CONFIDENCE toward exhaustion at <b>0.80</b>.</li>
+     *   <li>{@code DefaultProblemDetector} raises a problem entry at <b>0.70</b> and auto-resolves
+     *       it again below <b>0.20</b>.</li>
+     *   <li>{@code DefaultInterpretationAgent} and {@code GraphQueryService} elevate at <b>0.20</b>.</li>
+     * </ul>
+     *
+     * <p><b>Score boundaries are the ones the old arithmetic already drew</b>, so the bands that
+     * carried 98.7% of emissions keep their meaning: {@code score <= 0.59} cleared 0.80, and
+     * {@code score <= 0.71} cleared 0.20.
+     */
+    static Double lowConfidenceUrgency(double score) {
+        if (score <= SEVERE_FAILURE_SCORE_CEILING) {
+            return SEVERE_URGENCY;
+        }
+        if (score <= MODERATE_FAILURE_SCORE_CEILING) {
+            return MODERATE_URGENCY;
+        }
+        // Below every reader's threshold: the request would be inert on arrival and eligible for
+        // DefaultProblemDetector's own auto-resolve. Emitting it only fed the additive accumulator.
+        return null;
+    }
+
+    /** Highest score still treated as a severe evaluation failure — the old formula's 0.80 crossing. */
+    static final double SEVERE_FAILURE_SCORE_CEILING = 0.59;
+
+    /** Highest score that asks for anything at all — the old formula's 0.20 crossing. */
+    static final double MODERATE_FAILURE_SCORE_CEILING = 0.71;
+
+    /**
+     * Severe: must clear the exhaustion reader's 0.80 with room to decay. 99.8% of archived
+     * emissions in this band were already exactly 1.0, so this is the behaviour-preserving value.
+     */
+    static final double SEVERE_URGENCY = 1.0;
+
+    /**
+     * Moderate: must clear the elevation readers' 0.20 and must NOT reach the problem reader's
+     * 0.70 — so it sits halfway between them, clear of both under decay. Archived emissions in
+     * this band had a median of 0.358, so this is marginally more persistent than before.
+     */
+    static final double MODERATE_URGENCY = 0.45;
 
     static List<String> collectRejectionReasons(EvaluationOutcome finalOutcome, NegotiationResult negotiation) {
         List<String> reasons = new ArrayList<>();

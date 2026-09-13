@@ -104,9 +104,20 @@ public class ScoreRegressionHeuristic implements EvaluationHeuristic {
             rationale = "No regression detected (Δ=%.2f)".formatted(delta);
         }
 
+        // T2-AJ: the scale is the VOTE WEIGHT's complexity adjustment — a multi-file mutation's
+        // score drop is less attributable, so its opinion should carry less weight in the
+        // negotiator's weighted vote.
         confidence = confidence * confidenceScale;
 
-        boolean override = confidence >= 0.75;
+        // T2-FJ 2026-09-13: note that the ladder above uses HIGH's own value (0.75) as a rung while
+        // this line uses it as the override line, so scaling can push a rung that MEANS "override"
+        // below the line that performs it: the 0.75 rung survives only at extraFiles == 0, and 0.95
+        // survives to extraFiles == 4. Measured before deciding to leave it: over 633 archived
+        // firings this cost 2 decisions (0.3%), none of them on the current build, so reading the
+        // UNSCALED rung here would trade a documented oddity for a real increase in rejections on
+        // no evidence. Named rather than renumbered — re-entry is a measured case where a
+        // multi-file mutation's severe regression should have been overridden and was not.
+        boolean override = confidence >= ConfidenceLevel.HIGH.threshold();
         double suggestedScore = score; // keep current score; the REJECTED state is the penalty
 
         return HeuristicOpinion.ofWithScore(

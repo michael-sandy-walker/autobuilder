@@ -47,7 +47,7 @@ public class SuspiciousScoreHeuristic implements EvaluationHeuristic {
             rationale = "Score looks appropriate for the mutation.";
         }
 
-        boolean override = confidence >= 0.75;
+        boolean override = confidence >= ConfidenceLevel.HIGH.threshold();
         double suggestedScore = override ? 0.4 : score;
 
         return HeuristicOpinion.ofWithScore(

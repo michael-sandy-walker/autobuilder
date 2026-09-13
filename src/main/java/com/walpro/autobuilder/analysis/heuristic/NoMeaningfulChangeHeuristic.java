@@ -60,7 +60,7 @@ public class NoMeaningfulChangeHeuristic implements EvaluationHeuristic {
             rationale = "Files changed — no issue with score.";
         }
 
-        boolean override = confidence >= 0.75;
+        boolean override = confidence >= ConfidenceLevel.HIGH.threshold();
         double suggestedScore = override ? 0.4 : score;
 
         return HeuristicOpinion.ofWithScore(

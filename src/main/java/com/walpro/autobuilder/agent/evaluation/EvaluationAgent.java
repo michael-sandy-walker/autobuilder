@@ -1062,7 +1062,15 @@ public class EvaluationAgent implements ExecutionAgent {
      *
      * <p><b>Score boundaries are the ones the old arithmetic already drew</b>, so the bands that
      * carried 98.7% of emissions keep their meaning: {@code score <= 0.59} cleared 0.80, and
-     * {@code score <= 0.71} cleared 0.20.
+     * {@code score <= 0.71} cleared 0.20. Note that the {@code 0.20} in that replaced formula was
+     * the RAMP WIDTH (a divisor), not a threshold; it survives here as the band edges, which are
+     * that ramp solved for each reader's threshold.
+     *
+     * <p><b>⚠ Known coupling, filed as T4-DV:</b> these edges are derived from the literal 0.75,
+     * while the floor deciding whether this is called at all ({@code EvaluationInterpreter}'s
+     * success test) is tunable as {@code autobuilder.tuning.score.merge-acceptance-floor}. At the
+     * default they agree; under tuning the bands do NOT follow the floor. The replaced formula
+     * hardcoded 0.75 in the same way, so this is inherited, not introduced.
      */
     static Double lowConfidenceUrgency(double score) {
         if (score <= SEVERE_FAILURE_SCORE_CEILING) {

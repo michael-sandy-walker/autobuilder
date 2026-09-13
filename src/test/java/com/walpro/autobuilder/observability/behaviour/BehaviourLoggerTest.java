@@ -210,7 +210,29 @@ class BehaviourLoggerTest {
         logger.mutationRejected("cycle-11", "fp-1", "score below threshold");
         JsonNode env = capturedAsJson();
         assertEnvelope(env, "cycle-11", "mutation_rejected");
-        assertThat(env.get("payload").fieldNames()).toIterable().containsExactlyInAnyOrder("mutationId", "reason");
+        // T1-GA: the relay-exclusion inputs are part of the shape. The three-argument overload is
+        // for callers with no probe in hand, so they arrive null rather than absent — "this
+        // rejection ran no probe" is a fact worth recording, not a gap.
+        assertThat(env.get("payload").fieldNames()).toIterable().containsExactlyInAnyOrder(
+                "mutationId", "reason", "probeResult", "filesOnDisk", "relayedReasons");
+        assertThat(env.get("payload").get("probeResult").isNull()).isTrue();
+        assertThat(env.get("payload").get("relayedReasons").isNull()).isTrue();
+    }
+
+    /**
+     * T1-GA: a rejection that ran a probe records what the probe said and how many authored
+     * reasons it handed forward — the two facts run 2026-09-13_09-44-03 could not supply when
+     * seven rejections relayed nothing and the cause had to be guessed at by elimination.
+     */
+    @Test
+    void mutationRejected_carriesTheRelayDecision() {
+        logger.mutationRejected("cycle-11", "fp-1", "parallel store introduced",
+                "COMPILE_OK", true, 2);
+        JsonNode env = capturedAsJson();
+        assertEnvelope(env, "cycle-11", "mutation_rejected");
+        assertThat(env.get("payload").get("probeResult").asText()).isEqualTo("COMPILE_OK");
+        assertThat(env.get("payload").get("filesOnDisk").asBoolean()).isTrue();
+        assertThat(env.get("payload").get("relayedReasons").asInt()).isEqualTo(2);
     }
 
     @Test

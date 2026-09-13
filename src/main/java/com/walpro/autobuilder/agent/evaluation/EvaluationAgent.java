@@ -425,13 +425,9 @@ public class EvaluationAgent implements ExecutionAgent {
                     finalOutcome.mutationState() != null ? finalOutcome.mutationState().name() : null,
                     overrides
             );
-            if (finalOutcome.mutationState() == MutationAcceptanceState.REJECTED) {
-                behaviourLogger.mutationRejected(
-                        context.cycleName(),
-                        context.lastEvolutionFingerprint(),
-                        finalOutcome.feedbackMessage()
-                );
-            }
+            // T1-GA: the rejection event is emitted further down, at the point where the relay
+            // decision is made, so it can carry WHY the authored reasons did or did not travel.
+            // Emitting it here could only record the reason, never the disposition.
         }
 
         // IMPORTANT: this is now the canonical "context score"
@@ -489,9 +485,28 @@ public class EvaluationAgent implements ExecutionAgent {
                         || probeResult.outcome().result() == BuildResult.FRAGMENTATION_REJECTED);
         if (result.mutationState() == MutationAcceptanceState.REJECTED) {
             List<String> reasons = collectRejectionReasons(finalOutcome, negotiationResult);
+            int relayedReasons = 0;
             if (!buildFailureRejection && !reasons.isEmpty()) {
                 context = context.withRejectionFeedback(reasons);
+                relayedReasons = reasons.size();
                 log.info("T4-BX: relaying {} rejection reason(s) to the next evolution/planner prompt", reasons.size());
+            } else {
+                // T1-GA: the silent branch. Run 2026-09-13_09-44-03 took it seven times for one
+                // repeated defect and left no trace of which input caused it.
+                log.info("T4-BX: NOT relaying {} rejection reason(s) — buildFailureRejection={} (probe={}, filesOnDisk={})",
+                        reasons.size(), buildFailureRejection,
+                        probeResult != null && probeResult.outcome() != null ? probeResult.outcome().result() : null,
+                        probeResult != null ? probeResult.filesOnDisk() : null);
+            }
+            if (behaviourLogger != null) {
+                behaviourLogger.mutationRejected(
+                        context.cycleName(),
+                        context.lastEvolutionFingerprint(),
+                        finalOutcome.feedbackMessage(),
+                        probeResult != null && probeResult.outcome() != null
+                                ? probeResult.outcome().result().name() : null,
+                        probeResult != null ? probeResult.filesOnDisk() : null,
+                        relayedReasons);
             }
             // T2-EY: record the verdict against the proposal's CONTENT, so an identical proposal
             // later in this run is refused instead of re-evaluated. Build failures are recorded

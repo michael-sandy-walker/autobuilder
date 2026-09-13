@@ -189,11 +189,21 @@ public sealed interface BehaviourEvent {
         public String event() { return "mutation_merged"; }
     }
 
+    /**
+     * T1-GA: {@code probeResult} / {@code filesOnDisk} are the two inputs to the relay exclusion in
+     * {@code EvaluationAgent} — a rejection whose authored reasons are NOT relayed to the next
+     * evolution prompt is excluded on exactly these, and until 2026-09-13 neither was recorded, so
+     * a run could not say why a diagnosis failed to travel. {@code relayedReasons} is the decision
+     * itself: how many authored reasons this rejection actually handed forward.
+     */
     record MutationRejected(
             Instant timestamp,
             String cycleId,
             String mutationId,
-            String reason
+            String reason,
+            String probeResult,
+            Boolean filesOnDisk,
+            Integer relayedReasons
     ) implements BehaviourEvent {
         public String event() { return "mutation_rejected"; }
     }

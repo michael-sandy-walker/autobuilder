@@ -185,8 +185,19 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.MutationMerged(Instant.now(), cycleId, mutationId, files));
     }
 
+    /** Kept for callers with no probe in hand (the repeat-refusal path never runs one). */
     public void mutationRejected(String cycleId, String mutationId, String reason) {
-        emit(new BehaviourEvent.MutationRejected(Instant.now(), cycleId, mutationId, reason));
+        mutationRejected(cycleId, mutationId, reason, null, null, null);
+    }
+
+    /**
+     * T1-GA: the relay-exclusion inputs travel with the rejection, so "why did this diagnosis not
+     * reach the next prompt" is answerable from the run record instead of by elimination.
+     */
+    public void mutationRejected(String cycleId, String mutationId, String reason,
+                                 String probeResult, Boolean filesOnDisk, Integer relayedReasons) {
+        emit(new BehaviourEvent.MutationRejected(Instant.now(), cycleId, mutationId, reason,
+                probeResult, filesOnDisk, relayedReasons));
     }
 
     public void mutationInjected(String cycleId, String rule, String kind, String missingToken,

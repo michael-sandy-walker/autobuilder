@@ -77,6 +77,24 @@ public interface GoalGraphService {
         return java.util.List.of();
     }
 
+    /**
+     * T4-DQ follow-up: every goal of {@code lineageId} whose {@code created} stamp is at or before
+     * {@code at} — the goals that EXISTED at a cut point.
+     *
+     * <p>Needed because the transition log cannot answer this across a lineage boundary. Measured
+     * 2026-09-14: of 4982 goal nodes, 64 carry a CREATED transition — 1.3%. Within a run that gap
+     * is invisible, since the in-memory goal map already holds every goal and the fold only has to
+     * say which to REMOVE. Across runs the map belongs to a different run, so existence has to come
+     * from the record, and the record does not have it. Every goal node does carry {@code created},
+     * so this reads existence from the fact that was always written rather than from the event that
+     * usually was not.
+     *
+     * <p>Default empty: a graph-less build restores exactly as before.
+     */
+    default java.util.List<GoalEntity> goalsCreatedAtOrBefore(String lineageId, String at) {
+        return java.util.List.of();
+    }
+
     Optional<GoalGraphState> getState();
 
     void setState(String rootGoalId, String currentSubGoalId);

@@ -49,6 +49,19 @@ public record GoalTransition(
         REMOVED
     }
 
+    /**
+     * T4-DQ follow-up: the status this transition moved AWAY from, which is the goal's status just
+     * before it — the only record of what a goal was at a cut point it has no transition at or
+     * before.
+     */
+    public GoalStatus fromStatus() {
+        try {
+            return from == null ? null : GoalStatus.valueOf(from);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     public GoalStatus toStatus() {
         try {
             return to == null ? null : GoalStatus.valueOf(to);

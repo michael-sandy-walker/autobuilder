@@ -109,7 +109,8 @@ public class RewindService {
         // One read of the log for all three views — statuses, existence and how much is undone —
         // so a rewind cannot restore a goal it also believes never existed.
         GoalTransitionLog.Fold fold =
-                goalTransitionLog.foldAtForLineage(record.goalTransitionSeq(), record.lineageId());
+                goalTransitionLog.foldAtForLineage(record.goalTransitionSeq(), record.lineageId(),
+                        record.at() != null ? record.at().toString() : null);
         if (!fold.historyAvailable()) {
             // Refuse rather than half-restore, as everywhere else here. A point from a lineage a
             // reset severed carries a cut point into a history that no longer exists; folding it

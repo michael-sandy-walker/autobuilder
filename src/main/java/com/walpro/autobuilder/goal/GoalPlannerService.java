@@ -2858,9 +2858,21 @@ public class GoalPlannerService {
             // keeps goal nodes rather than deleting them. Without this, a rewind — and especially a
             // cross-run one, where more has had time to be pruned — silently restores a smaller
             // tree than the one it claims to be returning to.
+            // The set to resurrect is EXISTENCE, not status. `foldOver` adds every goal it sees to
+            // `existing` but only records a status when the transition carries one, so a goal that
+            // existed at the cut point and never changed status appears in one set and not the
+            // other. Resurrecting over `statuses` alone therefore restored a strict subset while
+            // removal was already gated on `existing` — the fold could delete a goal it was unable
+            // to bring back. Seen on the first cross-lineage rewind (2026-09-14): tree restored,
+            // 17 goals rewound out, 1 status restored, and the loop left with no current subgoal
+            // at all. Union, so the two halves of the same fold agree.
+            java.util.Set<String> toResurrect = new java.util.LinkedHashSet<>();
+            if (existing != null) toResurrect.addAll(existing);
+            if (statuses != null) toResurrect.addAll(statuses.keySet());
+
             int resurrected = 0;
-            if (statuses != null && goalGraphService != null) {
-                for (String id : statuses.keySet()) {
+            if (goalGraphService != null) {
+                for (String id : toResurrect) {
                     if (goalMap.containsKey(id)) continue;
                     try {
                         GoalEntity fromGraph = goalGraphService.findById(id).orElse(null);

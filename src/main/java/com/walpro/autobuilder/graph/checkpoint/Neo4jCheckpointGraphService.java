@@ -35,6 +35,7 @@ import java.util.Optional;
 public class Neo4jCheckpointGraphService implements CheckpointGraphService {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+    private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {};
 
     private final Neo4jClient neo4jClient;
     private final ObjectMapper objectMapper;
@@ -58,7 +59,8 @@ public class Neo4jCheckpointGraphService implements CheckpointGraphService {
                         c.archivePath = $archivePath,
                         c.cacheCaptured = $cacheCaptured,
                         c.holdersJson = $holdersJson,
-                        c.fingerprintJson = $fingerprintJson
+                        c.fingerprintJson = $fingerprintJson,
+                        c.captureFailuresJson = $captureFailuresJson
                     """)
                     .bind(record.cycleId()).to("cycleId")
                     .bind(record.runId()).to("runId")
@@ -75,6 +77,13 @@ public class Neo4jCheckpointGraphService implements CheckpointGraphService {
                     .bind(record.cacheCaptured()).to("cacheCaptured")
                     .bind(writeJson(record.holders())).to("holdersJson")
                     .bind(writeJson(record.fingerprint())).to("fingerprintJson")
+                    // T4-DQ follow-up: a point that failed to capture something must say so on the
+                    // way OUT too. Without this the cross-run index rebuilt every record with an
+                    // empty failure list, so a point the local listing correctly excluded was
+                    // readmitted as restorable the moment it was read back from the graph — and a
+                    // cross-run rewind is exactly when nobody can check the local file, because a
+                    // reset has already removed it.
+                    .bind(writeJson(record.captureFailures())).to("captureFailuresJson")
                     .run();
         } catch (Exception e) {
             log.warn("T4-DQ: could not index checkpoint {} in the graph (the local point is "
@@ -165,7 +174,7 @@ public class Neo4jCheckpointGraphService implements CheckpointGraphService {
                     str(c, "snapshotPath"), str(c, "mutationMetaPath"),
                     c.containsKey("merged") && c.get("merged").asBoolean(false),
                     c.containsKey("cacheCaptured") && c.get("cacheCaptured").asBoolean(false),
-                    holders, List.of(), fingerprint);
+                    holders, readStringList(str(c, "captureFailuresJson")), fingerprint);
             return new StoredCheckpoint(record, str(c, "archivePath"));
         } catch (Exception e) {
             log.debug("T4-DQ: unreadable checkpoint node: {}", e.getMessage());
@@ -205,6 +214,22 @@ public class Neo4jCheckpointGraphService implements CheckpointGraphService {
             return objectMapper.readValue(json, MAP_TYPE);
         } catch (Exception e) {
             return Map.of();
+        }
+    }
+
+    /**
+     * T4-DQ follow-up: the failure list as stored, or empty when the point predates this property.
+     * <p>An OLDER point genuinely cannot say whether it captured everything — the information was
+     * never written. Empty is therefore the honest answer for those and a wrong one for nothing:
+     * it restores the pre-existing reading rather than inventing a completeness claim, and every
+     * point written from here on carries its own answer.
+     */
+    private List<String> readStringList(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            return objectMapper.readValue(json, STRING_LIST_TYPE);
+        } catch (Exception e) {
+            return List.of();
         }
     }
 

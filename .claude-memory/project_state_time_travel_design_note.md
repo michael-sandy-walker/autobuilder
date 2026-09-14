@@ -239,3 +239,42 @@ deterministic replay of live runs on its own, which is worth having regardless
   transitions from the graph** (they survive the reset, unlike the file) and returns
   `historyAvailable=false` when there are none — which the rewind turns into a refusal. This is what
   made the operator listing safe to widen beyond the current lineage.
+
+## 2026-09-14 — the first CROSS-LINEAGE rewind, and the two gaps it found
+
+Attempting to restore run `2026-09-13_09-44-03` (a different run AND a different lineage) to
+re-run a defect on a new build. It worked, but only after two fixes; both are the same shape —
+**machinery that is correct within a run and silently under-powered across one.**
+
+- **🔴 GOAL EXISTENCE IS NOT IN THE TRANSITION LOG. Measured: of 4982 goal nodes, 64 carry a
+  `CREATED` transition — 1.3%.** Within a run this is invisible, because the live goal map already
+  holds every goal and the fold only has to decide which to REMOVE. Across a lineage the map
+  belongs to a different run, so existence must come from the record — and the record does not
+  have it. First attempt restored the right tree, rewound out 17 goals, restored ONE status, and
+  left the loop with **no current subgoal at all**; the checkpoint's own `currentSubGoalId` had a
+  single transition, at seq 14, four past the cut, so the fold never knew it existed.
+  - **Fixed by reading existence from the fact that was always written.** Every goal node carries
+    `created`, so `goalsCreatedAtOrBefore(lineageId, at)` answers "what existed at the cut" from
+    the graph, and the fold is widened with it. Status at the cut comes from recorded facts only:
+    the last transition at or before the cut; else the `fromStatus` of the earliest transition
+    AFTER it (a goal given up at seq 14 was ACTIVE at seq 11, and the record says so); else the
+    goal's own status. A goal with no `created` stamp is EXCLUDED rather than assumed old —
+    excluding it loses a goal, including it invents one.
+  - **Result: divergences 6 → 1**, goal statuses restored 0 → 3, and the pointer came back.
+- **🔴 RESURRECTION WAS KEYED ON STATUS WHERE REMOVAL WAS KEYED ON EXISTENCE.** `foldOver` adds
+  every goal it sees to `existing` but records a status only when the transition carries one, so
+  the sets differ — and `restoreGoalStateAsOf` resurrected over `statuses.keySet()` while removing
+  over `existing`. **The fold could delete a goal it was unable to bring back.** Now a union.
+- **🔴 The cross-run index claimed a completeness it never had** — the known-and-unfixed note above
+  said "persisting it is a schema change". It is two properties: `captureFailuresJson` is now
+  written and read back, so `complete()` stops being hardcoded true for every point read from the
+  graph. A point that predates the property returns empty, which is the honest answer for a record
+  that never wrote one — not a completeness claim.
+- **⚠ STILL DIVERGING, not chased: `holder:fixAttempts`.** One decision-bearing holder does not
+  come back identically. Reported rather than hidden, which is the fingerprint working.
+- **📋 Operational, learned the hard way:** `POST /autobuilder/evolve` is a **no-op while the
+  scheduler is disabled** — it answers *"Evolution cycle triggered."* and runs nothing, so
+  `dev-local` cannot drive cycles by hand. Use `dev-auto`, and rewind through
+  **pause → rewind → resume**: the scheduler takes the control-loop lock within seconds of boot
+  and the rewind is correctly refused while it is held. An explicit user-pause survives the rewind
+  by design, so the resume is required.

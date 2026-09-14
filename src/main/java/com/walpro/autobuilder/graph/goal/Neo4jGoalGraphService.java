@@ -278,6 +278,28 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 .toList();
     }
 
+    @Override
+    public List<GoalEntity> goalsCreatedAtOrBefore(String lineageId, String at) {
+        if (lineageId == null || lineageId.isBlank() || at == null || at.isBlank()) {
+            return List.of();
+        }
+        // A goal with no `created` stamp is deliberately EXCLUDED rather than assumed old: this
+        // answers "what existed at the cut", and a goal that cannot say when it began cannot
+        // support that claim. Excluding it loses a goal; including it invents one.
+        return neo4jClient.query("""
+                MATCH (g:Goal)
+                WHERE g.lineageId = $lineageId AND g.created IS NOT NULL AND g.created <= $at
+                OPTIONAL MATCH (g)-[:SUBGOAL_OF]->(parent:Goal)
+                RETURN g, parent.id AS parentId
+                """)
+                .bind(lineageId).to("lineageId")
+                .bind(at).to("at")
+                .fetch().all().stream()
+                .map(this::mapRowToGoalEntity)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
     private com.walpro.autobuilder.goal.GoalTransition toTransition(Object node) {
         if (!(node instanceof Node t)) return null;
         try {

@@ -265,6 +265,25 @@ public class GoalTransitionLog {
      * as "that lineage had no goals": see {@link Fold#historyAvailable()}.
      */
     public Fold foldAtForLineage(long seq, String lineageId) {
+        return foldAtForLineage(seq, lineageId, null);
+    }
+
+    /**
+     * T4-DQ follow-up: the same fold, widened by the goals the GRAPH says existed at {@code at}.
+     *
+     * <p>Transitions alone undercount existence badly across a lineage boundary — 64 of 4982 goal
+     * nodes carry a CREATED transition. Within a run that is harmless, because the live goal map
+     * already holds every goal and the fold only decides which to remove. Across runs the map is a
+     * different run's, so a fold built from transitions restored the tree and almost none of the
+     * goals: the first cross-lineage rewind (2026-09-14) came back with the right three files, 17
+     * goals rewound out, and no current subgoal at all.
+     *
+     * <p>Status at the cut, per goal, from recorded facts only: the last transition at or before
+     * the cut; failing that the {@code fromStatus} of the earliest transition after it (a goal
+     * given up at seq 14 was ACTIVE at seq 11, and the record says so); failing that the goal's
+     * own status, which nothing has ever changed.
+     */
+    public Fold foldAtForLineage(long seq, String lineageId, String at) {
         if (lineageId == null || runIdentityService == null
                 || lineageId.equals(runIdentityService.lineageId())) {
             return foldAt(seq);
@@ -283,7 +302,55 @@ public class GoalTransitionLog {
                     + "folded, so nothing may be restored from its cut point.", lineageId);
             return new Fold(seq, Map.of(), Set.of(), 0, false);
         }
-        return foldOver(foreign, seq);
+        return widenWithGraphExistence(foldOver(foreign, seq), foreign, seq, lineageId, at);
+    }
+
+    /** Adds the goals the graph says already existed, with the status the record implies. */
+    private Fold widenWithGraphExistence(Fold fold, List<GoalTransition> foreign, long seq,
+                                         String lineageId, String at) {
+        if (at == null || at.isBlank() || goalGraphService == null) return fold;
+        List<com.walpro.autobuilder.goal.GoalEntity> existed;
+        try {
+            existed = goalGraphService.goalsCreatedAtOrBefore(lineageId, at);
+        } catch (Exception e) {
+            log.warn("T4-DQ: could not widen the fold for lineage {}: {}", lineageId, e.getMessage());
+            return fold;
+        }
+        if (existed.isEmpty()) return fold;
+
+        Map<String, GoalStatus> statuses = new LinkedHashMap<>(fold.statuses());
+        Set<String> existing = new LinkedHashSet<>(fold.existingGoalIds());
+        int added = 0;
+        for (com.walpro.autobuilder.goal.GoalEntity g : existed) {
+            String id = g.getId();
+            if (id == null || existing.contains(id)) continue;
+            existing.add(id);
+            added++;
+            if (statuses.containsKey(id)) continue;
+            GoalStatus atCut = statusAtCut(foreign, id, seq, g.getStatus());
+            if (atCut != null) statuses.put(id, atCut);
+        }
+        if (added > 0) {
+            log.info("T4-DQ: the graph says {} further goal(s) of lineage {} existed at the cut "
+                    + "point but carry no transition at or before it; folded them in.", added, lineageId);
+        }
+        return new Fold(fold.seq(), statuses, existing, fold.transitionsUndone(), true);
+    }
+
+    private GoalStatus statusAtCut(List<GoalTransition> transitions, String goalId, long seq,
+                                   GoalStatus current) {
+        GoalTransition earliestAfter = null;
+        for (GoalTransition t : transitions) {
+            if (!goalId.equals(t.goalId())) continue;
+            if (t.seq() > seq && (earliestAfter == null || t.seq() < earliestAfter.seq())) {
+                earliestAfter = t;
+            }
+        }
+        if (earliestAfter != null) {
+            GoalStatus from = earliestAfter.fromStatus();
+            if (from != null) return from;
+        }
+        return current;
     }
 
     public Fold foldAt(long seq) {

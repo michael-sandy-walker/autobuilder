@@ -506,7 +506,9 @@ class BlockerSubgoalInjectorTest {
                 "BookStore is the only type that declares a collection of 'Book', and BookRepository "
                         + "reads and writes that collection through BookStore instead of declaring its own");
 
-        injector.injectStructuralDefectRedirection("StoreCoherenceHeuristic", "Book", paths, 3);
+        var outcome = injector.injectStructuralDefectRedirection("StoreCoherenceHeuristic", "Book", paths, 3);
+        assertThat(outcome.injected()).isTrue();
+        assertThat(outcome.outcome()).isEqualTo("injected");
 
         ArgumentCaptor<String> idCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> descCaptor = ArgumentCaptor.forClass(String.class);
@@ -567,10 +569,13 @@ class BlockerSubgoalInjectorTest {
     void structuralDefect_whenABuildFixIsAlreadyActive_doesNotInject() {
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(activeBuildFixGoal());
 
-        injector.injectStructuralDefectRedirection(
+        var outcome = injector.injectStructuralDefectRedirection(
                 "StoreCoherenceHeuristic", "Book", List.of("one type declares it"), 4);
 
         verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+        // The skip is reported, not buried: the caller records it on the escalation event.
+        assertThat(outcome.injected()).isFalse();
+        assertThat(outcome.outcome()).isEqualTo("skipped: a blocker subgoal is already active");
     }
 
     // ── helpers ──

@@ -267,22 +267,45 @@ public class BlockerSubgoalInjector {
      * derived from the parsed target code — no framework or target-domain vocabulary enters here.
      * This method renders them; it does not interpret them.
      */
-    public void injectStructuralDefectRedirection(String heuristicName,
+    /**
+     * What an escalation did: the work item it injected, or why it injected none. Returned so the
+     * caller can RECORD the outcome — the first field escalation (2026-09-14) emitted its event
+     * and injected nothing, because a planner-written blocker subgoal was already active, and the
+     * skip was a debug line nobody saw.
+     */
+    public record StructuralDefectEscalation(String injectedGoalId, String skippedBecause) {
+        public static StructuralDefectEscalation injected(String goalId) {
+            return new StructuralDefectEscalation(goalId, null);
+        }
+        public static StructuralDefectEscalation skipped(String why) {
+            return new StructuralDefectEscalation(null, why);
+        }
+        public boolean injected() {
+            return injectedGoalId != null;
+        }
+        public String outcome() {
+            return injected() ? "injected" : "skipped: " + skippedBecause;
+        }
+    }
+
+    public StructuralDefectEscalation injectStructuralDefectRedirection(String heuristicName,
                                                   String subject,
                                                   java.util.List<String> resolutionPaths,
                                                   int streak) {
-        if (subject == null || subject.isBlank()) return;
+        if (subject == null || subject.isBlank()) {
+            return StructuralDefectEscalation.skipped("no structural subject");
+        }
         if (resolutionPaths == null || resolutionPaths.isEmpty()) {
             // Without alternatives there is nothing to say that the warning has not already said,
             // and injecting anyway would re-ask through a more expensive channel.
-            log.debug("T2-ES: {} reported '{}' for {} cycles but offered no resolution paths — "
+            log.info("T2-ES: {} reported '{}' for {} cycles but offered no resolution paths — "
                     + "not escalating", heuristicName, subject, streak);
-            return;
+            return StructuralDefectEscalation.skipped("no resolution paths");
         }
         if (hasActiveBuildFixSubgoal()) {
-            log.debug("T2-ES: a blocker subgoal is already active — skipping structural-defect "
-                    + "redirection for {}", subject);
-            return;
+            log.info("T2-ES: a blocker subgoal is already active — skipping structural-defect "
+                    + "redirection for {} ({} reported it for {} cycles)", subject, heuristicName, streak);
+            return StructuralDefectEscalation.skipped("a blocker subgoal is already active");
         }
 
         StringBuilder description = new StringBuilder(BlockerTypes.DIVERGENCE_DESCRIPTION_PREFIX)
@@ -299,7 +322,7 @@ public class BlockerSubgoalInjector {
             goalPlannerService.addSubGoal(newId, description.toString(), true);
         } catch (RuntimeException e) {
             log.warn("T2-ES: failed to inject structural-defect redirection subgoal: {}", e.getMessage());
-            return;
+            return StructuralDefectEscalation.skipped("injection failed: " + e.getMessage());
         }
 
         GoalEntity injected = goalPlannerService.getGoalById(newId);
@@ -320,6 +343,7 @@ public class BlockerSubgoalInjector {
         log.info("T2-ES: injected structural-defect redirection subgoal [{}] — {} reported '{}' for "
                         + "{} consecutive cycles; offering {} resolution path(s)",
                 newId, heuristicName, subject, streak, resolutionPaths.size());
+        return StructuralDefectEscalation.injected(newId);
     }
 
     /**

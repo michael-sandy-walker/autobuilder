@@ -21,16 +21,28 @@ public class ProjectDiffService {
     private final DiffService diffService;
 
     public ProjectDiffResult computeDiff(Path currentPath, Path previousPath) {
+        return computeDiff(currentPath, previousPath, Set.of());
+    }
+
+    /**
+     * @param explicitDeletions the paths the mutation asked to delete. The mutation directory
+     *                          holds only what was written, so a deletion has no footprint in the
+     *                          folder comparison and must be told to the diff; without it the
+     *                          delete directive was parsed, logged and then dropped — absent from
+     *                          the diff, the probe tree, the heuristics' view and the merge.
+     */
+    public ProjectDiffResult computeDiff(Path currentPath, Path previousPath, Set<String> explicitDeletions) {
         try {
             String currentPathStr = currentPath.toString();
             String previousPathStr = previousPath != null && fileService.existsResolved(previousPath)
                     ? previousPath.toString()
                     : null;
 
+            Set<String> asked = explicitDeletions == null ? Set.of() : explicitDeletions;
             DiffReport diffReport = diffService.compareFolders(
                     previousPathStr,
                     currentPathStr,
-                    null
+                    asked.isEmpty() ? null : asked
             );
 
             Map<String, String> changedFiles = new HashMap<>();
@@ -93,6 +105,13 @@ public class ProjectDiffService {
                         ));
                     }
                 }
+            }
+
+            // A deletion the mutation asked for is a deletion whether or not the previous
+            // mutation directory happened to hold the file (it usually does not: the file was
+            // merged in an earlier cycle and lives in output/, not in mutations/<previous>/).
+            for (String path : asked) {
+                if (path != null && !path.isBlank()) deletedPaths.add(path.replace('\\', '/'));
             }
 
             // Create a synthetic root node for the full project

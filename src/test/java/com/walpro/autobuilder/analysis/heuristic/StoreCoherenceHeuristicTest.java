@@ -390,4 +390,31 @@ class StoreCoherenceHeuristicTest {
         return new EvaluationOutcome(score, MutationAcceptanceState.ACCEPTED,
                 GoalProgressState.PROGRESSING, null, null);
     }
+
+    /**
+     * The field case of 2026-09-14 (rewound {@code 2026-09-13_09-44-03} cut point): the model
+     * took one of the offered ways out — it deleted one declaring type and kept the other — and
+     * was rejected for the parallel store it had just removed, because the overlay added the
+     * changed files to the previous tree and subtracted nothing.
+     */
+    @Test
+    void deletingOneOfTheTwoDeclaringTypes_isNotAnIntroduction() {
+        Map<String, String> previousOutput = Map.of(
+                "src/main/java/com/example/library/model/Book.java", BOOK_ENTITY,
+                "src/main/java/com/example/library/controller/BookController.java", CONTROLLER_WITH_STORE);
+        // This cycle: the service gains a store AND the controller, the other holder, is deleted.
+        ProjectDiffResult diff = new ProjectDiffResult(null,
+                Map.of("src/main/java/com/example/library/service/BookService.java", SERVICE_WITH_STORE),
+                Set.of("src/main/java/com/example/library/controller/BookController.java"));
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-delete-path").previousOutput(previousOutput).projectDiff(diff).build();
+
+        HeuristicOpinion opinion = heuristic.evaluate(ctx,
+                new EvaluationOutcome(0.8, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, null, null));
+
+        assertThat(opinion.mutationState())
+                .as("one declaring type left: no parallel store to reject")
+                .isNotEqualTo(MutationAcceptanceState.REJECTED);
+    }
+
 }

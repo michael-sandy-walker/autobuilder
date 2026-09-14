@@ -519,4 +519,53 @@ class CompileProbeServiceTest {
                 new BuildOutcome(BuildResult.COMPILE_OK, "", 1L, "mvn", "p")))
                 .isEqualTo(0);
     }
+
+    /**
+     * A delete directive is part of the candidate. Until 2026-09-14 the probe staged only the
+     * written files, so a mutation that removed one of two parallel stores was compiled with both
+     * present — and the tree the heuristics then judged still held the one it had deleted.
+     */
+    @Test
+    void aDeleteDirectiveIsStagedForTheProbe_andRestoredByTheRollback() throws IOException {
+        String repo = "src/main/java/com/example/demo/BookRepository.java";
+        Files.createDirectories(tmp.resolve("output/src/main/java/com/example/demo"));
+        Files.writeString(tmp.resolve("output/" + repo), "class BookRepository {}");
+        java.util.List<Boolean> presentDuringBuild = new java.util.ArrayList<>();
+        when(buildExecutor.execute(any(), any())).thenAnswer(inv -> {
+            presentDuringBuild.add(Files.exists(tmp.resolve("output/" + repo)));
+            return new BuildOutcome(BuildResult.COMPILE_ERROR, "unrelated: class Foo", 1L, "mvn", "probe");
+        });
+        when(injector.inject(any(), any())).thenReturn(Optional.empty());
+        CycleContextData ctx = baseContext()
+                .evolutionOutcome(new EvolutionOutcome(
+                        List.of(new FileMutation(MEMBER_CONTROLLER, LLM_CONTENT)), List.of(repo), "llm", ""))
+                .build();
+
+        CompileProbeService.ProbeResult result = probe.probe(ctx, false);
+
+        assertThat(presentDuringBuild).as("the compiler saw the tree the mutation describes").containsExactly(false);
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_ERROR);
+        assertThat(tmp.resolve("output/" + repo)).as("a rejected probe puts the deleted file back").exists();
+        assertThat(Files.readString(tmp.resolve("output/" + repo))).isEqualTo("class BookRepository {}");
+    }
+
+    @Test
+    void aDeleteOnlyMutationIsStillProbed() throws IOException {
+        String repo = "src/main/java/com/example/demo/BookRepository.java";
+        Files.createDirectories(tmp.resolve("output/src/main/java/com/example/demo"));
+        Files.writeString(tmp.resolve("output/" + repo), "class BookRepository {}");
+        when(buildExecutor.execute(any(), any())).thenReturn(
+                new BuildOutcome(BuildResult.COMPILE_OK, "", 1L, "mvn", "probe"));
+        CycleContextData ctx = baseContext()
+                .evolutionOutcome(new EvolutionOutcome(List.of(), List.of(repo), "llm", ""))
+                .build();
+
+        CompileProbeService.ProbeResult result = probe.probe(ctx, false);
+
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_OK);
+        assertThat(tmp.resolve("output/" + repo)).as("COMPILE_OK leaves the candidate on disk, deletion included").doesNotExist();
+        assertThat(result.rollbackPoint()).isNotNull();
+        assertThat(result.rollbackPoint().originalContents()).containsKey(repo);
+    }
+
 }

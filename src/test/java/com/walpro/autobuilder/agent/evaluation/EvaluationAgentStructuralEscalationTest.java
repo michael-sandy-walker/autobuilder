@@ -86,6 +86,8 @@ class EvaluationAgentStructuralEscalationTest {
                 evaluationActionRegistrar, goalPlannerService, mutationSnapshotService,
                 compileProbeService, mergeRollbackService, fileService);
         agent.setBlockerSubgoalInjector(blockerSubgoalInjector);
+        lenient().when(blockerSubgoalInjector.injectStructuralDefectRedirection(anyString(), anyString(), any(), anyInt()))
+                .thenReturn(BlockerSubgoalInjector.StructuralDefectEscalation.injected("goal-injected"));
 
         lenient().when(problemDetector.detectAndUpdate(any(), any(), any()))
                 .thenReturn(ProblemContext.empty());
@@ -225,5 +227,26 @@ class EvaluationAgentStructuralEscalationTest {
         assertThat(out.criticalHeuristicStreaks()).containsKey("MergeRegressionHeuristic");
         verify(blockerSubgoalInjector, never())
                 .injectStructuralDefectRedirection(anyString(), anyString(), any(), anyInt());
+    }
+
+    /**
+     * The event says what the escalation DID. Its first field firing (2026-09-14) recorded
+     * "escalated" while the injector had skipped on an active blocker subgoal at debug level, so
+     * the ledger claimed a work item that did not exist.
+     */
+    @Test
+    void theEventCarriesTheInjectorsOutcome_includingASkip() {
+        com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLogger =
+                org.mockito.Mockito.mock(com.walpro.autobuilder.observability.behaviour.BehaviourLogger.class);
+        agent.setBehaviourLogger(behaviourLogger);
+        when(blockerSubgoalInjector.injectStructuralDefectRedirection(anyString(), anyString(), any(), anyInt()))
+                .thenReturn(BlockerSubgoalInjector.StructuralDefectEscalation.skipped("a blocker subgoal is already active"));
+
+        CycleContextData c1 = rejectOnce(null, "Book", "declared in BookRepository:12, BookStore:14");
+        CycleContextData c2 = rejectOnce(c1, "Book", "declared in BookRepository:12, BookStore:14");
+        rejectOnce(c2, "Book", "declared in BookRepository:12, BookStore:11");
+
+        verify(behaviourLogger).structuralDefectEscalated(anyString(), eq("StoreCoherenceHeuristic"), eq("Book"),
+                eq(3), eq(PATHS), org.mockito.ArgumentMatchers.isNull(), eq("skipped: a blocker subgoal is already active"));
     }
 }

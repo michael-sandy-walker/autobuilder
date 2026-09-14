@@ -165,7 +165,12 @@ public class CompileProbeService {
         List<FileMutation> mutations = context.evolutionOutcome() != null
                 ? context.evolutionOutcome().addedOrChangedFiles()
                 : null;
-        if (mutations == null || mutations.isEmpty()) {
+        List<String> deletions = context.evolutionOutcome() != null
+                && context.evolutionOutcome().deletedFiles() != null
+                ? context.evolutionOutcome().deletedFiles()
+                : List.of();
+        if (mutations == null) mutations = List.of();
+        if (mutations.isEmpty() && deletions.isEmpty()) {
             return new ProbeResult(BuildOutcome.skipped("no changed files in evolution outcome"), null);
         }
 
@@ -226,6 +231,20 @@ public class CompileProbeService {
                 Path outputFile = fileService.resolveSecurePath(relPath);
                 fileService.writeFileResolved(outputFile, mutation.content());
             }
+            // A delete directive is part of the candidate: the tree the compiler sees must be the
+            // tree the mutation describes. The original goes into the rollback point like any
+            // overwritten file, so a rejected probe puts it back. Until 2026-09-14 deletions were
+            // never staged, so a mutation that removed one of two parallel stores was compiled and
+            // judged with both present.
+            for (String deleted : deletions) {
+                if (deleted == null || deleted.isBlank()) continue;
+                String relPath = outputPath + "/" + deleted;
+                if (!fileService.exists(relPath)) continue;
+                if (!originalContents.containsKey(deleted)) {
+                    originalContents.put(deleted, fileService.readString(relPath));
+                }
+                fileService.deleteFile(relPath);
+            }
         } catch (IOException e) {
             log.warn("T1-EC: probe write failed: {}", e.getMessage());
             // Best-effort restore of any files we managed to write before the IOException.
@@ -246,7 +265,8 @@ public class CompileProbeService {
         BuildOutcome outcome = probeCommand != null
                 ? buildExecutor.execute(fileBasePath, cycleId, probeCommand)
                 : buildExecutor.execute(fileBasePath, cycleId);
-        log.info("T1-EC: probe result={} ({} files written{})", outcome.result(), originalContents.size(),
+        log.info("T1-EC: probe result={} ({} files written{}{})", outcome.result(), originalContents.size(),
+                deletions.isEmpty() ? "" : ", " + deletions.size() + " deleted",
                 touchesTestSources ? ", test-scoped probe" : "");
         emitBuildFixAttempt(context.cycleName(), "probe", 0, null, outcome);
 

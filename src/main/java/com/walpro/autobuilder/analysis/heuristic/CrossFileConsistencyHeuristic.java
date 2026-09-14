@@ -68,10 +68,8 @@ public class CrossFileConsistencyHeuristic implements EvaluationHeuristic {
 
         Map<String, String> previousOutput = input.previousOutput();
 
-        // Build the full view: previousOutput overridden by incoming changes.
-        Map<String, String> allFiles = new HashMap<>();
-        if (previousOutput != null) allFiles.putAll(previousOutput);
-        allFiles.putAll(diff.changedFiles());
+        // Build the full view: previousOutput overridden by incoming changes, deletions removed.
+        Map<String, String> allFiles = diff.overlay(previousOutput);
 
         // 1. Build method registry: simpleName → set of known method names
         Map<String, Set<String>> typeMethodRegistry = buildMethodRegistry(allFiles);

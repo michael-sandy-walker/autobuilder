@@ -15,7 +15,6 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -84,9 +83,8 @@ public class StoreCoherenceHeuristic implements EvaluationHeuristic {
 
         Map<String, String> previous = input.previousOutput() != null ? input.previousOutput() : Map.of();
 
-        // Current view = previous overlaid with this cycle's changed content.
-        Map<String, String> current = new LinkedHashMap<>(previous);
-        current.putAll(diff.changedFiles());
+        // Current view = previous overlaid with this cycle's changes, deletions included.
+        Map<String, String> current = diff.overlay(previous);
 
         Map<String, List<StoreLocation>> previousStores = parallelStores(previous);
         Map<String, List<StoreLocation>> currentStores = parallelStores(current);

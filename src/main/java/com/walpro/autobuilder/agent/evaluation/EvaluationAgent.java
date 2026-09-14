@@ -1272,16 +1272,21 @@ public class EvaluationAgent implements ExecutionAgent {
             int streak = streaks.getOrDefault(op.identityKey(), 0);
             if (streak < threshold) continue;
 
+            // Inject first, record second: the event says what the escalation DID, not merely
+            // that the threshold was crossed. Its first field firing recorded "escalated" while
+            // the injector had skipped on an active blocker subgoal at debug level.
+            var escalation = blockerSubgoalInjector.injectStructuralDefectRedirection(
+                    op.name(), defect.subject(), defect.resolutionPaths(), streak);
             if (behaviourLogger != null) {
                 behaviourLogger.structuralDefectEscalated(
                         context.cycleName(),
                         op.name(),
                         defect.subject(),
                         streak,
-                        defect.resolutionPaths());
+                        defect.resolutionPaths(),
+                        escalation == null ? null : escalation.injectedGoalId(),
+                        escalation == null ? "unknown" : escalation.outcome());
             }
-            blockerSubgoalInjector.injectStructuralDefectRedirection(
-                    op.name(), defect.subject(), defect.resolutionPaths(), streak);
         }
     }
 

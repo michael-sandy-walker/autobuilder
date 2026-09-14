@@ -71,7 +71,7 @@ class EvolutionAgentRepetitionTest {
         when(mutationApplier.resolveMutationPath(anyString()))
                 .thenAnswer(inv -> Path.of("mutations/" + inv.getArgument(0)));
         doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
-        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+        when(projectDiffService.computeDiff(any(), any(), any())).thenReturn(diffResult);
     }
 
     @Test

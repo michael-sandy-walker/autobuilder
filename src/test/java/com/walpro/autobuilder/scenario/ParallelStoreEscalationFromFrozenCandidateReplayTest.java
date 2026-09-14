@@ -121,4 +121,33 @@ class ParallelStoreEscalationFromFrozenCandidateReplayTest {
                 .contains("BookRepository:12")
                 .contains("writes to one are invisible to the other");
     }
+
+    /**
+     * What the model did one cycle after the 2026-09-14 rewind to this run's cut point: it kept
+     * {@code BookStore} and emitted {@code #Delete} for {@code BookRepository} — the second of the
+     * two resolution paths above, taken. The loop rejected it for the parallel store, because the
+     * deletion never reached the tree it judged. Against the real files, the delete path must read
+     * as the defect resolved, not introduced.
+     */
+    @Test
+    void theDeletePathTheModelTookIsHonoured() throws IOException {
+        Map<String, String> tree = frozenTree();
+        String storePath = "src/main/java/com/example/library/domain/store/BookStore.java";
+        String repositoryPath = "src/main/java/com/example/library/domain/repository/BookRepository.java";
+        Map<String, String> previous = new HashMap<>(tree);
+        previous.remove(storePath);
+        CycleContextData context = CycleContextData.builder()
+                .cycleName("replay-delete")
+                .previousOutput(previous)
+                .projectDiff(new ProjectDiffResult(null, Map.of(storePath, tree.get(storePath)), Set.of(repositoryPath)))
+                .build();
+
+        HeuristicOpinion opinion = heuristic.evaluate(context,
+                new EvaluationOutcome(0.85, MutationAcceptanceState.ACCEPTED,
+                        GoalProgressState.PROGRESSING, null, null));
+
+        assertThat(opinion.mutationState()).isNotEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(opinion.defectFinding()).isFalse();
+    }
+
 }

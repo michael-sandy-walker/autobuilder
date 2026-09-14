@@ -258,6 +258,14 @@ public class MergeAgent implements ExecutionAgent {
             anyMergeRegistered = true;
         }
 
+        // A delete directive is part of the mutation. The merge loop above walks the mutation
+        // directories, which hold only what was written, so a deletion has no variant to merge
+        // and until 2026-09-14 was never applied: the file the model asked to remove stayed in
+        // the tree, and the loop then judged the tree for the defect the deletion had cleared.
+        // The originals go into the rollback point like any overwritten file.
+        Set<String> deletedInMerge = applyDeletions(context, contributingCyclesAccumulated,
+                outputPath, originalContents);
+
         // T4-BA: if the guard rejected any fragmenting file this cycle, carry the conflicts
         // forward exactly one cycle (single-cycle TTL via ContextLineageTracker) so the next
         // evolution prompt tells the LLM to consolidate the type rather than re-split it.
@@ -308,7 +316,7 @@ public class MergeAgent implements ExecutionAgent {
 
         // T4-AN-1: post-merge compile gate. Only invoke when something was actually written —
         // running the build on a SKIPPED merge would just re-validate the prior state.
-        if (!successfullyMergedPaths.isEmpty() && buildExecutor.isEnabled()) {
+        if ((!successfullyMergedPaths.isEmpty() || !deletedInMerge.isEmpty()) && buildExecutor.isEnabled()) {
             // T1-DW: capture previous outcome BEFORE overwriting — rollback condition needs it.
             BuildOutcome previousBuildOutcome = context.buildOutcome();
             BuildOutcome buildOutcome = buildExecutor.execute(fileBasePath, context.cycleName());
@@ -447,7 +455,7 @@ public class MergeAgent implements ExecutionAgent {
         // a merge — i.e. something was written AND rollback did not undo it. Build-disabled mode
         // satisfies this trivially (rolledBackThisCycle stays false). The SKIPPED-merge branch
         // (successfullyMergedPaths empty) does not commit because there is nothing to commit.
-        if (!successfullyMergedPaths.isEmpty()) {
+        if (!successfullyMergedPaths.isEmpty() || !deletedInMerge.isEmpty()) {
             commitMergeState(context, successfullyMergedPaths, mergedFileCount);
         }
 
@@ -631,6 +639,52 @@ public class MergeAgent implements ExecutionAgent {
             }
         }
         return false;
+    }
+
+    /**
+     * Apply every deletion the merged mutation(s) asked for: this cycle's own outcome, plus the
+     * recorded outcome of each contributing cycle (a deferred mutation merges from its
+     * {@code meta.json}, where its delete list survives). Only files that exist are touched; each
+     * original is captured into {@code originalContents} first so the build gate's rollback can
+     * put it back.
+     *
+     * @return the paths removed from {@code output/}
+     */
+    private Set<String> applyDeletions(CycleContextData context, Set<String> contributingCycles,
+                                       String outputPath, Map<String, String> originalContents) {
+        Set<String> asked = new LinkedHashSet<>();
+        EvolutionOutcome own = context.evolutionOutcome();
+        if (own != null && own.deletedFiles() != null) asked.addAll(own.deletedFiles());
+        for (String cycle : contributingCycles) {
+            if (cycle == null || cycle.isBlank() || cycle.equals(context.cycleName())) continue;
+            try {
+                CycleContextData meta = mutationSnapshotService.readMutationMeta("mutations/" + cycle + "/meta.json");
+                if (meta != null && meta.evolutionOutcome() != null && meta.evolutionOutcome().deletedFiles() != null) {
+                    asked.addAll(meta.evolutionOutcome().deletedFiles());
+                }
+            } catch (IOException | RuntimeException e) {
+                log.debug("merge: no recorded delete list for contributing cycle {}: {}", cycle, e.getMessage());
+            }
+        }
+        Set<String> deleted = new LinkedHashSet<>();
+        for (String path : asked) {
+            if (path == null || path.isBlank()) continue;
+            String rel = outputPath + "/" + path;
+            try {
+                if (!fileService.exists(rel)) continue;
+                if (!originalContents.containsKey(path)) {
+                    originalContents.put(path, fileService.readString(rel));
+                }
+                fileService.deleteFile(rel);
+                deleted.add(path);
+            } catch (IOException e) {
+                log.warn("merge: could not delete {}: {}", path, e.getMessage());
+            }
+        }
+        if (!deleted.isEmpty()) {
+            log.info("merge: deleted {} path(s) the mutation asked to remove: {}", deleted.size(), deleted);
+        }
+        return deleted;
     }
 
     private static Set<String> collectBasenames(EvolutionOutcome evolutionOutcome) {

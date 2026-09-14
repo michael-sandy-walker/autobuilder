@@ -34,6 +34,8 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -117,7 +119,7 @@ class EvolutionAgentTest {
         when(mutationApplier.resolveOutputPath()).thenReturn(outPath);
         doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
 
-        when(projectDiffService.computeDiff(null, outPath)).thenReturn(diffResult);
+        when(projectDiffService.computeDiff(isNull(), eq(outPath), any())).thenReturn(diffResult);
 
         CycleContextData result = agent.execute(ctx);
 
@@ -132,7 +134,7 @@ class EvolutionAgentTest {
         assertThat(DerivedFacts.evolutionOccurred(result)).isTrue();
 
         // diff computed and stored
-        verify(projectDiffService).computeDiff(null, outPath);
+        verify(projectDiffService).computeDiff(isNull(), eq(outPath), eq(java.util.Set.of()));
         assertThat(result.projectDiff()).isEqualTo(diffResult);
     }
 
@@ -161,7 +163,7 @@ class EvolutionAgentTest {
         Path outPath = Path.of("build/out");
         when(mutationApplier.resolveOutputPath()).thenReturn(outPath);
         doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
-        when(projectDiffService.computeDiff(null, outPath)).thenReturn(diffResult);
+        when(projectDiffService.computeDiff(isNull(), eq(outPath), any())).thenReturn(diffResult);
 
         CycleContextData result = agent.execute(ctx);
 
@@ -198,7 +200,7 @@ class EvolutionAgentTest {
                 .thenReturn("fp-1");
         when(mutationApplier.resolveOutputPath())
                 .thenReturn(Path.of("build/out"));
-        when(projectDiffService.computeDiff(any(), any()))
+        when(projectDiffService.computeDiff(any(), any(), any()))
                 .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
 
         CycleContextData context = baseContext()
@@ -237,7 +239,7 @@ class EvolutionAgentTest {
 
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
         when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
-        when(projectDiffService.computeDiff(any(), any()))
+        when(projectDiffService.computeDiff(any(), any(), any()))
                 .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
 
         // mock interpretation -> REGRESSING
@@ -272,7 +274,7 @@ class EvolutionAgentTest {
 
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
         when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
-        when(projectDiffService.computeDiff(any(), any()))
+        when(projectDiffService.computeDiff(any(), any(), any()))
                 .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
 
         EvaluationInterpreter.InterpretationResult interpretation = mock(EvaluationInterpreter.InterpretationResult.class);
@@ -520,7 +522,7 @@ class EvolutionAgentTest {
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-new");
         when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
         doNothing().when(mutationApplier).applyRegularMutations(any());
-        when(projectDiffService.computeDiff(any(), any()))
+        when(projectDiffService.computeDiff(any(), any(), any()))
                 .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
 
         CycleContextData ctx = baseContext()
@@ -548,7 +550,7 @@ class EvolutionAgentTest {
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-same");
         when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
         doNothing().when(mutationApplier).applyRegularMutations(any());
-        when(projectDiffService.computeDiff(any(), any()))
+        when(projectDiffService.computeDiff(any(), any(), any()))
                 .thenReturn(new ProjectDiffResult(null, Map.of(), Set.of()));
 
         CycleContextData ctx = baseContext()
@@ -583,7 +585,7 @@ class EvolutionAgentTest {
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
         when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
         doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
-        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+        when(projectDiffService.computeDiff(any(), any(), any())).thenReturn(diffResult);
 
         CycleContextData result = agent.execute(baseContext());
 
@@ -609,7 +611,7 @@ class EvolutionAgentTest {
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-1");
         when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
         doNothing().when(mutationApplier).applyRegularMutations(any(CycleContextData.class));
-        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+        when(projectDiffService.computeDiff(any(), any(), any())).thenReturn(diffResult);
 
         CycleContextData result = agent.execute(baseContext());
 

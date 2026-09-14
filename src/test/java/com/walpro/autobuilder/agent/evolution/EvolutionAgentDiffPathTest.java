@@ -41,7 +41,7 @@ class EvolutionAgentDiffPathTest {
 
         Path outputPath = Path.of("build/out");
         when(mutationApplier.resolveOutputPath()).thenReturn(outputPath);
-        when(projectDiffService.computeDiff(outputPath, null)).thenReturn(diffResult);
+        when(projectDiffService.computeDiff(eq(outputPath), isNull(), any())).thenReturn(diffResult);
 
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("bootstrap")
@@ -52,7 +52,7 @@ class EvolutionAgentDiffPathTest {
 
         assertThat(result).isSameAs(diffResult);
         verify(mutationApplier).resolveOutputPath();
-        verify(projectDiffService).computeDiff(outputPath, null);
+        verify(projectDiffService).computeDiff(eq(outputPath), isNull(), eq(java.util.Set.of()));
         verifyNoMoreInteractions(projectDiffService);
     }
 
@@ -65,7 +65,7 @@ class EvolutionAgentDiffPathTest {
 
         when(mutationApplier.resolveOutputPath()).thenReturn(outputPath);
         when(mutationApplier.resolveMutationPath("cycle-1")).thenReturn(mutationPath);
-        when(projectDiffService.computeDiff(mutationPath, outputPath)).thenReturn(diffResult);
+        when(projectDiffService.computeDiff(eq(mutationPath), eq(outputPath), any())).thenReturn(diffResult);
 
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("cycle-1")
@@ -77,7 +77,7 @@ class EvolutionAgentDiffPathTest {
         assertThat(result).isSameAs(diffResult);
         verify(mutationApplier).resolveOutputPath();
         verify(mutationApplier).resolveMutationPath("cycle-1");
-        verify(projectDiffService).computeDiff(mutationPath, outputPath);
+        verify(projectDiffService).computeDiff(eq(mutationPath), eq(outputPath), eq(java.util.Set.of()));
         verifyNoMoreInteractions(projectDiffService);
     }
 
@@ -90,7 +90,7 @@ class EvolutionAgentDiffPathTest {
 
         when(mutationApplier.resolveMutationPath("cycle-1")).thenReturn(prev);
         when(mutationApplier.resolveMutationPath("cycle-2")).thenReturn(curr);
-        when(projectDiffService.computeDiff(curr, prev)).thenReturn(diffResult);
+        when(projectDiffService.computeDiff(eq(curr), eq(prev), any())).thenReturn(diffResult);
 
         CycleContextData ctx = CycleContextData.builder()
                 .cycleName("cycle-2")
@@ -102,7 +102,7 @@ class EvolutionAgentDiffPathTest {
         assertThat(result).isSameAs(diffResult);
         verify(mutationApplier).resolveMutationPath("cycle-1");
         verify(mutationApplier).resolveMutationPath("cycle-2");
-        verify(projectDiffService).computeDiff(curr, prev);
+        verify(projectDiffService).computeDiff(eq(curr), eq(prev), eq(java.util.Set.of()));
         verifyNoMoreInteractions(projectDiffService);
     }
 }

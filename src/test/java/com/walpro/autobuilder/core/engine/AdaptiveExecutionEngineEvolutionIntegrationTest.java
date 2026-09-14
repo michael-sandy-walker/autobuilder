@@ -180,7 +180,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
                 Set.of()
         );
         // adjust arg order if your computeDiff signature is (current, previous) etc.
-        when(projectDiffService.computeDiff(any(), any())).thenReturn(diffResult);
+        when(projectDiffService.computeDiff(any(), any(), any())).thenReturn(diffResult);
 
         // --- evaluation stubs ------------------------------------------------------
         EvaluationOutcome evalOutcome = new EvaluationOutcome(
@@ -342,7 +342,7 @@ class AdaptiveExecutionEngineEvolutionIntegrationTest {
         when(fingerprintService.computeEvolutionFingerprint(any())).thenReturn("fp-fitness");
         when(mutationApplier.resolveOutputPath()).thenReturn(Path.of("build/out"));
         doNothing().when(mutationApplier).applyRegularMutations(any());
-        when(projectDiffService.computeDiff(any(), any())).thenReturn(diff);
+        when(projectDiffService.computeDiff(any(), any(), any())).thenReturn(diff);
 
         EvaluationOutcome evalOutcome = new EvaluationOutcome(
                 0.85, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "ok", null);

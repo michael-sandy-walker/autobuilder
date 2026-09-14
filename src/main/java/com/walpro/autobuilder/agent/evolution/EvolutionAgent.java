@@ -265,7 +265,11 @@ public class EvolutionAgent implements ExecutionAgent {
             current = mutationApplier.resolveMutationPath(context.cycleName());
         }
 
-        return projectDiffService.computeDiff(current, previous);
+        java.util.Set<String> explicitDeletions = context.evolutionOutcome() != null
+                && context.evolutionOutcome().deletedFiles() != null
+                ? new java.util.LinkedHashSet<>(context.evolutionOutcome().deletedFiles())
+                : java.util.Set.of();
+        return projectDiffService.computeDiff(current, previous, explicitDeletions);
     }
 
     private CycleContextData updateFingerprint(CycleContextData context) {

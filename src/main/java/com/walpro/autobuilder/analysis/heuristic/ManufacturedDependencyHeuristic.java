@@ -107,8 +107,7 @@ public class ManufacturedDependencyHeuristic implements EvaluationHeuristic {
         }
 
         Map<String, String> previous = input.previousOutput() != null ? input.previousOutput() : Map.of();
-        Map<String, String> current = new LinkedHashMap<>(previous);
-        current.putAll(diff.changedFiles());
+        Map<String, String> current = diff.overlay(previous);
 
         Set<String> previousKeys = keys(manufacturedDependencies(previous));
         previousKeys.addAll(dupeKeys(duplicateFactoryManufactures(previous)));

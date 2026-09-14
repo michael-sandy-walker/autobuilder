@@ -26,11 +26,24 @@ import java.util.TreeSet;
  * ids to their position in the goal tree before digesting.
  */
 public record StateFingerprint(String tree, String pointer, Map<String, String> goals,
-                               Map<String, String> holders) {
+                               Map<String, String> holders,
+                               /**
+                                * Digest of the carried cycle context as it serialises — the fifth
+                                * state component, added 2026-09-14 with the context itself. Null on
+                                * a checkpoint written before contexts were captured, and null on a
+                                * fingerprint taken without one.
+                                */
+                               String context) {
 
     public StateFingerprint {
         goals = goals == null ? Map.of() : Map.copyOf(goals);
         holders = holders == null ? Map.of() : Map.copyOf(holders);
+    }
+
+    /** A fingerprint of the four original components, for callers that hold no cycle context. */
+    public StateFingerprint(String tree, String pointer, Map<String, String> goals,
+                            Map<String, String> holders) {
+        this(tree, pointer, goals, holders, null);
     }
 
     /**
@@ -57,6 +70,14 @@ public record StateFingerprint(String tree, String pointer, Map<String, String> 
                 out.add("holder:" + key);
             }
         }
+        // Compared only when BOTH sides carry one. A null on the recorded side means the point
+        // predates context fingerprinting; a null on this side means the caller took a fingerprint
+        // without a context. Neither is a mismatch, and both are reported by the rewind itself,
+        // which knows whether a context was expected — reporting them here as well would say the
+        // same thing twice and make every pre-2026-09-14 point restore dirty for no defect.
+        if (context != null && other.context() != null && !context.equals(other.context())) {
+            out.add("context");
+        }
         return out;
     }
 
@@ -77,6 +98,7 @@ public record StateFingerprint(String tree, String pointer, Map<String, String> 
         all.put("tree", shorten(tree));
         all.put("pointer", pointer == null ? "-" : pointer);
         all.put("goals", String.valueOf(goals.size()));
+        all.put("context", shorten(context));
         holders.forEach((k, v) -> all.put(k, shorten(v)));
         StringBuilder sb = new StringBuilder();
         all.forEach((k, v) -> sb.append(sb.isEmpty() ? "" : " ").append(k).append('=').append(v));

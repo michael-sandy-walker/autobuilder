@@ -411,7 +411,9 @@ class RewindServiceTest {
     void aPointWithoutACarriedContextSaysSo() throws IOException {
         writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
         checkpoints.write(context("cycle-1"));
-        // A point taken before contexts were captured: neither copy exists.
+        // A point taken before contexts were captured: no copy on disk, and no digest recorded
+        // either, so the restore has nothing to check rather than something to complain about.
+        stripRecordedContextDigest("cycle-1");
         fileService.deleteFile("checkpoints/cycle-1/" + CheckpointService.CONTEXT_FILE);
         fileService.deleteFile(CheckpointArchive.ARCHIVE_DIR + "/cycle-1/" + CheckpointArchive.CONTEXT_FILE);
 
@@ -422,6 +424,9 @@ class RewindServiceTest {
         assertThat(result.carriedContextSource()).isEqualTo("none");
         assertThat(result.clean()).isFalse();
         assertThat(result.failures()).anyMatch(f -> f.contains("carried cycle context was not captured"));
+        assertThat(result.failures())
+                .as("an old point has no context claim to verify, so it must not be reported as diverging")
+                .noneMatch(f -> f.contains("state diverged after restore: context"));
     }
 
     @Test
@@ -461,6 +466,68 @@ class RewindServiceTest {
         assertThat(tmp.resolve("output/" + CheckpointArchive.CONTEXT_FILE)).doesNotExist();
         assertThat(tmp.resolve("output/" + CheckpointArchive.CACHE_SUBDIR)).doesNotExist();
         assertThat(tmp.resolve("output/src/A.java")).exists();
+    }
+
+
+    /**
+     * The break-it-on-purpose case for the fifth component. A context that reaches the restore as
+     * something other than what was captured is exactly the silent failure this digest exists to
+     * catch, and before 2026-09-14 it had no instrument at all: the fingerprint covered tree,
+     * pointer, goals and holders, and the context was added without extending it.
+     */
+    @Test
+    @DisplayName("a carried context that is not the one captured is reported as a diverging component")
+    void aCarriedContextThatChangedUnderneathIsCaught() throws IOException {
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(context("cycle-1")
+                .withCriticalHeuristicStreaks(Map.of("StoreCoherenceHeuristic|Book", 2)));
+        // Tampered structurally, not by string replace: the file is pretty-printed, and the digest
+        // is taken over the re-serialised OBJECT, so formatting is deliberately not what it
+        // measures. Only a semantic change can move it, which is what this asserts.
+        java.nio.file.Path file = tmp.resolve("checkpoints/cycle-1/" + CheckpointService.CONTEXT_FILE);
+        com.fasterxml.jackson.databind.node.ObjectNode root =
+                (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(Files.readString(file));
+        com.fasterxml.jackson.databind.node.ObjectNode streaks =
+                (com.fasterxml.jackson.databind.node.ObjectNode) root.get("criticalHeuristicStreaks");
+        assertThat(streaks.get("StoreCoherenceHeuristic|Book").asInt())
+                .as("the field being tampered must be there, or this passes vacuously").isEqualTo(2);
+        streaks.put("StoreCoherenceHeuristic|Book", 99);
+        Files.writeString(file, mapper.writeValueAsString(root));
+
+        RewindService.Result result = rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-9");
+
+        assertThat(result.performed()).isTrue();
+        assertThat(result.clean()).isFalse();
+        assertThat(result.failures()).anyMatch(f -> f.contains("state diverged after restore: context"));
+        // And the loop is still handed the context that IS on disk: reporting is not refusing.
+        assertThat(result.carried().orElseThrow().criticalHeuristicStreaks())
+                .containsEntry("StoreCoherenceHeuristic|Book", 99);
+    }
+
+    @Test
+    @DisplayName("a point whose recorded context has gone missing says so, and is not confused with an old point")
+    void aRecordedContextThatIsGoneIsNamedAsALoss() throws IOException {
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(context("cycle-1"));
+        // The digest stays in the record; both copies of the file go.
+        fileService.deleteFile("checkpoints/cycle-1/" + CheckpointService.CONTEXT_FILE);
+        fileService.deleteFile(CheckpointArchive.ARCHIVE_DIR + "/cycle-1/" + CheckpointArchive.CONTEXT_FILE);
+
+        RewindService.Result result = rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-9");
+
+        assertThat(result.performed()).isTrue();
+        assertThat(result.clean()).isFalse();
+        assertThat(result.failures()).anyMatch(f -> f.contains("carried cycle context is MISSING"));
+        assertThat(result.failures()).noneMatch(f -> f.contains("was not captured by this point"));
+    }
+
+    /** Make a checkpoint look like one written before contexts were fingerprinted. */
+    private void stripRecordedContextDigest(String cycleId) throws IOException {
+        java.nio.file.Path file = tmp.resolve("checkpoints/" + cycleId + "/" + CheckpointService.CHECKPOINT_FILE);
+        com.fasterxml.jackson.databind.node.ObjectNode root =
+                (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(Files.readString(file));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.get("fingerprint")).remove("context");
+        Files.writeString(file, mapper.writeValueAsString(root));
     }
 
 }

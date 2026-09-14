@@ -152,7 +152,13 @@ public class RewindService {
         // (see CheckpointArchive#CONTEXT_PROVENANCE_FILE) is relayed with its provenance so the
         // rewind never reads as a capture of something nobody captured.
         CheckpointService.CarriedContext carried = checkpointService.readCarriedContext(toCycleId, treeSource);
-        if (!carried.present()) {
+        boolean contextWasRecorded = record.fingerprint() != null && record.fingerprint().context() != null;
+        if (!carried.present() && contextWasRecorded) {
+            // Different from never having captured one: the checkpoint's own fingerprint says it
+            // had a context, and it is not there now. That is a loss, not an old point.
+            failures.add("carried cycle context is MISSING — this checkpoint recorded one, and "
+                    + "neither its own copy nor the archived copy is on disk");
+        } else if (!carried.present()) {
             failures.add("carried cycle context was not captured by this point — the next cycle "
                     + "carries forward from the context of the cycle just backed out of");
         } else if (carried.provenance() != null) {
@@ -163,7 +169,7 @@ public class RewindService {
         // design time. Anything the checkpoint failed to capture, and that actually matters, shows
         // up here as a named diverging component — and the caller is told, rather than continuing
         // on a state that only looks restored.
-        List<String> divergences = verifyRestoredState(record);
+        List<String> divergences = verifyRestoredState(record, carried.context());
         for (String component : divergences) {
             failures.add("state diverged after restore: " + component);
         }
@@ -194,13 +200,13 @@ public class RewindService {
      * recorded. The cache is deliberately outside the fingerprint: FRESH mode clears it ON PURPOSE,
      * so a mode difference is not a divergence.
      */
-    private List<String> verifyRestoredState(CheckpointRecord record) {
+    private List<String> verifyRestoredState(CheckpointRecord record, CycleContextData restoredContext) {
         if (record.fingerprint() == null) {
             // Not silence: a rewind nobody could check is a different thing from a clean one.
             return List.of("not verified — this checkpoint carries no readable fingerprint");
         }
         try {
-            return stateFingerprintService.current().divergencesFrom(record.fingerprint());
+            return stateFingerprintService.current(restoredContext).divergencesFrom(record.fingerprint());
         } catch (Exception e) {
             return List.of("fingerprint could not be recomputed: " + e.getMessage());
         }

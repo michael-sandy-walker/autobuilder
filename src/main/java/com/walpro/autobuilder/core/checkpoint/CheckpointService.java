@@ -161,7 +161,9 @@ public class CheckpointService {
                     cacheCopied,
                     capture.state(),
                     capture.failures(),
-                    stateFingerprintService.of(capture));
+                    // The context goes into the fingerprint too, so a checkpoint that captured
+                    // one makes a claim a later restore can check.
+                    stateFingerprintService.of(capture, context));
 
             fileService.writeJson(dir + "/" + CHECKPOINT_FILE, record);
             position = new Position(record.cycleId(), record.at(), false, null);

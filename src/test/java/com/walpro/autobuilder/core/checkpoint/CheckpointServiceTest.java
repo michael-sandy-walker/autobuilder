@@ -37,6 +37,7 @@ class CheckpointServiceTest {
     private FileService fileService;
     private ObjectMapper mapper;
     private CheckpointService checkpoints;
+    private StateFingerprintService fingerprints;
     private CountingHolder holder;
     private GoalTransitionLog transitions;
     private RunIdentityService identity;
@@ -55,7 +56,7 @@ class CheckpointServiceTest {
         when(identity.lineageId()).thenReturn("lineage-1");
         GoalPlannerService planner = mock(GoalPlannerService.class);
         when(planner.getAllGoals()).thenReturn(java.util.List.of());
-        StateFingerprintService fingerprints =
+        fingerprints =
                 new StateFingerprintService(fileService, mapper, planner, manifest, diffConfig());
         checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner, archiveFor(fileService));
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
@@ -420,6 +421,47 @@ class CheckpointServiceTest {
         // The mid-cycle meta.json is deliberately NOT what is captured: it is written after
         // evolution and before evaluation, so it carries the previous cycle's verdict.
         assertThat(checkpoints.readCarriedContext("cycle-1", null).source()).isEqualTo("checkpoint");
+    }
+
+
+    /**
+     * The fifth fingerprint component, and the property it exists to hold: the digest recorded at
+     * capture must equal the digest of what is read back off disk. That is the JSON round trip
+     * being a fixed point, asserted in the suite rather than measured once — the failure it guards
+     * against is the one that already happened, when map keys serialised through {@code toString()}
+     * and came back wrapped, silently, for exactly the first cycle after a rewind.
+     */
+    @Test
+    @DisplayName("the recorded context digest equals the digest of what lands on disk")
+    void theContextDigestIsAFixedPointAcrossTheRoundTrip() throws IOException {
+        CycleContextData ctx = context("cycle-1", "snapshots/cycle-1")
+                .withCriticalHeuristicStreaks(Map.of("StoreCoherenceHeuristic|Book", 2))
+                .withPersistentHeuristicWarnings(List.of("[StoreCoherenceHeuristic] (critical for 2 consecutive cycles)"))
+                // An open request specifically: the map keyed by a record is what broke before.
+                .withRequests(com.walpro.autobuilder.core.lifecycle.RequestChannel.empty()
+                        .issue(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                                com.walpro.autobuilder.core.lifecycle.BasicSignals.LOW_CONFIDENCE,
+                                3.0, "evaluation", 7)));
+        // context(...) creates the snapshot directory; the tree goes in after it exists.
+        Files.writeString(tmp.resolve("snapshots/cycle-1/A.java"), "class A {}");
+
+        CheckpointRecord record = checkpoints.write(ctx).orElseThrow();
+
+        assertThat(record.fingerprint().context()).as("a captured context makes a checkable claim").isNotNull();
+        CycleContextData back = mapper.readValue(
+                Files.readString(tmp.resolve("checkpoints/cycle-1/" + CheckpointService.CONTEXT_FILE)),
+                CycleContextData.class);
+        assertThat(back.hasOpenRequest(com.walpro.autobuilder.core.lifecycle.BasicSignals.LOW_CONFIDENCE)).isTrue();
+        assertThat(fingerprints.contextDigest(back))
+                .as("a context that does not survive the round trip would restore as a different object")
+                .isEqualTo(record.fingerprint().context());
+    }
+
+    @Test
+    @DisplayName("a fingerprint taken without a context does not claim one")
+    void aFingerprintWithoutAContextRecordsNoDigest() {
+        assertThat(fingerprints.current().context()).isNull();
+        assertThat(fingerprints.contextDigest(null)).isNull();
     }
 
 }

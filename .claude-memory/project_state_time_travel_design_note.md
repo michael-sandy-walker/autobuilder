@@ -318,3 +318,30 @@ from the WRONG context, and two smaller things underneath.
   the right context replaced the "wait for the next natural grind" watch item; that is what the
   time machine is for, and it is the first time it has been used that way.**
 
+## 2026-09-14 latest — decision 4 had stopped covering the state, one change after it proved itself
+
+The carried context above was added as a fifth piece of captured state. `StateFingerprint`
+digested four: tree, pointer, goals, holders. Nobody extended it, so for the length of one
+session a context captured partially, corrupted on disk, or lost to a lossy round trip would
+have restored silently — the exact failure decision 4 exists to prevent, arriving immediately
+after decision 4 was credited with catching a real defect on its first field outing.
+
+**The rule this earns: a new state component and the instrument that checks it ship in the same
+change.** An instrument that is not extended does not fail loudly; it just quietly stops
+describing the state, and it keeps reporting clean while doing so. Ask of any addition to the
+capture: which component of the fingerprint covers this, and if none, the change is not finished.
+
+As built:
+
+- **The digest is over the serialised context**, not id-canonicalised the way holder digests are.
+  Those are compared across replays that re-create goals under fresh ids; this asks the narrower
+  and stricter question of whether THIS context survived a write and a read.
+- **Compared only when both sides carry one.** A pre-2026-09-14 point has no claim to check, so it
+  is not reported as diverging; a point whose record claims a context that is gone is named as a
+  loss instead. Presence is the rewind's business, equality is the fingerprint's.
+- **The fixed-point property was measured before shipping and is now pinned in the suite.** All
+  fifteen contexts on disk round-trip byte-identically. A `CycleContextData` field that stops
+  doing so now turns the suite red rather than surfacing at someone's restore.
+- **Field-verified both ways:** the pre-fix reconstructed point restores with no false context
+  divergence, and a point this build wrote restores with no divergences at all.
+

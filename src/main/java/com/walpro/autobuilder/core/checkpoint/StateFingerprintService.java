@@ -49,7 +49,15 @@ public class StateFingerprintService {
 
     /** The current state of the loop, digested per component. */
     public StateFingerprint current() {
-        return of(stateManifest.capture());
+        return current(null);
+    }
+
+    /**
+     * The live state's fingerprint, including the carried cycle context when the caller has one.
+     * A restore passes the context it just read back, so the comparison covers all five components.
+     */
+    public StateFingerprint current(com.walpro.autobuilder.core.lifecycle.CycleContextData context) {
+        return of(stateManifest.capture(), context);
     }
 
     /**
@@ -59,9 +67,35 @@ public class StateFingerprintService {
      * fingerprint of the wrong one would report a divergence that never happened.
      */
     public StateFingerprint of(StateManifest.Capture capture) {
+        return of(capture, null);
+    }
+
+    public StateFingerprint of(StateManifest.Capture capture,
+                               com.walpro.autobuilder.core.lifecycle.CycleContextData context) {
         Map<String, String> canonicalIds = canonicalGoalIds();
         return new StateFingerprint(treeDigest("output"), pointerKey(), goalDigests(),
-                holderDigests(capture, canonicalIds));
+                holderDigests(capture, canonicalIds), contextDigest(context));
+    }
+
+    /**
+     * Digest of the carried cycle context as it serialises.
+     *
+     * <p>Deliberately NOT id-canonicalised the way the holder digests are: those are compared
+     * across replays that re-create goals under fresh ids, while this one asks a narrower and
+     * stricter question — did THIS context survive being written and read back. That is the
+     * question the JSON round trip failed silently before, when map keys serialised through
+     * {@code toString()} and came back wrapped, which is the class of defect this component exists
+     * to make loud. Checked against every context on disk before it shipped: all 15 are a
+     * round-trip fixed point, so a difference here means a real loss rather than formatting.
+     */
+    public String contextDigest(com.walpro.autobuilder.core.lifecycle.CycleContextData context) {
+        if (context == null) return null;
+        try {
+            return sha256(objectMapper.writeValueAsString(context));
+        } catch (Exception e) {
+            log.debug("T4-DQ: context digest failed: {}", e.getMessage());
+            return sha256("<undigestable>");
+        }
     }
 
     /**

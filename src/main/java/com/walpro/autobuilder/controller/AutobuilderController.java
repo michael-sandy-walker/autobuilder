@@ -386,6 +386,10 @@ public class AutobuilderController {
                 row.put("continuable", checkpointService.canContinueFrom(record));
                 row.put("rootGoalStatus", checkpointService.rootGoalStatusAt(record)
                         .map(Enum::name).orElse(null));
+                // Whether the point carries the cycle context it was taken with. Without it the
+                // rewind settles from the current context, so streaks and relayed observations
+                // describe the path being backed out of rather than the one being returned to.
+                row.put("carriedContext", checkpointService.hasCarriedContext(record));
             }
             points.add(row);
         }
@@ -464,6 +468,7 @@ public class AutobuilderController {
         body.put("ok", result.performed());
         body.put("toCycleId", result.toCycleId());
         body.put("cacheMode", cacheMode.toUpperCase(java.util.Locale.ROOT));
+        body.put("carriedContext", result.carriedContextSource());
         if (!result.performed()) {
             body.put("refusedBecause", result.refusedBecause());
             return ResponseEntity.badRequest().body(body);

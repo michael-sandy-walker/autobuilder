@@ -249,7 +249,11 @@ public sealed interface BehaviourEvent {
             String heuristic,
             String subject,
             int streak,
-            List<String> resolutionPaths
+            List<String> resolutionPaths,
+            /** The work item the escalation injected, or null when it injected none. */
+            String injectedGoalId,
+            /** {@code injected}, or {@code skipped: <why>} — the threshold crossing alone is not an escalation. */
+            String outcome
     ) implements BehaviourEvent {
         public String event() { return "structural_defect_escalated"; }
     }
@@ -877,6 +881,8 @@ public sealed interface BehaviourEvent {
             int goalsRestored,
             int goalTransitionsUndone,
             boolean treeRestored,
+            /** Where the carried cycle context came from: checkpoint, archive, or none. */
+            String carriedContext,
             List<String> failures
     ) implements BehaviourEvent {
         public String event() { return "rewind_performed"; }

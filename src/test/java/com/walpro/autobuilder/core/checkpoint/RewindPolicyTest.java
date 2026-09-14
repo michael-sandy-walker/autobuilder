@@ -188,11 +188,11 @@ class RewindPolicyTest {
 
     private static RewindService.Result performed(String toCycleId) {
         return new RewindService.Result(true, toCycleId, null, CacheMode.FAITHFUL,
-                3, 0, 2, 1, 40, true, List.of());
+                3, 0, 2, 1, 40, true, List.of(), null, "none");
     }
 
     private static RewindService.Result refused() {
         return new RewindService.Result(false, "cycle-5", "the checkpoint's tree snapshot has been cleared",
-                null, 0, 0, 0, 0, 0, false, List.of());
+                null, 0, 0, 0, 0, 0, false, List.of(), null, "none");
     }
 }

@@ -19,7 +19,10 @@ import java.util.function.Predicate;
  * is the addressed mechanism's read ({@link #consume}); {@link #tick} ages entries once per
  * cycle boundary and removes expired ones, returning them so T4-BO can attribute the ending.
  */
-public record RequestChannel(Map<SignalType, ChannelRequest> open) {
+public record RequestChannel(
+        @com.fasterxml.jackson.databind.annotation.JsonSerialize(keyUsing = SignalTypeKey.Serializer.class)
+        @com.fasterxml.jackson.databind.annotation.JsonDeserialize(keyUsing = SignalTypeKey.Deserializer.class)
+        Map<SignalType, ChannelRequest> open) {
 
     private static final RequestChannel EMPTY = new RequestChannel(Map.of());
 

@@ -399,4 +399,27 @@ class CheckpointServiceTest {
         diff.setExcludeFolders(java.util.List.of("target", "logs"));
         return diff;
     }
+
+    @Test
+    @DisplayName("the carried cycle context is written beside the record and archived beside the tree")
+    void theCarriedContextIsCapturedAndArchived() throws IOException {
+        CycleContextData context = context("cycle-1", "snapshots/cycle-1")
+                .withCriticalHeuristicStreaks(Map.of("StoreCoherenceHeuristic|Book", 2))
+                .withPersistentHeuristicWarnings(List.of("[StoreCoherenceHeuristic] (critical for 2 consecutive cycles): parallel store"));
+        Files.writeString(tmp.resolve("snapshots/cycle-1/A.java"), "class A {}");
+
+        CheckpointRecord record = checkpoints.write(context).orElseThrow();
+
+        assertThat(tmp.resolve("checkpoints/cycle-1/" + CheckpointService.CONTEXT_FILE)).exists();
+        assertThat(tmp.resolve(CheckpointArchive.ARCHIVE_DIR + "/cycle-1/" + CheckpointArchive.CONTEXT_FILE)).exists();
+        assertThat(checkpoints.hasCarriedContext(record)).isTrue();
+        CycleContextData back = mapper.readValue(
+                tmp.resolve("checkpoints/cycle-1/" + CheckpointService.CONTEXT_FILE).toFile(), CycleContextData.class);
+        assertThat(back.criticalHeuristicStreaks()).containsEntry("StoreCoherenceHeuristic|Book", 2);
+        assertThat(back.persistentHeuristicWarnings()).hasSize(1);
+        // The mid-cycle meta.json is deliberately NOT what is captured: it is written after
+        // evolution and before evaluation, so it carries the previous cycle's verdict.
+        assertThat(checkpoints.readCarriedContext("cycle-1", null).source()).isEqualTo("checkpoint");
+    }
+
 }

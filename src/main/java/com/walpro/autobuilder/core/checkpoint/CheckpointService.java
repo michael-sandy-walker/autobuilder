@@ -50,6 +50,15 @@ public class CheckpointService {
     public static final String CHECKPOINT_FILE = "checkpoint.json";
     public static final String CACHE_DIR = "cache";
 
+    /**
+     * The carried cycle context as it stood when the point was taken — the object the scheduler
+     * hands to the next tick. Written beside the record rather than referenced via
+     * {@code mutations/<cycleId>/meta.json}: that file is written MID-cycle (after evolution,
+     * before evaluation, so it carries the previous cycle's verdict, not this one's) and is
+     * cleared at the run boundary. Neither property makes it something a rewind can settle from.
+     */
+    public static final String CONTEXT_FILE = "context.json";
+
     private final FileService fileService;
     private final ObjectMapper objectMapper;
     private final StateManifest stateManifest;
@@ -157,9 +166,23 @@ public class CheckpointService {
             fileService.writeJson(dir + "/" + CHECKPOINT_FILE, record);
             position = new Position(record.cycleId(), record.at(), false, null);
 
+            // The carried context is not a holder — it is the record of the cycle that just ran,
+            // and the one thing the restore cannot rebuild from holders and goals. Without it a
+            // rewind settles from the context of the path being backed out of: its streaks,
+            // relayed rejection reasons and build observations describe a tree that is no longer
+            // there, and every consecutive-cycle counter restarts from zero.
+            String contextPath = dir + "/" + CONTEXT_FILE;
+            try {
+                fileService.writeJson(contextPath, context);
+            } catch (IOException | RuntimeException e) {
+                contextPath = null;
+                log.warn("T4-DQ: checkpoint {} could not capture the carried context: {}",
+                        record.cycleId(), e.getMessage());
+            }
+
             // Keep the point reachable after this run ends: a source-only tree copy that reset and
             // resume do not clear, and an index entry in the graph, which they do not purge either.
-            String archivePath = checkpointArchive.archive(record.cycleId(), record.snapshotPath());
+            String archivePath = checkpointArchive.archive(record.cycleId(), record.snapshotPath(), contextPath);
             if (checkpointGraphService != null) {
                 checkpointGraphService.record(record, archivePath);
             }
@@ -236,6 +259,80 @@ public class CheckpointService {
     /** Captured state as a tree, for a restore that wants the raw node. */
     public JsonNode holdersNode(CheckpointRecord record) {
         return objectMapper.valueToTree(record.holders());
+    }
+
+    /**
+     * The carried cycle context a point can be settled from, and where it came from.
+     *
+     * @param context    the context, or null when the point carries none
+     * @param source     {@code checkpoint} (this run's own copy), {@code archive} (an earlier
+     *                   run's, kept beside the tree), or {@code none}
+     * @param provenance non-null only when the archived file was SUPPLIED rather than captured —
+     *                   the text of {@link CheckpointArchive#CONTEXT_PROVENANCE_FILE}, verbatim
+     */
+    public record CarriedContext(CycleContextData context, String source, String provenance) {
+        public static CarriedContext none() {
+            return new CarriedContext(null, "none", null);
+        }
+
+        public boolean present() {
+            return context != null;
+        }
+    }
+
+    /**
+     * Read the carried context for {@code cycleId}: this run's own copy first, then the archived
+     * one under {@code treeSource} (the archive directory, when the point comes from an earlier
+     * run). A file that exists but cannot be read counts as absent and is logged, not thrown —
+     * the rewind reports the absence and carries on, which is the same treatment an unreadable
+     * fingerprint gets.
+     */
+    public CarriedContext readCarriedContext(String cycleId, String treeSource) {
+        if (cycleId == null || cycleId.isBlank()) return CarriedContext.none();
+        String own = CHECKPOINTS_DIR + "/" + cycleId + "/" + CONTEXT_FILE;
+        CycleContextData fromOwn = readContextFile(own, cycleId);
+        if (fromOwn != null) return new CarriedContext(fromOwn, "checkpoint", null);
+
+        String archiveDir = treeSource != null && treeSource.startsWith(CheckpointArchive.ARCHIVE_DIR + "/")
+                ? treeSource
+                : archivePathOf(cycleId).orElse(null);
+        if (archiveDir == null) return CarriedContext.none();
+        CycleContextData fromArchive = readContextFile(archiveDir + "/" + CheckpointArchive.CONTEXT_FILE, cycleId);
+        if (fromArchive == null) return CarriedContext.none();
+        String provenance = null;
+        try {
+            String provenancePath = archiveDir + "/" + CheckpointArchive.CONTEXT_PROVENANCE_FILE;
+            if (fileService.exists(provenancePath)) {
+                provenance = fileService.readString(provenancePath).strip();
+                if (provenance.isEmpty()) provenance = "supplied, with no provenance recorded";
+            }
+        } catch (IOException | RuntimeException e) {
+            provenance = "supplied, provenance unreadable: " + e.getMessage();
+        }
+        return new CarriedContext(fromArchive, "archive", provenance);
+    }
+
+    /** Whether a point can be settled from its own carried context rather than the current one. */
+    public boolean hasCarriedContext(CheckpointRecord record) {
+        if (record == null || record.cycleId() == null) return false;
+        try {
+            if (fileService.exists(CHECKPOINTS_DIR + "/" + record.cycleId() + "/" + CONTEXT_FILE)) return true;
+            Optional<String> archive = archivePathOf(record.cycleId());
+            return archive.isPresent()
+                    && fileService.exists(archive.get() + "/" + CheckpointArchive.CONTEXT_FILE);
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    private CycleContextData readContextFile(String path, String cycleId) {
+        try {
+            if (!fileService.exists(path)) return null;
+            return objectMapper.readValue(fileService.readString(path), CycleContextData.class);
+        } catch (IOException | RuntimeException e) {
+            log.warn("T4-DQ: the carried context for {} at {} is unreadable: {}", cycleId, path, e.getMessage());
+            return null;
+        }
     }
 
     /**

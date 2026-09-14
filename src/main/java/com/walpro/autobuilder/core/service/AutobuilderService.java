@@ -1592,7 +1592,7 @@ public class AutobuilderService implements CheckpointableState {
                 context.cycleName(), rootConvergenceTracker.cyclesSinceProgress());
         if (rewound.isEmpty()) return false;
 
-        settleAfterRewind(context, false);
+        settleAfterRewind(context, rewound.get().carriedContext(), false);
         log.warn("T4-DQ: cycle {} ends at the rewind ({}) — the remainder of its post-cycle work "
                 + "describes the path that was just backed out of.", context.cycleName(), why);
         return true;
@@ -1618,7 +1618,7 @@ public class AutobuilderService implements CheckpointableState {
             String at = context != null && context.cycleName() != null ? context.cycleName() : toCycleId;
             var result = rewindService.rewindTo(toCycleId, mode, "operator", at);
             if (result.performed()) {
-                settleAfterRewind(context, true);
+                settleAfterRewind(context, result.carriedContext(), true);
             }
             return result;
         });
@@ -1634,17 +1634,32 @@ public class AutobuilderService implements CheckpointableState {
      * no exhaustion reason, result {@code CONTINUE}, the same reading the run had when it finished
      * the cycle the checkpoint was taken at. One home for both the policy's rewind and the operator's.
      *
+     * <p>Which context gets settled matters as much as the settling. The checkpoint captures the
+     * carried context as it stood when the point was taken (T4-DQ, 2026-09-14), and that is what
+     * the next tick should read: its consecutive-cycle streaks, relayed rejection reasons and
+     * build observations describe the restored tree. Settling the CURRENT context instead — the
+     * only option before contexts were captured — hands the restored tree a description of the
+     * path just backed out of, and restarts every streak from zero, which is how a rewind staged
+     * to sit one cycle short of an escalation threshold could never reach it. The current context
+     * remains the fallback for a point that carries none, and the rewind's result says which.
+     *
+     * @param current       the context of the cycle being backed out of — judged for a user pause,
+     *                      and settled from only when {@code restored} is null
+     * @param restored      the checkpoint's carried context, or null when the point carries none
      * @param keepUserPause whether a pause a person asked for survives (the operator's rewind keeps
      *                      it; the policy's never fires under one — see {@code NON_REWINDABLE_PAUSES})
      */
-    private void settleAfterRewind(CycleContextData current, boolean keepUserPause) {
+    private void settleAfterRewind(CycleContextData current, CycleContextData restored, boolean keepUserPause) {
         if (rootConvergenceTracker != null) {
             rootConvergenceTracker.resyncAfterRewind();
         }
-        if (current == null) return;
-        boolean userPaused = keepUserPause && "user-pause".equals(current.pausedReason());
+        // A user pause is a fact about NOW, so it is read from the current context whatever the
+        // restored one happened to record at the time it was taken.
+        boolean userPaused = keepUserPause && current != null && "user-pause".equals(current.pausedReason());
+        CycleContextData base = restored != null ? restored : current;
+        if (base == null) return;
         // `context` is the service's own field, which the next tick reads.
-        this.context = current
+        this.context = base
                 .withPausedReason(userPaused ? "user-pause" : null)
                 .withGoalExhaustedReason(null)
                 .withCycleResultState(CycleResultState.CONTINUE);

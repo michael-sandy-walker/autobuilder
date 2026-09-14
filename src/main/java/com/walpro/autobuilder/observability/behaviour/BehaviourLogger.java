@@ -234,9 +234,10 @@ public class BehaviourLogger {
 
     // T2-ES: a structural defect survived re-asking and was escalated to a work item.
     public void structuralDefectEscalated(String cycleId, String heuristic, String subject,
-                                          int streak, List<String> resolutionPaths) {
+                                          int streak, List<String> resolutionPaths,
+                                          String injectedGoalId, String outcome) {
         emit(new BehaviourEvent.StructuralDefectEscalated(Instant.now(), cycleId, heuristic,
-                subject, streak, resolutionPaths));
+                subject, streak, resolutionPaths, injectedGoalId, outcome));
     }
 
     public void deliberationOutcome(String cycleId, String mode, List<String> signalAdjustments,
@@ -302,10 +303,10 @@ public class BehaviourLogger {
     public void rewindPerformed(String cycleId, String toCycleId, String trigger, String cacheMode,
                                 int holdersRestored, int holdersReset, int goalsRestored,
                                 int goalTransitionsUndone, boolean treeRestored,
-                                java.util.List<String> failures) {
+                                String carriedContext, java.util.List<String> failures) {
         emit(new BehaviourEvent.RewindPerformed(Instant.now(), cycleId, toCycleId, trigger, cacheMode,
                 holdersRestored, holdersReset, goalsRestored, goalTransitionsUndone, treeRestored,
-                failures));
+                carriedContext, failures));
     }
 
     /** T4-DQ slice 4: a new path was opened from an earlier checkpoint. */

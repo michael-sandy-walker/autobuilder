@@ -106,7 +106,7 @@ class AutobuilderServiceRewindWiringTest {
     void aRefusedOperatorRewindLeavesTheContextAlone() {
         when(rewinds.rewindTo(anyString(), any(), anyString(), anyString()))
                 .thenReturn(new RewindService.Result(false, "cycle-12", "no checkpoint for that cycle",
-                        null, 0, 0, 0, 0, 0, false, List.of()));
+                        null, 0, 0, 0, 0, 0, false, List.of(), null, "none"));
         ReflectionTestUtils.setField(service, "context",
                 cycle("cycle-30", null).withCycleResultState(CycleResultState.GOAL_FULFILLED));
 
@@ -267,7 +267,92 @@ class AutobuilderServiceRewindWiringTest {
     }
 
     private static RewindService.Result performed(String toCycleId) {
-        return new RewindService.Result(true, toCycleId, null, CacheMode.FAITHFUL,
-                12, 0, 3, 1, 20, true, List.of());
+        return performed(toCycleId, null);
     }
+
+    /** A rewind whose point carried its cycle context — the shape every checkpoint now writes. */
+    private static RewindService.Result performed(String toCycleId, CycleContextData carried) {
+        return new RewindService.Result(true, toCycleId, null, CacheMode.FAITHFUL,
+                12, 0, 3, 1, 20, true, List.of(), carried, carried == null ? "none" : "checkpoint");
+    }
+
+    // ---- the carried context (2026-09-14): settle FROM the restored point, not from the path backed out of ----
+
+    @Test
+    @DisplayName("an operator rewind carries the restored point's context forward, settled")
+    void anOperatorRewindCarriesTheRestoredContextForward() {
+        CycleContextData restored = cycle("cycle-12", "root-convergence-stall")
+                .withCycleResultState(CycleResultState.STAGNATING)
+                .withCriticalHeuristicStreaks(java.util.Map.of("StoreCoherenceHeuristic|Book", 2))
+                .withRejectionFeedback(List.of("StoreCoherenceHeuristic: parallel store introduced"));
+        when(rewinds.rewindTo(eq("cycle-12"), any(), eq("operator"), anyString()))
+                .thenReturn(performed("cycle-12", restored));
+        ReflectionTestUtils.setField(service, "context",
+                cycle("cycle-30", null).withCycleResultState(CycleResultState.GOAL_FULFILLED)
+                        .withCriticalHeuristicStreaks(java.util.Map.of("ScoreRegressionHeuristic", 3)));
+
+        service.rewindAsOperator("cycle-12", CacheMode.FAITHFUL);
+
+        CycleContextData after = service.getContext().orElseThrow();
+        assertThat(after.cycleName()).as("the next tick continues from the point returned to").isEqualTo("cycle-12");
+        assertThat(after.criticalHeuristicStreaks())
+                .as("the streaks are the restored point's, so a threshold one cycle away stays one cycle away")
+                .containsEntry("StoreCoherenceHeuristic|Book", 2)
+                .doesNotContainKey("ScoreRegressionHeuristic");
+        assertThat(after.rejectionFeedback()).containsExactly("StoreCoherenceHeuristic: parallel store introduced");
+        // Settled all the same: the point's own halt reason and result must not be re-processed.
+        assertThat(after.pausedReason()).isNull();
+        assertThat(after.cycleResultState()).isEqualTo(CycleResultState.CONTINUE);
+    }
+
+    @Test
+    @DisplayName("a user pause is judged from the current context, whatever the restored point recorded")
+    void aUserPauseIsJudgedFromTheCurrentContextNotTheRestoredOne() {
+        CycleContextData restored = cycle("cycle-12", null).withCycleResultState(CycleResultState.CONTINUE);
+        when(rewinds.rewindTo(eq("cycle-12"), any(), eq("operator"), anyString()))
+                .thenReturn(performed("cycle-12", restored));
+        ReflectionTestUtils.setField(service, "context", cycle("cycle-30", "user-pause"));
+        ReflectionTestUtils.setField(service, "systemPaused", true);
+
+        service.rewindAsOperator("cycle-12", CacheMode.FAITHFUL);
+
+        CycleContextData after = service.getContext().orElseThrow();
+        assertThat(after.cycleName()).isEqualTo("cycle-12");
+        assertThat(after.pausedReason()).isEqualTo("user-pause");
+        assertThat(service.userPaused()).isTrue();
+    }
+
+    @Test
+    @DisplayName("the policy's rewind settles from the restored context too — one home")
+    void thePolicysRewindCarriesTheRestoredContextForward() {
+        CycleContextData restored = cycle("cycle-10", null)
+                .withCriticalHeuristicStreaks(java.util.Map.of("StoreCoherenceHeuristic|Book", 2));
+        when(policy.considerRewindInsteadOfHalting(anyString(), anyInt()))
+                .thenReturn(Optional.of(performed("cycle-10", restored)));
+
+        service.rewindBeforeHalting(
+                cycle("cycle-30", "root-exhaustion").withCycleResultState(CycleResultState.GOAL_EXHAUSTED));
+
+        CycleContextData after = service.getContext().orElseThrow();
+        assertThat(after.cycleName()).isEqualTo("cycle-10");
+        assertThat(after.criticalHeuristicStreaks()).containsEntry("StoreCoherenceHeuristic|Book", 2);
+        assertThat(after.cycleResultState()).isEqualTo(CycleResultState.CONTINUE);
+        assertThat(after.goalExhaustedReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("a point that carries no context falls back to settling the current one")
+    void aPointWithoutAContextSettlesTheCurrentOne() {
+        when(rewinds.rewindTo(eq("cycle-12"), any(), eq("operator"), anyString()))
+                .thenReturn(performed("cycle-12"));
+        ReflectionTestUtils.setField(service, "context",
+                cycle("cycle-30", null).withCycleResultState(CycleResultState.GOAL_FULFILLED));
+
+        service.rewindAsOperator("cycle-12", CacheMode.FAITHFUL);
+
+        CycleContextData after = service.getContext().orElseThrow();
+        assertThat(after.cycleName()).isEqualTo("cycle-30");
+        assertThat(after.cycleResultState()).isEqualTo(CycleResultState.CONTINUE);
+    }
+
 }

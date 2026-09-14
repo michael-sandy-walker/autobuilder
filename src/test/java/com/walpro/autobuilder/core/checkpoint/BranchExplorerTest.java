@@ -206,7 +206,7 @@ class BranchExplorerTest {
 
     private static RewindService.Result performed() {
         return new RewindService.Result(true, "cycle-2", null, CacheMode.FAITHFUL,
-                3, 0, 2, 1, 4, true, java.util.List.of());
+                3, 0, 2, 1, 4, true, java.util.List.of(), null, "none");
     }
 
     /**

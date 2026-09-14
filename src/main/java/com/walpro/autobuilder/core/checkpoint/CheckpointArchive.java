@@ -60,6 +60,22 @@ public class CheckpointArchive {
      * carries its holder state, just without a tree to put back.
      */
     public String archive(String cycleId, String snapshotPath) {
+        return archive(cycleId, snapshotPath, null);
+    }
+
+    /**
+     * Archive the tree and, when the checkpoint captured one, the carried cycle context beside it.
+     *
+     * <p>The context is what the scheduler reads on its next tick — the streaks, warnings, relayed
+     * rejection reasons and build observations that {@code ContextLineageTracker} carries from one
+     * cycle into the next. It lived only in {@code mutations/<cycleId>/meta.json}, which is
+     * written mid-cycle (after evolution, before evaluation) and cleared at the run boundary, so
+     * no point from an earlier run could ever bring it back. Kept here under a reserved name, like
+     * the cache, and stripped again before the tree is planted into {@code output/}.
+     *
+     * @param contextSourcePath the checkpoint's own copy of the carried context, or null
+     */
+    public String archive(String cycleId, String snapshotPath, String contextSourcePath) {
         if (!enabled || cycleId == null || snapshotPath == null || snapshotPath.isBlank()) return null;
         String target = ARCHIVE_DIR + "/" + cycleId;
         try {
@@ -89,6 +105,7 @@ public class CheckpointArchive {
             // checkpoint's own copy is gone with checkpoints/. Keep one here or cross-run
             // FAITHFUL can only ever report that it could not honour the mode.
             copyCacheInto(destination);
+            copyContextInto(destination, contextSourcePath);
             prune();
             return target;
         } catch (IOException | RuntimeException e) {
@@ -103,7 +120,36 @@ public class CheckpointArchive {
     }
 
     /** Name of the cache copy inside an archived cycle. */
+    /**
+     * Everything the archive keeps beside the tree starts with this. The restore strips every
+     * top-level entry carrying it before the tree is planted into {@code output/}, so a file
+     * added here later cannot become project source by omission from a list of names.
+     */
+    public static final String RESERVED_PREFIX = "__";
+
     public static final String CACHE_SUBDIR = "__cache";
+
+    /** The carried cycle context, archived beside the tree; never part of the project. */
+    public static final String CONTEXT_FILE = "__context.json";
+
+    /**
+     * Present only when a person SUPPLIED the context file rather than the checkpoint capturing
+     * it — a point taken before contexts were archived, rebuilt from the run's logs. Its text is
+     * relayed verbatim into the rewind's result so the restore never reads as a capture.
+     */
+    public static final String CONTEXT_PROVENANCE_FILE = "__context.provenance";
+
+    private void copyContextInto(Path destination, String contextSourcePath) {
+        if (contextSourcePath == null || contextSourcePath.isBlank()) return;
+        try {
+            if (!fileService.exists(contextSourcePath)) return;
+            Files.copy(fileService.resolveSecurePath(contextSourcePath),
+                    destination.resolve(CONTEXT_FILE),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException | RuntimeException e) {
+            log.debug("T4-DQ: could not archive the carried context: {}", e.getMessage());
+        }
+    }
 
     private void copyCacheInto(Path destination) {
         try {

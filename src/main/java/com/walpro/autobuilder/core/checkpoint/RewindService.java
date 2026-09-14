@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.checkpoint;
 
+import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.core.service.FileService;
@@ -144,6 +145,20 @@ public class RewindService {
 
         applyCacheMode(record, mode, failures, treeSource);
 
+        // The carried context: what the next tick reads, and the one part of the state that is
+        // neither a holder nor a goal. Absent, the caller settles from the context of the cycle
+        // just backed out of — reported here, because every consecutive-cycle counter then
+        // restarts and the prompt describes a tree that is no longer there. A supplied context
+        // (see CheckpointArchive#CONTEXT_PROVENANCE_FILE) is relayed with its provenance so the
+        // rewind never reads as a capture of something nobody captured.
+        CheckpointService.CarriedContext carried = checkpointService.readCarriedContext(toCycleId, treeSource);
+        if (!carried.present()) {
+            failures.add("carried cycle context was not captured by this point — the next cycle "
+                    + "carries forward from the context of the cycle just backed out of");
+        } else if (carried.provenance() != null) {
+            failures.add("carried cycle context is not a capture: " + carried.provenance());
+        }
+
         // T4-DQ decision 4: the completeness check, run at the restore rather than asserted at
         // design time. Anything the checkpoint failed to capture, and that actually matters, shows
         // up here as a named diverging component — and the caller is told, rather than continuing
@@ -158,17 +173,18 @@ public class RewindService {
 
         Result result = new Result(true, toCycleId, null, mode, holders.restored().size(),
                 holders.reset().size(), goals.statusesRestored(), goals.goalsRewoundOut(), undone,
-                true, List.copyOf(failures));
+                true, List.copyOf(failures), carried.context(), carried.source());
 
         log.warn("T4-DQ: REWOUND to {} (trigger={}, cache={}) — holders restored={} reset={}, "
-                        + "goal statuses restored={}, goals rewound out={}, goal transitions undone={}{}",
+                        + "goal statuses restored={}, goals rewound out={}, goal transitions undone={}, "
+                        + "carried context={}{}",
                 toCycleId, trigger, mode, result.holdersRestored(), result.holdersReset(),
-                result.goalStatusesRestored(), result.goalsRewoundOut(), undone,
+                result.goalStatusesRestored(), result.goalsRewoundOut(), undone, carried.source(),
                 failures.isEmpty() ? "" : ", failures=" + failures);
         if (behaviourLogger != null) {
             behaviourLogger.rewindPerformed(atCycleId, toCycleId, trigger, mode.name(),
                     result.holdersRestored(), result.holdersReset(), result.goalStatusesRestored(),
-                    undone, true, result.failures());
+                    undone, true, carried.source(), result.failures());
         }
         return result;
     }
@@ -257,6 +273,11 @@ public class RewindService {
             // An archived point keeps its cache alongside the tree; it is state, not source, and
             // must not be planted into output/ where the loop would read it back as project files.
             fileService.deleteRecursively(staging + "/" + CheckpointArchive.CACHE_SUBDIR);
+            // Likewise everything else the archive keeps beside the tree under its reserved prefix
+            // — the carried context, its provenance note, and whatever a later build adds. Named
+            // deletes were the first version, and the first field rewind planted a third file a
+            // person had put there into output/, where the loop read it back as source.
+            stripReservedEntries(stagingPath);
 
             if (isEmptyTree(stagingPath)) {
                 failures.add("tree: the checkpoint's snapshot staged empty — refusing to replace a "
@@ -278,6 +299,16 @@ public class RewindService {
                 log.debug("T4-DQ: could not clear the rewind staging directory: {}", cleanup.getMessage());
             }
             return false;
+        }
+    }
+
+    /** Remove every top-level entry of the staged tree that carries the archive's reserved prefix. */
+    private void stripReservedEntries(Path stagingPath) throws IOException {
+        try (Stream<Path> entries = Files.list(stagingPath)) {
+            for (Path entry : entries.filter(p -> p.getFileName().toString()
+                    .startsWith(CheckpointArchive.RESERVED_PREFIX)).toList()) {
+                if (Files.isDirectory(entry)) deleteRecursive(entry); else Files.deleteIfExists(entry);
+            }
         }
     }
 
@@ -343,10 +374,18 @@ public class RewindService {
                          int goalsRewoundOut,
                          int goalTransitionsUndone,
                          boolean treeRestored,
-                         List<String> failures) {
+                         List<String> failures,
+                         /** The context the caller settles the loop from; null when the point carries none. */
+                         CycleContextData carriedContext,
+                         /** {@code checkpoint}, {@code archive} or {@code none} — see {@link CheckpointService.CarriedContext}. */
+                         String carriedContextSource) {
 
         static Result refused(String toCycleId, String why) {
-            return new Result(false, toCycleId, why, null, 0, 0, 0, 0, 0, false, List.of());
+            return new Result(false, toCycleId, why, null, 0, 0, 0, 0, 0, false, List.of(), null, "none");
+        }
+
+        public Optional<CycleContextData> carried() {
+            return Optional.ofNullable(carriedContext);
         }
 
         /** True when the rewind happened and nothing inside it reported a problem. */

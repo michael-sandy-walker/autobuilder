@@ -357,4 +357,110 @@ class RewindServiceTest {
         diff.setExcludeFolders(java.util.List.of("target", "logs"));
         return diff;
     }
+
+    // ---- the carried cycle context (2026-09-14) ----
+    //
+    // A rewind restored holders, goals, tree and cache — and then the loop settled from the context
+    // of the cycle just backed out of, because the carried context was never captured. Every
+    // consecutive-cycle streak restarted at zero and the next prompt described a tree that was no
+    // longer there. A rewind staged one cycle short of an escalation threshold could never reach it.
+
+    @Test
+    @DisplayName("the carried context comes back with the point, streaks and relayed reasons intact")
+    void theCarriedContextComesBackWithThePoint() throws IOException {
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(context("cycle-1")
+                .withCriticalHeuristicStreaks(Map.of("StoreCoherenceHeuristic|Book", 2))
+                .withRejectionFeedback(List.of("StoreCoherenceHeuristic: parallel store introduced")));
+
+        RewindService.Result result = rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-9");
+
+        assertThat(result.carriedContextSource()).isEqualTo("checkpoint");
+        CycleContextData carried = result.carried().orElseThrow();
+        assertThat(carried.cycleName()).isEqualTo("cycle-1");
+        assertThat(carried.criticalHeuristicStreaks()).containsEntry("StoreCoherenceHeuristic|Book", 2);
+        assertThat(carried.rejectionFeedback()).containsExactly("StoreCoherenceHeuristic: parallel store introduced");
+        assertThat(result.failures()).noneMatch(f -> f.contains("carried cycle context"));
+    }
+
+    @Test
+    @DisplayName("across the run boundary the archived context restores, and is not planted into the tree")
+    void theArchivedContextOutlivesTheCheckpointDirectory() throws IOException {
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(context("cycle-1")
+                .withCriticalHeuristicStreaks(Map.of("StoreCoherenceHeuristic|Book", 2)));
+        // What a run boundary does to this run's own copies: snapshots/ and the checkpoint's
+        // context go; the record and the archive stay.
+        fileService.deleteRecursively("snapshots/cycle-1");
+        fileService.deleteFile("checkpoints/cycle-1/" + CheckpointService.CONTEXT_FILE);
+
+        RewindService.Result result = rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-9");
+
+        assertThat(result.performed()).isTrue();
+        assertThat(result.carriedContextSource()).isEqualTo("archive");
+        assertThat(result.carried().orElseThrow().criticalHeuristicStreaks())
+                .containsEntry("StoreCoherenceHeuristic|Book", 2);
+        assertThat(tmp.resolve("output/" + CheckpointArchive.CONTEXT_FILE))
+                .as("state kept beside the tree must not become project source")
+                .doesNotExist();
+        assertThat(tmp.resolve("output/src/A.java")).exists();
+    }
+
+    @Test
+    @DisplayName("a point that carries no context says so, and the rewind does not read as clean")
+    void aPointWithoutACarriedContextSaysSo() throws IOException {
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(context("cycle-1"));
+        // A point taken before contexts were captured: neither copy exists.
+        fileService.deleteFile("checkpoints/cycle-1/" + CheckpointService.CONTEXT_FILE);
+        fileService.deleteFile(CheckpointArchive.ARCHIVE_DIR + "/cycle-1/" + CheckpointArchive.CONTEXT_FILE);
+
+        RewindService.Result result = rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-9");
+
+        assertThat(result.performed()).isTrue();
+        assertThat(result.carried()).isEmpty();
+        assertThat(result.carriedContextSource()).isEqualTo("none");
+        assertThat(result.clean()).isFalse();
+        assertThat(result.failures()).anyMatch(f -> f.contains("carried cycle context was not captured"));
+    }
+
+    @Test
+    @DisplayName("a supplied context restores but is labelled with its provenance, never as a capture")
+    void aSuppliedContextIsLabelledNotCaptured() throws IOException {
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(context("cycle-1"));
+        fileService.deleteFile("checkpoints/cycle-1/" + CheckpointService.CONTEXT_FILE);
+        // The archived file was written by a person from the run's logs, and says so.
+        Files.writeString(tmp.resolve(CheckpointArchive.ARCHIVE_DIR + "/cycle-1/" + CheckpointArchive.CONTEXT_PROVENANCE_FILE),
+                "RECONSTRUCTED 2026-09-14 from autobuilder-2026-09-13_09-44-38.log\n");
+
+        RewindService.Result result = rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-9");
+
+        assertThat(result.carriedContextSource()).isEqualTo("archive");
+        assertThat(result.carried()).isPresent();
+        assertThat(result.clean()).isFalse();
+        assertThat(result.failures()).anyMatch(f -> f.contains("not a capture")
+                && f.contains("RECONSTRUCTED 2026-09-14 from autobuilder-2026-09-13_09-44-38.log"));
+        assertThat(tmp.resolve("output/" + CheckpointArchive.CONTEXT_PROVENANCE_FILE)).doesNotExist();
+    }
+
+
+    @Test
+    @DisplayName("nothing under the archive's reserved prefix is ever planted into the tree")
+    void reservedArchiveEntriesAreNeverPlantedIntoTheTree() throws IOException {
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(context("cycle-1"));
+        fileService.deleteRecursively("snapshots/cycle-1");
+        // A file a person or a later build put beside the tree, under the reserved prefix but not
+        // on any list of names — the first field rewind planted exactly such a file into output/.
+        Files.writeString(tmp.resolve(CheckpointArchive.ARCHIVE_DIR + "/cycle-1/__context.provenance.json"), "{}");
+
+        rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-9");
+
+        assertThat(tmp.resolve("output/__context.provenance.json")).doesNotExist();
+        assertThat(tmp.resolve("output/" + CheckpointArchive.CONTEXT_FILE)).doesNotExist();
+        assertThat(tmp.resolve("output/" + CheckpointArchive.CACHE_SUBDIR)).doesNotExist();
+        assertThat(tmp.resolve("output/src/A.java")).exists();
+    }
+
 }

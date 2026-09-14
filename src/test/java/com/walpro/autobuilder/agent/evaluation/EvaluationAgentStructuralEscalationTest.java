@@ -179,6 +179,14 @@ class EvaluationAgentStructuralEscalationTest {
         assertThat(c3.criticalHeuristicStreaks()).containsEntry("StoreCoherenceHeuristic|Loan", 1);
         verify(blockerSubgoalInjector, never())
                 .injectStructuralDefectRedirection(anyString(), anyString(), any(), anyInt());
+
+        // T2-ES CONSEQUENCE, pinned because it narrows a channel this repo relies on: warnings
+        // render from a streak of 2, so three findings about three DIFFERENT subjects now render
+        // NO persistent warning where name-keying would have rendered one claiming "critical for
+        // 3 consecutive cycles". That claim was false -- it was three different defects -- but the
+        // block was the channel that carried a diagnosis when the T4-BX relay was dead (T1-GA).
+        // Recorded here so the coverage question is visible rather than discovered in a run.
+        assertThat(c3.persistentHeuristicWarnings()).isEmpty();
     }
 
     /**

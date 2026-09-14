@@ -17,8 +17,11 @@ import java.util.TreeSet;
  * red light and a diagnosis. The first real field divergence made the point: a coarse {@code goals}
  * digest said the goal tree did not match and left no way to tell a changed status from a moved
  * pointer from a reworded description. Goals are per-goal now, and the current-subgoal pointer is
- * its own component. The components are the same three the checkpoint moves — the output
- * tree, the goal tree, and each registered holder's captured state.
+ * its own component. The components are the same things the checkpoint moves — the output tree,
+ * the goal tree, each registered holder's captured state, and, since 2026-09-14, the carried cycle
+ * context, which is the one piece of state the next tick reads that is none of the other three.
+ * Adding a component to the checkpoint without adding it here is how this stopped describing the
+ * state once already: the context shipped as capture and was unverified for a session.
  *
  * <p>Comparison is by structure, not by identity. Goal ids are freshly minted UUIDs, so a goal the
  * loop re-creates during a replay is a different id for the same work; comparing on ids would

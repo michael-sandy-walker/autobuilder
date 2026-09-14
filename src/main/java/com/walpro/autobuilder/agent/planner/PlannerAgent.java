@@ -330,13 +330,32 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
         boolean noRemaining = context.remainingGoals() == null || context.remainingGoals().isEmpty();
 
         if (noCurrent && noRemaining) {
-            log.warn("No current or remaining goals found — injecting fallback root goal");
+            // The fallback used to name two ids that are never created as goals
+            // ("bootstrap-project-structure" / "create-basic-structure"). Whatever treated one as
+            // a real parent next threw `Parent goal not found` — the failure AutobuilderService's
+            // `awaitingGoal` field documents as how the first adopted run died at boot, and the
+            // same wall a cross-lineage rewind hits from the other side (2026-09-14): a restored
+            // tree whose goals are all UUIDs left the loop crash-looping here every five seconds,
+            // 179 cycles started and nine finished, with no mutation ever proposed.
+            //
+            // A placeholder is only safe where nothing resolves it. Point at the goal tree that
+            // actually exists instead, and where there is none, say so and change nothing —
+            // inventing a parent cannot help a run that has no goals to parent under.
+            GoalEntity realRoot = goalPlannerService.getRootGoal();
+            if (realRoot != null && realRoot.getId() != null) {
+                log.warn("No current or remaining goals found — falling back to the real root goal [{}]",
+                        realRoot.getId());
+                return context.withCurrentGoalId(realRoot.getId())
+                        .withCurrentSubGoalId(null)
+                        .withPlannerOutcome(null)
+                        .withEvaluationFeedback(context.evaluationFeedback())
+                        .withRecommendation(context.recommendation());
+            }
 
-            return context.withCurrentGoalId("bootstrap-project-structure")
-                    .withCurrentSubGoalId("create-basic-structure")
-                    .withPlannerOutcome(null)
-                    .withEvaluationFeedback(context.evaluationFeedback())
-                    .withRecommendation(context.recommendation());
+            log.error("No current or remaining goals and no root goal in the tree — the planner has "
+                    + "nothing to parent under. Leaving the context untouched rather than inventing "
+                    + "an id that the next parent lookup would fail on.");
+            return context;
         }
 
         return context;

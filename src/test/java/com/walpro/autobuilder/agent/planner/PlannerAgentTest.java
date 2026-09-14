@@ -344,14 +344,24 @@ class PlannerAgentTest {
         assertThat(updated.lastPlannerOutcome()).isSameAs(outcome);
     }
 
+    /**
+     * The fallback names the goal tree that EXISTS. It used to invent
+     * {@code bootstrap-project-structure} / {@code create-basic-structure}, ids nothing ever
+     * creates, and the next thing to treat one as a parent threw {@code Parent goal not found} —
+     * the failure {@code AutobuilderService}'s {@code awaitingGoal} field documents as how the
+     * first adopted run died at boot, and the one a cross-lineage rewind hit from the other side
+     * on 2026-09-14 (179 cycles started, nine finished, no mutation ever proposed).
+     */
     @Test
-    void execute_whenNoCurrentAndNoRemaining_injectsFallbackGoalState() {
+    void execute_whenNoCurrentAndNoRemaining_fallsBackToTheRealRootGoal() {
         CycleContextData ctx = CycleContextData.builder()
                 .evaluationFeedback("keep this")
                 .recommendation("and this")
                 .build();
 
-        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        GoalEntity root = new GoalEntity("goal-real-root", "Evolve the application",
+                "system", GoalType.GOAL, null);
+        when(goalPlannerService.getRootGoal()).thenReturn(root);
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of()); // triggers fallback
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
@@ -362,10 +372,36 @@ class PlannerAgentTest {
 
         CycleContextData updated = agent.execute(ctx);
 
-        assertThat(updated.currentGoalId()).isEqualTo("bootstrap-project-structure");
-        assertThat(updated.currentSubGoalId()).isEqualTo("create-basic-structure");
+        assertThat(updated.currentGoalId()).isEqualTo("goal-real-root");
+        // No invented subgoal: injection then goes under the root rather than under a stranger.
+        assertThat(updated.currentSubGoalId()).isNull();
         assertThat(updated.evaluationFeedback()).isEqualTo("keep this");
         assertThat(updated.recommendation()).isEqualTo("and this");
+    }
+
+    /**
+     * And where there is no tree at all, it invents nothing. A placeholder is only safe somewhere
+     * nothing resolves it, and every consumer here resolves it.
+     */
+    @Test
+    void execute_whenThereIsNoGoalTreeAtAll_inventsNoIds() {
+        CycleContextData ctx = CycleContextData.builder()
+                .evaluationFeedback("keep this")
+                .build();
+
+        when(goalPlannerService.getRootGoal()).thenReturn(null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        when(outcome.updated()).thenReturn(false);
+        when(plannerAdapter.plan(any())).thenReturn(outcome);
+
+        CycleContextData updated = agent.execute(ctx);
+
+        assertThat(updated.currentGoalId()).isNull();
+        assertThat(updated.currentSubGoalId()).isNull();
     }
 
     @Test

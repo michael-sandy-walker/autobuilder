@@ -278,3 +278,43 @@ re-run a defect on a new build. It worked, but only after two fixes; both are th
   **pause → rewind → resume**: the scheduler takes the control-loop lock within seconds of boot
   and the rewind is correctly refused while it is held. An explicit user-pause survives the rewind
   by design, so the resume is required.
+
+## 2026-09-14 later — a rewind restores a STATE only if it restores what the next tick READS
+
+Staging `T2-ES` one cycle short of its threshold (the user's framing: start a run just before
+the ticket can be tested, not hours before) found that every rewind so far had settled the loop
+from the WRONG context, and two smaller things underneath.
+
+- **🔴 The carried cycle context was never part of a rewind.** Holders, goals, tree and cache
+  came back; then `settleAfterRewind(context, ...)` cleared the halt fields on the CURRENT context
+  — the record of the cycle just backed out of — because the carried context is not a holder and
+  nothing had captured it. `meta.json` looked like the capture (bucket 2 above says "reuse it") and
+  is not: it is written after evolution and before evaluation, so it carries the PREVIOUS cycle's
+  verdict, and it is cleared at the run boundary. Consequence of a year of rewinds: every
+  consecutive-cycle streak restarted at zero, and the first prompt after a rewind described the
+  abandoned tree's rejection reasons and build state. **The rule: a restore is only as complete as
+  what the scheduler reads on its next tick, and "not a holder" is not "not state".** Now the
+  checkpoint writes `context.json`, the archive keeps it as `__context.json`, the rewind returns it
+  and both paths settle from it; absence and supplied-not-captured are both reported.
+- **🔴 A `Map` keyed by a record does not survive JSON.** `RequestChannel.open` keys serialized as
+  `SignalType[name=X]` and deserialized through the single-String constructor, so one round trip
+  made every open request invisible to `open.get(kind)` until the post-cycle tick re-keyed the map
+  by each value's kind. Every `meta.json` on disk carries `SIGNALTYPE[NAME=SIGNALTYPE[NAME=X]]` from
+  repeated trips. It only mattered once a context was READ back — the first cycle after a rewind,
+  blind to its own signals. Fixed with a key (de)serializer that also unwraps the legacy forms.
+  **Check any persisted `Map<RecordType, ...>` the same way before trusting a restore of it.**
+- **The reserved prefix is a rule.** The restore deleted `__cache` and two named files from the
+  staged tree; the first supplied context came with a third `__` file and it was planted into
+  `output/`. Strip by prefix, never by list.
+- **A reconstructed context is checked by what the model was SHOWN.** The 09-13 defect run's
+  cut-point context had to be rebuilt from its logs (55 fields log-derived, 43 recomputed at the
+  next tick anyway, 8 cleared, one RE-KEYED). The check that made it trustworthy was a block-by-block
+  diff of the rewound cycle's evolution prompt against the original run's next prompt: same
+  warning, same interpretation, same diagnostics, same open problems, same two goals subsumed by
+  the planner. How the file was assembled is provenance; what rendered from it is evidence.
+- **What the staged rewind then proved:** the escalation fired one cycle after the cut, the model
+  had already taken one of the offered paths in that very proposal, and the loop could not see the
+  `#Delete` that took it — `T1-GB`. Two cycles after the cut the grind was over. **One rewind with
+  the right context replaced the "wait for the next natural grind" watch item; that is what the
+  time machine is for, and it is the first time it has been used that way.**
+

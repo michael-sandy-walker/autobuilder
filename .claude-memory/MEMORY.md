@@ -34,7 +34,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked; sole orchestrator since the T4-AI-2+5 meta-lane deletion) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-11)
+- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-14)
 - `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-14)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: the live ordering is the appended 2026-08-23 REORDER section at the end of the file; the S1-S6 sections above it are kept for their reasoning, not their sequence. Rationale, never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. (reviewed 2026-09-13)
+- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. 2026-09-14: T2-ES field-proven by a STAGED rewind with a reconstructed carried context; T1-GB (dropped `#Delete`) found under it. (reviewed 2026-09-14)
 - `project_wave2_structure.md`: wave 2's five layers (substrate -> portability -> reconciliation -> consultation -> yardsticks) and gate-driven sequence; widening what the loop SEES must follow scoping what it CONSULTS. Rationale only. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
@@ -63,7 +63,7 @@ Design notes, read before touching their area:
 - `project_t4ap_prompt_audit.md`: prompt bloat is raw-payload passthroughs, not contract conditionals; enumerated name-anchored lines win, dumps/concats/echoes lose; `scripts/prompt_block_report.py`. Read before ANY prompt-surface change or T2-EP. (reviewed 2026-07-24)
 - `project_pattern_recognition_design_note.md`: the 6-slice gated plan for meaningful pattern recognition, plus per-class dispositions. Read before touching `analysis/pattern/` or filing any pattern/self-model ticket. (reviewed 2026-09-08)
 - `project_target_domain_plugin_design.md`: T4-DC's field proof landed (a CLI target ran clean, 12/12, no HTTP anywhere) and REVISED the design from five seams to two -- an outcome-representation abstraction beyond HTTP status, plus a handful of leaked REST-specific strings fixable by grep. Read before adding any ecosystem-aware rule. (reviewed 2026-09-08)
-- `project_state_time_travel_design_note.md`: T4-DQ checkpoint/rewind/branching, all four slices shipped. The state surface is 40 holders, not 5; a branch is a CYCLE RANGE, not a lineage fork (settled NO). **Cross-lineage rewind needed four more fixes (2026-09-14) and a rewind reproduces a STATE, not a TRAJECTORY** — temperature 0 does not survive one. Read before any rewind/branching or T4-CR work. (reviewed 2026-09-14)
+- `project_state_time_travel_design_note.md`: T4-DQ checkpoint/rewind/branching, all four slices shipped. The state surface is 40 holders, not 5; a branch is a CYCLE RANGE, not a lineage fork (settled NO). Cross-lineage rewind needed four fixes (2026-09-14) and a rewind reproduces a STATE, not a TRAJECTORY. **2026-09-14 later: no rewind had ever restored the CARRIED CYCLE CONTEXT (not a holder; meta.json is mid-cycle and boundary-cleared) -- fixed; record-keyed maps do not round-trip JSON; archive reserved prefix is a rule; a reconstructed context is checked by the prompt it renders.** Read before any rewind/branching or T4-CR work. (reviewed 2026-09-14)
 - `project_project_portability_vision.md`: import/continue/store/restore/merge a project's CODE layer (T4-CQ/CR/CS, all still open); the import half now has a real first adopted-project run (goal-setting endpoint, awaitingGoal state) and a field finding that a diff cannot survive a tree the loop did not write. Read before any import/export/bundle work. (reviewed 2026-09-08)
 - `project_cross_run_knowledge_base.md`: T4-CJ slice 2 to T4-CN to T4-CM are ONE chain about reconciling graphs from DIFFERENT runs, not single-graph browsing. Read before touching any of them. (reviewed 2026-07-23)
 - `project_reliability_plan.md`: rationale behind the reliability work (floor up, ceiling free). NOT a queue; everything it selected is filed or closed. (reviewed 2026-07-14)
@@ -75,7 +75,7 @@ Measurement and yardsticks:
 - `project_goal_fulfilled_is_real_happy_path.md`: GOAL_FULFILLED fires routinely; use length-matched fulfilled runs as yardsticks. (reviewed 2026-07-09)
 - `project_rejection_composition.md`: measured why mutations are rejected; the "model cannot see the signatures it calls" hypothesis is REFUTED. Read before filing anything about compile failures. (reviewed 2026-09-08)
 - `project_completion_binding_constraint.md`: resolved — the constraint is planner coverage/convergence plus residual variance, two-factor. (reviewed 2026-07-09)
-- `project_scenario_replay_harness.md`: freeze a real run's tree and replay it in milliseconds (`scripts/freeze_scenario.sh`); answers everything decided WITHOUT the model. **A frozen tree is ONE cycle's input and cannot express a sequence, and a defect living only in REJECTED candidates is in no archived tree at all.** Read before reproducing a bad run by re-running it. (reviewed 2026-09-14)
+- `project_scenario_replay_harness.md`: freeze a real run's tree and replay it in milliseconds (`scripts/freeze_scenario.sh`); answers everything decided WITHOUT the model. A frozen tree is ONE cycle's input and cannot express a sequence, and a defect living only in REJECTED candidates is in no archived tree at all. **Third instrument (2026-09-14): a rewind WITH the carried context cuts a sequence-dependent mechanism one cycle short of its threshold -- the point must carry its context, an old point's context is rebuilt from logs, and the reconstruction is verified by a prompt diff.** Read before reproducing a bad run by re-running it. (reviewed 2026-09-14)
 - `project_coverage_guard_experiment.md`: runbook pattern for falsifiable off-switch experiments — metrics and decision rule stated in advance. (reviewed 2026-07-09)
 - `project_t4bq_naming_consistency_ab.md`: naming-consistency A/B stood down; 3-pair minimum before claims; do not name a replacement lever without critical-path evidence. (reviewed 2026-07-09)
 

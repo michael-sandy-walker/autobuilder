@@ -49,3 +49,19 @@ choosing an instrument.
   moved on — no grind, so nothing that needs a repeat could fire. Prompts go out at temperature 0,
   but rewound-out goals stay in the graph's description corpus that the planner's duplicate check
   reads, so the plan diverges anyway. See [[project-state-time-travel-design-note]].
+
+## 2026-09-14 later — the third instrument: a rewind WITH the carried context
+
+A frozen tree is one cycle's input; a rewind gives a fresh roll from a restored STATE. The
+2026-09-14 T2-ES run showed what a rewind can answer once the checkpoint carries the cycle
+context the next tick reads (streaks, warnings, relayed verdicts, build observations): **a
+sequence-dependent mechanism can be cut ONE cycle short of its threshold and tested in one cycle.**
+The escalation that no natural run had reached in two weeks fired 2 minutes 20 seconds after the
+resume. Requirements, learned the hard way: the point must carry its context (every checkpoint
+before 2026-09-14 does not; a reconstructed one is accepted and labelled), the run's `mutations/`
+is gone after the boundary so the context of an old point has to be rebuilt from its logs, and
+the reconstruction is verified by diffing the first rendered prompt against the original run's,
+not by inspecting the file. What it still cannot do: force the model's next roll — the planner
+re-rolled too (a structured replan the original run's planner did not manage), and only the
+DETERMINISTIC half of the claim is settled by one rewind.
+

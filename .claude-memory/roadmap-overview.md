@@ -159,6 +159,8 @@
 - [x] `T1-FM` — Resume adopts an unowned root
 - [x] `T1-I2` — Fix meta intention not reaching Planner/Evolution agents
 - [x] `T1-FW` — A requirement loses part of itself between being READ and being EXERCISED — whatever the specification names as part of the request must survive into it; probe drops the query string, 12 of 29 runs / 190 refused closure attempts — value half SHIPPED 2026-08-26 (three defects in it fixed 2026-09-08), clause 4 (generality) MET 2026-08-29 by `CommandExerciseSynthesizer`'s CLI fix (13 blocks -> 0, credited 2026-09-08); CLOSED 2026-09-09 on its T1 scope — 17 probed / **0 contradicted** / 41 abstained, so nothing is reported defective any more — with the ONE UNMET CLAUSE (*no new silence*) carried to `T3-CB`, not dropped
+- [x] `T1-GA` — The rejection-feedback relay renders on NO semantic rejection, and the run records cannot say why
+- [x] `T1-GB` — A `#Delete` directive is parsed and then dropped at every later stage (diff, heuristics' view, probe tree, merge); a mutation that removes one of two parallel stores is rejected for the store it removed. Fixed 2026-09-14, one invariant in four homes; found by the T2-ES rewind
 
 ## Tier 2 — Steering quality (131)
 
@@ -174,7 +176,7 @@
 - [x] `T2-EY` — A correct rejection with a stated reason does not produce a different next proposal — BUILT 2026-07-31: a proposal already rejected this run, with nothing merged since, is refused before the probe and the evaluator (39 duplicates in 33 corpora, 38 safely blockable); field DoD MET 2026-08-01 — refused a repeat with no evaluator call, and the next proposal differed (n=1, uncontrolled)
 - [x] `T2-EX` — How much of a run is verifiable is decided at criterion-authoring time (77%/32%/79% executable across three frozen runs) and nothing measures it
 - [ ] `T2-ET` — A gate-raised work item is closed by an LLM score; the gate never votes on its own closure (completes T4-CC's authority)
-- [ ] `T2-ES` — "Already implemented" vs "criterion unmet" is a diagnosis, not a retry (27/110 cycles lost on one subgoal)
+- [~] `T2-ES` — "Already implemented" vs "criterion unmet" is a diagnosis, not a retry (27/110 cycles lost on one subgoal). Identity + escalation shipped 2026-09-13; **field-proven 2026-09-14 by a rewind to the defect run's cut point with a reconstructed carried context: `structural_defect_escalated` one cycle after the cut** — and the model had already taken a resolution path the loop could not see (dropped `#Delete`, now `T1-GB`); the injector skipped on a planner-written BUILD_FIX, event now records the outcome
 - [x] `T2-EU` — A retired goal blocked its own replacement, defeating the prescribed stuck-subgoal workflow (shipped + field-verified 2026-07-27)
 - [x] `T2-EV` — Coverage-injected endpoints now carry the spec's stated statuses, not just "a mapping exists" (shipped 2026-07-27)
 - [x] `T2-EW` — Unrequested test sources are not merged; they break packaging and can satisfy no gate (shipped 2026-07-27)
@@ -370,7 +372,7 @@
 - [s] `T4-CV` — Forward-looking requirement for a runnable entry point (shipped + FIELD-VERIFIED 2026-07-27: gate fired at min 5, loop wrote the entry point in ~60s)
 - [x] `T4-CX` — Startup-wiring forecast no longer precedes the gate that measures it (shipped 2026-07-28)
 - [x] `T4-CY` — Loop observes its own running behaviour mid-run: PROVEN, disabled on cost until probe synthesis is deterministic
-- [ ] `T4-DQ` — The loop cannot return to a state it was in: no checkpoint, rewind or backtracking, so a run down a bad path can only grind to death; tree+context snapshots already run every cycle, blockers are goal status mutated in place and 5 decision-bearing trackers never persisted — design note first
+- [x] `T4-DQ` — The loop cannot return to a state it was in: no checkpoint, rewind or backtracking, so a run down a bad path can only grind to death; tree+context snapshots already run every cycle, blockers are goal status mutated in place and 5 decision-bearing trackers never persisted — design note first
 - [x] `T4-DP` — How a run STARTS is an accident of five flags: no explicit start mode, so "continue someone else's project" and "wipe it and begin again" are one careless default apart; recommendation is runtime not wrapper, chooser UI last
 - [x] `T4-DR` — Every structural repair is reachable only from a MERGE, so a run that INHERITS a defective tree names the defect for its whole life and is never offered the fix it already computed — MEASURED FIRST (`scripts/inherited_finding_report.py`, whole 39-run corpus): 1 run inherited a finding, and exactly 2 carried one the merge hook could never reach, ONE ON EACH SIDE OF T1-FX — those two fixes are the two ends of one gap with nothing between them; BUILT+CLOSED 2026-09-08 — `core/build/StructuralTreeRepair` is now the one home both the merge path and a CONTINUE_LINEAGE start-of-run pass call (ADOPT_PROJECT deliberately excluded: an uninvited edit is not a repair), DoD demonstrated on 2026-09-03_20-25-22's own frozen first checkpoint — both repositories repaired with zero merges, where the run itself spent 44 cycles and 35 minutes never reaching it
 - [ ] `T4-CQ` — Import and continue an existing project (cold read; with or without a graph)

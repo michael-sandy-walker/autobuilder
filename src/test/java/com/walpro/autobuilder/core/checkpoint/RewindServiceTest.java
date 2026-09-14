@@ -72,7 +72,7 @@ class RewindServiceTest {
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
         ReflectionTestUtils.setField(checkpoints, "retainCheckpoints", 40);
         ReflectionTestUtils.setField(checkpoints, "captureCache", true);
-        when(planner.restoreGoalStateAsOf(any(), any(), any()))
+        when(planner.restoreGoalStateAsOf(any(), any(), any(), any()))
                 .thenReturn(new GoalPlannerService.RewindResult(2, 1, "s1"));
         rewind = new RewindService(fileService, mapper, checkpoints, manifest, log, planner, fingerprints, identity);
     }
@@ -156,7 +156,8 @@ class RewindServiceTest {
         ArgumentCaptor<Map<String, GoalStatus>> statuses = ArgumentCaptor.forClass(Map.class);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Set<String>> existing = ArgumentCaptor.forClass(Set.class);
-        verify(planner).restoreGoalStateAsOf(statuses.capture(), existing.capture(), anyString());
+        verify(planner).restoreGoalStateAsOf(statuses.capture(), existing.capture(), anyString(),
+                any());
 
         assertThat(statuses.getValue()).containsEntry("g1", GoalStatus.ACTIVE);
         assertThat(existing.getValue()).containsExactly("g1");
@@ -205,7 +206,7 @@ class RewindServiceTest {
 
         assertThat(result.performed()).isFalse();
         assertThat(result.refusedBecause()).contains("archived copy");
-        verify(planner, never()).restoreGoalStateAsOf(any(), any(), any());
+        verify(planner, never()).restoreGoalStateAsOf(any(), any(), any(), any());
     }
 
     @Test

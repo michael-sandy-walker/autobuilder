@@ -2825,6 +2825,23 @@ public class GoalPlannerService {
     public synchronized RewindResult restoreGoalStateAsOf(Map<String, GoalStatus> statuses,
                                                           java.util.Set<String> existing,
                                                           String restoredSubGoalId) {
+        return restoreGoalStateAsOf(statuses, existing, restoredSubGoalId, null);
+    }
+
+    /**
+     * T4-DQ follow-up: the same restore, also moving the ROOT to the one the checkpoint recorded.
+     *
+     * <p>Within a run the root never changes, so nothing needed to restore it. Across a lineage it
+     * is a different goal, and the fold removes the live root because it is not among the goals
+     * that existed at the cut — leaving the pointer aimed at a goal the map no longer holds. The
+     * loop then threw {@code Parent goal not found: <live root>} on its first tick after a rewind
+     * that had reported one divergence (2026-09-14). The checkpoint has always carried
+     * {@code rootGoalId}; the restore simply never read it.
+     */
+    public synchronized RewindResult restoreGoalStateAsOf(Map<String, GoalStatus> statuses,
+                                                          java.util.Set<String> existing,
+                                                          String restoredSubGoalId,
+                                                          String restoredRootGoalId) {
         int restored = 0;
         int removed = 0;
         rewindInProgress = true;
@@ -2913,6 +2930,20 @@ public class GoalPlannerService {
                     }
                     restored++;
                 }
+            }
+
+            // Move the root BEFORE resolving the leaf: resolveNextActiveLeaf walks down from
+            // rootGoalId, so a stale root would search a tree that is no longer there.
+            if (restoredRootGoalId != null && goalMap.containsKey(restoredRootGoalId)) {
+                if (!restoredRootGoalId.equals(this.rootGoalId)) {
+                    log.info("T4-DQ: root goal moved {} -> {} by the rewind (the checkpoint's own root).",
+                            this.rootGoalId, restoredRootGoalId);
+                }
+                this.rootGoalId = restoredRootGoalId;
+            } else if (restoredRootGoalId != null) {
+                log.warn("T4-DQ: the checkpoint's root [{}] is not in the restored goal map — leaving "
+                        + "the root at [{}] rather than pointing at a goal that is not there.",
+                        restoredRootGoalId, this.rootGoalId);
             }
 
             this.currentSubGoalId = restoredSubGoalId != null

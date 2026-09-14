@@ -131,7 +131,8 @@ public class RewindService {
         GoalPlannerService.RewindResult goals;
         try {
             goals = goalPlannerService.restoreGoalStateAsOf(
-                    fold.statuses(), fold.existingGoalIds(), record.currentSubGoalId());
+                    fold.statuses(), fold.existingGoalIds(), record.currentSubGoalId(),
+                    record.rootGoalId());
         } catch (Exception e) {
             failures.add("goal state: " + e.getMessage());
             goals = new GoalPlannerService.RewindResult(0, 0, record.currentSubGoalId());

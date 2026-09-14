@@ -152,6 +152,54 @@ class GoalPlannerServiceRewindTest {
         return g;
     }
 
+    /**
+     * Across a lineage the root is a different goal, and the fold removes the live one because it
+     * did not exist at the cut. Restoring statuses and the leaf while leaving the root behind left
+     * the pointer aimed at a goal the map no longer held, and the loop threw
+     * {@code Parent goal not found: <live root>} on its first tick after a rewind that had
+     * reported one divergence (2026-09-14).
+     */
+    @Test
+    @DisplayName("the root moves to the one the checkpoint recorded")
+    void rootGoalIsRestoredFromTheCheckpoint() {
+        // The live tree, from the run doing the rewinding.
+        installTree(goal("live-root", null, GoalStatus.ACTIVE),
+                goal("live-sub", "live-root", GoalStatus.ACTIVE));
+
+        // The cut point's tree, which the fold says existed and the graph can supply.
+        GoalEntity foreignRoot = goal("foreign-root", null, GoalStatus.ACTIVE);
+        GoalEntity foreignLeaf = goal("foreign-leaf", "foreign-root", GoalStatus.ACTIVE);
+        org.mockito.Mockito.when(goalGraphService.findById("foreign-root"))
+                .thenReturn(java.util.Optional.of(foreignRoot));
+        org.mockito.Mockito.when(goalGraphService.findById("foreign-leaf"))
+                .thenReturn(java.util.Optional.of(foreignLeaf));
+
+        service.restoreGoalStateAsOf(
+                Map.of("foreign-root", GoalStatus.ACTIVE, "foreign-leaf", GoalStatus.ACTIVE),
+                java.util.Set.of("foreign-root", "foreign-leaf"),
+                "foreign-leaf",
+                "foreign-root");
+
+        assertThat(ReflectionTestUtils.getField(service, "rootGoalId")).isEqualTo("foreign-root");
+        assertThat(service.getGoalById("live-root"))
+                .as("the live root did not exist at the cut and is rewound out")
+                .isNull();
+    }
+
+    /** A root the restore cannot actually produce is not adopted — better a stale root than a
+     *  pointer into nothing, which is the failure this whole path exists to avoid. */
+    @Test
+    @DisplayName("a root that is not in the restored map is refused")
+    void aRootThatCannotBeResolvedIsNotAdopted() {
+        installTree(goal("live-root", null, GoalStatus.ACTIVE),
+                goal("live-sub", "live-root", GoalStatus.ACTIVE));
+
+        service.restoreGoalStateAsOf(Map.of(), java.util.Set.of("live-root", "live-sub"),
+                "live-sub", "a-root-nobody-has");
+
+        assertThat(ReflectionTestUtils.getField(service, "rootGoalId")).isEqualTo("live-root");
+    }
+
     private void installTree(GoalEntity root, GoalEntity... subgoals) {
         Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
         goalMap.put(root.getId(), root);

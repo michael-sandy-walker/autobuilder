@@ -314,14 +314,22 @@ public class CheckpointService {
         return new CarriedContext(fromArchive, "archive", provenance);
     }
 
-    /** Whether a point can be settled from its own carried context rather than the current one. */
+    /**
+     * Whether a point can be settled from its own carried context rather than the current one.
+     *
+     * <p>Disk only, deliberately. This answers a per-row hint on the operator listing, which walks
+     * every restorable point — and {@link #archivePathOf} falls back to a graph query when the
+     * archive directory is absent, so consulting it here was one Neo4j round trip per row, several
+     * hundred per request. The restore path still uses the full lookup, where it is one query for
+     * the one point being returned to. A point whose archive is only known to the graph reports
+     * false here and restores correctly anyway; the listing understates rather than blocks.
+     */
     public boolean hasCarriedContext(CheckpointRecord record) {
         if (record == null || record.cycleId() == null) return false;
         try {
-            if (fileService.exists(CHECKPOINTS_DIR + "/" + record.cycleId() + "/" + CONTEXT_FILE)) return true;
-            Optional<String> archive = archivePathOf(record.cycleId());
-            return archive.isPresent()
-                    && fileService.exists(archive.get() + "/" + CheckpointArchive.CONTEXT_FILE);
+            return fileService.exists(CHECKPOINTS_DIR + "/" + record.cycleId() + "/" + CONTEXT_FILE)
+                    || fileService.exists(CheckpointArchive.ARCHIVE_DIR + "/" + record.cycleId()
+                            + "/" + CheckpointArchive.CONTEXT_FILE);
         } catch (IOException | RuntimeException e) {
             return false;
         }

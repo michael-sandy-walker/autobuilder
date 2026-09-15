@@ -2,6 +2,7 @@ package com.walpro.autobuilder.core.service;
 
 import com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -168,6 +170,102 @@ class AutobuilderServiceNoDiffEscalationTest {
 
         verify(injector).injectNoDiffDisagreementRedirection(
                 eq(List.of("the only stated behaviour is observable")), eq(3), any());
+    }
+
+
+    // ---- the seam: a refusal must actually reach the escalation ----
+    //
+    // Everything above drives escalateNoDiffDisagreement directly, which tests the decision and
+    // not the wiring. The call lives inside the refusal branch of the promotion decision, four
+    // hundred lines into the scheduled tick, and the condition it guards has occurred zero times
+    // in 967 recorded cycles — so the field cannot cover it either. These drive the branch.
+
+    private AutobuilderService serviceWithPlanner(GoalPlannerService planner) {
+        AutobuilderService s = new AutobuilderService(null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null);
+        ReflectionTestUtils.setField(s, "goalPlannerService", planner);
+        s.setBlockerSubgoalInjector(injector);
+        return s;
+    }
+
+    /** A cycle whose evolution said #NoDiff, on a subgoal with a criterion banked false. */
+    private static CycleContextData noDiffWithUnmetCriterion(int streak) {
+        return CycleContextData.builder()
+                .cycleName("cycle-1")
+                .currentSubGoalId("sub-1")
+                .currentSubGoalCriteria(CRITERIA)
+                .cumulativeCriteriaStatus(Map.of(1, true, 2, false))
+                .noDiffRefusalStreak(streak)
+                .build()
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        com.walpro.autobuilder.core.lifecycle.BasicSignals.EVOLUTION_NOOP,
+                        1.0, "evolution", 5));
+    }
+
+    @Test
+    @DisplayName("a refused #NoDiff promotion reaches the escalation, and a third one raises the item")
+    void theRefusalBranchReachesTheEscalation() {
+        GoalPlannerService planner = mock(GoalPlannerService.class);
+        AutobuilderService s = serviceWithPlanner(planner);
+
+        CycleContextData after = s.promoteOnNoDiffOrRefuse(noDiffWithUnmetCriterion(2));
+
+        verify(injector).injectNoDiffDisagreementRedirection(
+                eq(List.of("the second stated behaviour is observable")), eq(3), any());
+        // The refusal must not promote: that is the contradiction being preserved, not resolved.
+        verify(planner, never()).transitionGoal(any(), any(), anyString());
+        assertThat(after.noDiffRefusalStreak()).isZero();
+    }
+
+    @Test
+    @DisplayName("the first refusal counts without escalating, so the branch is not a one-shot")
+    void theRefusalBranchCountsBeforeItEscalates() {
+        AutobuilderService s = serviceWithPlanner(mock(GoalPlannerService.class));
+
+        CycleContextData after = s.promoteOnNoDiffOrRefuse(noDiffWithUnmetCriterion(0));
+
+        assertThat(after.noDiffRefusalStreak()).isEqualTo(1);
+        verify(injector, never()).injectNoDiffDisagreementRedirection(any(), anyInt(), any());
+    }
+
+    /**
+     * The other side of the branch: when the criteria agree with the model there is no
+     * disagreement, the subgoal is promoted, and nothing is counted. This is the case that
+     * actually happens in the field, which is why the refusal side needed a test of its own.
+     */
+    @Test
+    @DisplayName("when the criteria agree, the subgoal is promoted and nothing is counted")
+    void anAgreedNoDiffPromotesAndCountsNothing() {
+        GoalPlannerService planner = mock(GoalPlannerService.class);
+        AutobuilderService s = serviceWithPlanner(planner);
+        CycleContextData agreed = CycleContextData.builder()
+                .cycleName("cycle-1").currentSubGoalId("sub-1")
+                .currentSubGoalCriteria(CRITERIA)
+                .cumulativeCriteriaStatus(Map.of(1, true, 2, true))
+                .noDiffRefusalStreak(2)
+                .build()
+                .issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        com.walpro.autobuilder.core.lifecycle.BasicSignals.EVOLUTION_NOOP,
+                        1.0, "evolution", 5));
+
+        CycleContextData after = s.promoteOnNoDiffOrRefuse(agreed);
+
+        verify(planner).transitionGoal(eq("sub-1"), eq(com.walpro.autobuilder.goal.GoalStatus.COMPLETED), anyString());
+        verify(injector, never()).injectNoDiffDisagreementRedirection(any(), anyInt(), any());
+        assertThat(after.noDiffRefusalStreak()).as("a promotion clears the disagreement").isZero();
+    }
+
+    @Test
+    @DisplayName("no #NoDiff signal, no decision: the branch is not entered at all")
+    void withoutTheSignalNothingHappens() {
+        AutobuilderService s = serviceWithPlanner(mock(GoalPlannerService.class));
+        CycleContextData plain = CycleContextData.builder()
+                .cycleName("cycle-1").currentSubGoalId("sub-1").noDiffRefusalStreak(2).build();
+
+        CycleContextData after = s.promoteOnNoDiffOrRefuse(plain);
+
+        assertThat(after.noDiffRefusalStreak()).isEqualTo(2);
+        verify(injector, never()).injectNoDiffDisagreementRedirection(any(), anyInt(), any());
     }
 
 }

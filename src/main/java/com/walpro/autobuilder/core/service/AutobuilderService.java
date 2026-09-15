@@ -1284,79 +1284,7 @@ public class AutobuilderService implements CheckpointableState {
         // that the current output already satisfies all criteria for the subgoal. Promote directly
         // to FULFILLED without requiring criteriaPassStatus (which is only written by evaluation and
         // would be absent when the implementation arrived via a prior subgoal's deferred merge).
-        if (context.hasStrongRequest(BasicSignals.EVOLUTION_NOOP, 0.5)) {
-            com.walpro.autobuilder.core.lifecycle.ChannelRequest noOpSignal =
-                    context.peekRequest(BasicSignals.EVOLUTION_NOOP);
-            context = context.consumeRequest(BasicSignals.EVOLUTION_NOOP);
-            String noOpSubGoalId = context.currentSubGoalId();
-            // T1-EE: evaluation may have fulfilled the signal's originating subgoal mid-cycle and
-            // advanced the pointer. Reject the signal if it names a different subgoal than the
-            // current one — promoting the wrong subgoal would leave it FULFILLED with zero observation.
-            if (noOpSignal != null && noOpSignal.meta() != null) {
-                Object signalSubGoalId = noOpSignal.meta().get("subGoalId");
-                if (signalSubGoalId != null && !signalSubGoalId.toString().equals(noOpSubGoalId)) {
-                    log.debug("T1-EE: EVOLUTION_NOOP was for subGoalId={} but current is {} — discarding stale signal",
-                            signalSubGoalId, noOpSubGoalId);
-                    noOpSubGoalId = null;
-                }
-            }
-            if (noOpSubGoalId != null) {
-                // T1-DN: outer gate — refuse promotion when concrete state contradicts the LLM.
-                String refusalReason = whyRefuseNoDiffPromotion(context);
-                // T4-BP step 3 on the #NoDiff route (run 18, 2026-07-06): the step-1 pass used to
-                // run AFTER the promotion decision — recording only — so its ✗ landed on an
-                // already-COMPLETED goal. That closed-but-unmet contradiction had no owner: T2-DR
-                // treated it as a root-closure blocker and gave up the root on work nothing ever
-                // retried (false give-up #4). Verify BEFORE deciding and let an unmet criterion
-                // refuse the promotion; the pass map is banked either way so the retry ladder and
-                // the evolution prompt see exactly the unmet work. Abstain (empty map / failure)
-                // keeps the promotion — the closure edge re-verifies with its own gates.
-                if (refusalReason == null && criteriaVerificationService != null) {
-                    Map<Integer, Boolean> verifiedNow = Map.of();
-                    try {
-                        verifiedNow = criteriaVerificationService.verifyAndRecord(context, noOpSubGoalId);
-                        if (!verifiedNow.isEmpty()) {
-                            goalPlannerService.saveCriteriaPassStatus(noOpSubGoalId, verifiedNow);
-                        }
-                    } catch (Exception e) {
-                        log.warn("T4-BP-1: #NoDiff criteria verification failed (no answer — promotion proceeds): {}", e.getMessage());
-                    }
-                    if (verifiedNow.containsValue(Boolean.FALSE)) {
-                        refusalReason = "verified-criteria-unmet";
-                    }
-                }
-                if (refusalReason != null) {
-                    log.warn("T1-DN: refusing #NoDiff promotion — {} (subGoalId={})", refusalReason, noOpSubGoalId);
-                    context = context.issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "noDiff-trust-gate:" + refusalReason, ChannelRequest.horizonFromDecay(1.0, 0.1)));
-                    // T2-ES: count the disagreement. The DIVERGENCE_REQUEST above is the loop
-                    // asking the same question differently, which is what produced 27 identical
-                    // cycles in the run this ticket was filed from; nothing counted the repeat, so
-                    // nothing could ever decide that asking again had stopped working.
-                    context = escalateNoDiffDisagreement(context, noOpSubGoalId, refusalReason);
-                } else {
-                    log.info("Evolution noOp — #NoDiff implies current output satisfies all criteria. Promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
-                    // The disagreement is over: this promotion was allowed to proceed.
-                    context = context.withNoDiffRefusalStreak(0);
-                    consecutiveStagnatingCyclesWithoutMerge = 0;
-                    consecutiveSameFingerprintCycles = 0;
-                    lastEvaluatedScore = Double.NaN;
-                    context = context.withPlateauCycles(0).consumeRequest(BasicSignals.SCORE_PLATEAU);
-                    // Route through transitionGoal so banking the acceptance criteria is
-                    // paired with the status flip; calling applyGoalProgress(FULFILLED)
-                    // directly skips the bank and leaves criteriaPassStatus empty.
-                    goalPlannerService.transitionGoal(noOpSubGoalId,
-                            com.walpro.autobuilder.goal.GoalStatus.COMPLETED,
-                            "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
-                    context = context
-                            .consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED)
-                            .consumeRequest(BasicSignals.STAGNATION)
-                            .consumeRequest(BasicSignals.REPETITION_DETECTED)
-                            .consumeRequest(BasicSignals.LOW_CONFIDENCE)
-                            .withStagnationCircuitBreakerActive(false)
-                            .withGoalProgress(GoalProgressState.NOT_EVALUATED);
-                }
-            }
-        }
+        context = promoteOnNoDiffOrRefuse(context);
 
         // T1-EB: build-blocked deadlock breaker. When no agent runs and no mutation is proposed
         // while BUILD_BROKEN is active, increment a counter. Halt once the limit is reached.
@@ -1720,6 +1648,95 @@ public class AutobuilderService implements CheckpointableState {
         if (++cyclesSincePreserve < preserveIntervalCycles) return false;
         cyclesSincePreserve = 0;
         return true;
+    }
+
+    /**
+     * T2-CC/T1-DN/T2-ES: the promotion decision for an evolution {@code #NoDiff}, and the one
+     * place the disagreement between "already implemented" and "criterion unmet" is judged.
+     *
+     * <p>Extracted from the tick so the REFUSAL BRANCH can be driven by a test. It sits four
+     * hundred lines into a scheduled method with sixteen collaborators, so the escalation call
+     * inside it was otherwise reachable only in the field — against a condition measured at zero
+     * occurrences in 967 recorded cycles. An untestable branch guarding an unobservable condition
+     * is not a guard at all.
+     *
+     * @return the context after promoting, or after refusing and counting the disagreement
+     */
+    CycleContextData promoteOnNoDiffOrRefuse(CycleContextData context) {
+    if (context.hasStrongRequest(BasicSignals.EVOLUTION_NOOP, 0.5)) {
+        com.walpro.autobuilder.core.lifecycle.ChannelRequest noOpSignal =
+                context.peekRequest(BasicSignals.EVOLUTION_NOOP);
+        context = context.consumeRequest(BasicSignals.EVOLUTION_NOOP);
+        String noOpSubGoalId = context.currentSubGoalId();
+        // T1-EE: evaluation may have fulfilled the signal's originating subgoal mid-cycle and
+        // advanced the pointer. Reject the signal if it names a different subgoal than the
+        // current one — promoting the wrong subgoal would leave it FULFILLED with zero observation.
+        if (noOpSignal != null && noOpSignal.meta() != null) {
+            Object signalSubGoalId = noOpSignal.meta().get("subGoalId");
+            if (signalSubGoalId != null && !signalSubGoalId.toString().equals(noOpSubGoalId)) {
+                log.debug("T1-EE: EVOLUTION_NOOP was for subGoalId={} but current is {} — discarding stale signal",
+                        signalSubGoalId, noOpSubGoalId);
+                noOpSubGoalId = null;
+            }
+        }
+        if (noOpSubGoalId != null) {
+            // T1-DN: outer gate — refuse promotion when concrete state contradicts the LLM.
+            String refusalReason = whyRefuseNoDiffPromotion(context);
+            // T4-BP step 3 on the #NoDiff route (run 18, 2026-07-06): the step-1 pass used to
+            // run AFTER the promotion decision — recording only — so its ✗ landed on an
+            // already-COMPLETED goal. That closed-but-unmet contradiction had no owner: T2-DR
+            // treated it as a root-closure blocker and gave up the root on work nothing ever
+            // retried (false give-up #4). Verify BEFORE deciding and let an unmet criterion
+            // refuse the promotion; the pass map is banked either way so the retry ladder and
+            // the evolution prompt see exactly the unmet work. Abstain (empty map / failure)
+            // keeps the promotion — the closure edge re-verifies with its own gates.
+            if (refusalReason == null && criteriaVerificationService != null) {
+                Map<Integer, Boolean> verifiedNow = Map.of();
+                try {
+                    verifiedNow = criteriaVerificationService.verifyAndRecord(context, noOpSubGoalId);
+                    if (!verifiedNow.isEmpty()) {
+                        goalPlannerService.saveCriteriaPassStatus(noOpSubGoalId, verifiedNow);
+                    }
+                } catch (Exception e) {
+                    log.warn("T4-BP-1: #NoDiff criteria verification failed (no answer — promotion proceeds): {}", e.getMessage());
+                }
+                if (verifiedNow.containsValue(Boolean.FALSE)) {
+                    refusalReason = "verified-criteria-unmet";
+                }
+            }
+            if (refusalReason != null) {
+                log.warn("T1-DN: refusing #NoDiff promotion — {} (subGoalId={})", refusalReason, noOpSubGoalId);
+                context = context.issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "noDiff-trust-gate:" + refusalReason, ChannelRequest.horizonFromDecay(1.0, 0.1)));
+                // T2-ES: count the disagreement. The DIVERGENCE_REQUEST above is the loop
+                // asking the same question differently, which is what produced 27 identical
+                // cycles in the run this ticket was filed from; nothing counted the repeat, so
+                // nothing could ever decide that asking again had stopped working.
+                context = escalateNoDiffDisagreement(context, noOpSubGoalId, refusalReason);
+            } else {
+                log.info("Evolution noOp — #NoDiff implies current output satisfies all criteria. Promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
+                // The disagreement is over: this promotion was allowed to proceed.
+                context = context.withNoDiffRefusalStreak(0);
+                consecutiveStagnatingCyclesWithoutMerge = 0;
+                consecutiveSameFingerprintCycles = 0;
+                lastEvaluatedScore = Double.NaN;
+                context = context.withPlateauCycles(0).consumeRequest(BasicSignals.SCORE_PLATEAU);
+                // Route through transitionGoal so banking the acceptance criteria is
+                // paired with the status flip; calling applyGoalProgress(FULFILLED)
+                // directly skips the bank and leaves criteriaPassStatus empty.
+                goalPlannerService.transitionGoal(noOpSubGoalId,
+                        com.walpro.autobuilder.goal.GoalStatus.COMPLETED,
+                        "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
+                context = context
+                        .consumeRequest(BasicSignals.SUBGOAL_EXHAUSTED)
+                        .consumeRequest(BasicSignals.STAGNATION)
+                        .consumeRequest(BasicSignals.REPETITION_DETECTED)
+                        .consumeRequest(BasicSignals.LOW_CONFIDENCE)
+                        .withStagnationCircuitBreakerActive(false)
+                        .withGoalProgress(GoalProgressState.NOT_EVALUATED);
+            }
+        }
+    }
+        return context;
     }
 
     /** T2-ES: how many identical disagreements before the loop changes the question. */

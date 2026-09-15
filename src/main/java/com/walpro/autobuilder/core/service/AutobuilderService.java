@@ -1332,7 +1332,7 @@ public class AutobuilderService implements CheckpointableState {
                     // asking the same question differently, which is what produced 27 identical
                     // cycles in the run this ticket was filed from; nothing counted the repeat, so
                     // nothing could ever decide that asking again had stopped working.
-                    context = escalateNoDiffDisagreement(context, noOpSubGoalId);
+                    context = escalateNoDiffDisagreement(context, noOpSubGoalId, refusalReason);
                 } else {
                     log.info("Evolution noOp — #NoDiff implies current output satisfies all criteria. Promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
                     // The disagreement is over: this promotion was allowed to proceed.
@@ -1743,7 +1743,15 @@ public class AutobuilderService implements CheckpointableState {
      */
     // Package-private: the seam the wiring test drives, because reaching it through a full tick
     // needs every collaborator the service has and would test the scheduler, not this decision.
-    CycleContextData escalateNoDiffDisagreement(CycleContextData context, String subGoalId) {
+    CycleContextData escalateNoDiffDisagreement(CycleContextData context, String subGoalId,
+                                               String refusalReason) {
+        // Only the criteria disagreement counts. A refusal because the build is broken is a
+        // different problem with its own actuator, and letting it share this counter would both
+        // raise an item with no criterion to name and RESET the streak, masking a real
+        // disagreement underneath a passing build.
+        if (!isCriteriaDisagreement(refusalReason)) {
+            return context;
+        }
         int streak = context.noDiffRefusalStreak() + 1;
         context = context.withNoDiffRefusalStreak(streak);
         int threshold = tuningParameterStore != null
@@ -1774,10 +1782,23 @@ public class AutobuilderService implements CheckpointableState {
         return context.withNoDiffRefusalStreak(0);
     }
 
+    /** Both {@code criteria-unmet} and {@code verified-criteria-unmet} are this disagreement. */
+    private static boolean isCriteriaDisagreement(String refusalReason) {
+        return refusalReason != null && refusalReason.endsWith("criteria-unmet");
+    }
+
     /**
-     * The acceptance criteria currently recorded as failing, in the planner's words. Index
-     * convention is the one the evolution prompt already uses: {@code cumulativeCriteriaStatus} is
-     * keyed from zero and displayed from one.
+     * The acceptance criteria currently recorded as failing, in the planner's words.
+     *
+     * <p><b>The banked map is keyed from ONE.</b> Both writers agree on that: the criteria
+     * verification service builds its pass map as {@code passMap.get(i + 1)}, and the operator
+     * endpoint writes {@code status.put(criterionIndex, true)} after range-checking from 1. Read
+     * from zero and the first failing criterion is invisible while every other one names the text
+     * above it — an escalation that quotes the wrong requirement back at the model.
+     *
+     * <p>Noted rather than fixed here: {@code EvolutionProtocolContract.criteriaProgressBlock}
+     * reads the same map from zero. It renders an absent key the same as a false one, so the block
+     * reads as pessimistic rather than wrong, but the two conventions should not both exist.
      */
     private static List<String> unmetCriteriaOf(CycleContextData context) {
         Map<Integer, Boolean> status = context.cumulativeCriteriaStatus();
@@ -1785,7 +1806,7 @@ public class AutobuilderService implements CheckpointableState {
         if (status == null || status.isEmpty() || criteria == null) return List.of();
         List<String> out = new java.util.ArrayList<>();
         for (int i = 0; i < criteria.size(); i++) {
-            if (Boolean.FALSE.equals(status.get(i))) out.add(criteria.get(i));
+            if (Boolean.FALSE.equals(status.get(i + 1))) out.add(criteria.get(i));
         }
         return List.copyOf(out);
     }

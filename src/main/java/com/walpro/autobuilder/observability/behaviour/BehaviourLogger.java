@@ -233,6 +233,14 @@ public class BehaviourLogger {
     }
 
     // T2-ES: a structural defect survived re-asking and was escalated to a work item.
+    public void noDiffDisagreementEscalated(String cycleId, String subGoalId, int streak,
+                                            java.util.List<String> unmetCriteria,
+                                            java.util.List<String> structuralDifferences,
+                                            String injectedGoalId, String outcome) {
+        emit(new BehaviourEvent.NoDiffDisagreementEscalated(Instant.now(), cycleId, subGoalId,
+                streak, unmetCriteria, structuralDifferences, injectedGoalId, outcome));
+    }
+
     public void structuralDefectEscalated(String cycleId, String heuristic, String subject,
                                           int streak, List<String> resolutionPaths,
                                           String injectedGoalId, String outcome) {

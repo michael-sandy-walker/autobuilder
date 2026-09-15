@@ -243,6 +243,21 @@ public sealed interface BehaviourEvent {
      * the model rewrites the file), and the paths so a later reading can tell an escalation that
      * offered real alternatives from one that offered none.
      */
+    /** T2-ES: the #NoDiff-vs-criteria-unmet disagreement escalated instead of re-asked. */
+    record NoDiffDisagreementEscalated(
+            Instant timestamp,
+            String cycleId,
+            String subGoalId,
+            int streak,
+            List<String> unmetCriteria,
+            List<String> structuralDifferences,
+            String injectedGoalId,
+            /** {@code injected}, or {@code skipped: <why>} — crossing the threshold is not the act. */
+            String outcome
+    ) implements BehaviourEvent {
+        public String event() { return "nodiff_disagreement_escalated"; }
+    }
+
     record StructuralDefectEscalated(
             Instant timestamp,
             String cycleId,

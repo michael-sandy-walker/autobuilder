@@ -279,6 +279,12 @@ public record CycleContextData(
         String sameFailureStreakKey,
         int sameFailureStreak,
 
+        // T2-ES: consecutive cycles in which evolution reported #NoDiff for THIS subgoal and the
+        // promotion was refused because a criterion is unmet. The disagreement the ticket is named
+        // for, counted — nothing counted it before, so the only response available was to ask
+        // again. Reset on subgoal change and on a promotion that is allowed to proceed.
+        int noDiffRefusalStreak,
+
         // T4-BA: per-cycle flag — true on the cycle whose MergeAgent guard rejected a
         // package-fragmenting mutation. Mirrors rolledBackThisCycle: never carried forward;
         // ContextLineageTracker uses it to gate the single-cycle TTL on packageFragmentation.

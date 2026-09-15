@@ -9,6 +9,7 @@ import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.goal.GoalStatus;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -647,4 +648,125 @@ class BlockerSubgoalInjectorTest {
         assertThat((List<String>) captor.getValue()).anySatisfy(c ->
                 assertThat(c).contains("available on the compile classpath"));
     }
+
+    // ---- T2-ES: the #NoDiff-vs-criteria-unmet disagreement, the case the ticket was filed from ----
+
+    private static final List<String> UNMET = List.of("the stated behaviour is observable when exercised");
+
+    @Test
+    @DisplayName("the disagreement escalates into an item naming the criterion, the count and the derived differences")
+    void noDiffDisagreement_namesTheContradictionAndTheDerivedFacts() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        GoalEntity injected = goalEntityWithMeta(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        var outcome = injector.injectNoDiffDisagreementRedirection(
+                UNMET, 3, List.of("Alpha differs from its peers in this project"));
+
+        assertThat(outcome.injected()).isTrue();
+        ArgumentCaptor<String> idCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> descCaptor = ArgumentCaptor.forClass(String.class);
+        verify(goalPlannerService).addSubGoal(idCaptor.capture(), descCaptor.capture(), eq(true));
+
+        String description = descCaptor.getValue();
+        assertThat(description).startsWith(BlockerTypes.DIVERGENCE_DESCRIPTION_PREFIX);
+        assertThat(description).contains("3 consecutive cycles");
+        assertThat(description).contains(UNMET.get(0));
+        assertThat(description).contains("Alpha differs from its peers in this project");
+        assertThat(description).contains("do not re-send it");
+        assertThat(BlockerTypes.isDiagnosticInstruction(description)).isTrue();
+
+        // The criteria are the planner's own words for the missing behaviour, so they stay
+        // confirmable once it is there — a criterion about the loop's state would not be.
+        verify(goalPlannerService).setAcceptanceCriteria(idCaptor.getValue(), UNMET);
+        assertThat(injected.getMetadata())
+                .containsEntry(BlockerTypes.ORIGINATING_GATE_KEY, BlockerTypes.GATE_NODIFF_DISAGREEMENT);
+    }
+
+    /**
+     * The defect compiles perfectly — that is its whole shape — so a COMPILE_OK observation can
+     * attest to nothing about it. Without the gate stamp the cleanup would retire the item on the
+     * next merge, which is T2-EQ's cause B arriving through yet another door.
+     */
+    @Test
+    void noDiffDisagreement_isStampedSoACompileObservationCannotRetireIt() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        GoalEntity injected = goalEntityWithMeta(new HashMap<>());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(injected);
+
+        injector.injectNoDiffDisagreementRedirection(UNMET, 3, List.of());
+
+        assertThat(BlockerTypes.isFromGate(injected.getMetadata())).isTrue();
+        injected.setStatus(GoalStatus.ACTIVE);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(injected);
+        injector.clearActiveBuildFixSubgoals();
+        verify(goalPlannerService, never()).transitionGoal(any(), eq(GoalStatus.SUBSUMED), any(), any());
+    }
+
+    @Test
+    @DisplayName("with no peer difference to name it still shows the contradiction rather than re-asking")
+    void noDiffDisagreement_withoutPeerFacts_stillShowsTheContradiction() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(goalEntityWithMeta(new HashMap<>()));
+
+        injector.injectNoDiffDisagreementRedirection(UNMET, 4, List.of());
+
+        ArgumentCaptor<String> descCaptor = ArgumentCaptor.forClass(String.class);
+        verify(goalPlannerService).addSubGoal(anyString(), descCaptor.capture(), eq(true));
+        assertThat(descCaptor.getValue())
+                .contains("Investigate why the code that exists does not behave")
+                .contains(UNMET.get(0));
+    }
+
+    /**
+     * Without a criterion there is no contradiction to show, and an item that says only
+     * "investigate" is re-asking through a more expensive channel — the thing this ticket exists
+     * to stop.
+     */
+    @Test
+    void noDiffDisagreement_withNoUnmetCriterion_doesNotInject() {
+        var outcome = injector.injectNoDiffDisagreementRedirection(List.of(), 9, List.of("a difference"));
+
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+        assertThat(outcome.injected()).isFalse();
+        assertThat(outcome.outcome()).isEqualTo("skipped: no unmet criterion on record");
+    }
+
+    @Test
+    void noDiffDisagreement_whenABuildFixIsAlreadyActive_doesNotInject() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(activeBuildFixGoal());
+
+        var outcome = injector.injectNoDiffDisagreementRedirection(UNMET, 5, List.of());
+
+        verify(goalPlannerService, never()).addSubGoal(anyString(), anyString(), anyBoolean());
+        assertThat(outcome.outcome()).isEqualTo("skipped: a blocker subgoal is already active");
+    }
+
+    /**
+     * The user's constraint on this ticket, 2026-07-27: the escalation must be DERIVED, never a
+     * canned instruction naming a framework or a target-domain concept. Given inputs that carry no
+     * such vocabulary, the framework must contribute none of its own.
+     */
+    @Test
+    @DisplayName("the injected item adds no ecosystem or domain vocabulary of its own")
+    void noDiffDisagreement_addsNoVocabularyOfItsOwn() {
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        when(goalPlannerService.getGoalById(anyString())).thenReturn(goalEntityWithMeta(new HashMap<>()));
+
+        injector.injectNoDiffDisagreementRedirection(
+                List.of("the stated behaviour is observable"), 3, List.of("Alpha differs from its peers"));
+
+        ArgumentCaptor<String> descCaptor = ArgumentCaptor.forClass(String.class);
+        verify(goalPlannerService).addSubGoal(anyString(), descCaptor.capture(), eq(true));
+        String lower = descCaptor.getValue().toLowerCase(java.util.Locale.ROOT);
+        for (String banned : List.of("spring", "boot", "restcontroller", "requestmapping", "annotation",
+                "controller", "endpoint", "http", "rest ", "repository", "entity", "bean")) {
+            assertThat(lower).as("framework code must not name '%s'", banned).doesNotContain(banned);
+        }
+    }
+
 }

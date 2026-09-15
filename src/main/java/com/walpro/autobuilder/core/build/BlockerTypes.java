@@ -62,6 +62,14 @@ public final class BlockerTypes {
     public static final String GATE_STRUCTURAL_DEFECT = "structural-defect";
 
     /**
+     * T2-ES: raised when evolution reports the work as already implemented while an acceptance
+     * criterion stays unmet, for enough consecutive cycles that re-asking has been given its
+     * chance. Like the structural-defect gate, the defect it names compiles perfectly, so a
+     * COMPILE_OK observation can attest to nothing about it and must not retire the item.
+     */
+    public static final String GATE_NODIFF_DISAGREEMENT = "nodiff-disagreement";
+
+    /**
      * True when the goal's work item was raised by the completion edge's acceptance-criteria
      * check, whose done-when is a requirement about the target application rather than a fact
      * about the build.

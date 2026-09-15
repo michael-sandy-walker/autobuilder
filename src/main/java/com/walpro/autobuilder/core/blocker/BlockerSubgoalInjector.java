@@ -351,6 +351,89 @@ public class BlockerSubgoalInjector {
      * stderr summary. Returns the symbol simple name (e.g. {@code "BookAlreadyLoanedException"})
      * or {@code null} if no recognisable symbol appears in the summary.
      */
+    /**
+     * T2-ES, the case the ticket is named for: evolution keeps reporting the work as already
+     * implemented while an acceptance criterion stays unmet. Both statements are usually TRUE —
+     * the file exists and the behaviour is absent — and the loop's only response was to ask
+     * evolution again, differently, which produces another identical answer. The disagreement is
+     * itself the information, so this changes the question instead of repeating it.
+     *
+     * <p>Every word of the injected item is derived from the run's own state: the criterion text
+     * comes from the planner, the count is observed, and the structural differences are computed
+     * against the project's OWN peers. Nothing here names an ecosystem, a framework or a target
+     * domain concept, and nothing may be added that does.
+     *
+     * @param unmetCriteria       the acceptance criteria still failing, in the planner's words
+     * @param streak              consecutive cycles of the same disagreement
+     * @param structuralDifferences derived peer anomalies, empty when the project shows none
+     */
+    public StructuralDefectEscalation injectNoDiffDisagreementRedirection(
+            java.util.List<String> unmetCriteria, int streak,
+            java.util.List<String> structuralDifferences) {
+        if (unmetCriteria == null || unmetCriteria.isEmpty()) {
+            // Without a criterion there is no contradiction to show, and an item saying only
+            // "investigate" is re-asking through a more expensive channel.
+            log.info("T2-ES: #NoDiff disagreement repeated {} times but no unmet criterion is on "
+                    + "record — not escalating", streak);
+            return StructuralDefectEscalation.skipped("no unmet criterion on record");
+        }
+        if (hasActiveBuildFixSubgoal()) {
+            log.info("T2-ES: a blocker subgoal is already active — skipping #NoDiff disagreement "
+                    + "redirection after {} repeats", streak);
+            return StructuralDefectEscalation.skipped("a blocker subgoal is already active");
+        }
+
+        StringBuilder description = new StringBuilder(BlockerTypes.DIVERGENCE_DESCRIPTION_PREFIX)
+                .append("for ").append(streak).append(" consecutive cycles this work has been reported")
+                .append(" as already implemented while these acceptance criteria stayed unmet:");
+        for (String criterion : unmetCriteria) {
+            description.append("\n  - ").append(criterion);
+        }
+        description.append("\nBoth statements can be true at once: the code can exist and the required")
+                .append(" behaviour still be absent. Proposing the same implementation again cannot")
+                .append(" change that, so do not re-send it.");
+        if (structuralDifferences != null && !structuralDifferences.isEmpty()) {
+            description.append("\nThese types differ from their own peers in this project:");
+            for (String difference : structuralDifferences) {
+                description.append("\n  - ").append(difference);
+            }
+            description.append("\nEither bring a named difference into line with its peers, or change")
+                    .append(" the code so a criterion above is demonstrably satisfied.");
+        } else {
+            description.append("\nInvestigate why the code that exists does not behave as the criteria")
+                    .append(" require, and change what you find — not the implementation you have")
+                    .append(" already sent.");
+        }
+
+        String newId = "goal-" + UUID.randomUUID();
+        try {
+            goalPlannerService.addSubGoal(newId, description.toString(), true);
+        } catch (RuntimeException e) {
+            log.warn("T2-ES: failed to inject #NoDiff disagreement redirection subgoal: {}", e.getMessage());
+            return StructuralDefectEscalation.skipped("injection failed: " + e.getMessage());
+        }
+
+        GoalEntity injected = goalPlannerService.getGoalById(newId);
+        if (injected != null) {
+            injected.getMetadata().put(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX);
+            // The code compiles — that is the whole shape of this defect — so the COMPILE_OK
+            // cleanup must not retire the item. Same carve-out as the structural-defect gate.
+            injected.getMetadata().put(BlockerTypes.ORIGINATING_GATE_KEY,
+                    BlockerTypes.GATE_NODIFF_DISAGREEMENT);
+            goalPlannerService.saveGoalMetadata(injected);
+        }
+
+        // The criteria are the planner's own words for the behaviour that is missing, so they stay
+        // confirmable after the defect is gone — which a criterion about the loop's state would not.
+        goalPlannerService.setAcceptanceCriteria(newId, java.util.List.copyOf(unmetCriteria));
+
+        log.info("T2-ES: injected #NoDiff disagreement redirection subgoal [{}] — {} repeats, "
+                        + "{} unmet criterion(s), {} structural difference(s) named",
+                newId, streak, unmetCriteria.size(),
+                structuralDifferences == null ? 0 : structuralDifferences.size());
+        return StructuralDefectEscalation.injected(newId);
+    }
+
     static String extractMissingSymbol(String summary) {
         if (summary == null) return null;
         java.util.regex.Matcher m = java.util.regex.Pattern.compile(

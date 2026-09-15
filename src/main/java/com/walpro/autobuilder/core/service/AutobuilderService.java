@@ -115,6 +115,21 @@ public class AutobuilderService implements CheckpointableState {
     @Autowired(required = false)
     @lombok.Setter
     private com.walpro.autobuilder.core.build.StructuralTreeRepair structuralTreeRepair;
+    /** T2-ES: the one home for injecting work items. Optional, as in every other caller. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector blockerSubgoalInjector;
+
+    /** T2-ES: derives the peer differences the escalation names. Optional, as the other analyzers are. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer wiringFactsAnalyzer;
+
+    /** T2-ES: lets the disagreement threshold be tuned like the structural-defect one. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.tuning.TuningParameterStore tuningParameterStore;
+
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker rootConvergenceTracker;
     private final com.walpro.autobuilder.goal.GoalConsolidationService goalConsolidationService;
@@ -1313,8 +1328,15 @@ public class AutobuilderService implements CheckpointableState {
                 if (refusalReason != null) {
                     log.warn("T1-DN: refusing #NoDiff promotion — {} (subGoalId={})", refusalReason, noOpSubGoalId);
                     context = context.issueRequest(ChannelRequest.of(BasicSignals.DIVERGENCE_REQUEST, 1.0, "noDiff-trust-gate:" + refusalReason, ChannelRequest.horizonFromDecay(1.0, 0.1)));
+                    // T2-ES: count the disagreement. The DIVERGENCE_REQUEST above is the loop
+                    // asking the same question differently, which is what produced 27 identical
+                    // cycles in the run this ticket was filed from; nothing counted the repeat, so
+                    // nothing could ever decide that asking again had stopped working.
+                    context = escalateNoDiffDisagreement(context, noOpSubGoalId);
                 } else {
                     log.info("Evolution noOp — #NoDiff implies current output satisfies all criteria. Promoting to FULFILLED (subGoalId={}).", noOpSubGoalId);
+                    // The disagreement is over: this promotion was allowed to proceed.
+                    context = context.withNoDiffRefusalStreak(0);
                     consecutiveStagnatingCyclesWithoutMerge = 0;
                     consecutiveSameFingerprintCycles = 0;
                     lastEvaluatedScore = Double.NaN;
@@ -1698,6 +1720,74 @@ public class AutobuilderService implements CheckpointableState {
         if (++cyclesSincePreserve < preserveIntervalCycles) return false;
         cyclesSincePreserve = 0;
         return true;
+    }
+
+    /** T2-ES: how many identical disagreements before the loop changes the question. */
+    static final String NODIFF_ESCALATION_PARAM = "escalation.nodiff-disagreement-cycles";
+    static final int NODIFF_ESCALATION_DEFAULT = 3;
+
+    /**
+     * T2-ES: count one refused {@code #NoDiff} promotion, and when the same subgoal has produced
+     * enough of them, escalate instead of asking again.
+     *
+     * <p>The ticket's measurement: 27 of 110 cycles on one subgoal, every one of them emitting the
+     * identical pair of statements — evolution saying the implementation is already present, the
+     * promotion gate saying the criterion is unmet. Both were right. What was missing was anything
+     * that treated the DISAGREEMENT as information rather than as a reason to re-prompt, and the
+     * only thing that eventually stopped it was a run-level emergency brake twenty cycles later.
+     *
+     * <p>Everything the injected item says is derived: the criterion is the planner's own text, the
+     * count is observed, and the structural differences are computed against the project's own
+     * peers by the analyzer that already owns that question. No framework or domain vocabulary
+     * enters framework code.
+     */
+    // Package-private: the seam the wiring test drives, because reaching it through a full tick
+    // needs every collaborator the service has and would test the scheduler, not this decision.
+    CycleContextData escalateNoDiffDisagreement(CycleContextData context, String subGoalId) {
+        int streak = context.noDiffRefusalStreak() + 1;
+        context = context.withNoDiffRefusalStreak(streak);
+        int threshold = tuningParameterStore != null
+                ? (int) Math.round(tuningParameterStore.get(NODIFF_ESCALATION_PARAM, NODIFF_ESCALATION_DEFAULT))
+                : NODIFF_ESCALATION_DEFAULT;
+        log.info("T2-ES: #NoDiff disagreement {} of {} for subGoalId={}", streak, threshold, subGoalId);
+        if (streak < threshold || blockerSubgoalInjector == null) {
+            return context;
+        }
+
+        List<String> unmet = unmetCriteriaOf(context);
+        List<String> differences = List.of();
+        if (wiringFactsAnalyzer != null && context.previousOutput() != null) {
+            try {
+                differences = wiringFactsAnalyzer.peerAnnotationAnomalies(context.previousOutput());
+            } catch (RuntimeException e) {
+                log.debug("T2-ES: peer anomaly scan failed, escalating without it: {}", e.getMessage());
+            }
+        }
+
+        var escalation = blockerSubgoalInjector.injectNoDiffDisagreementRedirection(unmet, streak, differences);
+        if (behaviourLogger != null) {
+            behaviourLogger.noDiffDisagreementEscalated(context.cycleName(), subGoalId, streak,
+                    unmet, differences, escalation.injectedGoalId(), escalation.outcome());
+        }
+        // Whether it injected or was refused, the streak restarts: the next repeat is a new run at
+        // the threshold rather than an escalation on every cycle from here on.
+        return context.withNoDiffRefusalStreak(0);
+    }
+
+    /**
+     * The acceptance criteria currently recorded as failing, in the planner's words. Index
+     * convention is the one the evolution prompt already uses: {@code cumulativeCriteriaStatus} is
+     * keyed from zero and displayed from one.
+     */
+    private static List<String> unmetCriteriaOf(CycleContextData context) {
+        Map<Integer, Boolean> status = context.cumulativeCriteriaStatus();
+        List<String> criteria = context.currentSubGoalCriteria();
+        if (status == null || status.isEmpty() || criteria == null) return List.of();
+        List<String> out = new java.util.ArrayList<>();
+        for (int i = 0; i < criteria.size(); i++) {
+            if (Boolean.FALSE.equals(status.get(i))) out.add(criteria.get(i));
+        }
+        return List.copyOf(out);
     }
 
     /**

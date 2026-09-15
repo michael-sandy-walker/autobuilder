@@ -76,6 +76,11 @@ public class ContextLineageTracker {
                 .withRecentDeltas(previousContext != null ? previousContext.recentDeltas() : null)
                 .withLastAcceptedMutationFileCount(previousContext != null ? previousContext.lastAcceptedMutationFileCount() : 0)
                 .withPlateauCycles(previousContext != null ? previousContext.plateauCycles() : 0)
+                // T2-ES: the #NoDiff-vs-criteria-unmet streak is per-subgoal, exactly like the
+                // heuristic streaks below — a new subgoal is a new disagreement, not a repeat.
+                .withNoDiffRefusalStreak(
+                        previousContext == null || subgoalChanged(baseContext, previousContext)
+                                ? 0 : previousContext.noDiffRefusalStreak())
                 // T2-AT: reset streaks + warnings when the subgoal changes; otherwise carry forward.
                 .withCriticalHeuristicStreaks(resolveStreaks(baseContext, previousContext))
                 .withPersistentHeuristicWarnings(resolveWarnings(baseContext, previousContext))

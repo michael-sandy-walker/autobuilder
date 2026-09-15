@@ -158,7 +158,7 @@ Watchers:
 
 Writing:
 - `feedback_curly_quotes.md`: no curly quotes or stray non-Latin characters; ENFORCED by `scripts/charset_guard.py` as a PostToolUse hook (em dashes, box-drawing and arrows are legitimate). `jq` is not installed; hooks use python3. (reviewed 2026-08-28)
-- `feedback_neutral_vocabulary.md`: no courtroom or military wording, no emoji decorations. Records the amputation-to-truncated rename, and why `rehabilitationVotes` was NOT renamed (persisted schema key). (reviewed 2026-09-08)
+- `feedback_neutral_vocabulary.md`: no courtroom or military wording, no emoji decorations. Records the amputation-to-truncated rename, why `rehabilitationVotes` was NOT renamed (persisted schema key), and the 2026-09-15 emoji drift: 64 put into the roadmap in one session against a rule written in July, plus the trap of citing my own accumulated drift back as the convention. (reviewed 2026-09-15)
 - `feedback_no_symbolic_enumerations.md`: never use circled-number characters anywhere; name each item instead -- positional tokens carry no meaning on re-read. (reviewed 2026-07-30)
 - `feedback_no_invented_labels.md`: no invented structural labels or role-nouns; use participles and descriptions. Do not silently truncate criteria for cost. (reviewed 2026-07-09)
 - `feedback_no_co_mention_pairing.md`: do not co-list unrelated tickets across reports; name the category, not a recurring pair. (reviewed 2026-07-09)

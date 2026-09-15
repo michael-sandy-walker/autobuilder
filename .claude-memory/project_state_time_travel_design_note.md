@@ -285,7 +285,7 @@ Staging `T2-ES` one cycle short of its threshold (the user's framing: start a ru
 the ticket can be tested, not hours before) found that every rewind so far had settled the loop
 from the WRONG context, and two smaller things underneath.
 
-- **🔴 The carried cycle context was never part of a rewind.** Holders, goals, tree and cache
+- **The carried cycle context was never part of a rewind.** Holders, goals, tree and cache
   came back; then `settleAfterRewind(context, ...)` cleared the halt fields on the CURRENT context
   — the record of the cycle just backed out of — because the carried context is not a holder and
   nothing had captured it. `meta.json` looked like the capture (bucket 2 above says "reuse it") and
@@ -296,7 +296,7 @@ from the WRONG context, and two smaller things underneath.
   what the scheduler reads on its next tick, and "not a holder" is not "not state".** Now the
   checkpoint writes `context.json`, the archive keeps it as `__context.json`, the rewind returns it
   and both paths settle from it; absence and supplied-not-captured are both reported.
-- **🔴 A `Map` keyed by a record does not survive JSON.** `RequestChannel.open` keys serialized as
+- **A `Map` keyed by a record does not survive JSON.** `RequestChannel.open` keys serialized as
   `SignalType[name=X]` and deserialized through the single-String constructor, so one round trip
   made every open request invisible to `open.get(kind)` until the post-cycle tick re-keyed the map
   by each value's kind. Every `meta.json` on disk carries `SIGNALTYPE[NAME=SIGNALTYPE[NAME=X]]` from

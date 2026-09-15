@@ -368,7 +368,7 @@
 - [n] `T4-AP` — State-tagged prompt routing
 - [ ] `T4-AS` — Multi-provider LLM fallback
 - [ ] `T4-CT` — The loop CONSULTS accumulated cross-run knowledge before acting (the payoff layer; previously homeless across three tickets' slices)
-- [s] `T4-CU` — The loop EXECUTES its own acceptance criteria against the booted artifact instead of asking the model whether they hold (shipped 2026-07-27) — PLACEMENT GAP CLOSED 2026-07-31: criteria are now checked when the SUBGOAL closes, not only at the run's closure edge, via the `ClosureClaimVerifier` port (T4-DD's first exercise); field DoD needs a refused closure
+- [~] `T4-CU` — The loop EXECUTES its own acceptance criteria against the booted artifact instead of asking the model whether they hold (shipped 2026-07-27) — PLACEMENT GAP CLOSED 2026-07-31: criteria are now checked when the SUBGOAL closes, not only at the run's closure edge, via the `ClosureClaimVerifier` port (T4-DD's first exercise); field DoD needs a refused closure ⚠ MARKER CORRECTED 2026-09-15 `[s]`→`[~]`: it was folded into no ticket, no other ticket claims the capability, and its own body says the original DoD is still not met. `[s]` had made an outstanding field DoD on a live mechanism read as somebody else's problem.
 - [s] `T4-CV` — Forward-looking requirement for a runnable entry point (shipped + FIELD-VERIFIED 2026-07-27: gate fired at min 5, loop wrote the entry point in ~60s)
 - [x] `T4-CX` — Startup-wiring forecast no longer precedes the gate that measures it (shipped 2026-07-28)
 - [x] `T4-CY` — Loop observes its own running behaviour mid-run: PROVEN, disabled on cost until probe synthesis is deterministic

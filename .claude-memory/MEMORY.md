@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: the live ordering is the appended 2026-08-23 REORDER section at the end of the file; the S1-S6 sections above it are kept for their reasoning, not their sequence. Rationale, never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. 2026-09-16: two field runs (firestarter 23/23, clitarget 17/19 preserved) both clean; T1-GB's delete-only probe path field-exercised. (reviewed 2026-09-16)
+- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. 2026-09-17: T4-CU's port widened and shipped; its own watch was reporting FIRED on another gate's evidence; the field DoD got NO opportunity because T3-CC filters all-AUTHORED criteria before the verifier is called -- structural, not bad luck. T2-FH closed `[n]`. (reviewed 2026-09-17)
 - `project_wave2_structure.md`: wave 2's five layers (substrate -> portability -> reconciliation -> consultation -> yardsticks) and gate-driven sequence; widening what the loop SEES must follow scoping what it CONSULTS. Rationale only. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)

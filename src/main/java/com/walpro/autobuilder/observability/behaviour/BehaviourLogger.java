@@ -459,6 +459,12 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.GoalStatusChanged(Instant.now(), cycleId, goalId, from, to, reason));
     }
 
+    /** T4-CU: a closure gate refused to close a goal, and what it refused on. */
+    public void closureRefused(String cycleId, String gate, String goalId, String reason,
+                               java.util.List<String> criteria) {
+        emit(new BehaviourEvent.ClosureRefused(Instant.now(), cycleId, gate, goalId, reason, criteria));
+    }
+
     /** T5-I: one planner wave finished applying its proposals. */
     public void planningRun(String cycleId, String goalId, String trigger, int injected, int deduped) {
         emit(new BehaviourEvent.PlanningRun(Instant.now(), cycleId, goalId, trigger, injected, deduped));

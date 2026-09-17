@@ -820,6 +820,25 @@ public sealed interface BehaviourEvent {
     }
 
     /**
+     * T4-CU: a closure gate refused to close a goal. {@code gate} is the refusing gate's
+     * {@code BlockerTypes} id, so a run can be asked which gate does the blocking rather than
+     * being grepped for eleven different log sentences. {@code criteria} carries the criterion
+     * texts the refusal was attributed to, empty for a gate that judges none or a refutation
+     * nothing could attribute.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record ClosureRefused(
+            Instant timestamp,
+            String cycleId,
+            String gate,
+            String goalId,
+            String reason,
+            java.util.List<String> criteria
+    ) implements BehaviourEvent {
+        public String event() { return "closure_refused"; }
+    }
+
+    /**
      * T5-I: one planner wave finished applying its proposals. {@code deduped} counts proposals
      * blocked before injection (similarity dedup, given-up-retry limit, missing criteria).
      * {@code trigger} distinguishes the in-cycle planner pass ({@code cycle-planning}) from the

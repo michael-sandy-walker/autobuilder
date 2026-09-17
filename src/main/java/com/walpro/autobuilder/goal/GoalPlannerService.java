@@ -293,15 +293,72 @@ public class GoalPlannerService {
      * fires whether or not it did anything.
      */
     boolean clearCriteriaBankAfterRefutation(String goalId) {
+        return clearCriteriaBankAfterRefutation(goalId, List.of());
+    }
+
+    /**
+     * T4-CU: as above, dropping only the banked reads for {@code refutedCriteria} when the
+     * verifier could say which criteria were refuted.
+     *
+     * <p>Dropping the WHOLE map was deliberate and is still the fallback, but the reason it was
+     * deliberate has gone: the refutation used to arrive as prose that did not name a criterion,
+     * so matching it back to one would have been code consuming prose for control flow. The port
+     * now returns the criteria themselves, so the narrow drop is available without that coupling.
+     * Re-verifying a criterion that did hold costs a re-check; trusting one inside a refuted claim
+     * is how false completions happen — so an UNATTRIBUTED refutation still clears everything.
+     */
+    boolean clearCriteriaBankAfterRefutation(String goalId, List<String> refutedCriteria) {
         GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
         if (goal == null || goal.getMetadata() == null) return false;
         Object banks = goal.getMetadata().get("criteriaPassStatus");
         if (!(banks instanceof Map<?, ?> m) || m.isEmpty()) return false;
+        Map<Integer, Boolean> narrowed = narrowBankDrop(goal, refutedCriteria);
+        if (narrowed != null) {
+            saveCriteriaPassStatus(goalId, narrowed);
+            log.info("T2-FB: cleared {} of {} banked criterion read(s) for {} — the refutation named"
+                            + " which criteria it contradicted, so the rest stand",
+                    m.size() - narrowed.size(), m.size(), goalId);
+            return true;
+        }
         goal.getMetadata().remove("criteriaPassStatus");
         saveGoalMetadata(goal);
         log.info("T2-FB: cleared {} banked criterion read(s) for {} — the claim they supported was"
                 + " refuted, so they must be re-earned before it can be made again", m.size(), goalId);
         return true;
+    }
+
+    /**
+     * The bank that survives a refutation naming {@code refutedCriteria}, or null when the drop
+     * cannot be narrowed and the whole map must go.
+     *
+     * <p>Returns null rather than an empty map for "do not narrow", because an empty map is a
+     * legitimate narrowing result (every banked read was refuted) and must not be confused with
+     * a refusal to attribute. The bank is keyed by the criterion's 1-based position in
+     * {@code acceptanceCriteria}, so a criterion whose text is no longer in that list cannot be
+     * located and forces the wide drop.
+     */
+    private Map<Integer, Boolean> narrowBankDrop(GoalEntity goal, List<String> refutedCriteria) {
+        if (refutedCriteria == null || refutedCriteria.isEmpty()) return null;
+        Object raw = goal.getMetadata().get("acceptanceCriteria");
+        if (!(raw instanceof List<?> declared) || declared.isEmpty()) return null;
+        Set<Integer> drop = new java.util.LinkedHashSet<>();
+        for (String refuted : refutedCriteria) {
+            if (refuted == null) continue;
+            int at = -1;
+            for (int i = 0; i < declared.size(); i++) {
+                Object d = declared.get(i);
+                if (d != null && refuted.equals(d.toString())) { at = i + 1; break; }
+            }
+            if (at < 0) return null;   // cannot place it — do not guess, drop everything
+            drop.add(at);
+        }
+        // The bank's keys are Strings in metadata and Integers in the API; getCriteriaPassStatus
+        // is the one home for that conversion and this must not become a second one.
+        Map<Integer, Boolean> kept = new LinkedHashMap<>();
+        getCriteriaPassStatus(goal).forEach((key, value) -> {
+            if (!drop.contains(key)) kept.put(key, value);
+        });
+        return kept;
     }
 
     /** T4-CC: stores a string flag in goal metadata and persists the change. */
@@ -1292,7 +1349,8 @@ public class GoalPlannerService {
                 // not name which criterion failed, and matching it back to one would be code
                 // consuming prose for control flow. Re-verifying a criterion that did hold costs a
                 // re-check; trusting one inside a refuted claim is how false completions happen.
-                clearCriteriaBankAfterRefutation(refuted.goalId());
+                clearCriteriaBankAfterRefutation(refuted.goalId(), refuted.refutation().refutedCriteria());
+                injectClaimRefutationRepair(refuted.goalId(), refuted.refutation());
                 return false;
             }
             case MarkCompletedResult.Completed completed -> { /* standard promotion continues below */ }
@@ -2161,7 +2219,7 @@ public class GoalPlannerService {
                 // T4-CU: the refutation check lives in markGoalCompleted, which BOTH completion
                 // paths reach — this one and promoteCurrentSubGoal, which calls it directly.
                 // Placing it here alone left the primary path uncovered.
-                Optional<String> refuted = refuteClosureClaim(goalId);
+                Optional<ClaimRefutation> refuted = refuteClosureClaim(goalId);
                 if (refuted.isPresent()) {
                     yield refuseClosure(goalId, refuted.get());
                 }
@@ -2194,10 +2252,48 @@ public class GoalPlannerService {
      * a criterion is false, and a verifier that can fail closed would block closure on its own
      * defects. The worst case is that the check does not run, which is where the loop already was.
      */
+    /**
+     * T4-CU: turns a refuted closure claim into work the loop can pick up.
+     *
+     * <p><b>This is the ticket's DoD and it was unreachable until the port named the criteria.</b>
+     * The refusal used to log, clear the bank and return — so a correctly diagnosed defect left
+     * nothing pointing at it, and the next cycle re-derived the same claim from scratch. The work
+     * item's done-when is the refuted criteria THEMSELVES, which is only sayable now that they
+     * arrive as data.
+     *
+     * <p><b>Nothing is injected for an unattributed refutation</b> — an artifact that will not boot
+     * is the build gates' problem and they raise their own items; a work item saying only "this
+     * claim is false" would re-ask the same question through a costlier channel, which is the trap
+     * the nodiff escalation records.
+     *
+     * <p><b>MARKER FIRST, CRITERIA SECOND.</b> {@code setAcceptanceCriteria} stamps the
+     * per-criterion binding and asks {@code isFromCriteriaGate}; written the other way round the
+     * guard reads a map with no marker yet, concludes "gate-owned BUILD_FIX", and stamps the
+     * specification's own words AUTHORED. Same ordering hazard as the T4-BP-3 site.
+     */
+    private void injectClaimRefutationRepair(String goalId, ClaimRefutation refutation) {
+        if (goalId == null || refutation == null || !refutation.isAttributed()) return;
+        GoalEntity root = getRootGoal();
+        if (root == null) return;
+        CoverageReviewResult injected = injectCoverageGaps(root, List.of(
+                "[BUILD_FIX] The running artifact contradicts acceptance criteria this work item"
+                        + " closed on — repair the code so they hold: " + refutation.description()));
+        if (injected.injected().isEmpty()) {
+            log.info("T4-CU: no repair item injected for {} — the gap was deduped or limited", goalId);
+            return;
+        }
+        for (String id : injected.injectedIds()) {
+            setGoalMetadataString(id, BlockerTypes.ORIGINATING_GATE_KEY, BlockerTypes.GATE_CRITERIA);
+            setAcceptanceCriteria(id, refutation.refutedCriteria());
+        }
+        log.warn("T4-CU: {} closure refused and a repair item injected for {} refuted criterion(s)",
+                goalId, refutation.refutedCriteria().size());
+    }
+
     /** T4-CU: so the first closure of a run says out loud whether the check is even wired. */
     private boolean closureVerifierPresenceReported;
 
-    private Optional<String> refuteClosureClaim(String goalId) {
+    private Optional<ClaimRefutation> refuteClosureClaim(String goalId) {
         // Without this, a run in which the verifier bean was absent looks exactly like one in
         // which every closure happened to carry no executable criterion — both are silence. That
         // ambiguity already cost a reading of run 2026-08-01_00-23-26, where four closures passed
@@ -2272,13 +2368,14 @@ public class GoalPlannerService {
      * does, the ordinary exhaustion path retires the goal as GIVEN_UP — which is a true statement
      * about the run, where COMPLETED would have been a false one.
      */
-    private GoalProgressApplicationResult refuseClosure(String goalId, String contradiction) {
-        recordRefutedClosure(goalId, contradiction);
+    private GoalProgressApplicationResult refuseClosure(String goalId, ClaimRefutation refutation) {
+        recordRefutedClosure(goalId, refutation);
         return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
     }
 
     /** Logs the refusal and records the contradiction on the goal, for both completion paths. */
-    private void recordRefutedClosure(String goalId, String contradiction) {
+    private void recordRefutedClosure(String goalId, ClaimRefutation refutation) {
+        String contradiction = refutation.description();
         log.warn("T4-CU: refusing to close {} — the running artifact contradicts its own acceptance"
                 + " criteria: {}", goalId, contradiction);
         markGoalStatus(goalId, gx -> {
@@ -2287,6 +2384,28 @@ public class GoalPlannerService {
         });
         GoalEntity g = goalMap.get(goalId);
         if (g != null) goalGraphService.save(g);
+        recordClosureRefusal(BlockerTypes.GATE_CRITERIA, goalId, contradiction,
+                refutation.refutedCriteria());
+    }
+
+    /**
+     * T4-CU: one home for "a closure gate refused, and this is what it refused on".
+     *
+     * <p>Eleven gates block root or subgoal closure and every one of them reported it with a
+     * {@code log.warn} alone — no event, no graph record. So the question "which gate refused this
+     * closure, and on what" could only be answered by a regex over an archived log, which is why
+     * the refusal rate went 25 runs without being measured at all. The counted event is the
+     * actuator's prerequisite: it names the gate, so a run says which gate is doing the blocking
+     * rather than leaving a reader to grep for eleven different sentences.
+     *
+     * <p>{@code criteria} is empty for a gate that does not judge criteria, and for a criteria
+     * refutation nothing could attribute — see {@link ClaimRefutation}.
+     */
+    void recordClosureRefusal(String gate, String goalId, String reason, List<String> criteria) {
+        if (behaviourLogger == null) return;
+        behaviourLogger.closureRefused(
+                currentCycleContext != null ? currentCycleContext.cycleName() : null,
+                gate, goalId, reason, criteria == null ? List.of() : criteria);
     }
 
     private void bankAllCriteriaTrueIfDefined(String goalId) {
@@ -2398,7 +2517,7 @@ public class GoalPlannerService {
         // The verifier only ever refutes — silence means "not checked" as often as "holds" — so
         // this can turn a false COMPLETED into an honest still-ACTIVE and can never block a
         // closure on absence of evidence.
-        Optional<String> refuted = refuteClosureClaim(id);
+        Optional<ClaimRefutation> refuted = refuteClosureClaim(id);
         if (refuted.isPresent()) {
             recordRefutedClosure(id, refuted.get());
             return new MarkCompletedResult.RefusedClaimRefuted(id, refuted.get());
@@ -3184,7 +3303,11 @@ public class GoalPlannerService {
             return Optional.empty();
         }
         try {
-            return closureClaimVerifier.refute(root.getId(), uncoveredSeed, root.getDescription());
+            // T4-CU: this caller wants only the prose — it reports an uncovered SEED obligation,
+            // not one of a work item's own criteria, so there is no bank to narrow and no repair
+            // item to name. Mapping to the description keeps it exactly as it was.
+            return closureClaimVerifier.refute(root.getId(), uncoveredSeed, root.getDescription())
+                    .map(ClaimRefutation::description);
         } catch (RuntimeException e) {
             log.warn("T4-DT: execution check of the seed's obligations failed ({}) — treating as "
                     + "unchecked, not as refuted", e.toString());

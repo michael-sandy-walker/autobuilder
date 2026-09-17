@@ -99,9 +99,10 @@ class CompletionEdgeExecutionRefutationTest {
     void anArtifactThatContradictsTheSpecificationBlocksTheRootAndTheModelIsNeverAsked() throws IOException {
         CriteriaVerificationService verifier = mock(CriteriaVerificationService.class);
         ClosureClaimVerifier refuting = (goalId, criteria, specText) ->
-                Optional.of("\"column <file> <name> — print every value of the named column\" — "
+                Optional.of(new ClaimRefutation(
+                        "\"column <file> <name> — print every value of the named column\" — "
                         + "column <well_formed_file> <present-name>, but it printed \"b,c,de\" "
-                        + "where the specification states \"b,c\"");
+                        + "where the specification states \"b,c\"", criteria));
 
         GoalPlannerService service = serviceWith(verifier, refuting);
         service.autoCompleteRootIfSatisfied();
@@ -118,7 +119,9 @@ class CompletionEdgeExecutionRefutationTest {
     void theWorkItemCarriesTheGateStampAndADoneWhenTheProbeCanRecheck() throws IOException {
         CriteriaVerificationService verifier = mock(CriteriaVerificationService.class);
         ClosureClaimVerifier refuting = (goalId, criteria, specText) ->
-                Optional.of("the running artifact printed \"b,c,de\" where the specification states \"b,c\"");
+                Optional.of(new ClaimRefutation(
+                        "the running artifact printed \"b,c,de\" where the specification states \"b,c\"",
+                        criteria));
 
         GoalPlannerService service = serviceWith(verifier, refuting);
         service.autoCompleteRootIfSatisfied();

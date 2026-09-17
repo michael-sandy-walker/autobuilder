@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import com.walpro.autobuilder.goal.ClaimRefutation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -81,10 +82,10 @@ class ClosureClaimRefutalEndToEndTest {
 
     @Test
     void aClaimTheRunningApplicationContradictsIsRefuted() throws Exception {
-        Optional<String> refuted = verifier().refute("goal-1", List.of(FALSE_CLAIM), null);
+        Optional<ClaimRefutation> refuted = verifier().refute("goal-1", List.of(FALSE_CLAIM), null);
 
         assertThat(refuted).as("an empty spec text must not neuter the criterion probe").isPresent();
-        assertThat(refuted.get()).contains("/orders");
+        assertThat(refuted.get().description()).contains("/orders");
     }
 
     @Test
@@ -97,9 +98,9 @@ class ClosureClaimRefutalEndToEndTest {
     @Test
     void aTrueClaimAlongsideAFalseOneStillRefutes() throws Exception {
         // A work item usually carries several criteria and only one of them is wrong.
-        Optional<String> refuted = verifier().refute("goal-1", List.of(TRUE_CLAIM, FALSE_CLAIM), null);
+        Optional<ClaimRefutation> refuted = verifier().refute("goal-1", List.of(TRUE_CLAIM, FALSE_CLAIM), null);
 
         assertThat(refuted).isPresent();
-        assertThat(refuted.get()).contains("/orders");
+        assertThat(refuted.get().description()).contains("/orders");
     }
 }

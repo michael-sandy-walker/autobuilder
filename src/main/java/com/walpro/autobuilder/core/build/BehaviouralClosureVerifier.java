@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import com.walpro.autobuilder.goal.ClaimRefutation;
 
 /**
  * T4-CU: the target-side half of {@link ClosureClaimVerifier} — executes a work item's criteria
@@ -56,7 +57,7 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     @Override
-    public Optional<String> refute(String goalId, List<String> criteria, String specText) {
+    public Optional<ClaimRefutation> refute(String goalId, List<String> criteria, String specText) {
         if (!enabled || criteria == null || criteria.isEmpty()) return Optional.empty();
 
         // Only criteria some probe can be BUILT for are worth booting the artifact. Filtering here
@@ -108,7 +109,10 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
         // specification with no endpoints in it declares none — so a target that was never meant to
         // serve still yields no opinion on that axis. The expectation self-gates on the
         // specification's own markers rather than on a flag anyone has to remember to set.
-        Optional<String> contradiction = bootGate.verifyBootsAndServes(checkId, specText, executable);
+        // T4-CU: the attributing overload. The probes below know which criterion each verdict
+        // belongs to; asking for the prose-only one is what used to discard that here.
+        Optional<ClaimRefutation> contradiction =
+                bootGate.verifyBootsAndServesWithAttribution(checkId, specText, executable, false);
         if (contradiction.isEmpty()) {
             // Deliberately NOT phrased as "the criteria hold". An empty result means no
             // contradiction was FOUND, which includes the case where the gate could construct no
@@ -121,8 +125,10 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
             return Optional.empty();
         }
 
-        log.warn("T4-CU: {} was about to be closed on a claim the running artifact refutes — {}",
-                goalId, contradiction.get());
+        ClaimRefutation refutation = contradiction.get();
+        log.warn("T4-CU: {} was about to be closed on a claim the running artifact refutes — {}"
+                        + " (criteria named: {})",
+                goalId, refutation.description(), refutation.refutedCriteria().size());
         return contradiction;
     }
 }

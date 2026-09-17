@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import com.walpro.autobuilder.goal.ClaimRefutation;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
@@ -183,6 +184,31 @@ public class BootGate {
     public Optional<String> verifyBootsAndServes(String cycleId, String specText,
                                                  List<String> behaviouralCriteria,
                                                  boolean allowModelFallback) {
+        return verifyBootsAndServesWithAttribution(cycleId, specText, behaviouralCriteria,
+                allowModelFallback)
+                .map(ClaimRefutation::description);
+    }
+
+    /**
+     * T4-CU: as {@link #verifyBootsAndServes(String, String, List, boolean)}, but keeping WHICH
+     * criteria the probes refuted instead of only the summary sentence.
+     *
+     * <p><b>Why this shares the {@code verify} verb rather than introducing a second one.</b>
+     * Every gate in this package spells the question {@code verifyX} and answers it with the
+     * PROBLEM — empty means clean ({@code verifyPackageable}, {@code verifyTestsPass},
+     * {@code verifyDeclaredEntryPoint}, and this method's own three prose overloads: ten methods
+     * across three gates). A method here named for what it returns instead would leave one class
+     * holding two verbs for one operation, and the prose overload above would read as delegating
+     * to a different question rather than to a fuller answer of the same one. The suffix carries
+     * the difference, which is attribution and nothing else.
+     *
+     * <p>The prose overloads map to {@link ClaimRefutation#description()}, so all three per-cycle
+     * callers are unchanged and none of them learns about attribution. Only the closure edge reads
+     * this, because only the closure edge has criteria of its own to repair.
+     */
+    public Optional<ClaimRefutation> verifyBootsAndServesWithAttribution(
+            String cycleId, String specText, List<String> behaviouralCriteria,
+            boolean allowModelFallback) {
         long t0 = System.nanoTime();
         try {
             return verifyBootsAndServesTimed(cycleId, specText, behaviouralCriteria,
@@ -194,7 +220,7 @@ public class BootGate {
         }
     }
 
-    private Optional<String> verifyBootsAndServesTimed(String cycleId, String specText,
+    private Optional<ClaimRefutation> verifyBootsAndServesTimed(String cycleId, String specText,
                                                        List<String> behaviouralCriteria,
                                                        boolean allowModelFallback) {
         if (!enabled || !buildExecutor.isEnabled()) {
@@ -223,7 +249,7 @@ public class BootGate {
                 ? Set.of() : endpointSurfaceQuery.declaredInSpec(specText);
 
         long start = System.currentTimeMillis();
-        Optional<String> failure = launchAndObserve(artifact.get(), declared, workingDir,
+        Optional<ClaimRefutation> failure = launchAndObserve(artifact.get(), declared, workingDir,
                 specText, behaviouralCriteria, allowModelFallback);
         long elapsed = System.currentTimeMillis() - start;
         log.info("T4-BV: boot gate result={} (durationMs={})", failure.isEmpty() ? "OK" : "BLOCKED", elapsed);
@@ -239,7 +265,7 @@ public class BootGate {
      * environment failure to even spawn the process is an abstain, but everything the process
      * itself does (crash, silence, wrong answers) is the artifact's own behaviour and can block.
      */
-    private Optional<String> launchAndObserve(Path artifact, Set<EndpointSurfaceQuery.Endpoint> declared,
+    private Optional<ClaimRefutation> launchAndObserve(Path artifact, Set<EndpointSurfaceQuery.Endpoint> declared,
                                               Path workingDir, String specText,
                                               List<String> behaviouralCriteria,
                                               boolean allowModelFallback) {
@@ -296,25 +322,27 @@ public class BootGate {
                     // Ask them. Item 3 alone left the gate with nothing to ask a terminating
                     // artifact — measured on run 2026-08-26_02-20-47, which fulfilled with
                     // criteria_executable_pct=0: correct output, and nothing in the loop checking it.
-                    List<String> commandFailures = probeCommandCriteria(artifact, specText, behaviouralCriteria);
+                    List<ProbeFailure> commandFailures = probeCommandCriteria(artifact, specText, behaviouralCriteria);
                     if (!commandFailures.isEmpty()) {
-                        return Optional.of("the tool runs, but acceptance criteria fail when exercised"
-                                + " against it: " + String.join("; ", commandFailures));
+                        return Optional.of(new ClaimRefutation(
+                                "the tool runs, but acceptance criteria fail when exercised"
+                                + " against it: " + joinMessages(commandFailures),
+                                attributedCriteria(commandFailures)));
                     }
                     return Optional.empty();
                 }
                 if (exit != 0) {
-                    return Optional.of("the application exits at startup (exit " + exit + ") — "
-                            + summariseOutput(outputTail, true));
+                    return Optional.of(ClaimRefutation.unattributed("the application exits at startup (exit " + exit + ") — "
+                            + summariseOutput(outputTail, true)));
                 }
-                return Optional.of("the application exits immediately instead of staying up to serve"
-                        + " the endpoints the goal specification names — " + summariseOutput(outputTail, true));
+                return Optional.of(ClaimRefutation.unattributed("the application exits immediately instead of staying up to serve"
+                        + " the endpoints the goal specification names — " + summariseOutput(outputTail, true)));
             }
             if (!serving) {
                 if (!declared.isEmpty()) {
-                    return Optional.of("the application starts but never answers HTTP on its assigned port"
+                    return Optional.of(ClaimRefutation.unattributed("the application starts but never answers HTTP on its assigned port"
                             + " within " + readinessTimeoutMs / 1000 + "s, although the goal specification"
-                            + " names endpoints — " + summariseOutput(outputTail));
+                            + " names endpoints — " + summariseOutput(outputTail)));
                 }
                 return Optional.empty(); // long-running non-serving process, nothing expected of it — no opinion
             }
@@ -349,7 +377,7 @@ public class BootGate {
             // creation 500s, a probe's setup sequence fails and later criteria are contradicted
             // for a reason that is not their own, and the reader needs the 500 before the five
             // symptoms. The shared cap keeps the item short.
-            List<String> criterionFailures = probeBehaviouralCriteria(allowModelFallback,
+            List<ProbeFailure> criterionFailures = probeBehaviouralCriteria(allowModelFallback,
                     client, port, specText, behaviouralCriteria, workingDir);
             if (!endpointFailures.isEmpty() || !criterionFailures.isEmpty()) {
                 StringBuilder summary = new StringBuilder("the application runs, but ");
@@ -360,12 +388,18 @@ public class BootGate {
                 if (!criterionFailures.isEmpty()) {
                     if (!endpointFailures.isEmpty()) summary.append(". Also, ");
                     summary.append("acceptance criteria fail when exercised against it: ")
-                            .append(String.join("; ", criterionFailures));
+                            .append(joinMessages(criterionFailures));
                 }
                 if (!endpointFailures.isEmpty()) {
                     summary.append(" — ").append(summariseOutput(outputTail));
                 }
-                return Optional.of(summary.toString());
+                // T4-CU: attribute to criteria ONLY when the criterion probes are the whole story.
+                // With an endpoint fault in the mix a probe's setup sequence fails for a reason
+                // that is not the criterion's own — the comment above says exactly that — so
+                // naming those criteria would point the repair at the symptom. Unattributed there,
+                // and the consumer falls back to the whole-claim behaviour.
+                return Optional.of(new ClaimRefutation(summary.toString(),
+                        endpointFailures.isEmpty() ? attributedCriteria(criterionFailures) : List.of()));
             }
             return Optional.empty();
         } catch (IOException e) {
@@ -396,9 +430,9 @@ public class BootGate {
      * invocation is written into the criterion the same way an endpoint is
      * ({@code Running `<launch> unknown` … exits with code 3}), so reading it is a parser's job.
      */
-    private List<String> probeCommandCriteria(Path artifact, String specText,
+    private List<ProbeFailure> probeCommandCriteria(Path artifact, String specText,
                                               List<String> behaviouralCriteria) {
-        List<String> failures = new ArrayList<>();
+        List<ProbeFailure> failures = new ArrayList<>();
         if (!criterionProbeEnabled || behaviouralCriteria == null || behaviouralCriteria.isEmpty()) {
             return failures;
         }
@@ -433,8 +467,9 @@ public class BootGate {
             }
             probed++;
             if (observed.getAsInt() != a.expectedExitStatus()) {
-                failures.add("\"" + a.criterionText() + "\" — " + a.describe()
-                        + ", but running it exited " + observed.getAsInt());
+                failures.add(ProbeFailure.of(a.criterionText(),
+                        "\"" + a.criterionText() + "\" — " + a.describe()
+                        + ", but running it exited " + observed.getAsInt()));
             }
         }
 
@@ -474,8 +509,9 @@ public class BootGate {
                 // Comparing against the record's default 0 would refuse `check` on a malformed file
                 // for exiting 2 -- the specification's own answer -- which is T1-FY's defect rebuilt.
                 if (e.assertsExitStatus() && observed.get().exitStatus() != e.expectedExitStatus()) {
-                    failures.add("\"" + e.criterionText() + "\" — " + e.describe()
-                            + ", but running it exited " + observed.get().exitStatus());
+                    failures.add(ProbeFailure.of(e.criterionText(),
+                            "\"" + e.criterionText() + "\" — " + e.describe()
+                            + ", but running it exited " + observed.get().exitStatus()));
                     continue;
                 }
                 // A right status with a wrong answer is the defect an exit code cannot see, so the
@@ -483,9 +519,10 @@ public class BootGate {
                 // placeholder can be grounded in the value actually passed.
                 Optional<String> want = groundedMessage(e, grounded.get().args());
                 if (want.isPresent() && !observed.get().output().contains(want.get())) {
-                    failures.add("\"" + e.criterionText() + "\" — " + e.describe()
+                    failures.add(ProbeFailure.of(e.criterionText(),
+                            "\"" + e.criterionText() + "\" — " + e.describe()
                             + ", and it exited " + observed.get().exitStatus()
-                            + " but never said \"" + want.get() + "\"");
+                            + " but never said \"" + want.get() + "\""));
                     continue;
                 }
                 // T4-DU: a stated message carrying MORE THAN ONE placeholder is never substituted —
@@ -500,7 +537,7 @@ public class BootGate {
                 if (unmentioned.isPresent()) {
                     messageProbed++;
                     messageContradicted++;
-                    failures.add(unmentioned.get());
+                    failures.add(ProbeFailure.of(e.criterionText(), unmentioned.get()));
                     continue;
                 }
                 if (judgesLineNumber(e, grounded.get())) messageProbed++;
@@ -515,7 +552,7 @@ public class BootGate {
                 Optional<String> contradiction = e.contradictedBy(observed.get().output());
                 if (contradiction.isPresent()) {
                     valueContradicted++;
-                    failures.add(contradiction.get());
+                    failures.add(ProbeFailure.of(e.criterionText(), contradiction.get()));
                 }
             }
         } catch (IOException io) {
@@ -750,7 +787,33 @@ public class BootGate {
     }
 
     /** What one invocation reported: the status it terminated with, and everything it wrote. */
+    /** T4-CU: the reader-facing prose, unchanged in wording from before the carrier existed. */
+    private static String joinMessages(List<ProbeFailure> failures) {
+        return failures.stream().map(ProbeFailure::message).collect(java.util.stream.Collectors.joining("; "));
+    }
+
+    /** T4-CU: the distinct criteria these probes refuted, in encounter order, nulls dropped. */
+    private static List<String> attributedCriteria(List<ProbeFailure> failures) {
+        return failures.stream().map(ProbeFailure::criterionText).filter(java.util.Objects::nonNull)
+                .distinct().toList();
+    }
+
     private record Invocation(int exitStatus, String output) {}
+
+    /**
+     * T4-CU: one probe verdict, with the criterion it belongs to kept BESIDE the message rather
+     * than only inside it. The message has always embedded the criterion text for a human reader;
+     * what was missing was a field a caller could read without parsing prose, which is what left
+     * the closure gate unable to name what it had refuted.
+     *
+     * {@code criterionText} is null for a failure that is not a criterion's own — an endpoint that
+     * does not answer, an artifact that never boots.
+     */
+    private record ProbeFailure(String criterionText, String message) {
+        static ProbeFailure of(String criterionText, String message) {
+            return new ProbeFailure(criterionText, message);
+        }
+    }
 
     private OptionalInt invokeOnce(Path artifact, List<String> args) {
         return invoke(artifact, args).map(i -> OptionalInt.of(i.exitStatus())).orElse(OptionalInt.empty());
@@ -895,10 +958,10 @@ public class BootGate {
      *       words the planner wrote.</li>
      * </ul>
      */
-    private List<String> probeBehaviouralCriteria(boolean allowModelFallback,
+    private List<ProbeFailure> probeBehaviouralCriteria(boolean allowModelFallback,
                                                   HttpClient client, int port, String specText,
                                                   List<String> criteria, Path artifactRoot) {
-        List<String> failures = new ArrayList<>();
+        List<ProbeFailure> failures = new ArrayList<>();
         if (!criterionProbeEnabled || criterionProbeSynthesizer == null
                 || criteria == null || criteria.isEmpty()) {
             return failures;
@@ -1018,9 +1081,10 @@ public class BootGate {
             }
             probed++;
             if (observed.status() != assertion.expectedStatus()) {
-                failures.add("\"" + assertion.criterionText() + "\" — " + assertion.describe()
+                failures.add(ProbeFailure.of(assertion.criterionText(),
+                        "\"" + assertion.criterionText() + "\" — " + assertion.describe()
                         + ", but the running application answered " + observed.status()
-                        + " to " + judged);
+                        + " to " + judged));
             }
         }
         int unobservedTotal = unobserved.values().stream().mapToInt(Integer::intValue).sum();

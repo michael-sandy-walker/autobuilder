@@ -16,6 +16,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -105,30 +106,33 @@ class ClosureEdgeBlindToNonServingTargetReplayTest {
         assertThat(verifier.refute("goal-ba65c7b0", SURFACE_CRITERIA, "")).isEmpty();
 
         verify(packageGate, never()).verifyPackageable(anyString());
-        verify(bootGate, never()).verifyBootsAndServes(anyString(), anyString(), any());
+        verify(bootGate, never()).verifyBootsAndServesWithAttribution(anyString(), anyString(), any(), anyBoolean());
     }
 
     @Test
     void withItsOwnSpecificationTheCheckNowReachesTheArtifact() {
-        when(bootGate.verifyBootsAndServes(anyString(), anyString(), any())).thenReturn(Optional.empty());
+        when(bootGate.verifyBootsAndServesWithAttribution(anyString(), anyString(), any(), anyBoolean())).thenReturn(Optional.empty());
 
         verifier.refute("goal-ba65c7b0", SURFACE_CRITERIA, SPEC);
 
-        verify(bootGate).verifyBootsAndServes(anyString(), anyString(),
-                org.mockito.ArgumentMatchers.eq(SURFACE_CRITERIA));
+        verify(bootGate).verifyBootsAndServesWithAttribution(anyString(), anyString(),
+                org.mockito.ArgumentMatchers.eq(SURFACE_CRITERIA), anyBoolean());
     }
 
     @Test
     void aRefutationFromTheProbeBlocksTheClosureItWouldHaveWaivedThrough() {
         // The point of reaching the artifact. Where the run had only a model's reading of source,
         // an execution result now outranks it — the check refutes and the claim does not stand.
-        when(bootGate.verifyBootsAndServes(anyString(), anyString(), any()))
-                .thenReturn(Optional.of("\"Running a known command with the wrong number of arguments "
-                        + "exits 5\" — but running it exited 0"));
+        when(bootGate.verifyBootsAndServesWithAttribution(anyString(), anyString(), any(), anyBoolean()))
+                .thenReturn(Optional.of(new com.walpro.autobuilder.goal.ClaimRefutation(
+                        "\"Running a known command with the wrong number of arguments "
+                        + "exits 5\" — but running it exited 0", SURFACE_CRITERIA)));
 
         assertThat(verifier.refute("goal-ba65c7b0", SURFACE_CRITERIA, SPEC))
                 .isPresent()
-                .get().asString().contains("exited 0");
+                .get()
+                .extracting(com.walpro.autobuilder.goal.ClaimRefutation::description).asString()
+                .contains("exited 0");
     }
 
     @Test
@@ -141,6 +145,6 @@ class ClosureEdgeBlindToNonServingTargetReplayTest {
         // would catch it.
         assertThat(verifier.refute("goal-ba65c7b0", CONTENT_CRITERIA, SPEC)).isEmpty();
 
-        verify(bootGate, never()).verifyBootsAndServes(anyString(), anyString(), any());
+        verify(bootGate, never()).verifyBootsAndServesWithAttribution(anyString(), anyString(), any(), anyBoolean());
     }
 }

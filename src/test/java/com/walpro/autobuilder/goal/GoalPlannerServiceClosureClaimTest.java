@@ -69,13 +69,13 @@ class GoalPlannerServiceClosureClaimTest {
     }
 
     /** Answers whatever it is told to, so the test controls the one fact under examination. */
-    private void withVerifier(Optional<String> verdict) {
+    private void withVerifier(Optional<ClaimRefutation> verdict) {
         service.setClosureClaimVerifier((goalId, criteria, specText) -> verdict);
     }
 
     @Test
     void aRefutedClaimLeavesTheGoalActiveInsteadOfClosingIt() {
-        withVerifier(Optional.of(CONTRADICTION));
+        withVerifier(Optional.of(ClaimRefutation.unattributed(CONTRADICTION)));
 
         service.transitionGoal("A", GoalStatus.COMPLETED, "evaluator says done");
 
@@ -86,7 +86,7 @@ class GoalPlannerServiceClosureClaimTest {
     void aRefutedClaimDoesNotBankItsCriteriaAsTrue() {
         // The banked ✓ is what the rest of the run inherits — the later gates, the closure edge,
         // and the decomposition that retired the parent all read it.
-        withVerifier(Optional.of(CONTRADICTION));
+        withVerifier(Optional.of(ClaimRefutation.unattributed(CONTRADICTION)));
 
         service.transitionGoal("A", GoalStatus.COMPLETED, "evaluator says done");
 
@@ -107,7 +107,7 @@ class GoalPlannerServiceClosureClaimTest {
         assertThat(service.allCriteriaDefinedAndBanked("A"))
                 .as("precondition — this is exactly what arms T3-BL's early exit")
                 .isTrue();
-        withVerifier(Optional.of(CONTRADICTION));
+        withVerifier(Optional.of(ClaimRefutation.unattributed(CONTRADICTION)));
 
         service.promoteCurrentSubGoal();
 
@@ -137,7 +137,7 @@ class GoalPlannerServiceClosureClaimTest {
 
     @Test
     void theContradictionIsRecordedOnTheGoalSoTheReasonSurvives() {
-        withVerifier(Optional.of(CONTRADICTION));
+        withVerifier(Optional.of(ClaimRefutation.unattributed(CONTRADICTION)));
 
         service.transitionGoal("A", GoalStatus.COMPLETED, "evaluator says done");
 
@@ -195,7 +195,7 @@ class GoalPlannerServiceClosureClaimTest {
         // but promoteCurrentSubGoal calls markGoalCompleted DIRECTLY — and that is the path the
         // loop actually takes when a subgoal is fulfilled. The check covered the API nobody used
         // for this and missed the one everybody does.
-        withVerifier(Optional.of(CONTRADICTION));
+        withVerifier(Optional.of(ClaimRefutation.unattributed(CONTRADICTION)));
 
         service.promoteCurrentSubGoal();
 
@@ -209,7 +209,7 @@ class GoalPlannerServiceClosureClaimTest {
     void promotionDoesNotAdvancePastAGoalWhoseClaimIsRefuted() {
         // Advancing would leave the defect behind with nothing pointing at it, which is how the
         // measured chain ended: the parent gave up because its child claimed success.
-        withVerifier(Optional.of(CONTRADICTION));
+        withVerifier(Optional.of(ClaimRefutation.unattributed(CONTRADICTION)));
 
         boolean adopted = service.promoteCurrentSubGoal();
 
@@ -237,7 +237,7 @@ class GoalPlannerServiceClosureClaimTest {
     void aRepairedArtifactClosesTheGoalOnTheNextAttempt() {
         // Refusal is not a terminal verdict on the work item: it stands only while the
         // contradiction reproduces. This is what keeps a refused goal from being stuck forever.
-        withVerifier(Optional.of(CONTRADICTION));
+        withVerifier(Optional.of(ClaimRefutation.unattributed(CONTRADICTION)));
         service.transitionGoal("A", GoalStatus.COMPLETED, "evaluator says done");
         assertThat(service.getGoalById("A").getStatus()).isEqualTo(GoalStatus.ACTIVE);
 

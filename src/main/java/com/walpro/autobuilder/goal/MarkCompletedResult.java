@@ -37,9 +37,15 @@ public sealed interface MarkCompletedResult {
      * claim it would close on is false. The goal keeps the status it had; callers must not run
      * the "treat goal as terminal" flow.
      *
-     * @param contradiction what was observed, phrased so the loop can act on it
+     * @param refutation what was observed, and which of the goal's criteria were refuted where
+     *                   the verifier could attribute it (T4-CU: this was a bare description
+     *                   string, which left the consumer unable to name what it should repair)
      */
-    record RefusedClaimRefuted(String goalId, String contradiction) implements MarkCompletedResult {}
+    record RefusedClaimRefuted(String goalId, ClaimRefutation refutation) implements MarkCompletedResult {
+
+        /** The prose, for readers that only report it. */
+        public String contradiction() { return refutation.description(); }
+    }
 
     /** Caller passed an id not in {@code goalMap}; nothing happened. */
     record UnknownGoal(String goalId) implements MarkCompletedResult {}

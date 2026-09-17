@@ -49,9 +49,16 @@ public interface ClosureClaimVerifier {
      *                 T4-DK: passing the empty string here made every criterion on a target with no
      *                 network surface unexercisable, so the check abstained at every closure and a
      *                 model reading source was the only evidence left at the completion edge.
-     * @return a description of the contradiction when the artifact demonstrably refutes one of
-     *         {@code criteria} — phrased so the loop can act on it — or empty when it does not, or
-     *         when nothing could be checked. Empty is "no opinion", never "verified".
+     * @return the contradiction when the artifact demonstrably refutes one of {@code criteria} —
+     *         its description phrased so the loop can act on it, and the subset of
+     *         {@code criteria} that was refuted where the implementation can attribute it — or
+     *         empty when it does not, or when nothing could be checked. Empty is "no opinion",
+     *         never "verified".
+     *         <p>T4-CU: this used to be an {@code Optional<String>}. An implementation probes the
+     *         criteria one at a time and so knows which failed; flattening that to one sentence
+     *         left the consumer unable to name the criterion without matching prose back to it,
+     *         which blocked the repair work item, forced T2-FB to drop a whole criteria bank, and
+     *         made refusals uncountable. See {@link ClaimRefutation}.
      */
-    Optional<String> refute(String goalId, List<String> criteria, String specText);
+    Optional<ClaimRefutation> refute(String goalId, List<String> criteria, String specText);
 }

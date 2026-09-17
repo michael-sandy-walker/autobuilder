@@ -9,9 +9,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
+import com.walpro.autobuilder.goal.ClaimRefutation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -50,16 +52,24 @@ class BehaviouralClosureVerifierTest {
 
     @Test
     void aCriterionTheArtifactRefutesBlocksTheClaim() {
-        when(bootGate.verifyBootsAndServes(anyString(), isNull(), any()))
-                .thenReturn(Optional.of("POST /books -> 400, but the running application answered 201"));
+        when(bootGate.verifyBootsAndServesWithAttribution(anyString(), isNull(), any(), anyBoolean()))
+                .thenReturn(Optional.of(new ClaimRefutation(
+                        "POST /books -> 400, but the running application answered 201",
+                        List.of(EXECUTABLE))));
 
         assertThat(verifier.refute("goal-1", List.of(EXECUTABLE), null))
-                .hasValueSatisfying(s -> assertThat(s).contains("answered 201"));
+                .hasValueSatisfying(r -> {
+                    assertThat(r.description()).contains("answered 201");
+                    // T4-CU: the criterion travels with the verdict. Asserted here because the
+                    // whole point of the widening is that this survives the return.
+                    assertThat(r.refutedCriteria()).containsExactly(EXECUTABLE);
+                });
     }
 
     @Test
     void aCriterionTheArtifactUpholdsIsNotRefuted() {
-        when(bootGate.verifyBootsAndServes(anyString(), isNull(), any())).thenReturn(Optional.empty());
+        when(bootGate.verifyBootsAndServesWithAttribution(anyString(), isNull(), any(), anyBoolean()))
+                .thenReturn(Optional.empty());
 
         assertThat(verifier.refute("goal-1", List.of(EXECUTABLE), null)).isEmpty();
     }
@@ -78,7 +88,7 @@ class BehaviouralClosureVerifierTest {
         assertThat(verifier.refute("goal-1", List.of(ungroundable), null)).isEmpty();
 
         verify(packageGate, never()).verifyPackageable(anyString());
-        verify(bootGate, never()).verifyBootsAndServes(anyString(), anyString(), any());
+        verify(bootGate, never()).verifyBootsAndServesWithAttribution(anyString(), anyString(), any(), anyBoolean());
     }
 
     @Test
@@ -89,18 +99,19 @@ class BehaviouralClosureVerifierTest {
         assertThat(verifier.refute("goal-1", List.of(STRUCTURAL), null)).isEmpty();
 
         verify(packageGate, never()).verifyPackageable(anyString());
-        verify(bootGate, never()).verifyBootsAndServes(anyString(), anyString(), any());
+        verify(bootGate, never()).verifyBootsAndServesWithAttribution(anyString(), anyString(), any(), anyBoolean());
     }
 
     @Test
     void onlyTheExecutableSubsetIsSentToTheGate() {
         // A work item usually mixes both kinds. Passing the structural ones through would ask the
         // gate to execute something it cannot, and its abstention would read as a pass.
-        when(bootGate.verifyBootsAndServes(anyString(), isNull(), any())).thenReturn(Optional.empty());
+        when(bootGate.verifyBootsAndServesWithAttribution(anyString(), isNull(), any(), anyBoolean()))
+                .thenReturn(Optional.empty());
 
         verifier.refute("goal-1", List.of(STRUCTURAL, EXECUTABLE, STRUCTURAL), null);
 
-        verify(bootGate).verifyBootsAndServes(anyString(), isNull(), eq(List.of(EXECUTABLE)));
+        verify(bootGate).verifyBootsAndServesWithAttribution(anyString(), isNull(), eq(List.of(EXECUTABLE)), anyBoolean());
     }
 
     @Test
@@ -110,7 +121,7 @@ class BehaviouralClosureVerifierTest {
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.of("package failed"));
 
         assertThat(verifier.refute("goal-1", List.of(EXECUTABLE), null)).isEmpty();
-        verify(bootGate, never()).verifyBootsAndServes(anyString(), anyString(), any());
+        verify(bootGate, never()).verifyBootsAndServesWithAttribution(anyString(), anyString(), any(), anyBoolean());
     }
 
     @Test
@@ -118,11 +129,12 @@ class BehaviouralClosureVerifierTest {
         // An empty specification text is deliberate: the closure edge already asks whether the
         // artifact satisfies the spec. Folding the spec in here would decide one work item's fate
         // on requirements it never claimed.
-        when(bootGate.verifyBootsAndServes(anyString(), isNull(), any())).thenReturn(Optional.empty());
+        when(bootGate.verifyBootsAndServesWithAttribution(anyString(), isNull(), any(), anyBoolean()))
+                .thenReturn(Optional.empty());
 
         verifier.refute("goal-1", List.of(EXECUTABLE), null);
 
-        verify(bootGate).verifyBootsAndServes(anyString(), isNull(), any());
+        verify(bootGate).verifyBootsAndServesWithAttribution(anyString(), isNull(), any(), anyBoolean());
     }
 
     @Test

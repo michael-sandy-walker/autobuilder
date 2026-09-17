@@ -2308,7 +2308,15 @@ public class GoalPlannerService {
         if (g == null || g.getMetadata() == null) return Optional.empty();
         Object raw = g.getMetadata().get("acceptanceCriteria");
         if (!(raw instanceof List<?> l) || l.isEmpty()) {
-            log.debug("T4-CU: {} declares no acceptance criteria — nothing to check", goalId);
+            // INFO, not DEBUG: this is the THIRD way this check can be silent, and until
+            // 2026-09-17 it was the only one invisible. The bean-absent case got the presence
+            // line above for exactly this reason ("both are silence"), and the
+            // nothing-executable case already logs at INFO -- but a closure declaring NO
+            // criteria exited here unseen, and it is the MAJORITY case: 4 of 6 closures in run
+            // 2026-09-17_23-01-39. So a run could not distinguish "the verifier was never
+            // reached" from "it was reached and had nothing to check", which is precisely the
+            // ambiguity that made this ticket's own "5 runs, never executed" unreadable.
+            log.info("T4-CU: {} declares no acceptance criteria — nothing to check", goalId);
             return Optional.empty();
         }
         // T3-CC: an AUTHORED criterion may be reported, never asserted against the artifact.

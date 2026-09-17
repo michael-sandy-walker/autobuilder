@@ -833,6 +833,15 @@ public sealed interface BehaviourEvent {
      * "which gate refused this closure, and on what" could only be answered by a regex over an
      * archived log — which is why the refusal rate went 25 runs unmeasured.
      *
+     * <p><b>{@code gate} is for operators and scripts, and must not reach a prompt untranslated.</b>
+     * A ticket id is the right join key for a reader who also has the roadmap, and noise to a model
+     * that does not: "T4-BV" tells it nothing a boot failure's own prose would not say better.
+     * Today nothing relays it — this sink is the NDJSON log and the dashboard's SSE stream, agents
+     * only emit, and no contract reads a behaviour event. But relaying a gate's diagnosis INTO a
+     * prompt is a move this codebase has already made once for evaluator rejection reasons (T4-BX),
+     * so if refusal information ever takes that route, send {@code reason} — which describes the
+     * artifact — and leave this field behind.
+     *
      * <p>{@code criteria} carries the criterion texts the refusal was attributed to. Empty for the
      * nine gates that judge no criteria, and for a criteria refutation nothing could attribute
      * (see {@code ClaimRefutation}).

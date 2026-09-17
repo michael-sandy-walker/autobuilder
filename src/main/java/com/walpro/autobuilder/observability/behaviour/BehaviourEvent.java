@@ -820,11 +820,22 @@ public sealed interface BehaviourEvent {
     }
 
     /**
-     * T4-CU: a closure gate refused to close a goal. {@code gate} is the refusing gate's
-     * {@code BlockerTypes} id, so a run can be asked which gate does the blocking rather than
-     * being grepped for eleven different log sentences. {@code criteria} carries the criterion
-     * texts the refusal was attributed to, empty for a gate that judges none or a refutation
-     * nothing could attribute.
+     * T4-CU: a closure gate refused to close a goal.
+     *
+     * <p>{@code gate} is the refusing gate's own TICKET ID — "T4-BV", "T4-BP-3", "T4-CU" — which
+     * is the identifier this codebase already uses for these gates in every one of their log lines
+     * and on the roadmap. Deliberately NOT a {@code BlockerTypes} constant: those name what kind
+     * of work item a gate RAISES and several gates share one, so stamping the event with them
+     * would make it unable to tell the two criteria gates apart, which is most of what the event
+     * exists to answer.
+     *
+     * <p>Eleven gates can block closure and each reported it with a {@code log.warn} alone, so
+     * "which gate refused this closure, and on what" could only be answered by a regex over an
+     * archived log — which is why the refusal rate went 25 runs unmeasured.
+     *
+     * <p>{@code criteria} carries the criterion texts the refusal was attributed to. Empty for the
+     * nine gates that judge no criteria, and for a criteria refutation nothing could attribute
+     * (see {@code ClaimRefutation}).
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record ClosureRefused(

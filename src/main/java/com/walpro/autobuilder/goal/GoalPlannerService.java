@@ -2384,7 +2384,7 @@ public class GoalPlannerService {
         });
         GoalEntity g = goalMap.get(goalId);
         if (g != null) goalGraphService.save(g);
-        recordClosureRefusal(BlockerTypes.GATE_CRITERIA, goalId, contradiction,
+        recordClosureRefusal("T4-CU", goalId, contradiction,
                 refutation.refutedCriteria());
     }
 
@@ -3535,9 +3535,14 @@ public class GoalPlannerService {
                         if (entryPointMissing) {
                             log.warn("T4-CV: root closure blocked — the specification names endpoints but no"
                                     + " application source declares an entry point; injected as a work item");
+                            recordClosureRefusal("T4-CV", root.getId(),
+                                    "the specification names endpoints but no application source"
+                                    + " declares an entry point", List.of());
                         }
                         log.warn("T2-EI D2: root closure blocked — {} coverage gap(s) injected as work items: {}",
                                 injected.injected().size(), injected.injected());
+                        recordClosureRefusal("T2-EI", root.getId(),
+                                injected.injected().size() + " endpoint coverage gap(s)", List.of());
                         return;
                     }
                     refuseClosureUnrepairable("T2-EI D2", missingEndpoints.size() + " missing endpoint(s)");
@@ -3579,6 +3584,8 @@ public class GoalPlannerService {
                     if (!injected.injected().isEmpty()) {
                         log.warn("T2-DR coverage gate: root closure blocked — {} uncovered feature(s) injected instead of completing: {}",
                                 injected.injected().size(), injected.injected());
+                        recordClosureRefusal("T2-DR", root.getId(),
+                                injected.injected().size() + " uncovered feature(s)", List.of());
                         return;
                     }
                     refuseClosureUnrepairable("T2-DR coverage gate", missing.size() + " uncovered feature(s)");
@@ -3650,6 +3657,7 @@ public class GoalPlannerService {
                         }
                         log.warn("T4-AN-8: root closure blocked — artifact is not packageable; work item injected: {}",
                                 packagingFailure.get());
+                        recordClosureRefusal("T4-AN-8", root.getId(), packagingFailure.get(), List.of());
                         return;
                     }
                     refuseClosureUnrepairable("T4-AN-8", packagingFailure.get());
@@ -3700,6 +3708,8 @@ public class GoalPlannerService {
                     if (applyRunnablePackagingRepair()) {
                         log.warn("T4-DO: root closure blocked — the packaged artifact could not run; "
                                 + "declared its entry point deterministically. Next cycle rebuilds.");
+                        recordClosureRefusal("T4-DO", root.getId(),
+                                "the packaged artifact could not run", List.of());
                         return;
                     }
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
@@ -3716,6 +3726,7 @@ public class GoalPlannerService {
                                     com.walpro.autobuilder.core.build.BlockerTypes.GATE_BOOT);
                         }
                         log.warn("T4-BV: root closure blocked — {}; work item injected", bootFailure.get());
+                        recordClosureRefusal("T4-BV", root.getId(), bootFailure.get(), List.of());
                         return;
                     }
                     refuseClosureUnrepairable("T4-BV", bootFailure.get());
@@ -3749,6 +3760,7 @@ public class GoalPlannerService {
                                     com.walpro.autobuilder.core.build.BlockerTypes.GATE_PACKAGE);
                         }
                         log.warn("T4-BW: root closure blocked — {}; work item injected", wiringFailure.get());
+                        recordClosureRefusal("T4-BW", root.getId(), wiringFailure.get(), List.of());
                         return;
                     }
                     refuseClosureUnrepairable("T4-BW", wiringFailure.get());
@@ -3793,6 +3805,7 @@ public class GoalPlannerService {
                                     com.walpro.autobuilder.core.build.BlockerTypes.GATE_TEST);
                         }
                         log.warn("T4-AN-2: root closure blocked — {}; work item injected", testFailure.get());
+                        recordClosureRefusal("T4-AN-2", root.getId(), testFailure.get(), List.of());
                         return;
                     }
                     refuseClosureUnrepairable("T4-AN-2", testFailure.get());
@@ -3879,6 +3892,10 @@ public class GoalPlannerService {
                             setAcceptanceCriteria(id, completionVerification.unconfirmedCriteria());
                         }
                         log.warn("T4-BP-3: root closure blocked — {}; work item injected", unconfirmed.get());
+                        // The criteria this gate could not confirm ARE known here, so this gate
+                        // attributes too -- it is the only other one that judges criteria.
+                        recordClosureRefusal("T4-BP-3", root.getId(), unconfirmed.get(),
+                                completionVerification.unconfirmedCriteria());
                         return;
                     }
                     refuseClosureUnrepairable("T4-BP-3", unconfirmed.get());

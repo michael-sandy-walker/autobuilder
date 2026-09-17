@@ -9,7 +9,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -20,7 +22,11 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /**
  * T4-CU: the three things that were blocked by the port returning prose, asserted now that it
@@ -162,6 +168,39 @@ class ClaimRefutationAttributionTest {
         assertThat(item.getMetadata().get("acceptanceCriteria"))
                 .as("the done-when is the refuted criteria themselves, not the log sentence")
                 .isEqualTo(List.of(REFUTED));
+    }
+
+    @Test
+    void theRefusalIsRecordedAsACountableEventNamingTheGateAndTheCriteria() {
+        // The census that motivated this: ten gates can block closure and every one of them
+        // reported it with a log.warn alone, so "which gate refused, and on what" could only be
+        // answered by a regex over an archived log.
+        BehaviourLogger logger = mock(BehaviourLogger.class);
+        ReflectionTestUtils.setField(service, "behaviourLogger", logger);
+        service.setClosureClaimVerifier((goalId, criteria, specText) ->
+                Optional.of(new ClaimRefutation("the running application answered 201", List.of(REFUTED))));
+
+        service.promoteCurrentSubGoal();
+
+        ArgumentCaptor<List<String>> criteria = ArgumentCaptor.forClass(List.class);
+        verify(logger).closureRefused(any(), eq("T4-CU"), eq("A"),
+                contains("answered 201"), criteria.capture());
+        assertThat(criteria.getValue())
+                .as("the gate field is the gate's own ticket id and the criteria travel with it")
+                .containsExactly(REFUTED);
+    }
+
+    @Test
+    void recordingSurvivesAnAbsentLogger() {
+        // The field is @Autowired(required = false) and null in most unit contexts; a refusal
+        // must not depend on observability being wired.
+        ReflectionTestUtils.setField(service, "behaviourLogger", null);
+        service.setClosureClaimVerifier((goalId, criteria, specText) ->
+                Optional.of(new ClaimRefutation("answered 201", List.of(REFUTED))));
+
+        service.promoteCurrentSubGoal();
+
+        assertThat(service.getGoalById("A").getStatus()).isEqualTo(GoalStatus.ACTIVE);
     }
 
     @Test

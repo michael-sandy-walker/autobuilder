@@ -836,6 +836,9 @@ public sealed interface BehaviourEvent {
      * <p><b>{@code gate} is for operators and scripts, and must not reach a prompt untranslated.</b>
      * A ticket id is the right join key for a reader who also has the roadmap, and noise to a model
      * that does not: "T4-BV" tells it nothing a boot failure's own prose would not say better.
+     * The test is whether a prompt DEFINES the token -- three signal names are listed in the
+     * interpretation contract and parsed back out, which makes those an interface; nothing defines
+     * a gate id, so it stays on this side of the boundary.
      * Today nothing relays it — this sink is the NDJSON log and the dashboard's SSE stream, agents
      * only emit, and no contract reads a behaviour event. But relaying a gate's diagnosis INTO a
      * prompt is a move this codebase has already made once for evaluator rejection reasons (T4-BX),

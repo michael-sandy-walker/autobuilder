@@ -145,7 +145,7 @@ Ticket and scope discipline:
 - `feedback_one_invariant_one_home.md`: two patches for one invariant at two sites means a missing capability; file one capability ticket. (reviewed 2026-07-09)
 
 Code and design constraints:
-- `feedback_no_internal_ids_in_model_facing_text.md`: ticket ids, gate slugs and signal names are the project's vocabulary, not the model's -- translate or drop them at any prompt boundary; the prose describing what was observed is the part that travels. (reviewed 2026-09-17)
+- `feedback_no_internal_ids_in_model_facing_text.md`: an identifier belongs in a prompt only if that prompt DEFINES it -- ticket ids and gate slugs never do and are noise; three of ~35 signal names are defined and parsed back, so those are an interface. Corrected after asserting the signal half without checking. (reviewed 2026-09-17)
 - `feedback_no_target_domain_in_framework_strings.md`: never bake target-project class or package names into framework-level production strings. (reviewed 2026-07-09)
 - `feedback_no_ecosystem_jargon_in_framework_code.md`: never name a specific framework or version in framework-level identifiers, comments or strings; ecosystem knowledge lives in data tables. (reviewed 2026-07-09)
 - `feedback_no_hardcoded_ecosystem_data.md`: even data tables are debt; prefer discovery (pom -> classpath -> Maven Central), and row-adds always file the discovery follow-up. (reviewed 2026-07-09)

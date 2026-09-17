@@ -1,28 +1,38 @@
 ---
 name: feedback-no-internal-ids-in-model-facing-text
-description: Project-internal identifiers (ticket ids, gate slugs, signal names) are meaningless to the LLM; translate or drop them at any prompt boundary.
+description: An identifier belongs in a prompt only if that prompt DEFINES it. Ticket ids and gate slugs never do and are noise; three signal names are defined and emitted back, so they are an interface.
 metadata:
   type: feedback
 ---
 
-Ticket ids, gate slugs and signal names are the project's vocabulary, not the model's. `T4-BV`
-identifies a gate precisely for anyone holding the roadmap and says nothing to a model that is not.
-So an internal identifier may live in logs, events, metadata and dashboards freely, and must be
-translated or dropped wherever text crosses into a prompt. Where a gate has both an id and a prose
-description of what it observed, the prose is the part that travels.
+The test is not whether a token is internal. It is whether the prompt **defines the token before
+using it**, and whether the model is expected to send it back.
 
-**Why:** raised by the user on 2026-09-17 against `closure_refused`'s `gate` field, as a question
-rather than a correction -- *"is the gate String communicated to the LLM? Because if it is, the LLM
-probably does not know anything regarding that."* The field was not prompt-bound (behaviour events
-sink to the NDJSON log and the dashboard's SSE stream; agents only emit; no contract reads one), and
-an audit found no ticket id in any prompt-bound literal across `protocol/`. But nothing ENFORCED
-that, and relaying a gate's diagnosis into a prompt is a move already made once -- `T4-BX` relays
-evaluator rejection reasons verbatim into the evolution and planner prompts -- so the same route
-exists for refusal information.
+- **Defined, therefore an interface.** `InterpretationProtocolContract` lists *"Allowed values:
+  REPLAN_REQUESTED, LOW_CONFIDENCE, DIVERGENCE_REQUEST"*, says when to emit each, shows a
+  WRONG/CORRECT pair, and `InterpretationResponseParser` parses them back out. Three of roughly
+  thirty-five signal types are exposed this way. Those three are model vocabulary because the
+  contract teaches them; the other thirty-two are not, and neither is a signal name that merely
+  happens to be in scope.
+- **Never defined, therefore noise.** Ticket ids (`T4-BV`) and gate slugs (`criteria-gate`) appear
+  in no prompt-bound literal and nothing would explain them if they did. Where a gate has both an id
+  and a prose description of what it observed, the prose is the part that travels.
 
-**How to apply:** when adding a field that names an internal thing, decide its audience in the same
-change and say so where it is declared. When relaying a diagnosis to an agent, send the description
-of what was observed, never the id of what observed it. This is the inverse direction of
+**Why:** the first version of this memory said *"ticket ids, gate slugs, signal names"* were all the
+project's vocabulary and not the model's. The user challenged the third -- *"I don't know if the same
+goes for signal names"* -- and the challenge was right: signal names are the counter-example, taught
+in the contract and parsed back, which makes the internal-versus-external framing wrong. Written
+without checking, in a memory sitting next to
+[[feedback-grep-the-behaviour-not-the-name]], which is the rule it broke. Behind the original
+question: `closure_refused`'s `gate` field is NOT prompt-bound (behaviour events sink to the NDJSON
+log and the dashboard's SSE stream, agents only emit, no contract reads one), but nothing enforced
+that, and `T4-BX` already relays evaluator rejection reasons verbatim into the evolution and planner
+prompts -- so the route exists.
+
+**How to apply:** when a token is about to cross into a prompt, find the line that defines it for the
+model. If there is none, send the description of what was observed instead of the id of what
+observed it, and say in the declaration who the field is for. Adding a token to a contract's allowed
+values is what makes it shared; being useful to a script is not. This is the inverse direction of
 [[feedback-no-target-domain-in-framework-strings]] and
 [[feedback-no-ecosystem-jargon-in-framework-code]]: those keep the target's vocabulary out of
-framework code, this keeps the framework's vocabulary out of the model's context.
+framework code, this governs what may cross into the model's context.

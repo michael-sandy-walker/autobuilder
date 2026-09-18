@@ -168,6 +168,41 @@ public class AutobuilderService implements CheckpointableState {
     private static final String LLM_BREAKER_PAUSE_REASON = "llm-circuit-breaker";
 
     /**
+     * T1-GC: the floor and ceiling for backing off after a cycle that could not even start.
+     *
+     * <p><b>The invariant: a cycle that FAILS must not retry faster than a cycle that SUCCEEDS.</b>
+     * The scheduler's {@code fixedDelay} is the pause between cycles, and the {@code fast} profile
+     * compresses it to 1ms on the stated premise that it "only removes time the loop spends
+     * waiting/probing". That premise holds for a healthy cycle, whose cost is dominated by model
+     * inference, and is VOID for one that aborts in microseconds. On 2026-09-19 Neo4j went away
+     * and {@code prepareRuntimeContext} began failing in ~8ms, so the 1ms delay became the only
+     * thing between iterations: <b>29,500 aborted cycles in 230 seconds (128/sec) and 231 MB of
+     * log</b>, with the host already under the memory pressure that had killed the database.
+     *
+     * <p>Both numbers are the project's own cadences rather than invented ones: 1s is the
+     * {@code @Scheduled} annotation's default delay — this codebase's statement of an ordinary
+     * tick — and 60s is the documented scheduler cadence. Escalation is doubling, as
+     * {@link com.walpro.autobuilder.client.LlmCircuitBreaker}'s cooldown is, because the same
+     * shape of problem is being solved: a dependency that may come back, where retrying hard
+     * helps nobody and costs the host.
+     */
+    private static final long CONTEXT_BACKOFF_FLOOR_MS = 1_000L;
+    private static final long CONTEXT_BACKOFF_CAP_MS = 60_000L;
+
+    /** T1-GC: consecutive cycles that could not prepare a context. Reset by any success. */
+    private int consecutiveContextFailures;
+
+    /** T1-GC: wall-clock before which the next tick is skipped outright. 0 = no backoff active. */
+    private long contextRetryNotBefore;
+
+    /**
+     * T1-GC: wall clock, overridable so a test can serve a backoff without waiting it out. Same
+     * seam and same default as {@code RootConvergenceTracker}'s, which exists for the same reason.
+     */
+    @Setter
+    private java.util.function.LongSupplier clock = System::currentTimeMillis;
+
+    /**
      * T2-AP: score plateau detection. Tracks the score at the last evaluation so we can detect
      * a flat band across consecutive cycles. NaN until the first evaluation runs.
      */
@@ -770,8 +805,42 @@ public class AutobuilderService implements CheckpointableState {
         buildSystemBootstrap.seedBuildSystemIfNecessary();
     }
 
+    /**
+     * T1-GC: a cycle could not prepare its context. Back off before the next attempt, doubling
+     * per consecutive failure, and say so ONCE per escalation rather than once per tick.
+     *
+     * <p>The log line is the second half of the fix. The first failure already logged a full stack
+     * from {@code CycleContextCoordinator}; repeating it 29,500 times told a reader nothing the
+     * first one had not, and buried everything else in the run. Here the count and the wait are
+     * what a reader needs, and they arrive at a rate that falls as the outage lengthens.
+     */
+    private void noteContextFailureAndBackOff() {
+        consecutiveContextFailures++;
+        long wait = Math.min(CONTEXT_BACKOFF_CAP_MS,
+                CONTEXT_BACKOFF_FLOOR_MS << Math.min(consecutiveContextFailures - 1, 20));
+        contextRetryNotBefore = clock.getAsLong() + wait;
+        log.warn("T1-GC: aborting cycle — unable to prepare context ({} consecutive); "
+                + "next attempt in {} ms", consecutiveContextFailures, wait);
+    }
+
+    /** T1-GC: a context was prepared, so whatever was wrong is over. */
+    private void noteContextPrepared() {
+        if (consecutiveContextFailures > 0) {
+            log.info("T1-GC: context prepared again after {} failed attempt(s) — backoff cleared.",
+                    consecutiveContextFailures);
+        }
+        consecutiveContextFailures = 0;
+        contextRetryNotBefore = 0L;
+    }
+
     @Scheduled(fixedDelayString = "${autobuilder.scheduler.inter-cycle-delay-ms:1000}")
     public void runAutobuilderCycle() {
+        // T1-GC: skip the tick outright while a context-failure backoff is in force. Deliberately
+        // BEFORE the lock and before any work: the point is to do nothing at all, including not
+        // re-entering the code whose own ERROR line produced most of the 231 MB.
+        if (contextRetryNotBefore > 0 && clock.getAsLong() < contextRetryNotBefore) {
+            return;
+        }
         lock.lock();
         try {
             runAutobuilderCycleLocked();
@@ -1274,9 +1343,10 @@ public class AutobuilderService implements CheckpointableState {
 
         Optional<CycleContextData> initialContext = contextCoordinator.prepareRuntimeContext(context);
         if (initialContext.isEmpty()) {
-            log.warn("Aborting cycle: unable to prepare context.");
+            noteContextFailureAndBackOff();
             return;
         }
+        noteContextPrepared();
 
         context = cycleExecutor.runCycle(initialContext.get());
 

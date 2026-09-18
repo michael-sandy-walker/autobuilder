@@ -42,6 +42,29 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
     @Value("${autobuilder.goal.verify-closure-claims:true}")
     private boolean enabled = true;
 
+    /**
+     * T4-CU residual (1): whether a criterion the DETERMINISTIC synthesizer cannot build a probe
+     * for may fall back to the model at this edge.
+     *
+     * <p><b>It was designed on and shipped off, and nobody noticed for seven weeks.</b> `BootGate`
+     * reserves the fallback for the completion edge in as many words — <i>"Only the completion
+     * edge should pass true … the other three run per cycle and must keep the deterministic-only
+     * path"</i> — and this class IS that edge, yet it reached the gate through the overload that
+     * passes {@code false}. Zero of the four production callers enabled it, which is why the
+     * residual reads "synthesis has never met the local model": nothing ever asked it to.
+     *
+     * <p><b>The bounded hazard, stated because it is exactly at its limit.</b> `BootGate` caps the
+     * fallback at 5 calls per sweep, and `LlmCircuitBreaker` opens on 5 consecutive failures — the
+     * same number. So one sweep against an unhealthy model is precisely enough to open the
+     * breaker, which is how run {@code 2026-08-05_20-58-50} died. Two things have changed since:
+     * T1-FD made opens timed and self-recovering, and T1-FL made a breaker-caused PAUSE resume
+     * when the cooldown elapses. Neither has been exercised in the field — there has not been a
+     * breaker-terminal run in the 71 since — so the protection is dormant rather than proven,
+     * and that is the reason this is a property and not a constant.
+     */
+    @Value("${autobuilder.goal.closure-probe-model-fallback:true}")
+    private boolean modelFallbackAtClosure = true;
+
     private final PackageGate packageGate;
     private final BootGate bootGate;
     private final ExercisableCriterionQuery exercisableCriterionQuery;
@@ -55,6 +78,9 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
 
     /** Test seam — production wires the field value. */
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+
+    /** Test seam — production wires the field value. */
+    public void setModelFallbackAtClosure(boolean on) { this.modelFallbackAtClosure = on; }
 
     @Override
     public Optional<ClaimRefutation> refute(String goalId, List<String> criteria, String specText) {
@@ -111,8 +137,8 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
         // specification's own markers rather than on a flag anyone has to remember to set.
         // T4-CU: the attributing overload. The probes below know which criterion each verdict
         // belongs to; asking for the prose-only one is what used to discard that here.
-        Optional<ClaimRefutation> contradiction =
-                bootGate.verifyBootsAndServesWithAttribution(checkId, specText, executable, false);
+        Optional<ClaimRefutation> contradiction = bootGate.verifyBootsAndServesWithAttribution(
+                checkId, specText, executable, modelFallbackAtClosure);
         if (contradiction.isEmpty()) {
             // Deliberately NOT phrased as "the criteria hold". An empty result means no
             // contradiction was FOUND, which includes the case where the gate could construct no

@@ -101,6 +101,21 @@ autobuilder:
     package-consolidation:
       enabled: true
   goal:
+    # T4-CU residual (1): may a criterion the deterministic synthesizer cannot build a probe for
+    # fall back to the model AT THE CLOSURE EDGE? BootGate reserves this for exactly this caller
+    # ("only the completion edge should pass true") and the caller passed false from the day it
+    # shipped, so the fallback has never once run in the field.
+    #
+    # Turned on 2026-09-19. The exposure is bounded but sits at its own limit: BootGate caps the
+    # fallback at 5 calls per sweep and the circuit breaker opens on 5 consecutive failures, so one
+    # sweep against an unhealthy model is precisely enough to open it -- which is how run
+    # 2026-08-05_20-58-50 died. T1-FD (timed opens) and T1-FL (resume when the cooldown elapses)
+    # both post-date that and would now turn the kill into a pause, but NEITHER HAS FIRED IN THE
+    # FIELD: zero breaker-terminal runs in the 71 since. Dormant protection, not proven protection.
+    #
+    # Watch after enabling: breaker opens per run, and whether closure sweeps recur often enough
+    # for 5-per-sweep to add up -- one archived run made 34 closure attempts.
+    closure-probe-model-fallback: true
     migrate-to-graph: false
     sync-from-graph: true
     # T2-EG: completion-edge coverage gate (leading "is this gap already implemented?" question over

@@ -51,6 +51,32 @@ class BehaviouralClosureVerifierTest {
     }
 
     @Test
+    void theModelFallbackIsOnByDefaultAndReachesTheGate() {
+        // T4-CU residual (1): this edge is the ONE caller BootGate reserves the fallback for, and
+        // it passed false from the day it shipped. The assertion is on the argument, because
+        // "designed on, wired off" is exactly how that went unnoticed for seven weeks.
+        when(bootGate.verifyBootsAndServesWithAttribution(anyString(), isNull(), any(), anyBoolean()))
+                .thenReturn(Optional.empty());
+
+        verifier.refute("goal-1", List.of(EXECUTABLE), null);
+
+        verify(bootGate).verifyBootsAndServesWithAttribution(anyString(), isNull(), any(), eq(true));
+    }
+
+    @Test
+    void theModelFallbackCanBeTurnedOffWithoutARebuild() {
+        // The off-switch has to be real: the cap is 5 fallbacks per sweep and the breaker opens on
+        // 5 consecutive failures, so one sweep against an unhealthy model is enough to open it.
+        verifier.setModelFallbackAtClosure(false);
+        when(bootGate.verifyBootsAndServesWithAttribution(anyString(), isNull(), any(), anyBoolean()))
+                .thenReturn(Optional.empty());
+
+        verifier.refute("goal-1", List.of(EXECUTABLE), null);
+
+        verify(bootGate).verifyBootsAndServesWithAttribution(anyString(), isNull(), any(), eq(false));
+    }
+
+    @Test
     void aCriterionTheArtifactRefutesBlocksTheClaim() {
         when(bootGate.verifyBootsAndServesWithAttribution(anyString(), isNull(), any(), anyBoolean()))
                 .thenReturn(Optional.of(new ClaimRefutation(

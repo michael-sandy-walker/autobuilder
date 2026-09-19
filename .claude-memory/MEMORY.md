@@ -34,8 +34,8 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked; sole orchestrator since the T4-AI-2+5 meta-lane deletion) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier; reconciled against the roadmap 2026-09-16 (3 stale markers, 8 absent tickets, 2 of them OPEN). (reviewed 2026-09-19)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-19)
+- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier; reconciled against the roadmap 2026-09-16 (3 stale markers, 8 absent tickets, 2 of them OPEN). (reviewed 2026-09-20)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-20)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: the live ordering is the appended 2026-08-23 REORDER section at the end of the file; the S1-S6 sections above it are kept for their reasoning, not their sequence. Rationale, never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest field-run state, open probe defects, and what the last session proved. Folded per-run, never split into new files. 2026-09-17: T4-CU's port widened and shipped; its own watch was reporting FIRED on another gate's evidence; the field DoD got NO opportunity because T3-CC filters all-AUTHORED criteria before the verifier is called -- structural, not bad luck. T2-FH closed `[n]`. (reviewed 2026-09-17)
+- `project_resume_state.md`: latest field-run state and what the last session proved. Folded per-run, never split. 2026-09-20: T4-CU fired in the field (chain end-to-end, not a livelock) but the repair clause is still unfired; T1-GC filed+fixed, not field-verified; I refuted my own "rare by construction" claim. (reviewed 2026-09-20)
 - `project_wave2_structure.md`: wave 2's five layers (substrate -> portability -> reconciliation -> consultation -> yardsticks) and gate-driven sequence; widening what the loop SEES must follow scoping what it CONSULTS. Rationale only. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)

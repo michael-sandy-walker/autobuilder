@@ -204,6 +204,59 @@ class ClaimRefutationAttributionTest {
     }
 
     @Test
+    void theWorkItemsTextIsBuiltFromTheCriteriaSoItIsSTABLEAcrossProbeRuns() {
+        // FIELD DEFECT, run 2026-09-20_09-43-23. The description was built from the refutation's
+        // prose, which embeds the probe's temporary fixture path (/tmp/boot-gate-fixture<random>).
+        // Two refusals of the same claim therefore produced textually DIFFERENT items, the
+        // similarity dedup never matched, and each refusal cloned the last -- three identical
+        // items in 100 seconds. The criteria are the planner's own words and do not move.
+        service.setClosureClaimVerifier((goalId, criteria, specText) ->
+                Optional.of(new ClaimRefutation(
+                        "exited 1 but never said \"no such file: /tmp/boot-gate-fixture"
+                                + System.nanoTime() + "\"", List.of(REFUTED))));
+
+        service.promoteCurrentSubGoal();
+
+        GoalEntity item = service.getAllGoals().stream()
+                .filter(g -> g.getDescription() != null && g.getDescription().startsWith("[BUILD_FIX]"))
+                .findFirst().orElseThrow();
+        assertThat(item.getDescription())
+                .as("the volatile fixture path must not reach the item's text, or dedup cannot work")
+                .doesNotContain("boot-gate-fixture")
+                .contains(REFUTED);
+    }
+
+    @Test
+    void aRepairItemThatIsItselfRefusedDoesNotCloneItself() {
+        // The same field defect's other half: the injected item's done-when IS the refuted
+        // criteria, so refusing it means the repair has not landed -- it should keep being
+        // worked, not spawn a twin.
+        //
+        // The refutation text VARIES per call on purpose. With a constant one the similarity
+        // dedup rescues the tree by itself and this test passes whether or not the guard exists
+        // -- which it did, until the known-negative check caught it pinning nothing. Varying the
+        // text is what isolates the guard from the dedup.
+        service.setClosureClaimVerifier((goalId, criteria, specText) ->
+                Optional.of(new ClaimRefutation(
+                        "answered 201 at /tmp/boot-gate-fixture" + System.nanoTime(),
+                        List.of(REFUTED))));
+
+        service.promoteCurrentSubGoal();      // refuses S, injects the repair item
+        long afterFirst = service.getAllGoals().stream()
+                .filter(g -> g.getDescription() != null && g.getDescription().startsWith("[BUILD_FIX]"))
+                .count();
+        service.promoteCurrentSubGoal();      // now the repair item itself is refused
+        service.promoteCurrentSubGoal();
+
+        assertThat(afterFirst).isEqualTo(1);
+        assertThat(service.getAllGoals().stream()
+                .filter(g -> g.getDescription() != null && g.getDescription().startsWith("[BUILD_FIX]"))
+                .count())
+                .as("a refused repair item must not clone itself, however often it is refused")
+                .isEqualTo(1L);
+    }
+
+    @Test
     void anUnattributedRefutationRaisesNoRepairItem() {
         // An artifact that will not boot is the build gates' problem and they raise their own
         // items. An item saying only "this claim is false" re-asks the same question at more cost.

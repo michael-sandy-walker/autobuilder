@@ -2275,9 +2275,30 @@ public class GoalPlannerService {
         if (goalId == null || refutation == null || !refutation.isAttributed()) return;
         GoalEntity root = getRootGoal();
         if (root == null) return;
+
+        // T4-CU 2026-09-20: a repair item that is ITSELF refused must not clone itself. Its
+        // done-when IS the refuted criteria, so a refusal means the repair has not landed yet —
+        // the item should keep being worked, not spawn a twin. Measured in run
+        // 2026-09-20_09-43-23: three identical items in 100 seconds, one per refusal, until the
+        // run was stopped; half the goal tree was duplicates.
+        GoalEntity refused = goalMap.get(goalId);
+        if (refused != null && BlockerTypes.isFromCriteriaGate(refused.getMetadata())) {
+            log.info("T4-CU: {} is itself a criteria-gate repair item — not injecting a twin;"
+                    + " the existing item stays the work", goalId);
+            return;
+        }
+
+        // T4-CU 2026-09-20: the description is built from the CRITERIA, not from the refutation's
+        // prose. The prose embeds the probe's temporary fixture path
+        // (/tmp/boot-gate-fixture<random>), so every injection was textually unique and the
+        // similarity dedup in injectCoverageGaps could never match one against the next. The
+        // criteria are the planner's own words and stable across probe runs, which is what makes
+        // dedup work — and they are already this item's done-when, so there is one source rather
+        // than two. The volatile detail stays in the log, where it belongs.
         CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                 "[BUILD_FIX] The running artifact contradicts acceptance criteria this work item"
-                        + " closed on — repair the code so they hold: " + refutation.description()));
+                        + " closed on — repair the code so they hold: "
+                        + String.join("; ", refutation.refutedCriteria())));
         if (injected.injected().isEmpty()) {
             log.info("T4-CU: no repair item injected for {} — the gap was deduped or limited", goalId);
             return;

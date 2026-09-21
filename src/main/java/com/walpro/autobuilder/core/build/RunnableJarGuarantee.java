@@ -98,6 +98,38 @@ public final class RunnableJarGuarantee {
         }
     }
 
+    /**
+     * T1-GD: whether the project's own sources say it is meant to be LAUNCHED at all — exactly the
+     * question {@link #repairedPom} asks before it offers a repair, exposed so a caller that only
+     * wants the verdict need not ask it a second way.
+     *
+     * <p><b>Why a launchability check is incomplete without it.</b> "This archive declares no entry
+     * point" is true of a library, and a library owes none. Acting on the first question alone
+     * turns a correct artifact into a defect and demands a completion model the specification never
+     * asked for — which is the asymmetry T4-DD item 3 removed one level down, where an artifact
+     * that terminated by design was reported as one that crashed at startup. Two main methods
+     * answer {@code false} for the same reason they do above: the check can say the jar will not
+     * run and cannot say what it should have run.
+     */
+    static boolean sourcesNameSoleEntryPoint(Path artifactRoot) {
+        if (artifactRoot == null) return false;
+        Path sourceRoot = artifactRoot.resolve("src");
+        if (!Files.isDirectory(sourceRoot)) return false;
+        Map<String, String> sources = new java.util.LinkedHashMap<>();
+        try (java.util.stream.Stream<Path> walk = Files.walk(sourceRoot)) {
+            for (Path p : walk.filter(Files::isRegularFile)
+                    .filter(f -> f.getFileName().toString().endsWith(".java"))
+                    .toList()) {
+                sources.put(artifactRoot.relativize(p).toString(), Files.readString(p));
+            }
+        } catch (IOException | RuntimeException e) {
+            // Unreadable sources are not evidence that the project owes an entry point.
+            log.debug("T1-GD: could not read sources under {} — {}", sourceRoot, e.getMessage());
+            return false;
+        }
+        return BootstrapPomResolver.soleMainClassOf(sources) != null;
+    }
+
     private static Optional<Path> builtJar(Path artifactRoot) {
         Path target = artifactRoot.resolve("target");
         if (!Files.isDirectory(target)) return Optional.empty();

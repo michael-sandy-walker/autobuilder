@@ -205,12 +205,11 @@ public class PackageGate {
 
             Optional<java.nio.file.Path> archive = newestArchive(buildDir.resolve("target"));
             if (archive.isEmpty()) return Optional.empty();
-            try (java.util.jar.JarFile jar = new java.util.jar.JarFile(archive.get().toFile())) {
-                java.util.jar.Manifest manifest = jar.getManifest();
-                String mainClass = manifest == null ? null
-                        : manifest.getMainAttributes().getValue("Main-Class");
-                if (mainClass != null && !mainClass.isBlank()) return Optional.empty();
-            }
+            // T1-GD: one home for "can this archive be entered" — the same read this gate used to
+            // do inline, and the same one the boot gate now asks before it probes a terminating
+            // artifact's criteria. Unchanged in outcome: both treat an unreadable archive as no
+            // answer rather than a block.
+            if (RunnableJarGuarantee.declaresEntryPoint(archive.get())) return Optional.empty();
             String failure = "packaging succeeded but the produced archive " + archive.get().getFileName()
                     + " carries no entry-point manifest attribute and cannot be launched — the build config"
                     + " declares an application-packaging plugin but its packaging execution never ran;"

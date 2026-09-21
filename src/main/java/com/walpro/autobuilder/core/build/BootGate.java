@@ -317,6 +317,49 @@ public class BootGate {
                 // merge 12. Note the asymmetry cost nothing on a served target — where the spec
                 // names endpoints, every branch below is exactly what it was.
                 if (declared.isEmpty()) {
+                    // T1-GD: before asking what the status MEANS, ask whether the program ran.
+                    //
+                    // An archive the launcher cannot enter terminates non-zero without executing a
+                    // line, and "exits non-zero on bad input" is a status a specification states
+                    // routinely — so on this branch alone a criterion could be probed, observed to
+                    // match, and recorded as holding against code that never started. Measured for
+                    // nineteen minutes in run 2026-09-20_09-55-09: the status agreed and only a
+                    // quoted-message assertion, which that artifact happened to carry, caught it.
+                    //
+                    // The serving branch has never had this hole — an artifact that cannot start
+                    // never becomes ready, so its criteria are not reached — and its refusal is
+                    // deliberately unattributed for the same reason this one is: a verdict the
+                    // artifact did not earn belongs to no criterion.
+                    //
+                    // Asked of the ARCHIVE, not of the launcher's complaint, so no ecosystem's
+                    // wording enters this class: {@link RunnableJarGuarantee#declaresEntryPoint}
+                    // is the home for that question and answers "nothing is wrong" for anything
+                    // it cannot open — a target launched some other way keeps its probes.
+                    //
+                    // ⚠ AND THE SECOND QUESTION IS WHAT MAKES THE FIRST SAFE. "Declares no entry
+                    // point" is also true of a LIBRARY, which owes none. Refuting on the archive
+                    // alone told a correct library to "declare the entry point the sources
+                    // provide" — T4-DD item 3's own defect rebuilt one level up, demanding a
+                    // completion model the specification never asked for, and the misreading that
+                    // cost the CLI target 25 of 37 merges. So the project's own sources decide
+                    // whether it is meant to be launched, through the same home that already
+                    // asks it before offering the repair. Cheap question first: the manifest read
+                    // short-circuits the tree walk on every healthy artifact.
+                    if (!RunnableJarGuarantee.declaresEntryPoint(artifact)
+                            && RunnableJarGuarantee.sourcesNameSoleEntryPoint(workingDir)) {
+                        log.info("T1-GD: {} declares no entry point — the criterion probe abstains;"
+                                + " no status it observed would be the criterion's own",
+                                artifact.getFileName());
+                        // Refuted rather than abstained-from, because empty here means "nothing
+                        // contradicted the claim" and the closure would proceed on exactly the
+                        // unearned pass this guard exists to stop. It also routes: the closure
+                        // edge answers a boot failure by trying the deterministic packaging
+                        // repair before it asks anyone else.
+                        return Optional.of(ClaimRefutation.unattributed(
+                                "the packaged artifact declares no entry point, so it cannot be"
+                                + " launched and nothing the specification asks of it has been"
+                                + " observed — declare the entry point the sources provide"));
+                    }
                     // T4-DD item 2: the artifact terminated and its specification asked for no
                     // served surface, so THIS is the shape whose criteria state an exit status.
                     // Ask them. Item 3 alone left the gate with nothing to ask a terminating

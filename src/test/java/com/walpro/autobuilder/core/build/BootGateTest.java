@@ -182,6 +182,153 @@ class BootGateTest {
                         false)).isEmpty();
     }
 
+    /**
+     * T1-GD, measured over nineteen minutes of run 2026-09-20_09-55-09: an archive the launcher
+     * cannot enter terminates non-zero without running a line, and a criterion stating only a
+     * non-zero status therefore MATCHES it. The fixture below is that artifact — a real, openable
+     * jar carrying no entry point — and the criterion is the shape a specification writes
+     * routinely. Before the guard the gate returned empty here, which the closure verifier reads
+     * as "nothing contradicted the claim": a criterion recorded as holding against code that never
+     * started.
+     *
+     * <p>The criterion is deliberately one the parser ACCEPTS and the probe would SATISFY, so the
+     * test fails if the guard is removed rather than passing for a second reason.
+     */
+    /**
+     * The fixture the field case actually has: an archive with no entry point, beside sources that
+     * name exactly one. Both halves matter — the archive is why it cannot run, and the source is
+     * why the project is owed an entry point at all.
+     */
+    private void unlaunchableArtifactOfALaunchableProject() throws Exception {
+        writeEntryPointSource("Main");
+        packageUnlaunchable("app.jar");
+    }
+
+    /** A source declaring one entry point. Written BEFORE the archive — see {@link #packageUnlaunchable}. */
+    private void writeEntryPointSource(String type) throws Exception {
+        Path src = tempDir.resolve("src/main/java/com/example/cli/" + type + ".java");
+        Files.createDirectories(src.getParent());
+        Files.writeString(src, """
+                package com.example.cli;
+                public class %s {
+                    public static void main(String[] args) { }
+                }
+                """.formatted(type));
+    }
+
+    /**
+     * The archive, written LAST so it is newer than the sources. Order is not cosmetic: the gate
+     * abstains outright when the artifact predates the sources, so a fixture built the other way
+     * round passes the entry-point tests for a reason that has nothing to do with entry points —
+     * and did, intermittently, until a same-millisecond write made it visible.
+     */
+    private void packageUnlaunchable(String jarName) throws Exception {
+        Path target = tempDir.resolve("target");
+        Files.createDirectories(target);
+        writeMinimalJar(target.resolve(jarName));
+    }
+
+    @Test
+    void anArtifactThatCannotBeLaunched_isNotAllowedToSatisfyAStatusOnlyCriterion() throws Exception {
+        unlaunchableArtifactOfALaunchableProject();
+
+        Optional<String> blocker = gate(true, "java -jar {artifact}", "", 2000)
+                .verifyBootsAndServes("c", "Produce a delimited-text checking tool.",
+                        List.of("Running `java -jar app.jar unknown` prints an error"
+                                + " and exits with code 1"),
+                        false);
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("declares no entry point");
+        // The verdict belongs to the artifact, not to the criterion that happened to be offered.
+        assertThat(blocker.get()).doesNotContain("unknown").doesNotContain("acceptance criteria");
+    }
+
+    /**
+     * T1-GD's other half: the question is asked of the ARCHIVE, so it names no launcher and no
+     * ecosystem. A target the gate launches some other way — every command-branch fixture in this
+     * class is one — is not an archive at all, and keeps its probes rather than being silenced by
+     * a check that could not read it.
+     */
+    @Test
+    void anArtifactTheEntryPointQuestionCannotBeAskedOf_keepsItsCriterionProbes() throws Exception {
+        terminatingArtifact();   // a script, not an archive — unopenable as one
+
+        Optional<String> blocker = gate(true, "sh {artifact}", "", 2000)
+                .verifyBootsAndServes("c", "Produce a delimited-text checking tool.",
+                        List.of("Running `sh app.jar frobnicate` prints an error and exits with code 3"),
+                        false);
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("acceptance criteria fail").contains("exited 9");
+    }
+
+    /**
+     * T1-GD: the half that makes the check above safe rather than merely correct. "Declares no
+     * entry point" is TRUE of a library, and a library owes none — so refuting on the archive
+     * alone told a correct artifact to declare an entry point its sources never named, which is
+     * T4-DD item 3's own defect one level up. The project's sources, not the archive, decide
+     * whether it was ever meant to be launched.
+     */
+    @Test
+    void aLibraryOwesNoEntryPoint_soTheGateHoldsNoOpinionAboutIt() throws Exception {
+        Path src = tempDir.resolve("src/main/java/com/example/text/Formatter.java");
+        Files.createDirectories(src.getParent());
+        // No main method anywhere: this project owes nobody a way to start it.
+        Files.writeString(src, """
+                package com.example.text;
+                public class Formatter {
+                    public String format(String value) { return value; }
+                }
+                """);
+        packageUnlaunchable("lib.jar");
+
+        assertThat(gate(true, "java -jar {artifact}", "", 2000)
+                .verifyBootsAndServes("c",
+                        "Provide a reusable text-formatting library for other projects to depend on.",
+                        List.of("The formatter preserves embedded separators inside quoted values"),
+                        false))
+                .as("a library owes no entry point; the gate has no expectation to judge")
+                .isEmpty();
+    }
+
+    /**
+     * And the same abstention when the sources name TWO entry points — the check can say the
+     * archive will not run and cannot say which of them it should have run, so it says nothing.
+     */
+    @Test
+    void twoCandidateEntryPoints_leaveTheGateWithNothingItCanDemand() throws Exception {
+        writeEntryPointSource("Main");
+        writeEntryPointSource("Tool");
+        packageUnlaunchable("app.jar");
+
+        assertThat(gate(true, "java -jar {artifact}", "", 2000)
+                .verifyBootsAndServes("c", "Produce a delimited-text checking tool.",
+                        List.of("Running `java -jar app.jar unknown` prints an error"
+                                + " and exits with code 1"),
+                        false))
+                .isEmpty();
+    }
+
+    /** T1-GD: the refusal is a work-item description, so it carries no ecosystem's vocabulary. */
+    @Test
+    void theUnlaunchableRefusalNamesNoLauncherAndNoEcosystem() throws Exception {
+        unlaunchableArtifactOfALaunchableProject();
+
+        Optional<String> blocker = gate(true, "java -jar {artifact}", "", 2000)
+                .verifyBootsAndServes("c", "Produce a delimited-text checking tool.",
+                        List.of("Running `java -jar app.jar unknown` prints an error"
+                                + " and exits with code 1"),
+                        false);
+
+        assertThat(blocker).isPresent();
+        String lower = blocker.get().toLowerCase(java.util.Locale.ROOT);
+        for (String banned : List.of("java", "jar", "manifest", "main-class", "mainclass",
+                "classpath", "spring", "boot", "plugin")) {
+            assertThat(lower).as("framework text must not name '%s'", banned).doesNotContain(banned);
+        }
+    }
+
     /** A specification that declares an operation surface, as the field runs' seeds do. */
     private static final String CLI_SPEC = """
             Produce a delimited-text checking tool.

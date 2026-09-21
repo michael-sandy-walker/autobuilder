@@ -28,3 +28,34 @@ Distinct from [[feedback-verify-population-before-claim]] (scan the WHOLE popula
 cache): that one is about the population being complete, this one about it being the RIGHT one.
 Related: [[feedback-replay-over-batches]] — a deterministic replay over a fixed corpus does not have
 this problem, which is another reason to prefer it for anything that is not an occurrence question.
+
+**2026-09-21 — the build is not the only thing that has to be constant. THE TARGET DOES TOO, and this
+corpus gained two mid-stream.** Asked whether 92 pooled runs were comparable, I checked and they were
+not: `clitarget` entered around 2026-08-25 and `flightsim` around 08-28, and they look at their
+artifact at very different rates (clitarget 0.711 package-gate visits per cycle against firestarter's
+0.398). My pooled figure of "0.188 vs 0.500" was a blend of two populations. Re-run on firestarter
+alone the same comparison reads **0.105 vs 0.458, a 4.4x gap** — the conclusion strengthened and every
+number I had quoted was wrong.
+
+**Targets are a harder axis than builds, because a target changes what a measurement MEANS, not just
+its value.** `clitarget` is a non-serving command-line target: its boot gate is not asking the
+question firestarter's is, and its yardstick has 19 checks against 23. Pooling those is
+[[feedback-baseline-before-accuracy]]'s fourth lie — a denominator that means something different per
+row — arriving through the population rather than the parse.
+
+**This cost me twice in one session, which is what makes it worth writing down.** The same morning,
+`scripts/failure_family.py` was found with firestarter's check count pinned into a regex, putting 23
+of 96 scoring runs into a failure distribution. Same root cause: **the project became multi-target at
+the end of August and the analysis habits did not follow.** Single-target instincts stay silently
+correct for months and then quietly average two things.
+
+**How to apply, added to the list above:**
+- Before pooling ANY cross-run statistic, split by target first and look at the per-target values.
+  Pool only if they agree; report them split if they do not. Do this before the build-window check,
+  since it is cheaper and bites harder.
+- State which axes you checked and which you did not. On this occasion three moved inside the window
+  (targets, the T4-DQ rewind capturing the counter being measured, and `BootGate` changing on the
+  3 newest runs) and one did not (the model swap landed 27 minutes before the earliest run — luck,
+  not design).
+- A statistic that survives the split is worth MORE, not less: here the headline held at 26%/22%/33%
+  across targets while the rate it was built on did not.

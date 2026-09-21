@@ -3402,21 +3402,13 @@ public class GoalPlannerService {
      */
     private boolean applyRunnablePackagingRepair() {
         if (currentCycleContext == null || currentCycleContext.outputPath() == null) return false;
-        java.util.Map<String, String> sources = currentCycleContext.previousOutput();
-        if (sources == null || sources.isEmpty()) return false;
-        String pomPath = sources.containsKey("pom.xml") ? "pom.xml" : null;
-        if (pomPath == null) return false;
-        try {
-            Path root = Path.of(currentCycleContext.outputPath());
-            java.util.Optional<String> repaired = com.walpro.autobuilder.core.build.RunnableJarGuarantee
-                    .repairedPom(root, sources.get(pomPath), sources);
-            if (repaired.isEmpty()) return false;
-            java.nio.file.Files.writeString(root.resolve(pomPath), repaired.get());
-            return true;
-        } catch (Exception e) {
-            log.warn("T4-DO: could not apply the packaging repair — {}", e.toString());
-            return false;
-        }
+        // T4-DO (routing, 2026-09-21): delegated so the WRITE has one home. This method used to
+        // read the pom out of the cycle context and write it itself; the boot gate now applies the
+        // same repair per cycle, and two copies of "which pom does this project need, and where
+        // does it get written" is the shape that produced the seven-gate closure bypass. The
+        // project on disk is what the package gate just built from and what it will rebuild from.
+        return com.walpro.autobuilder.core.build.RunnableJarGuarantee
+                .repairOnDisk(Path.of(currentCycleContext.outputPath()));
     }
 
     public void autoCompleteRootIfSatisfied() {
@@ -3723,10 +3715,17 @@ public class GoalPlannerService {
                     // exact defect — and T4-DO fired zero times, because the run stalled at 29
                     // cycles with 0 closure attempts and 0 boot-gate runs. **A run whose artifact
                     // cannot run is precisely the run that stalls before closure**, so gating the
-                    // repair here makes it unreachable for the case it exists for. The packaging
-                    // check now also runs after the package gate (see applyRunnablePackagingRepair
-                    // call in the packaging branch above); this call remains as the closure-edge
-                    // backstop for the runs that DO get here, which is how clitarget exercised it.
+                    // repair here makes it unreachable for the case it exists for.
+                    //
+                    // ⚠ CORRECTED 2026-09-21: this comment used to claim the check "now also runs
+                    // after the package gate", pointing at the second call further down. Both call
+                    // sites are inside THIS method, so the 2026-08-28 fix moved the call within
+                    // the unreachable region rather than out of it, and the ticket recorded it as
+                    // fixed. Run 2026-09-21_00-32-59 measured the consequence: thirty minutes with
+                    // an unlaunchable jar, closure_attempts=0, this repair firing zero times. The
+                    // real per-cycle route is now the boot gate's own T1-GD branch; both calls
+                    // here remain as the closure-edge backstop for runs that DO get here, which is
+                    // how clitarget exercised it.
                     // Before asking the MODEL to make the artifact runnable, check whether
                     // the answer is deterministic. A jar with no Main-Class cannot run and the
                     // sources say what it should run; that repair needs no model and no ecosystem
@@ -3762,9 +3761,15 @@ public class GoalPlannerService {
                     return;
                 }
             }
-            // T4-DO: a jar exists as soon as packaging succeeds, which is many cycles before any
-            // closure attempt — and on a stalling run, before the only other chance. Repair here
-            // and block this cycle; the next package gate rebuilds against the repaired pom.
+            // T4-DO: reached when the boot gate did not block — it abstained, is disabled, or
+            // found no fresh artifact — so the packaging question still has to be asked before the
+            // root may close. Repair here and block this cycle; the next package gate rebuilds
+            // against the repaired pom.
+            //
+            // ⚠ This is NOT the early route it was written as. The original comment read "a jar
+            // exists as soon as packaging succeeds, which is many cycles before any closure
+            // attempt" — but reaching this line IS a closure attempt, so on a run that never gets
+            // here the repair never fires. That route is the boot gate's T1-GD branch.
             if (applyRunnablePackagingRepair()) {
                 log.warn("T4-DO: the packaged artifact could not run; declared its entry point "
                         + "deterministically at the packaging edge. Next cycle rebuilds.");

@@ -139,4 +139,64 @@ class RunnableJarGuaranteeTest {
         assertThat(repaired).contains("maven-surefire-plugin");   // the project's own config kept
         assertThat(repaired).contains("<mainClass>com.demo.Main</mainClass>");
     }
+
+    /**
+     * T4-DO (routing, 2026-09-21). Between writing the pom and the next package the JAR still
+     * carries no {@code Main-Class} — the jar is the authority, and it has not been rebuilt yet —
+     * so every caller in that window gets the same non-empty answer. At the closure edge that
+     * never showed, because its one call site returned immediately. On the per-cycle route it
+     * does: the guard fired FIVE times in run 2026-09-21_00-32-59, and freshness does not stop it
+     * because {@code artifactOlderThanSources} walks {@code src/} and never reads {@code pom.xml}.
+     * Without the idempotence check this appends the plugin block once per firing.
+     */
+    @Test
+    void theRepairIsNotWrittenTwiceWhileTheJarAwaitsItsRebuild() throws IOException {
+        writeJar("demo.jar", null);
+        writeProjectOnDisk(POM_WITH_DEPENDENCY);
+
+        assertThat(RunnableJarGuarantee.repairOnDisk(root)).isTrue();
+        String afterFirst = Files.readString(root.resolve("pom.xml"));
+
+        // The jar is untouched — exactly the state the next four firings of the gate would see.
+        assertThat(RunnableJarGuarantee.repairOnDisk(root)).isFalse();
+
+        assertThat(Files.readString(root.resolve("pom.xml"))).isEqualTo(afterFirst);
+        assertThat(afterFirst.split("<mainClass>", -1)).hasSize(2);
+        assertThat(afterFirst.split("maven-jar-plugin", -1)).hasSize(2);
+    }
+
+    /** The disk form decides nothing the in-memory form does not: a library is still left alone. */
+    @Test
+    void repairOnDisk_leavesAProjectThatOwesNoEntryPointAlone() throws IOException {
+        writeJar("demo.jar", null);
+        Path src = root.resolve("src/main/java/com/demo/Library.java");
+        Files.createDirectories(src.getParent());
+        Files.writeString(src, "package com.demo;\npublic class Library { public int add(int a) { return a; } }\n");
+        Files.writeString(root.resolve("pom.xml"), POM_WITH_DEPENDENCY);
+
+        assertThat(RunnableJarGuarantee.repairOnDisk(root)).isFalse();
+        assertThat(Files.readString(root.resolve("pom.xml"))).isEqualTo(POM_WITH_DEPENDENCY);
+    }
+
+    /** No pom is not a project this can repair, and it must not throw looking for one. */
+    @Test
+    void repairOnDisk_withNoPom_abstains() throws IOException {
+        writeJar("demo.jar", null);
+        writeProjectSources();
+
+        assertThat(RunnableJarGuarantee.repairOnDisk(root)).isFalse();
+    }
+
+    private void writeProjectOnDisk(String pom) throws IOException {
+        writeProjectSources();
+        Files.writeString(root.resolve("pom.xml"), pom);
+    }
+
+    private void writeProjectSources() throws IOException {
+        for (Map.Entry<String, String> e : ONE_ENTRY_POINT.entrySet()) {
+            Path f = root.resolve(e.getKey());
+            Files.createDirectories(f.getParent());
+            Files.writeString(f, e.getValue());
+        }
+    }
 }

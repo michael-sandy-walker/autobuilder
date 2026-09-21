@@ -368,9 +368,16 @@ public class BootGate {
                                 artifact.getFileName());
                         // Refuted rather than abstained-from, because empty here means "nothing
                         // contradicted the claim" and the closure would proceed on exactly the
-                        // unearned pass this guard exists to stop. It also routes: the closure
-                        // edge answers a boot failure by trying the deterministic packaging
-                        // repair before it asks anyone else.
+                        // unearned pass this guard exists to stop.
+                        //
+                        // T4-DO (routing, 2026-09-21): this gate OBSERVES and does not repair.
+                        // The deterministic packaging repair briefly lived on this line, which
+                        // fixed its reachability and mistimed it: the self-check packages and then
+                        // boots, so a pom written here lands seconds after a build and waits a
+                        // whole interval (4 cycles) to be used. It is asked in PackageGate instead,
+                        // immediately before the build that consumes it, where the package gate's
+                        // own verifyDeclaredEntryPointExists() then checks the declaration against
+                        // the build output rather than the repair certifying itself.
                         return Optional.of(ClaimRefutation.unattributed(
                                 "the packaged artifact declares no entry point, so it cannot be"
                                 + " launched and nothing the specification asks of it has been"

@@ -2,9 +2,16 @@ package com.walpro.autobuilder.core.build;
 
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.jar.Attributes;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -277,5 +284,89 @@ class PackageGateTest {
         // Gate disabled → no build invocation at all.
         assertThat(gate(false).verifyPackageable("c")).isEmpty();
         verify(buildExecutor, never()).execute(any(), any(), eq(null));
+    }
+
+    // --- T4-DO: the deterministic packaging repair, asked immediately before the build ---
+
+    @TempDir
+    Path project;
+
+    /**
+     * The claim is not "the pom gets written" but "the build that follows uses it", so the pom is
+     * read AT THE MOMENT {@code execute} is called rather than afterwards. Written the other way
+     * round this passes even if the repair lands after the build, which is the mistiming that made
+     * the boot-gate placement wrong: the self-check packages and then boots, so a repair applied
+     * at the boot gate waits a whole 4-cycle interval for a build to consume it.
+     */
+    @Test
+    void theRepairIsAppliedBeforeTheBuildThatConsumesIt() throws Exception {
+        unlaunchableJarBesideOneEntryPoint();
+        AtomicReference<String> pomSeenByTheBuild = new AtomicReference<>();
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.resolveWorkingDir(any())).thenReturn(project.toString());
+        when(buildExecutor.execute(any(), any(), any())).thenAnswer(inv -> {
+            pomSeenByTheBuild.set(Files.readString(project.resolve("pom.xml")));
+            return new BuildOutcome(BuildResult.COMPILE_OK, "", 900L, "mvn package -DskipTests", "c");
+        });
+
+        gate(true).verifyPackageable("c");
+
+        assertThat(pomSeenByTheBuild.get()).contains("<mainClass>com.example.cli.Main</mainClass>");
+    }
+
+    /**
+     * The case the repair must DECLINE. A library owes no entry point, and repairing one into it
+     * demands a completion model the specification never asked for — T4-DD item 3's own defect.
+     */
+    @Test
+    void aProjectOwingNoEntryPoint_isNotRepairedIntoHavingOne() throws Exception {
+        writeCliSource("Library", "public class Library { public int add(int a) { return a; } }");
+        unlaunchableJar();
+        String pom = minimalPom();
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.resolveWorkingDir(any())).thenReturn(project.toString());
+        when(buildExecutor.execute(any(), any(), any()))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_OK, "", 900L, "mvn package -DskipTests", "c"));
+
+        gate(true).verifyPackageable("c");
+
+        assertThat(Files.readString(project.resolve("pom.xml"))).isEqualTo(pom);
+    }
+
+    private void unlaunchableJarBesideOneEntryPoint() throws Exception {
+        writeCliSource("Main", "public class Main { public static void main(String[] args) { } }");
+        unlaunchableJar();
+        minimalPom();
+    }
+
+    private void writeCliSource(String type, String body) throws Exception {
+        Path src = project.resolve("src/main/java/com/example/cli/" + type + ".java");
+        Files.createDirectories(src.getParent());
+        Files.writeString(src, "package com.example.cli;\n" + body + "\n");
+    }
+
+    /** Written after the sources, as a real build produces it. */
+    private void unlaunchableJar() throws Exception {
+        Path target = Files.createDirectories(project.resolve("target"));
+        Manifest manifest = new Manifest();
+        manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        try (JarOutputStream out = new JarOutputStream(
+                Files.newOutputStream(target.resolve("app.jar")), manifest)) {
+            out.flush();
+        }
+    }
+
+    private String minimalPom() throws Exception {
+        String pom = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                    <modelVersion>4.0.0</modelVersion>
+                    <groupId>com.example</groupId>
+                    <artifactId>cli</artifactId>
+                    <version>0.0.1-SNAPSHOT</version>
+                </project>
+                """;
+        Files.writeString(project.resolve("pom.xml"), pom);
+        return pom;
     }
 }

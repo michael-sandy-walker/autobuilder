@@ -49,6 +49,7 @@ public final class RunnableJarGuarantee {
     private static final Pattern HAS_DEPENDENCY = Pattern.compile("<dependency>\\s*<groupId>", Pattern.DOTALL);
     private static final Pattern DEPENDENCY_BLOCK = Pattern.compile("<dependency>(.*?)</dependency>", Pattern.DOTALL);
     private static final Pattern BUILD_OPEN = Pattern.compile("<build>\\s*<plugins>", Pattern.DOTALL);
+    private static final Pattern MAIN_CLASS_ELEMENT = Pattern.compile("<mainClass>(.*?)</mainClass>", Pattern.DOTALL);
 
     private RunnableJarGuarantee() {}
 
@@ -72,6 +73,21 @@ public final class RunnableJarGuarantee {
             // jar will not run, and cannot say what it should have run.
             log.info("T4-DO: {} declares no Main-Class and the sources name no single entry point — "
                     + "abstaining rather than choosing one", jar.get().getFileName());
+            return Optional.empty();
+        }
+
+        // T4-DO (routing, 2026-09-21): the jar stays the authority for "is packaging configured"
+        // — that is the question needing a plugin-name table, and it is still not asked here. This
+        // asks a different and much narrower one: is THIS repair already in the pom, waiting for a
+        // rebuild? Between writing the pom and the next package the jar still carries no
+        // Main-Class, so every caller in that window gets the same non-empty answer. At the
+        // closure edge that never showed, because the one call site returned immediately. On the
+        // per-cycle path it does: the T1-GD guard fired five times in run 2026-09-21_00-32-59, and
+        // freshness does not stop it — artifactOlderThanSources walks src/ and never reads
+        // pom.xml, so a written pom leaves the gate believing the artifact is current.
+        if (declaresEntryPointInPom(pom, mainClass)) {
+            log.debug("T4-DO: the pom already declares entry point {} — the repair is written and "
+                    + "waiting for a rebuild, abstaining rather than writing it twice", mainClass);
             return Optional.empty();
         }
 
@@ -113,8 +129,25 @@ public final class RunnableJarGuarantee {
      */
     static boolean sourcesNameSoleEntryPoint(Path artifactRoot) {
         if (artifactRoot == null) return false;
+        return BootstrapPomResolver.soleMainClassOf(readSources(artifactRoot)) != null;
+    }
+
+    /**
+     * Whether this class's own repair is already present in the pom for {@code mainClass}. Not the
+     * "is packaging configured" question — that one needs a table of plugin names and the jar
+     * answers it instead. This one only prevents writing the same block twice while the jar has
+     * not yet been rebuilt against it.
+     */
+    static boolean declaresEntryPointInPom(String pom, String mainClass) {
+        if (pom == null || mainClass == null) return false;
+        return MAIN_CLASS_ELEMENT.matcher(pom).results()
+                .anyMatch(r -> mainClass.equals(r.group(1).trim()));
+    }
+
+    /** The project's own {@code .java} sources, keyed by their path relative to the root. */
+    private static Map<String, String> readSources(Path artifactRoot) {
         Path sourceRoot = artifactRoot.resolve("src");
-        if (!Files.isDirectory(sourceRoot)) return false;
+        if (!Files.isDirectory(sourceRoot)) return Map.of();
         Map<String, String> sources = new java.util.LinkedHashMap<>();
         try (java.util.stream.Stream<Path> walk = Files.walk(sourceRoot)) {
             for (Path p : walk.filter(Files::isRegularFile)
@@ -124,10 +157,43 @@ public final class RunnableJarGuarantee {
             }
         } catch (IOException | RuntimeException e) {
             // Unreadable sources are not evidence that the project owes an entry point.
-            log.debug("T1-GD: could not read sources under {} — {}", sourceRoot, e.getMessage());
+            log.debug("T4-DO: could not read sources under {} — {}", sourceRoot, e.getMessage());
+            return Map.of();
+        }
+        return sources;
+    }
+
+    /**
+     * T4-DO (routing, 2026-09-21): applies the repair to the project on disk, reading the pom and
+     * the sources from the tree itself. Returns true when the pom was changed — the caller's next
+     * package rebuilds against it.
+     *
+     * <p><b>Why this exists as a second entry point.</b> The repair had exactly one caller, inside
+     * {@code autoCompleteRootIfSatisfied}, which is the CLOSURE edge. A run whose artifact cannot
+     * run is precisely the run that stalls before closure, so the repair stood behind a milestone
+     * the defect prevents the run from reaching: run 2026-09-21_00-32-59 spent thirty minutes with
+     * an unlaunchable jar, {@code closure_attempts=0}, and this repair firing zero times. That was
+     * recorded as fixed in August by adding a second call "after the package gate" — but both call
+     * sites sit inside the same method, so the call moved within the unreachable region rather
+     * than out of it. This overload is callable from a gate that runs every cycle, where the jar
+     * first exists.
+     *
+     * <p>It decides nothing the in-memory form does not: same questions, same abstentions.
+     */
+    public static boolean repairOnDisk(Path artifactRoot) {
+        if (artifactRoot == null) return false;
+        Path pomPath = artifactRoot.resolve("pom.xml");
+        if (!Files.isRegularFile(pomPath)) return false;
+        try {
+            String pom = Files.readString(pomPath);
+            Optional<String> repaired = repairedPom(artifactRoot, pom, readSources(artifactRoot));
+            if (repaired.isEmpty()) return false;
+            Files.writeString(pomPath, repaired.get());
+            return true;
+        } catch (IOException | RuntimeException e) {
+            log.warn("T4-DO: could not apply the packaging repair under {} — {}", artifactRoot, e.toString());
             return false;
         }
-        return BootstrapPomResolver.soleMainClassOf(sources) != null;
     }
 
     private static Optional<Path> builtJar(Path artifactRoot) {

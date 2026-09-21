@@ -101,6 +101,37 @@ public class PackageGate {
         if (!enabled || !buildExecutor.isEnabled()) {
             return Optional.empty();
         }
+        // T4-DO (routing, 2026-09-21): the deterministic packaging repair is applied HERE, in the
+        // one place that builds, so the repaired pom is consumed by the build that follows on the
+        // very next line.
+        //
+        // It sat at the CLOSURE edge for a month instead — both call sites inside
+        // autoCompleteRootIfSatisfied — and a run whose artifact cannot run is precisely the run
+        // that stalls before closure: run 2026-09-21_00-32-59 refused on the boot gate five times
+        // with closure_attempts=0 and this repair firing zero times. Routing it to the boot gate's
+        // own detection point fixed the reachability and bought a new problem: the self-check
+        // packages and THEN boots, so a repair written at the boot gate lands seconds after a
+        // build and waits a whole self-check interval (4 cycles) for the next one. Asked before
+        // the build instead, the same cycle that detects it also observes the fix.
+        //
+        // The jar it inspects is the PREVIOUS build's, which is the same authority argument as
+        // everywhere else in RunnableJarGuarantee: the jar answers "can this be launched", and no
+        // list of build-plugin names is consulted. It abstains when there is no jar, when the jar
+        // already declares an entry point, when the sources name no sole entry point (a library
+        // owes none), and when the repair is already written and awaiting this very build.
+        //
+        // Deliberately BEFORE the build rather than inside it: verifyDeclaredEntryPointExists()
+        // below then checks the repair's own declaration against the build output, which is the
+        // guard false completion #2 produced (an entry point pinned to a nonexistent class, the
+        // manifest written unverified, ClassNotFoundException at launch). A repair that built its
+        // own artifact would certify itself and step around exactly that check.
+        String projectRoot = buildExecutor.resolveWorkingDir(fileBasePath);
+        if (projectRoot != null && RunnableJarGuarantee.repairOnDisk(
+                java.nio.file.Path.of(projectRoot))) {
+            log.info("T4-DO: the packaged artifact could not run — declared its entry point "
+                    + "deterministically from the project's own sources; this build uses it");
+        }
+
         BuildOutcome outcome = buildExecutor.execute(fileBasePath, cycleId, packageCommand);
         log.info("T4-AN-8: package gate result={} (durationMs={})", outcome.result(), outcome.durationMs());
         if (behaviourLogger != null) {

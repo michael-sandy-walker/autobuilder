@@ -3183,6 +3183,32 @@
    "start_tree": "LOOP_AUTHORED",
    "terminal": "GOAL_FULFILLED",
    "total_cycles": "10"
+  },
+  "2026-09-21_14-29-16": {
+   "clauses_closed_vs_control": "1",
+   "cost_readout": "sms-commit=1570657ms/2 build=76294ms/17 package-gate=6296ms/1 sms-batch-build=1630ms/3 boot-gate=281ms/1 sms-cycle-link=147ms/1 sms-lineage-stamp=42ms/2 sms-cycle-merge=16ms/2",
+   "criteria_authored": "13",
+   "criteria_elaboration": "5",
+   "criteria_executable_count": "8",
+   "criteria_executable_pct": "62",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "75",
+   "merges": "3",
+   "peaked_at_cycle": "cycle-1789995496987 (24/24)",
+   "preserved_source": "reconstructed:cycle-1789995496987",
+   "recorded": "2026-09-21",
+   "repeat_proposals": "0",
+   "repeats_refused": "0",
+   "run_duration_min": "29.4",
+   "score_delta": "n/a (boot-failed vs boot-failed)",
+   "smoke": "boot-failed",
+   "smoke_preserved": "boot-failed",
+   "start_cleared_tree": "yes",
+   "start_mode": "NEW_PROJECT",
+   "start_tree": "LOOP_AUTHORED",
+   "terminal": "honest-halt:root-convergence-stall",
+   "total_cycles": "24"
   }
  },
  "updated": "2026-09-21"

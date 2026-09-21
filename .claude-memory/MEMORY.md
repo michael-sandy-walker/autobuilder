@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: the live ordering is the appended 2026-08-23 REORDER section at the end of the file; the S1-S6 sections above it are kept for their reasoning, not their sequence. Rationale, never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest field-run state and what the last session proved. Folded per-run, never split; only the NEWEST block carries the entry marker (strip it from the one below when appending). 2026-09-21 later: T4-DO CLOSED `[x]` -- its own August reachability fix had been mis-routed for three weeks, field-proven fixed (19/19, GOAL_FULFILLED, repair to observed in 65s). (reviewed 2026-09-21)
+- `project_resume_state.md`: latest field-run state and what the last session proved. Folded per-run, never split; only the NEWEST block carries the entry marker (strip it from the one below when appending). 2026-09-21 evening: T6-M CLOSED `[x]` -- no failure family dominates, and both T6 instruments were wrong before they were read. (reviewed 2026-09-21)
 - `project_wave2_structure.md`: wave 2's five layers (substrate -> portability -> reconciliation -> consultation -> yardsticks) and gate-driven sequence; widening what the loop SEES must follow scoping what it CONSULTS. Rationale only. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
@@ -146,7 +146,7 @@ Ticket and scope discipline:
 
 Code and design constraints:
 - `feedback_no_internal_ids_in_model_facing_text.md`: an identifier belongs in a prompt only if that prompt DEFINES it -- ticket ids and gate slugs never do and are noise; three of ~35 signal names are defined and parsed back, so those are an interface. Corrected after asserting the signal half without checking. (reviewed 2026-09-17)
-- `feedback_no_target_domain_in_framework_strings.md`: never bake target-project class or package names into framework-level production strings. (reviewed 2026-07-09)
+- `feedback_no_target_domain_in_framework_strings.md`: never bake target-project class or package names into framework-level production strings; 2026-09-21 extends it to any target-shaped CONSTANT and to ANALYSIS scripts -- a check count pinned to one target put 23 of 96 scoring runs into a failure distribution, and a guard is only proven for the target its tests were written on. (reviewed 2026-09-21)
 - `feedback_no_ecosystem_jargon_in_framework_code.md`: never name a specific framework or version in framework-level identifiers, comments or strings; ecosystem knowledge lives in data tables. (reviewed 2026-07-09)
 - `feedback_no_hardcoded_ecosystem_data.md`: even data tables are debt; prefer discovery (pom -> classpath -> Maven Central), and row-adds always file the discovery follow-up. (reviewed 2026-07-09)
 - `feedback_ecosystem_gated_heuristics.md`: ecosystem-specific heuristics must self-gate on the ecosystem's own markers; no opinion on marker-free projects. (reviewed 2026-07-09)

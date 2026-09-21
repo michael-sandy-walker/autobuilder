@@ -34,8 +34,8 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked; sole orchestrator since the T4-AI-2+5 meta-lane deletion) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier; reconciled against the roadmap 2026-09-16 (3 stale markers, 8 absent tickets, 2 of them OPEN). (reviewed 2026-09-20)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-20)
+- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier; reconciled against the roadmap 2026-09-16 (3 stale markers, 8 absent tickets, 2 of them OPEN). (reviewed 2026-09-21)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-21)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: the live ordering is the appended 2026-08-23 REORDER section at the end of the file; the S1-S6 sections above it are kept for their reasoning, not their sequence. Rationale, never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest field-run state and what the last session proved. Folded per-run, never split; only the NEWEST block carries the entry marker (strip it from the one below when appending). 2026-09-20: T4-CU CLOSED `[x]` (field DoD met end to end); the route was a TARGET CHANGE, not artifact quality; T1-GD filed. (reviewed 2026-09-20)
+- `project_resume_state.md`: latest field-run state and what the last session proved. Folded per-run, never split; only the NEWEST block carries the entry marker (strip it from the one below when appending). 2026-09-21: T1-GD CLOSED `[x]` field-proven in one session; the field had been producing 36 false FAILURES, not the false pass it was filed on; the guard refuses and T4-DO's repair is still unrouted. (reviewed 2026-09-21)
 - `project_wave2_structure.md`: wave 2's five layers (substrate -> portability -> reconciliation -> consultation -> yardsticks) and gate-driven sequence; widening what the loop SEES must follow scoping what it CONSULTS. Rationale only. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
@@ -96,7 +96,7 @@ False completions and diagnosis lenses:
 - `project_meta_concrete_target_hint_idea.md`: historical note; read only if reintroducing a concrete-target hint via a non-LLM path. (reviewed 2026-07-09)
 
 Operations:
-- `project_run_lifecycle_runbook.md`: start/stop/monitor runs safely -- launch, the brake-pause port trap, and ELEVEN watcher variants (self-matching predicates, mawk block-buffering, liveness vs progress). Prove a monitor STREAMS before arming it: `scripts/prove_watcher_streams.sh`. (reviewed 2026-09-19)
+- `project_run_lifecycle_runbook.md`: start/stop/monitor runs safely -- launch, the brake-pause port trap, and TWELVE watcher variants (self-matching predicates, mawk block-buffering, liveness vs progress, and a counter baseline read from the PREVIOUS run). Prove a monitor STREAMS before arming it: `scripts/prove_watcher_streams.sh`. (reviewed 2026-09-21)
 - `project_log_and_backup_conventions.md`: the current run is the UNSUFFIXED `logs/behaviour.ndjson`; a `behaviour-*.ndjson` glob silently excludes it; behaviour files are pretty-printed concatenated JSON, not line-JSON. (reviewed 2026-09-08)
 - `project_tests_rotate_live_logs.md`: SUPERSEDED by its own third variant (verified 2026-07-30) -- redirect `FILE_BASE_PATH` to a scratch dir instead of stopping the app; log rotation stays clear, but see `feedback_no_heavy_mvn_beside_a_live_run.md` for the separate resource-contention hazard a full suite still creates. (reviewed 2026-09-08)
 

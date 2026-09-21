@@ -115,22 +115,38 @@ def classify_boot(text):
         return "wiring", m.group(1).split(".")[-1]
     if WIRING.search(text):
         return "wiring", None
+    # A packaging failure is by nature a LAUNCH-time symptom: the build succeeds and the archive
+    # cannot be started, so its signature lands in the boot log while the build log is empty.
+    # Checked only against the build log until 2026-09-21, which sent run 2026-09-21_14-29-16 --
+    # artifact-build.log 0 bytes, artifact-boot.log "no main manifest attribute" -- down to the
+    # run-log fallback. It reached the right family there by luck and carried a weaker provenance
+    # than the evidence deserved, which is the reading this tool exists to make trustworthy.
+    if PACKAGING.search(text):
+        return "packaging", None
     if "APPLICATION FAILED TO START" in text:
         return "boot-other", None
     return None, None
 
 
 def outcome(d):
-    """The run's scored outcome: 0 for a build/boot failure, an int for a scored run, None if
+    """The run's scored outcome as (passed, of) -- (0, None) for a build/boot failure, None if
     unknown. Without this the run-log fallback happily classifies a HEALTHY run from its
     mid-run diagnostics -- every run hits missing symbols on the way, so that would put
-    successful runs into a failure distribution and inflate whichever family is loudest."""
+    successful runs into a failure distribution and inflate whichever family is loudest.
+
+    THE DENOMINATOR IS READ, NEVER ASSUMED. It was pinned to 23 -- firestarter's suite -- while
+    every other target scores against its own yardstick (clitarget 19, an earlier 12). Their
+    scores therefore matched nothing, read as 0, and entered the failure distribution anyway:
+    measured over the 96-run archive, 23 runs that SCORED ABOVE ZERO were classified as
+    failures, seven of them perfect. The guard above was correct and its denominator was not,
+    so it protected exactly the one target its tests were written on. A target's check count is
+    not a property of this tool."""
     txt = _read(_first(d, "summary.txt"))
     for line in txt.splitlines():
         if line.startswith("smoke="):
             raw = line.split("=", 1)[1].strip()
-            m = re.search(r"(\d+)/23", raw)
-            return int(m.group(1)) if m else 0
+            m = re.search(r"(\d+)/(\d+)", raw)
+            return (int(m.group(1)), int(m.group(2))) if m else (0, None)
     return None
 
 
@@ -167,10 +183,13 @@ def main(argv=None):
         if not os.path.isdir(d):
             continue
         sc = outcome(d)
-        if sc is not None and sc > 0:
+        if sc is not None and sc[0] > 0:
             # The artifact built and booted well enough to score. Not a failure, so its
-            # diagnostics do not belong in a failure distribution.
-            rows.append((os.path.basename(d.rstrip("/")), f"not-a-failure ({sc}/23)", "", "summary.txt"))
+            # diagnostics do not belong in a failure distribution. Reported against the
+            # target's OWN denominator -- printing every row as /23 would be the same
+            # defect one step later, a column whose meaning changes between rows.
+            rows.append((os.path.basename(d.rstrip("/")),
+                         f"not-a-failure ({sc[0]}/{sc[1]})", "", "summary.txt"))
             continue
         fam, detail, prov = classify(d)
         counts[fam] += 1

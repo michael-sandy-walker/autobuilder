@@ -120,6 +120,26 @@ class ClassifyBootTest(unittest.TestCase):
         self.assertEqual(fam, "wiring")
         self.assertEqual(detail, "BookRepository")
 
+    def test_an_unlaunchable_archive_is_packaging_from_the_boot_log(self):
+        """The build succeeds and the archive will not start, so the signature is in the BOOT log.
+
+        Field case `2026-09-21_14-29-16`: artifact-build.log 0 bytes, artifact-boot.log holding
+        only `no main manifest attribute`. Checked against the build log alone, this fell through
+        to the run-log fallback and was reported as a weaker claim than the evidence supported.
+        """
+        fam, _ = ff.classify_boot(
+            "no main manifest attribute, in /tmp/x/target/app-0.0.1-SNAPSHOT.jar")
+        self.assertEqual(fam, "packaging")
+
+    def test_the_packaging_verdict_comes_from_the_scorer_not_the_fallback(self):
+        d = rundir({"summary.txt": "smoke=boot-failed\n",
+                    "artifact-build.log": "",
+                    "artifact-boot.log": "no main manifest attribute, in /tmp/x/target/app.jar",
+                    "autobuilder.log": "symbol:   class SomethingTransient\n"})
+        fam, _, prov = ff.classify(d)
+        self.assertEqual(fam, "packaging")
+        self.assertEqual(prov, "artifact-boot.log")
+
     def test_other_startup_failure_is_boot_other(self):
         fam, _ = ff.classify_boot("APPLICATION FAILED TO START\nDescription: port in use")
         self.assertEqual(fam, "boot-other")
@@ -127,10 +147,18 @@ class ClassifyBootTest(unittest.TestCase):
 
 class OutcomeGateTest(unittest.TestCase):
     def test_scored_run_reads_its_score(self):
-        self.assertEqual(ff.outcome(rundir({"summary.txt": "smoke=SMOKE: 23/23\n"})), 23)
+        self.assertEqual(ff.outcome(rundir({"summary.txt": "smoke=SMOKE: 23/23\n"})), (23, 23))
 
     def test_build_failure_reads_as_zero(self):
-        self.assertEqual(ff.outcome(rundir({"summary.txt": "smoke=artifact-build-failed\n"})), 0)
+        self.assertEqual(ff.outcome(rundir({"summary.txt": "smoke=artifact-build-failed\n"})),
+                         (0, None))
+
+    def test_outcome_reads_the_denominator_rather_than_assuming_one(self):
+        # Targets carry their own yardsticks: clitarget scores out of 19, an earlier one out
+        # of 12. A denominator pinned to firestarter's 23 matched neither.
+        self.assertEqual(ff.outcome(rundir({"summary.txt": "smoke=SMOKE: 19/19\n"})), (19, 19))
+        self.assertEqual(ff.outcome(rundir({"summary.txt": "smoke=SMOKE: 12/12\n"})), (12, 12))
+        self.assertEqual(ff.outcome(rundir({"summary.txt": "smoke=SMOKE: 17/19\n"})), (17, 19))
 
     def test_no_summary_is_unknown_not_zero(self):
         self.assertIsNone(ff.outcome(rundir()))
@@ -146,6 +174,33 @@ class OutcomeGateTest(unittest.TestCase):
         self.assertIn("not-a-failure (23/23)", out)
         self.assertIn("classified=0", out)
         self.assertNotIn("compile-missing-type ", out.split("distribution")[1])
+
+    def test_a_healthy_run_on_a_NON_default_yardstick_is_also_not_classified(self):
+        """The same corrupting case, on a target that does not score out of 23.
+
+        This is the one the guard missed. Every test above it used firestarter's denominator,
+        so the guard was proven for exactly the target it was written on while 24 clitarget
+        runs accumulated in the archive -- 23 of 96 archived runs scored above zero and were
+        classified as failures anyway, seven of them perfect scores.
+        """
+        d = rundir({"summary.txt": "smoke=SMOKE: 19/19\n",
+                    "autobuilder.log": "symbol:   class SomethingTransient\n"})
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ff.main([d])
+        out = buf.getvalue()
+        self.assertIn("not-a-failure (19/19)", out)
+        self.assertIn("classified=0", out)
+        self.assertNotIn("compile-missing-type ", out.split("distribution")[1])
+
+    def test_a_partial_score_on_a_non_default_yardstick_still_ran(self):
+        """17/19 is a poor run, not a build failure -- the artifact built, booted and scored."""
+        d = rundir({"summary.txt": "smoke=SMOKE: 17/19\n",
+                    "autobuilder.log": "symbol:   class SomethingTransient\n"})
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ff.main([d])
+        self.assertIn("not-a-failure (17/19)", buf.getvalue())
 
 
 class ProvenanceTest(unittest.TestCase):

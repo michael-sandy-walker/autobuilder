@@ -132,7 +132,13 @@ def read_summary(run_dir):
 
 
 def smoke_pass(text):
-    """Passing checks from a `SMOKE: n/23` reading, or None for a failure token / absence."""
+    """Passing checks from a `SMOKE: n/m` reading, or None for a failure token / absence.
+
+    The denominator is whatever the row carries -- targets bring their own yardsticks (23, 19,
+    12). Written as n/23 until 2026-09-21; the code was always generic, but the same sentence
+    in failure_family.py had been turned into an actual pinned regex, which put 23 of 96
+    archived runs into a failure distribution while they were scoring above zero.
+    """
     m = SMOKE_RE.search(text or "")
     return int(m.group(1)) if m else None
 

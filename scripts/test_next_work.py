@@ -445,5 +445,68 @@ class NextWorkTest(unittest.TestCase):
         self.assertEqual(nw.main(["--roadmap", path, "--id", "T9-ZZ"]), 0)
 
 
+
+class AuditedPrecisionTest(unittest.TestCase):
+    """2026-09-21 audit: 19 warnings on the real roadmap, 1 genuine. These pin the shapes that
+    accounted for the noise, because a detector at 95% false is one nobody reads — which is how a
+    real mis-routed fix (T4-DO) sat unnoticed for three weeks in plain sight."""
+
+    def warn_kinds(self, body_lines, marker="x", tid="T9-A"):
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as fh:
+            fh.write(ticket(marker, tid, "t", *body_lines))
+            path = fh.name
+        try:
+            tickets = nw.parse(path)
+            return [w["kind"] for w in nw.find_warnings(tickets)]
+        finally:
+            os.unlink(path)
+
+    def test_residual_superseded_by_a_later_resolution_is_not_a_warning(self):
+        # feedback_append_dont_rewrite_tickets puts the newest truth at the BOTTOM.
+        kinds = self.warn_kinds([
+            "**Still open:** the six-run measurement and the direction call.",
+            "**✅ DoD MET AND THE DIRECTION CALL IS: DO NOT STEER ON IT (2026-08-24).**",
+        ])
+        self.assertNotIn("closed-with-residual", kinds)
+
+    def test_residual_stated_after_the_resolution_still_warns(self):
+        # Order is the whole discriminator: a ✅ above does not mute a residual below it.
+        kinds = self.warn_kinds([
+            "**✅ DoD MET 2026-08-24.**",
+            "**Still open:** the six-run measurement and the direction call.",
+        ])
+        self.assertIn("closed-with-residual", kinds)
+
+    def test_enumerating_three_or_more_tickets_is_not_a_dependency(self):
+        deps = self.deps_of(
+            "The same bypass exists verbatim in all seven closure gates — `T2-EI`, `T2-DR`, `T4-AN-8`.")
+        self.assertEqual(deps, [], "peer enumeration read as a precondition")
+
+    def test_a_ticket_that_gates_others_is_not_blocked_by_them(self):
+        deps = self.deps_of(
+            "**Sequencing:** this GATES the expensive half — only then invest in `T2-EI`.")
+        self.assertEqual(deps, [], "direction inverted: the arrow points the wrong way")
+
+    def test_an_explicit_disclaimer_is_not_a_dependency(self):
+        deps = self.deps_of(
+            "**⚠ NOT the same ticket as the discovery work.** That is `T2-EI`'s gated remainder.")
+        self.assertEqual(deps, [], "a line denying the link was read as asserting it")
+
+    def test_a_real_precondition_is_still_reported(self):
+        # The guards must not mute the one shape the checker exists for.
+        deps = self.deps_of("**re-entry condition:** `T2-EI` slice 2's replay machinery exists.")
+        self.assertEqual(deps, ["T2-EI"], "a genuine gated precondition was suppressed")
+
+    def deps_of(self, line):
+        """find_dead_deps over one live ticket whose body is `line`, against a deferred T2-EI."""
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as fh:
+            fh.write(ticket(">", "T2-EI", "dep") + "\n" + ticket(" ", "T9-A", "live", line))
+            path = fh.name
+        try:
+            return [d["depends_on"] for d in nw.find_dead_deps(nw.parse(path))]
+        finally:
+            os.unlink(path)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

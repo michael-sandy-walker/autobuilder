@@ -82,6 +82,23 @@ EXPLICIT_CLOSURE = re.compile(r"\bticket\s+CLOSED\b|\bCLOSED\s+\d{4}-\d\d-\d\d\b
 # A partial-progress qualifier: one slice/phase shipping under an open umbrella is not drift.
 PARTIAL_CLAIM = re.compile(r"\b(slice|phase|half|part|step)\b", re.I)
 
+# A body line RESOLVING the ticket, used positionally: `feedback_append_dont_rewrite_tickets` means
+# updates APPEND, so a "still open" note stays visible and unmarked after the work finishes and the
+# newest truth lands at the BOTTOM. Audited 2026-09-21: all five closed-with-residual warnings on
+# the real roadmap were this shape — T1-FU's resolution sits ten lines below its "Still open" line,
+# T2-EX's and T6-N's likewise — and none was a wrong marker. Requires the project's own resolved
+# marker AND a ticket-level resolution word, so a ✅ that closes one sub-item does not mute a real
+# residual stated after it.
+RESOLUTION_CLAIM = re.compile(
+    r"^(?:[✅✓\s*_-]*)(?:\*\*)?.{0,80}?"
+    r"\b(?:DoD\s+MET|CLAUSE\s+IS\s+MET|CLAUSES?\s+(?:HOLD|MET)|ANSWERED|RESOLVED"
+    r"|CLOSES|CLOSED|FULLY\s+MET)\b")
+
+
+def resolved_after(body, idx):
+    """True when a line after `idx` asserts the ticket itself resolved — so idx is superseded."""
+    return any(RESOLUTION_CLAIM.match(l.strip()) for l in body[idx + 1:])
+
 # The reverse direction: a body line asserting THIS ticket's own remaining work. Deliberately
 # high-precision the same way CLOSURE_CLAIM is: the claim must LEAD the line. Unlike the forward
 # direction, "half" is signal here, not noise (T4-DK's own phrase is "the open half"), so this
@@ -261,8 +278,9 @@ def find_warnings(tickets):
             continue
         if declines_build(t["body"]):
             continue
-        claims = [line.strip().lstrip("-*_ ").strip() for line in t["body"]
-                  if claims_own_residual(line, t["id"])]
+        claims = [line.strip().lstrip("-*_ ").strip()
+                  for i, line in enumerate(t["body"])
+                  if claims_own_residual(line, t["id"]) and not resolved_after(t["body"], i)]
         if claims:
             warnings.append({
                 "kind": "closed-with-residual", "id": t["id"], "line": t["line"],
@@ -270,6 +288,31 @@ def find_warnings(tickets):
                           % t["marker"],
                 "evidence": claims[:1]})
     return warnings
+
+
+# Three shapes that name tickets beside a dependency word without depending on them. Audited
+# 2026-09-21 against the real roadmap: 11 of 14 dead-dependency warnings were false, and these
+# three account for five of them. The residue — a ticket CITED as evidence or motivation — is not
+# separable by pattern from one DEPENDED ON, which is a limit of prose parsing, not a missing rule.
+#
+# ENUMERATION: "the same bypass exists in all seven closure gates — T2-EI, T2-DR, T4-AN-8, ..." and
+# "only then invest in T4-CR/T4-CN/T4-CM/T4-CS". A line naming three or more tickets is a list.
+# INVERTED: "this GATES the expensive half of the chain" — the refs are what this ticket gates, so
+# reading it as a dependency points the arrow backwards (T6-I was reported as blocked on the two
+# tickets it is itself the gate for).
+# DISCLAIMER: "⚠ NOT the same ticket as ..." exists precisely to deny the link the checker inferred.
+ENUMERATION_MIN_REFS = 3
+DIRECTION_INVERTED = re.compile(
+    r"\bthis\s+(?:ticket\s+)?(?:one\s+)?(?:GATES|BLOCKS|UNBLOCKS)\b|^\s*[*_✅⚠\s]*(?:\*\*)?Relation:",
+    re.I)
+DEPENDENCY_DISCLAIMER = re.compile(r"\bNOT\s+the\s+same\s+ticket\b", re.I)
+
+
+def states_a_precondition(line):
+    """False when the line names tickets beside a dependency word without depending on them."""
+    if DIRECTION_INVERTED.search(line) or DEPENDENCY_DISCLAIMER.search(line):
+        return False
+    return len(set(TICKET_REF.findall(line))) < ENUMERATION_MIN_REFS
 
 
 def find_dead_deps(tickets):
@@ -290,6 +333,8 @@ def find_dead_deps(tickets):
         for line in t["body"]:
             low = line.lower()
             if not any(w in low for w in DEPENDENCY_WORDS):
+                continue
+            if not states_a_precondition(line):
                 continue
             for ref in TICKET_REF.findall(line):
                 if ref == t["id"] or ref in seen or ref not in by_id:

@@ -131,7 +131,7 @@
     {
       "id": "t1gd-unlaunchable-abstention",
       "ticket": "T1-GD",
-      "description": "the criterion probe abstained because the packaged artifact declares no entry point, so no status it observed would be a criterion's own",
+      "description": "the criterion probe abstained because the packaged artifact declares no entry point -- counting BOTH outcomes: the refusal when the project owes one, and the silent-no-opinion when it does not (a library, or two candidates)",
       "type": "watch",
       "fired": {
         "file": "applog",
@@ -141,7 +141,7 @@
         "file": "applog",
         "pattern": "T4-DD: exit-status criteria probed|T1-GD: "
       },
-      "check": "FIRED counts the gate's OWN abstention line. Do NOT point this at the refutation prose ('declares no entry point') -- that text travels into the injected work item and re-matches on every echo, which is the defect t4cu-criterion-contradicted carried twice. OPPORTUNITY means the non-serving branch was reached at all; OPPORTUNITY-NO-FIRE is the healthy case (the artifact was launchable). NO-OPPORTUNITY means no terminating artifact was observed -- expected on a serving target, not a weakness. Cross-check: exit_status_probe_runs in summary.txt should be 0 for the sweeps where this fired."
+      "check": "FIRED counts the gate's OWN abstention lines, both forms. Tell them apart by the text: 'no status it observed would be the criterion's own' is the REFUSAL (the sources name a sole entry point, so the project owes one and the closure is blocked); 'the sources name no single one' is the DECLINATION (a library or two candidates -- the probe still abstains, but this gate demands nothing). Do NOT point this at the refutation prose ('declares no entry point') -- that text travels into the injected work item and re-matches on every echo, which is the defect t4cu-criterion-contradicted carried twice. OPPORTUNITY-NO-FIRE means the artifact was launchable and is the healthy case -- that reading is only trustworthy BECAUSE the declination logs too; before it did, a declining gate was indistinguishable from a healthy one. Cross-check: exit_status_probe_runs in summary.txt should be 0 for the sweeps where this fired."
     },
     {
       "id": "t4cu-probe-synthesis-yield",

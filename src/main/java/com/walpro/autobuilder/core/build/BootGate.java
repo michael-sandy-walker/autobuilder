@@ -345,8 +345,24 @@ public class BootGate {
                     // whether it is meant to be launched, through the same home that already
                     // asks it before offering the repair. Cheap question first: the manifest read
                     // short-circuits the tree walk on every healthy artifact.
-                    if (!RunnableJarGuarantee.declaresEntryPoint(artifact)
-                            && RunnableJarGuarantee.sourcesNameSoleEntryPoint(workingDir)) {
+                    if (!RunnableJarGuarantee.declaresEntryPoint(artifact)) {
+                        // The PROBE abstains either way — a library is still an archive that did
+                        // not run, so a verdict drawn from its exit status is still the
+                        // launcher's. Only the DEMAND is conditional. Splitting it the other way
+                        // round, so that a project owing no entry point fell through and was
+                        // probed anyway, narrowed this defect instead of closing it.
+                        if (!RunnableJarGuarantee.sourcesNameSoleEntryPoint(workingDir)) {
+                            // Said out loud, at a level a field log shows. Falling through in
+                            // silence made this indistinguishable from a healthy launchable
+                            // artifact — the ambiguity that left T4-CU's own "never executed"
+                            // unreadable for five runs, and the reason its third silence was
+                            // promoted to INFO.
+                            log.info("T1-GD: {} declares no entry point and the sources name no"
+                                    + " single one — the criterion probe abstains, and this gate"
+                                    + " demands nothing of a project that owes no entry point",
+                                    artifact.getFileName());
+                            return Optional.empty();
+                        }
                         log.info("T1-GD: {} declares no entry point — the criterion probe abstains;"
                                 + " no status it observed would be the criterion's own",
                                 artifact.getFileName());

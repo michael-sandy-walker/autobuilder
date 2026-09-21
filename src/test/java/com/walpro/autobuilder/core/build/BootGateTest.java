@@ -293,6 +293,36 @@ class BootGateTest {
     }
 
     /**
+     * The half the first correction still left open: declining to DEMAND an entry point is not the
+     * same as declining to JUDGE. A project owing no entry point used to fall through and have its
+     * criteria probed against an archive that never ran — the original defect, narrowed rather than
+     * closed. The criterion below is deliberately one the parser ACCEPTS and the launcher's own
+     * exit status CONTRADICTS, so this test fails if the abstention is ever weakened back to a
+     * fall-through.
+     */
+    @Test
+    void aLibraryIsNotProbedEither_theArchiveStillNeverRan() throws Exception {
+        Path src = tempDir.resolve("src/main/java/com/example/text/Formatter.java");
+        Files.createDirectories(src.getParent());
+        Files.writeString(src, """
+                package com.example.text;
+                public class Formatter {
+                    public String format(String value) { return value; }
+                }
+                """);
+        packageUnlaunchable("lib.jar");
+
+        assertThat(gate(true, "java -jar {artifact}", "", 2000)
+                .verifyBootsAndServes("c",
+                        "Provide a reusable text-formatting library for other projects to depend on.",
+                        List.of("Running `java -jar lib.jar unknown` prints an error"
+                                + " and exits with code 3"),
+                        false))
+                .as("the archive never ran, so its exit status is nobody's verdict")
+                .isEmpty();
+    }
+
+    /**
      * And the same abstention when the sources name TWO entry points — the check can say the
      * archive will not run and cannot say which of them it should have run, so it says nothing.
      */

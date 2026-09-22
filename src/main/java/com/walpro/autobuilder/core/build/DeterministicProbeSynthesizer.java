@@ -81,13 +81,22 @@ public final class DeterministicProbeSynthesizer {
         // More than one variable would need more than one resource created in a known order, and
         // the criterion does not say which collection each belongs to. Left unprobed.
         if (variableCount(assertion.path()) > 1) return Optional.empty();
-        return switch (assertion.expectedStatus()) {
-            case 200, 201 -> succeeded(assertion, artifactRoot);
-            case 400 -> rejectedInput(assertion, artifactRoot);
-            case 404 -> absentResource(assertion, artifactRoot);
-            case 409 -> collision(assertion, artifactRoot);
-            default -> Optional.empty();
-        };
+        // T4-DX: one token per CRITERION, derived from the criterion's own text, so every request
+        // this call produces shares it and no other criterion's requests do. The sequence below is
+        // built in this one call, which is what makes a collision probe still collide with itself
+        // while stopping it from colliding with the previous criterion's leftovers.
+        CRITERION_TOKEN.set(tokenFor(assertion.criterionText()));
+        try {
+            return switch (assertion.expectedStatus()) {
+                case 200, 201 -> succeeded(assertion, artifactRoot);
+                case 400 -> rejectedInput(assertion, artifactRoot);
+                case 404 -> absentResource(assertion, artifactRoot);
+                case 409 -> collision(assertion, artifactRoot);
+                default -> Optional.empty();
+            };
+        } finally {
+            CRITERION_TOKEN.remove();
+        }
     }
 
     /**
@@ -317,8 +326,28 @@ public final class DeterministicProbeSynthesizer {
      * cannot answer: did the application ACCEPT this. Empty means abstain.
      */
     static Optional<String> acceptableBody(String path, Path artifactRoot) {
-        return RequestBodySynthesizer.acceptableBody(path, artifactRoot)
+        return RequestBodySynthesizer.acceptableBody(path, artifactRoot, CRITERION_TOKEN.get())
                 .map(DeterministicProbeSynthesizer::withoutAssignedIdentifier);
+    }
+
+    /**
+     * T4-DX: the criterion currently being synthesized, so the bodies built several frames down
+     * carry its token without every intermediate method having to pass it.
+     *
+     * <p>Held per thread and cleared in a finally, because the gate synthesizes one criterion at a
+     * time on the scheduling thread and a leaked token would silently join two criteria's values.
+     */
+    private static final ThreadLocal<String> CRITERION_TOKEN = new ThreadLocal<>();
+
+    /**
+     * A short, stable token for one criterion's text. Stable so a replay of the same criterion
+     * produces the same request, and short so it cannot push a value past a length bound it has
+     * no way to see.
+     */
+    static String tokenFor(String criterionText) {
+        if (criterionText == null || criterionText.isBlank()) return null;
+        int hash = criterionText.hashCode();
+        return Integer.toString(Math.abs(hash % 100000), 36);
     }
 
     static Optional<String> derivedBody(String path, Path artifactRoot) {

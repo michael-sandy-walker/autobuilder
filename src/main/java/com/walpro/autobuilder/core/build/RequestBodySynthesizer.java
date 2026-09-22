@@ -71,7 +71,9 @@ public final class RequestBodySynthesizer {
         try {
             Optional<AcceptedBody> accepted = acceptedBody(path, artifactRoot);
             componentSource(path, artifactRoot, accepted)
-                    .flatMap(source -> synthesizeFromSource(source, Map.of(), accepted))
+                    // T4-DX: no token here — this path serves the ENDPOINT probes, which are not
+                    // per-criterion and have no collision to avoid.
+                    .flatMap(source -> synthesizeFromSource(source, Map.of(), accepted, null))
                     .ifPresent(candidates::add);
         } catch (RuntimeException e) {
             // synthesis is best-effort; the {} fallback below always stands
@@ -97,6 +99,28 @@ public final class RequestBodySynthesizer {
      * than a contradiction.
      */
     public static Optional<String> acceptableBody(String path, Path artifactRoot) {
+        return acceptableBody(path, artifactRoot, null);
+    }
+
+    /**
+     * T4-DX: as above, with a token that makes this criterion's values distinct from every other
+     * criterion's.
+     *
+     * <p><b>Per CRITERION, never per REQUEST, and that distinction is the whole design.</b> One
+     * criterion's probe sequence is synthesized in a single call and therefore shares one token,
+     * so a criterion asserting a collision — create a resource, create it again, expect the
+     * refusal — still collides with itself exactly as before. Across criteria the tokens differ,
+     * so the second criterion to create a resource no longer inherits the first one's. Measured on
+     * run {@code 2026-09-22_05-11-32}: five setup and body requests refused with 409 by an
+     * application that was right to refuse them.
+     *
+     * <p>Applied only to values carrying NO discovered constraint. A pattern-derived value cannot
+     * be altered without breaking the pattern it was built to satisfy, and a length-bounded value
+     * would have its distinguisher trimmed off; both keep today's behaviour, and a collision on a
+     * constrained field stays possible. That residual is real and is recorded rather than papered
+     * over.
+     */
+    public static Optional<String> acceptableBody(String path, Path artifactRoot, String distinguisher) {
         Optional<AcceptedBody> accepted = acceptedBody(path, artifactRoot);
         // T1-FV DoD: where the declaration cannot be read, decline. This method's whole promise is
         // a body the application will ACCEPT, and a derivation with nothing to check itself
@@ -108,7 +132,7 @@ public final class RequestBodySynthesizer {
         Map<String, FieldConstraintDiscovery.Constraint> constraints =
                 FieldConstraintDiscovery.discover(artifactRoot);
         try {
-            return synthesizeFromSource(model.get(), constraints, accepted);
+            return synthesizeFromSource(model.get(), constraints, accepted, distinguisher);
         } catch (RuntimeException e) {
             return Optional.empty();
         }
@@ -185,7 +209,8 @@ public final class RequestBodySynthesizer {
      */
     private static Optional<String> synthesizeFromSource(Path source,
                                                          Map<String, FieldConstraintDiscovery.Constraint> constraints,
-                                                         Optional<AcceptedBody> accepted) {
+                                                         Optional<AcceptedBody> accepted,
+                                                         String distinguisher) {
         String text;
         try {
             text = Files.readString(source);
@@ -207,6 +232,9 @@ public final class RequestBodySynthesizer {
                 continue;
             }
             FieldConstraintDiscovery.Constraint constraint = constraints.get(field);
+            if (constraint == null) {
+                value = distinguished(value, distinguisher);
+            }
             if (constraint != null) {
                 // Only a textual value can be shaped to a pattern or a length; a constrained
                 // non-textual field is a shape this class does not model, so it declines.
@@ -222,6 +250,20 @@ public final class RequestBodySynthesizer {
         }
         if (first) return Optional.empty(); // no usable fields — the {} fallback covers it
         return Optional.of(json.append("}").toString());
+    }
+
+    /**
+     * T4-DX: this criterion's own value for an unconstrained textual field.
+     *
+     * <p>Returns the value unchanged when there is no token, when the value is not textual, or
+     * when appending would say nothing — so every existing caller and every constrained field is
+     * exactly as before.
+     */
+    private static String distinguished(String quotedValue, String distinguisher) {
+        if (distinguisher == null || distinguisher.isBlank()) return quotedValue;
+        if (quotedValue == null || quotedValue.length() < 2 || !quotedValue.startsWith("\"")) return quotedValue;
+        String inner = quotedValue.substring(1, quotedValue.length() - 1);
+        return quote(inner + distinguisher);
     }
 
     /** JSON string literal for a generated value; the alphabet is narrow but not assumed. */

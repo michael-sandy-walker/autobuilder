@@ -41,6 +41,17 @@ class DeterministicProbeSynthesizerTest {
      * over 112 mid-run checkpoints that shape is 10 of 281 derivations, and every one is a tree
      * the loop had not yet given a controller. The constraint behaviour under test is unchanged.
      */
+    /** T4-DX: the same controller fixture for a collection other than the default one. */
+    private void servedByController(String collection) throws IOException {
+        Path dir = artifactRoot.resolve("src/main/java/com/example");
+        Files.createDirectories(dir);
+        String type = collection.substring(1, 2).toUpperCase() + collection.substring(2, collection.length() - 1);
+        Files.writeString(dir.resolve(type + "Controller.java"),
+                "@RestController\n@RequestMapping(\"" + collection + "\")\npublic class " + type
+                + "Controller {\n    @PostMapping\n    public ResponseEntity<" + type + "> create(@RequestBody "
+                + type + " body) { return null; }\n}\n");
+    }
+
     private void servedByController() throws IOException {
         Path dir = artifactRoot.resolve("src/main/java/com/example");
         Files.createDirectories(dir);
@@ -134,8 +145,55 @@ class DeterministicProbeSynthesizerTest {
         List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
                 assertion("POST /books returns HTTP 201 with the created book"), root));
 
+        // T4-DX: the placeholder now carries this criterion's own token, so the values two
+        // different criteria send cannot collide in a shared application. Asserted exactly rather
+        // than loosened to `contains`, because the per-criterion value IS the contract.
+        String token = DeterministicProbeSynthesizer.tokenFor("POST /books returns HTTP 201 with the created book");
         assertThat(seq).hasSize(1);
-        assertThat(seq.get(0).body()).isEqualTo("{\"title\":\"value\",\"isbn\":\"value\"}");
+        assertThat(seq.get(0).body())
+                .isEqualTo("{\"title\":\"value" + token + "\",\"isbn\":\"value" + token + "\"}");
+    }
+
+    /**
+     * T4-DX: the defect this half of the ticket exists for. On run {@code 2026-09-22_05-11-32} a
+     * correct application refused five of the probe's own requests with 409, because every
+     * criterion creating a member sent the SAME email as the criterion before it. Two criteria,
+     * two values.
+     */
+    @Test
+    void twoCriteriaCreatingTheSameResourceDoNotSendTheSameValues() throws IOException {
+        Path root = withModel("Member", "class Member { private String name; private String email; }");
+        servedByController("/members");
+
+        List<ProbeRequest> first = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /members returns HTTP 201 with the created member"), root));
+        List<ProbeRequest> second = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /members with a duplicate email returns HTTP 409"), root));
+
+        assertThat(first.get(0).body()).isNotEqualTo(second.get(0).body());
+    }
+
+    /**
+     * And the invariant the distinguisher must not break: a criterion that asserts a collision
+     * still collides WITH ITSELF, because one criterion's whole sequence shares one token.
+     * {@code aCollisionCriterionSendsTheSameCreatedBodyTwice} states it for the 409 shape; this
+     * states why it survives a change that makes values differ across criteria.
+     */
+    @Test
+    void oneCriterionsOwnRequestsShareItsValue() throws IOException {
+        List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /members with a duplicate email returns HTTP 409"),
+                withModel("Member", "class Member { private String name; private String email; }")));
+
+        assertThat(seq).hasSize(2);
+        assertThat(seq.get(0).body()).isEqualTo(seq.get(1).body());
+    }
+
+    @Test
+    void aTokenIsStableForTheSameCriterionText() {
+        assertThat(DeterministicProbeSynthesizer.tokenFor("POST /books returns HTTP 201"))
+                .isEqualTo(DeterministicProbeSynthesizer.tokenFor("POST /books returns HTTP 201"))
+                .isNotEqualTo(DeterministicProbeSynthesizer.tokenFor("POST /members returns HTTP 201"));
     }
 
     @Test

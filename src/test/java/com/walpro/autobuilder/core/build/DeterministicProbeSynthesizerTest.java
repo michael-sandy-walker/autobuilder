@@ -189,6 +189,37 @@ class DeterministicProbeSynthesizerTest {
         assertThat(seq.get(0).body()).isEqualTo(seq.get(1).body());
     }
 
+    /**
+     * T4-DX, found by the field rather than by review: FOUR criterion shapes reach their setup body
+     * through {@code derivedBody} / {@code candidateBodies}, which passed {@code Map.of()} for
+     * constraints. Run {@code 2026-09-22_11-07-40} showed the split verbatim — the model-fallback
+     * probes sent {@code "isbn":"1234567890123"} while this path still sent
+     * {@code {"title":"value","isbn":"value"}} and drew a 400 from an application that was right
+     * to refuse it.
+     */
+    @Test
+    void aBodyDerivedForASetupAlsoSatisfiesTheArtifactsOwnValidation() throws IOException {
+        Path root = withModel("Book", "public class Book { private String title; private String isbn; }");
+        Path dir = artifactRoot.resolve("src/main/java/com/example");
+        Files.writeString(dir.resolve("BookService.java"), """
+                public class BookService {
+                    private static final Pattern ISBN_PATTERN = Pattern.compile("\\\\d{13}");
+                    public Book create(Book book) {
+                        if (!ISBN_PATTERN.matcher(book.getIsbn()).matches()) {
+                            throw new IllegalArgumentException("isbn");
+                        }
+                        return book;
+                    }
+                }
+                """);
+
+        List<ProbeRequest> seq = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /books with a duplicate isbn returns HTTP 409"), root));
+
+        assertThat(seq.get(0).body()).doesNotContain("\"isbn\":\"value\"");
+        assertThat(seq.get(0).body()).containsPattern("\"isbn\":\"[0-9]{13}\"");
+    }
+
     @Test
     void aTokenIsStableForTheSameCriterionText() {
         assertThat(DeterministicProbeSynthesizer.tokenFor("POST /books returns HTTP 201"))

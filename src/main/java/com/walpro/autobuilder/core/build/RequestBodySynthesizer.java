@@ -67,13 +67,37 @@ public final class RequestBodySynthesizer {
      * Never returns an empty list.
      */
     public static List<String> candidateBodies(String path, Path artifactRoot) {
+        return candidateBodies(path, artifactRoot, null);
+    }
+
+    /**
+     * T4-DX: as above, shaped by the artifact's own validation and carrying this criterion's token.
+     *
+     * <p><b>This path was the gap the field found.</b> It passed {@code Map.of()} for constraints,
+     * so every body it produced ignored the validation the artifact states — and four of the
+     * criterion probe shapes reach their setup body through here, not through
+     * {@code acceptableBody}. Run {@code 2026-09-22_11-07-40} showed it verbatim: the
+     * model-fallback probes sent {@code "isbn":"1234567890123"} while this path was still sending
+     * {@code {"title":"value","isbn":"value"}} and being refused with 400. Discovering constraints
+     * was never wrong here; it was simply never asked for.
+     *
+     * <p>Falls back to the unconstrained body when a constraint cannot be satisfied, so this can
+     * only ever ADD a usable candidate and never remove one.
+     */
+    public static List<String> candidateBodies(String path, Path artifactRoot, String distinguisher) {
         List<String> candidates = new ArrayList<>();
         try {
             Optional<AcceptedBody> accepted = acceptedBody(path, artifactRoot);
+            Map<String, FieldConstraintDiscovery.Constraint> constraints =
+                    FieldConstraintDiscovery.discover(artifactRoot);
             componentSource(path, artifactRoot, accepted)
-                    // T4-DX: no token here — this path serves the ENDPOINT probes, which are not
-                    // per-criterion and have no collision to avoid.
-                    .flatMap(source -> synthesizeFromSource(source, Map.of(), accepted, null))
+                    .flatMap(source -> {
+                        Optional<String> shaped =
+                                synthesizeFromSource(source, constraints, accepted, distinguisher);
+                        return shaped.isPresent()
+                                ? shaped
+                                : synthesizeFromSource(source, Map.of(), accepted, distinguisher);
+                    })
                     .ifPresent(candidates::add);
         } catch (RuntimeException e) {
             // synthesis is best-effort; the {} fallback below always stands

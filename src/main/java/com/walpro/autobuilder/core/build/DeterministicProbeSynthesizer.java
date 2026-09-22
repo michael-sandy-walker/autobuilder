@@ -351,7 +351,12 @@ public final class DeterministicProbeSynthesizer {
     }
 
     static Optional<String> derivedBody(String path, Path artifactRoot) {
-        List<String> candidates = RequestBodySynthesizer.candidateBodies(path, artifactRoot);
+        // T4-DX: four criterion-probe shapes reach their setup body through here, so it needs the
+        // same constraints and the same per-criterion token acceptableBody gets. The field found
+        // this one: run 2026-09-22_11-07-40 still sent {"title":"value","isbn":"value"} from this
+        // path and was refused 400, while the shapes going through acceptableBody were fine.
+        List<String> candidates =
+                RequestBodySynthesizer.candidateBodies(path, artifactRoot, CRITERION_TOKEN.get());
         return candidates.size() > 1 ? Optional.of(withoutAssignedIdentifier(candidates.get(0))) : Optional.empty();
     }
 

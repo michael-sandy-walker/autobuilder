@@ -34,8 +34,8 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked; sole orchestrator since the T4-AI-2+5 meta-lane deletion) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier; reconciled against the roadmap 2026-09-16 (3 stale markers, 8 absent tickets, 2 of them OPEN). (reviewed 2026-09-21)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-21)
+- `roadmap-overview.md` — the thin one-line-per-ticket index over `roadmap.md`, grouped by tier; reconciled against the roadmap 2026-09-16 (3 stale markers, 8 absent tickets, 2 of them OPEN). (reviewed 2026-09-22)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). T4-DW filed 2026-09-22 (the boot gate has no observation that retires its own work items). (reviewed 2026-09-22)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: the live ordering is the appended 2026-08-23 REORDER section at the end of the file; the S1-S6 sections above it are kept for their reasoning, not their sequence. Rationale, never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest field-run state and what the last session proved. Folded per-run, never split; only the NEWEST block carries the entry marker (strip it from the one below when appending). 2026-09-21 evening: T6-M CLOSED `[x]` -- no failure family dominates, and both T6 instruments were wrong before they were read. (reviewed 2026-09-21)
+- `project_resume_state.md`: latest field-run state and what the last session proved. Folded per-run, never split; only the NEWEST block carries the entry marker (strip it from the one below when appending). 2026-09-22: the firestarter deterioration is a RECOGNITION failure -- 23/23 flat 10/20 -> 9/20 while GOAL_FULFILLED halved 10/20 -> 4/20; boot-gate residue 4 -> 17; root closure early-returns on ANY ACTIVE subgoal, silently. Read it before quoting any run-window number: it carries the canonical one-population set. (reviewed 2026-09-22)
 - `project_wave2_structure.md`: wave 2's five layers (substrate -> portability -> reconciliation -> consultation -> yardsticks) and gate-driven sequence; widening what the loop SEES must follow scoping what it CONSULTS. Rationale only. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)

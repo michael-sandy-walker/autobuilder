@@ -44,6 +44,7 @@ class CycleExecutorTest {
     @Mock private ScopeThrashSignalAnalyzer scopeThrashSignalAnalyzer;
     @Mock private SubgoalScopeGuard subgoalScopeGuard;
     @Mock private MutationSnapshotService mutationSnapshotService;
+    @Mock private com.walpro.autobuilder.core.build.PackageGate packageGate;
     @org.mockito.Spy private com.walpro.autobuilder.core.build.BuildFixEscalator buildFixEscalator
             = new com.walpro.autobuilder.core.build.BuildFixEscalator();
 
@@ -1157,5 +1158,26 @@ class CycleExecutorTest {
         assertThat(out.subgoalPromoted()).isFalse();
         // deriveCycleResult must surface ROLLED_BACK rather than CONTINUE/GOAL_FULFILLED.
         assertThat(out.cycleResultState()).isEqualTo(CycleResultState.ROLLED_BACK);
+    }
+
+    @Test
+    void theDeterministicPackagingRepairRunsEveryCycle() {
+        // T2-FK: reachability, which is the whole point of the change and the thing every
+        // previous attempt at this repair got wrong. T4-DO's repair was first written at the
+        // closure edge (unreachable for a run that stalls), then moved to a second call site
+        // INSIDE the same unreachable method, then routed to PackageGate -- whose only per-cycle
+        // caller abstains whenever the last compile probe failed. Measured on run
+        // 2026-09-21_14-29-16: that caller ran ONCE in 24 cycles and the repair was reached only
+        // by the halt-edge check, 7 seconds before the run ended.
+        //
+        // So the assertion is not "the repair works" -- RunnableJarGuaranteeTest owns that -- it
+        // is "an ordinary cycle asks for it at all", with nothing else having to go right first.
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+        cycleExecutor.setPackageGate(packageGate);
+
+        cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(packageGate).declareEntryPointIfArchiveCannotRun();
     }
 }

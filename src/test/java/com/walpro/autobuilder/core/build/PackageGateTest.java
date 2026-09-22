@@ -80,6 +80,63 @@ class PackageGateTest {
         return g;
     }
 
+    // ── T2-FK: the repair is reachable without a build ──────────────────────────
+
+    /** Sources first, archive last, as a real build orders them. */
+    private void writeUnrunnableArtifact() throws Exception {
+        java.nio.file.Path src = tempDir.resolve("src/main/java/com/demo");
+        java.nio.file.Files.createDirectories(src);
+        java.nio.file.Files.writeString(src.resolve("Main.java"),
+                "package com.demo;\npublic class Main { public static void main(String[] a) {} }\n");
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"), "<project></project>");
+        writeJar("app.jar", null);
+    }
+
+    @Test
+    void theRepairAppliesWithoutAnyBuild() throws Exception {
+        // T2-FK, the decoupling itself. The repair used to live inside the method that BUILDS, so
+        // it could only fire when something chose to package -- and its one per-cycle route
+        // abstains whenever the last compile probe failed, which is exactly the state an
+        // unrunnable archive lives in. On run 2026-09-21_14-29-16 that route ran ONCE in 24
+        // cycles while the loop narrated the defect 51 times over 27 minutes.
+        writeUnrunnableArtifact();
+        PackageGate g = gateOverTempDir();
+
+        assertThat(g.declareEntryPointIfArchiveCannotRun()).isTrue();
+
+        assertThat(java.nio.file.Files.readString(tempDir.resolve("pom.xml")))
+                .contains("com.demo.Main");
+        // The point of the whole change: no build was run to get here.
+        verify(buildExecutor, never()).execute(any(), any(), any());
+    }
+
+    @Test
+    void theRepairIsIdempotent_soCallingItEveryCycleWritesOnce() throws Exception {
+        // It is now on the per-cycle path, so "already written and awaiting a rebuild" is the
+        // common case rather than an edge one: between the write and the next package the jar
+        // still carries no entry point, so every later caller asks against the same archive.
+        writeUnrunnableArtifact();
+        PackageGate g = gateOverTempDir();
+
+        assertThat(g.declareEntryPointIfArchiveCannotRun()).isTrue();
+        String afterFirst = java.nio.file.Files.readString(tempDir.resolve("pom.xml"));
+
+        assertThat(g.declareEntryPointIfArchiveCannotRun()).isFalse();
+        assertThat(java.nio.file.Files.readString(tempDir.resolve("pom.xml"))).isEqualTo(afterFirst);
+    }
+
+    @Test
+    void anArchiveThatAlreadyDeclaresAnEntryPoint_isLeftAlone() throws Exception {
+        // The cheap abstention the per-cycle path pays in the common case: a directory listing
+        // and one manifest read, with the source tree never walked.
+        java.nio.file.Files.writeString(tempDir.resolve("pom.xml"), "<project></project>");
+        writeJar("app.jar", "com.demo.Main");
+
+        assertThat(gateOverTempDir().declareEntryPointIfArchiveCannotRun()).isFalse();
+        assertThat(java.nio.file.Files.readString(tempDir.resolve("pom.xml")))
+                .isEqualTo("<project></project>");
+    }
+
     @Test
     void packagingClean_butDeclaredEntryPointMissing_returnsBlocker() throws Exception {
         // 2026-07-02 false completion #2: the loop "resolved" `Unable to find main class` by

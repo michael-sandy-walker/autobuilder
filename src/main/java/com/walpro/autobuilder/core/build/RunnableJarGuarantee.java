@@ -57,15 +57,8 @@ public final class RunnableJarGuarantee {
     public static Optional<String> repairedPom(Path artifactRoot, String pom, Map<String, String> sources) {
         if (artifactRoot == null || pom == null || pom.isBlank()) return Optional.empty();
 
-        Optional<Path> jar = builtJar(artifactRoot);
-        if (jar.isEmpty()) {
-            log.debug("T4-DO: no built jar to inspect — abstaining");
-            return Optional.empty();
-        }
-        if (declaresEntryPoint(jar.get())) {
-            log.debug("T4-DO: {} already declares Main-Class — abstaining", jar.get().getFileName());
-            return Optional.empty();
-        }
+        Optional<Path> jar = archiveNeedingEntryPoint(artifactRoot);
+        if (jar.isEmpty()) return Optional.empty();
 
         String mainClass = BootstrapPomResolver.soleMainClassOf(sources);
         if (mainClass == null) {
@@ -184,6 +177,11 @@ public final class RunnableJarGuarantee {
         if (artifactRoot == null) return false;
         Path pomPath = artifactRoot.resolve("pom.xml");
         if (!Files.isRegularFile(pomPath)) return false;
+        // T2-FK cost gate. Asked before the source tree is read so the per-cycle caller pays a
+        // directory listing and a manifest read to abstain, not a full tree walk. The same
+        // question is asked again inside repairedPom, which keeps ONE home for the decision
+        // ([[feedback-one-invariant-one-home]]) at the price of a second cheap read.
+        if (archiveNeedingEntryPoint(artifactRoot).isEmpty()) return false;
         try {
             String pom = Files.readString(pomPath);
             Optional<String> repaired = repairedPom(artifactRoot, pom, readSources(artifactRoot));
@@ -194,6 +192,29 @@ public final class RunnableJarGuarantee {
             log.warn("T4-DO: could not apply the packaging repair under {} — {}", artifactRoot, e.toString());
             return false;
         }
+    }
+
+    /**
+     * The half of the question answerable WITHOUT reading a single source file: is there exactly
+     * one built archive, and does it already declare an entry point?
+     *
+     * <p>T2-FK: extracted so {@link #repairOnDisk} can ask it before {@code readSources()} walks
+     * and reads the whole source tree. That ordering is what makes the repair safe to call every
+     * cycle: when it abstains — which is the common case, since a correct artifact declares its
+     * entry point — the cost is a directory listing and one manifest read. Reading the tree first
+     * and abstaining afterwards is the shape that made a per-cycle call look expensive.
+     */
+    private static Optional<Path> archiveNeedingEntryPoint(Path artifactRoot) {
+        Optional<Path> jar = builtJar(artifactRoot);
+        if (jar.isEmpty()) {
+            log.debug("T4-DO: no built jar to inspect — abstaining");
+            return Optional.empty();
+        }
+        if (declaresEntryPoint(jar.get())) {
+            log.debug("T4-DO: {} already declares Main-Class — abstaining", jar.get().getFileName());
+            return Optional.empty();
+        }
+        return jar;
     }
 
     private static Optional<Path> builtJar(Path artifactRoot) {

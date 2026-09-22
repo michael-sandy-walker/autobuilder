@@ -97,6 +97,41 @@ public class PackageGate {
         }
     }
 
+    /**
+     * T4-DO's deterministic packaging repair, on its own, with no build attached.
+     *
+     * <p><b>T2-FK: extracted so the repair is not rationed by an observation budget.</b> It used
+     * to exist only inside {@link #verifyPackageableTimed}, so it could fire only when something
+     * chose to package. Measured on run {@code 2026-09-21_14-29-16}: the per-cycle route
+     * ({@code BehaviouralSelfCheck}) ran ONCE in 24 cycles — it abstains whenever the last compile
+     * probe failed, and 17 of its 19 interval elapses abstained for exactly that reason — so the
+     * repair was reached only by the halt-edge pre-halt check, seven seconds before the run ended.
+     * The loop had diagnosed the defect itself 27 minutes earlier and said so 51 times.
+     *
+     * <p><b>The abstention it was sitting behind is the wrong guard for it.</b> That guard exists
+     * to avoid spending {@code mvn package} on a build certain to fail. This repair spends a
+     * directory listing, a manifest read and one file write, and is valid on a tree that does not
+     * compile at all — writing an entry-point declaration says nothing about whether the Java
+     * currently builds.
+     *
+     * <p>Idempotent and self-gating: abstains when there is no archive, when the archive already
+     * declares an entry point, when the sources name no sole entry point (a library owes none),
+     * and when the repair is already written and awaiting a rebuild. Reads the pom and the build
+     * output from DISK rather than from a cycle-start view, so it cannot re-raise against stale
+     * state the way {@code t4cz-stale-view-reraise} records for the sibling requirement.
+     *
+     * @return {@code true} when a repair was just written
+     */
+    public boolean declareEntryPointIfArchiveCannotRun() {
+        if (!enabled || !buildExecutor.isEnabled()) return false;
+        String projectRoot = buildExecutor.resolveWorkingDir(fileBasePath);
+        if (projectRoot == null) return false;
+        if (!RunnableJarGuarantee.repairOnDisk(java.nio.file.Path.of(projectRoot))) return false;
+        log.info("T4-DO: the packaged artifact could not run — declared its entry point "
+                + "deterministically from the project's own sources");
+        return true;
+    }
+
     private Optional<String> verifyPackageableTimed(String cycleId) {
         if (!enabled || !buildExecutor.isEnabled()) {
             return Optional.empty();
@@ -125,11 +160,9 @@ public class PackageGate {
         // guard false completion #2 produced (an entry point pinned to a nonexistent class, the
         // manifest written unverified, ClassNotFoundException at launch). A repair that built its
         // own artifact would certify itself and step around exactly that check.
-        String projectRoot = buildExecutor.resolveWorkingDir(fileBasePath);
-        if (projectRoot != null && RunnableJarGuarantee.repairOnDisk(
-                java.nio.file.Path.of(projectRoot))) {
-            log.info("T4-DO: the packaged artifact could not run — declared its entry point "
-                    + "deterministically from the project's own sources; this build uses it");
+        if (declareEntryPointIfArchiveCannotRun()) {
+            log.debug("T4-DO: the repair above was applied immediately before this build, "
+                    + "so this build consumes it");
         }
 
         BuildOutcome outcome = buildExecutor.execute(fileBasePath, cycleId, packageCommand);

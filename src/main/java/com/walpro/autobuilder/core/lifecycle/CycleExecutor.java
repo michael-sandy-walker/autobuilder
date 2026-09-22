@@ -44,6 +44,16 @@ public class CycleExecutor implements CheckpointableState {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.BehaviouralSelfCheck behaviouralSelfCheck;
 
+    /** T2-FK: the packaging repair on the per-cycle path — optional so unit tests need no stub. */
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.PackageGate packageGate;
+
+    /** T2-FK: one switch, matching T4-CZ's, in case the per-cycle repair misbehaves in the field. */
+    @org.springframework.beans.factory.annotation.Value(
+            "${autobuilder.build.packaging-repair-per-cycle:true}")
+    private boolean packagingRepairEnabled = true;
+
     /** T4-CZ: one switch, in case requiring the entry point early ever misbehaves in the field. */
     @org.springframework.beans.factory.annotation.Value(
             "${autobuilder.goal.entry-point-required-early:true}")
@@ -264,6 +274,27 @@ public class CycleExecutor implements CheckpointableState {
         // a runnable artifact and no entry point exists.
         if (entryPointRequirementEnabled) {
             goalPlannerService.requireEntryPointNow(context.previousOutput());
+        }
+
+        // T2-FK: the same routing problem as T4-CZ above, one step later in the artifact's life.
+        // T4-CZ answers "the sources name no entry point" per cycle because the requirement sat
+        // on a closure path ~40% of runs never reach. This answers the COMPLEMENT — the sources
+        // name one and the archive does not declare it — which had the mirror-image defect: its
+        // only per-cycle route was BehaviouralSelfCheck, which abstains whenever the last compile
+        // probe failed. A broken build is precisely the state an unrunnable archive lives in, so
+        // the repair was rationed exactly where it was needed.
+        //
+        // Measured, run 2026-09-21_14-29-16: the self-check ran ONCE in 24 cycles (17 of 19
+        // interval elapses abstained on a failed probe), the boot gate diagnosed "the application
+        // exits at startup (exit 1) - no main manifest attribute" at 2m33s and the run repeated
+        // that phrase 51 times, and the repair fired only at the halt edge, 7 seconds before the
+        // end. 5 of 17 never-booted firestarter runs in the archive carry that same defect.
+        //
+        // Costs a directory listing and a manifest read when it abstains (T2-FK reordered the
+        // source-tree read to sit behind that check), and it is idempotent, so a cycle that
+        // changed nothing writes nothing.
+        if (packagingRepairEnabled && packageGate != null) {
+            packageGate.declareEntryPointIfArchiveCannotRun();
         }
 
         if (behaviouralSelfCheck != null) {

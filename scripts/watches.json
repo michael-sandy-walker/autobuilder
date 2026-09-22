@@ -327,9 +327,9 @@
       },
       "opportunity": {
         "file": "applog",
-        "pattern": "no main manifest attribute|carries no Main-Class"
+        "pattern": "no main manifest attribute"
       },
-      "check": "THE CLAIM IS ABOUT TIMING, NOT OCCURRENCE -- this repair already fired before the change, so a FIRED count alone proves nothing and reading it that way is the defect this project has found in its own watches twice. Read the firing TIMESTAMP against the run's first cycle and against its terminal: minutes in is the per-cycle path working; seconds before the terminal is the halt-edge check doing what it always did. OPPORTUNITY-NO-FIRE while 'no main manifest attribute' appears is the regression signal, and more than one '<mainClass>' in the pom would mean the idempotency guard failed under per-cycle calling."
+      "check": "THE CLAIM IS ABOUT TIMING, NOT OCCURRENCE -- this repair already fired before the change, so a FIRED count alone proves nothing. Read the firing TIMESTAMP against the run's first cycle: minutes in is the per-cycle path; seconds before the terminal is the halt-edge check doing what it always did. OPPORTUNITY-NO-FIRE IS NOT BY ITSELF A REGRESSION -- as first written this check said it was, and on run 2026-09-21_20-41-36 it reported OPPORTUNITY-NO-FIRE(112) while the repair was CORRECTLY abstaining: the sources declared no entry point at all (grep -rln 'static void main' over that artifact returns nothing), so there was nothing to declare and the abstention is the documented library carve-out. A correct decline and a real miss look identical under a count. To tell them apart, read the T4-DO abstention lines: 'the sources name no single one' means correct decline; 'carries no Main-Class' followed by no repair line means a real miss. Note also that the opportunity phrase travels into the injected work item and re-matches on every echo -- 61 of those 112 were echoed goal text."
     }
   ]
 }

@@ -166,7 +166,7 @@
 - [x] `T1-GA` — The rejection-feedback relay renders on NO semantic rejection, and the run records cannot say why
 - [x] `T1-GB` — A `#Delete` directive is parsed and then dropped at every later stage (diff, heuristics' view, probe tree, merge); a mutation that removes one of two parallel stores is rejected for the store it removed. Fixed 2026-09-14, one invariant in four homes; found by the T2-ES rewind
 
-## Tier 2 — Steering quality (133)
+## Tier 2 — Steering quality (134)
 
 - [x] `T2-FJ` — The model emits 29 distinct scores and the system treats them as a continuous scale — two decimals of fictional precision over what is really a four-band ordinal judgement; filed 2026-09-11 from the user's observation. CLOSED 2026-09-11 ON A NEGATIVE RESULT, the way `T6-R` closed: the premise holds, the HARM does not, and the redesign this ticket proposed is not warranted on the evidence
 - [ ] `T2-FK` — the loop looks at its running artifact on a FIXED cycle count and the runs that never see it boot are the ones it looks at least (0.105 vs 0.458 visits/cycle, 4.4x, firestarter n=66; 25% of runs never observe a booting artifact) — filed 2026-09-21 from the user's "why is there a fixed interval". CONFOUND RESOLVED AGAINST THE TRIGGER HALF the same hour: those runs failed 75% of compile probes vs 36%, and looked 49 times with every boot BLOCKED. What survives is decoupling T4-DO's pom repair from the observation budget — 5 of 17 carry `no main manifest attribute`, and on 14-29-16 the loop diagnosed it at 2m33s and said so 51 times while the one-write fix stayed unreachable. RE-SCOPE before building
@@ -302,6 +302,7 @@
 - [x] `T2-EM` — a structural repair leaf's actuator must be exempt from `SUBGOAL_SCOPE_MISMATCH` suppress…
 - [x] `T2-EN` — Injection recurrence needs a run-level brake
 - [x] `T2-H3` — Propagate InterpretationAgent summary/directives to next-cycle agent prompts
+- [ ] `T2-FL` — The loop verifies a near-complete artifact before its OWN halt and never before the operator's: T2-EH's verifyAndPromoteBeforePause has one caller (the convergence brake) while `deadline` is the terminal runs actually end on, and T2-FH's budget arithmetic already knows the run is nearly out of time and spends that only on braking. Run 2026-09-22_15-59-33: deadline at 23/23 final AND preserved, peaked at cycle 33 of 69 with a 36-cycle drift tail, 4 ACTIVE leaves all naming endpoints the artifact SERVES, none gate-stamped (so T4-DW correctly fired zero times). This is the authored-leaf residue the 40-run window measured and nothing owns. CORRECTED same day (user-raised): recognising a goal is ALREADY SOLVED is the first-class claim, and the "not periodic" constraint was a category error -- the loop already has a deterministic no-LLM check (endpointFromWorkItem + isBuilt) that it only ever asks the NEGATIVE half of, so the design is two tiers: cheap structural promotion run regularly, expensive criteria verification once at the budget edge. Filed 2026-09-22
 
 ## Tier 3 — Feature completion (42)
 

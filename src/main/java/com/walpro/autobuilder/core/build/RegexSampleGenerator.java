@@ -30,8 +30,40 @@ final class RegexSampleGenerator {
     private RegexSampleGenerator() {
     }
 
+    /**
+     * T4-DX: this seed's character in place of the fixed one, staying inside the same class the
+     * atom stands for — a digit stays a digit and a letter stays a letter, so the pattern the
+     * sample was built for still matches. Position is mixed in so a thirteen-digit value varies
+     * along its length rather than repeating one digit, which spreads far more values across the
+     * handful of criteria a run probes.
+     */
+    private static char varied(char base, int seed, int position) {
+        if (seed == 0) return base;
+        int spread = Math.floorMod(seed * 31 + position * 7, base == DIGIT ? 10 : 26);
+        return (char) (base + spread);
+    }
+
     /** A string matching {@code regex}, or empty when this class will not commit to one. */
     static Optional<String> sample(String regex) {
+        return sample(regex, 0);
+    }
+
+    /**
+     * T4-DX: as above, but a DIFFERENT matching string per seed.
+     *
+     * <p>A fixed sample is what a body needs to be accepted once and exactly what makes two
+     * criteria collide. Run {@code 2026-09-22_12-04-37} sent no placeholder at all and still drew
+     * seven 409s, because {@code \d{13}} sampled to {@code 0000000000000} for every criterion, so
+     * the second criterion to create a resource created the one the first had already created —
+     * and the probe that then lent it got the artifact's own "already on loan" refusal. Varying
+     * the sample removes the collision without weakening the pattern: the result is still verified
+     * against the regex before it is returned, so a seed that somehow produced a non-matching
+     * string yields an abstention rather than a body the application will refuse.
+     *
+     * <p>Seed {@code 0} reproduces the original sample exactly, so every caller that does not ask
+     * for variation is unchanged.
+     */
+    static Optional<String> sample(String regex, int seed) {
         if (regex == null || regex.isEmpty()) return Optional.empty();
         String body = regex;
         if (body.startsWith("^")) body = body.substring(1);
@@ -46,7 +78,9 @@ final class RegexSampleGenerator {
             Repetition repetition = readRepetition(body, i);
             if (repetition == null) return Optional.empty();
             i = repetition.next();
-            out.append(String.valueOf(atom.character()).repeat(repetition.count()));
+            for (int n = 0; n < repetition.count(); n++) {
+                out.append(varied(atom.character(), seed, out.length()));
+            }
         }
 
         String candidate = out.toString();

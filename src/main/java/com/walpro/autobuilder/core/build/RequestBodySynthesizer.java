@@ -263,8 +263,11 @@ public final class RequestBodySynthesizer {
                 // Only a textual value can be shaped to a pattern or a length; a constrained
                 // non-textual field is a shape this class does not model, so it declines.
                 if (!value.startsWith("\"")) return Optional.empty();
+                // T4-DX: the same criterion token that distinguishes unconstrained values now also
+                // picks WHICH matching value a pattern yields, so a constrained field stops being
+                // the one place two criteria still collide.
                 Optional<String> satisfying = FieldConstraintDiscovery.satisfyingValue(
-                        constraint, value.substring(1, value.length() - 1));
+                        constraint, value.substring(1, value.length() - 1), seedOf(distinguisher));
                 if (satisfying.isEmpty()) return Optional.empty();
                 value = quote(satisfying.get());
             }
@@ -274,6 +277,11 @@ public final class RequestBodySynthesizer {
         }
         if (first) return Optional.empty(); // no usable fields — the {} fallback covers it
         return Optional.of(json.append("}").toString());
+    }
+
+    /** T4-DX: a stable numeric seed for one criterion's token; 0 when there is none. */
+    private static int seedOf(String distinguisher) {
+        return distinguisher == null || distinguisher.isBlank() ? 0 : Math.abs(distinguisher.hashCode() % 9973) + 1;
     }
 
     /**

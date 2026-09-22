@@ -232,10 +232,23 @@ public final class FieldConstraintDiscovery {
      * @param fallback the value used when no pattern applies, trimmed to any length ceiling
      */
     public static Optional<String> satisfyingValue(Constraint constraint, String fallback) {
+        return satisfyingValue(constraint, fallback, 0);
+    }
+
+    /**
+     * T4-DX: as above, but this criterion's own value where the constraint permits variation.
+     *
+     * <p>A pattern-derived value used to be identical for every criterion, which made a
+     * constrained field the one place two criteria still collided — measured on run
+     * {@code 2026-09-22_12-04-37}, which sent no placeholder at all and still drew seven 409s.
+     * The seed varies the sample WITHIN the pattern; a length-bounded value keeps today's
+     * behaviour, since a distinguisher there is what the trim would remove.
+     */
+    public static Optional<String> satisfyingValue(Constraint constraint, String fallback, int seed) {
         if (constraint == null) return Optional.ofNullable(fallback);
         String candidate;
         if (constraint.regex() != null) {
-            Optional<String> fromPattern = RegexSampleGenerator.sample(constraint.regex());
+            Optional<String> fromPattern = RegexSampleGenerator.sample(constraint.regex(), seed);
             if (fromPattern.isEmpty()) return Optional.empty(); // constrained, and we cannot comply
             candidate = fromPattern.get();
         } else {

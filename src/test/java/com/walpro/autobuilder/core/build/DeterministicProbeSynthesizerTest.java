@@ -107,7 +107,10 @@ class DeterministicProbeSynthesizerTest {
         assertThat(seq).hasSize(1);
         assertThat(seq.get(0).method()).isEqualTo("POST");
         assertThat(seq.get(0).path()).isEqualTo("/books");
-        assertThat(seq.get(0).body()).contains("\"isbn\":\"0000000000000\"");
+        // T4-DX: still a value the artifact's own pattern accepts, and no longer the SAME one for
+        // every criterion — a fixed sample is exactly what made two criteria collide on a
+        // constrained field. The assertion is the pattern, because the pattern is the contract.
+        assertThat(seq.get(0).body()).containsPattern("\"isbn\":\"[0-9]{13}\"");
         // The server assigns the identifier; a client creating a resource does not supply it.
         assertThat(seq.get(0).body()).doesNotContain("\"id\"");
     }
@@ -218,6 +221,28 @@ class DeterministicProbeSynthesizerTest {
 
         assertThat(seq.get(0).body()).doesNotContain("\"isbn\":\"value\"");
         assertThat(seq.get(0).body()).containsPattern("\"isbn\":\"[0-9]{13}\"");
+    }
+
+    /**
+     * T4-DX, measured on run {@code 2026-09-22_12-04-37}: that run sent no placeholder body at all
+     * and still drew seven 409s, because {@code \\d{13}} sampled to the same thirteen digits for
+     * every criterion — so the second criterion to create a resource created the one the first had
+     * already created, and the probe that lent it got the artifact's own refusal.
+     */
+    @Test
+    void twoCriteriaDoNotCollideOnAConstrainedFieldEither() throws IOException {
+        Path root = withModel("Book", "public class Book { private String title; private String isbn; }");
+        withModel("BookService", BOOK_SERVICE);
+        servedByController();
+
+        List<ProbeRequest> first = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /books returns HTTP 201 with the created book"), root));
+        List<ProbeRequest> second = sequence(DeterministicProbeSynthesizer.synthesize(
+                assertion("POST /books with a duplicate isbn returns HTTP 409"), root));
+
+        assertThat(first.get(0).body()).containsPattern("\"isbn\":\"[0-9]{13}\"");
+        assertThat(second.get(0).body()).containsPattern("\"isbn\":\"[0-9]{13}\"");
+        assertThat(first.get(0).body()).isNotEqualTo(second.get(0).body());
     }
 
     @Test

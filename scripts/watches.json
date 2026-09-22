@@ -315,6 +315,21 @@
         "pattern": "T4-DK: \\d+ seed requirement\\(s\\) are covered by no banked criterion|seed coverage"
       },
       "check": "Read the state in the line: EDITED means the run is judged against the operator's split, PRISTINE against the model's. A FALLING BACK line instead means the file did not belong to this seed -- check the seed hash before assuming the file is wrong."
+    },
+    {
+      "id": "t2fk-repair-on-the-per-cycle-path",
+      "ticket": "T2-FK",
+      "type": "watch",
+      "description": "T4-DO's deterministic packaging repair reached once per cycle instead of only when something chooses to package. Its only per-cycle route was BehaviouralSelfCheck, which abstains whenever the last compile probe failed -- and a broken build is exactly the state an unrunnable archive lives in. Measured on run 2026-09-21_14-29-16: that route ran ONCE in 24 cycles (17 of 19 interval elapses abstained), and the repair was reached only by the halt-edge pre-halt check, 7 seconds before the run ended, having been correctly diagnosed 27 minutes earlier.",
+      "fired": {
+        "file": "applog",
+        "pattern": "T4-DO: the packaged artifact could not run"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "no main manifest attribute|carries no Main-Class"
+      },
+      "check": "THE CLAIM IS ABOUT TIMING, NOT OCCURRENCE -- this repair already fired before the change, so a FIRED count alone proves nothing and reading it that way is the defect this project has found in its own watches twice. Read the firing TIMESTAMP against the run's first cycle and against its terminal: minutes in is the per-cycle path working; seconds before the terminal is the halt-edge check doing what it always did. OPPORTUNITY-NO-FIRE while 'no main manifest attribute' appears is the regression signal, and more than one '<mainClass>' in the pom would mean the idempotency guard failed under per-cycle calling."
     }
   ]
 }

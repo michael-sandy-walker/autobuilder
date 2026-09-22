@@ -3298,7 +3298,36 @@
    "start_tree": "LOOP_AUTHORED",
    "terminal": "deadline",
    "total_cycles": "42"
+  },
+  "2026-09-22_05-11-32": {
+   "clauses_closed_vs_control": "1",
+   "cost_readout": "sms-commit=1316397ms/3 build=98449ms/35 boot-gate=41252ms/8 package-gate=25306ms/8 sms-batch-build=472ms/4 sms-lineage-stamp=26ms/3 sms-cycle-merge=15ms/3 sms-cycle-link=10ms/2",
+   "criteria_authored": "42",
+   "criteria_elaboration": "13",
+   "criteria_executable_count": "25",
+   "criteria_executable_pct": "60",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "47",
+   "merges": "7",
+   "peaked_at_cycle": "cycle-1790048438400 (32/32)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-09-22",
+   "repeat_proposals": "3",
+   "repeats_refused": "7",
+   "run_duration_min": "27.8",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 23/23",
+   "smoke_pass": 23,
+   "smoke_preserved": "SMOKE: 23/23",
+   "smoke_strict": "23/23 discounted=none",
+   "smoke_total": 23,
+   "start_cleared_tree": "yes",
+   "start_mode": "NEW_PROJECT",
+   "start_tree": "LOOP_AUTHORED",
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "32"
   }
  },
- "updated": "2026-09-21"
+ "updated": "2026-09-22"
 }

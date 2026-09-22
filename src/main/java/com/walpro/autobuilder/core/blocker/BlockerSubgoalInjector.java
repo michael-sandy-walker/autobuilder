@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.blocker;
 
 import com.walpro.autobuilder.core.build.BlockerTypes;
+import com.walpro.autobuilder.core.build.BootGate;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.BuildErrorClassifierAgent;
@@ -16,6 +17,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.io.IOException;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -535,6 +539,101 @@ public class BlockerSubgoalInjector {
      */
     public void clearPackagingBuildFixSubgoals() {
         retireActiveBuildFixSubgoals("packaging now succeeds", this::isFromPackageGate);
+    }
+
+    /**
+     * T4-DW: retire the work items the boot gate raised, once that same gate observes the claim
+     * they make. The third mirror of {@link #clearActiveBuildFixSubgoals()}, built for the reason
+     * the first two were: each observation retires only what it can attest to.
+     *
+     * <p><b>Why an observation and not the gate's return value.</b> {@code BootGate} answers with
+     * the problem, so "clean" and "abstained" are the same empty — eleven abstention paths share
+     * it. Measured over the 40-run firestarter window that motivated this: boot-gate leaves alive
+     * at run end went 4 to 17, and two runs that ended at a hand-verified 23/23 kept a leaf that
+     * later boot-gate OK lines had already answered. Retiring on those lines would have been
+     * right twice and wrong wherever the OK was an abstention, so the gate now says what it
+     * ESTABLISHED and this reads that instead.
+     *
+     * <p>Claims are matched, never guessed from the item's prose: the injector stamps
+     * {@link BlockerTypes#BOOT_CLAIM_KEY} when it raises the item, and an item carrying no stamp
+     * (an older run's, or one raised by a path that does not know its claim) is left alone.
+     */
+    public void clearBootBuildFixSubgoals(BootGate.BootObservation observation) {
+        if (observation == null) return;
+        retireGateStampedSubgoals(BlockerTypes.GATE_BOOT,
+                "the boot gate observed the claim this item makes",
+                g -> bootClaimObserved(g, observation));
+    }
+
+    private boolean bootClaimObserved(GoalEntity g, BootGate.BootObservation observation) {
+        Object claim = g.getMetadata() == null ? null : g.getMetadata().get(BlockerTypes.BOOT_CLAIM_KEY);
+        if (BlockerTypes.CLAIM_SERVES.equals(claim)) {
+            return observation.servesCleanly();
+        }
+        if (BlockerTypes.CLAIM_CRITERION.equals(claim)) {
+            // Every criterion the item was raised from must have been PROBED AGAIN and passed.
+            // An empty list here would otherwise retire on "nothing was contradicted", which is
+            // exactly what a sweep that judged nothing reports.
+            List<String> quoted = criteriaOf(g);
+            return !quoted.isEmpty() && quoted.stream().allMatch(observation::observedPassing);
+        }
+        // CLAIM_ENTRY_POINT is answered by a source scan, not by a launch — see
+        // clearEntryPointBuildFixSubgoals. An unstamped item is nobody's to retire.
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> criteriaOf(GoalEntity g) {
+        Object raw = g.getMetadata() == null ? null : g.getMetadata().get(BlockerTypes.BOOT_CLAIM_CRITERIA_KEY);
+        if (raw instanceof List<?> list) {
+            return list.stream().filter(String.class::isInstance).map(String.class::cast).toList();
+        }
+        return List.of();
+    }
+
+    /**
+     * T4-DW: retire the entry-point requirement when the sources declare an entry point again.
+     *
+     * <p>Separate from the launch observation on purpose. The claim is about the SOURCES, so the
+     * evidence is the same scan that raised it ({@code EntryPointScan}) — no package, no boot, and
+     * therefore available on every cycle, including the cycles where the tree does not compile.
+     * That is the state the entry-point item lives in, and the reason T4-CZ raises it there.
+     */
+    public void clearEntryPointBuildFixSubgoals(Map<String, String> outputFiles) {
+        if (outputFiles == null || outputFiles.isEmpty()) return;
+        if (!com.walpro.autobuilder.core.persistence.EntryPointScan.hasJavaEntryPointInSources(outputFiles)) {
+            return;
+        }
+        retireGateStampedSubgoals(BlockerTypes.GATE_BOOT,
+                "the sources declare an entry point again",
+                g -> BlockerTypes.CLAIM_ENTRY_POINT.equals(
+                        g.getMetadata() == null ? null : g.getMetadata().get(BlockerTypes.BOOT_CLAIM_KEY)));
+    }
+
+    /**
+     * T4-DW: the retirement loop for gate-stamped items, which are not necessarily BUILD_FIX-tagged
+     * — T4-CZ's entry-point requirement and T4-CY's observed-defect item are ordinary coverage
+     * items carrying a gate stamp. {@link #retireActiveBuildFixSubgoals} filters on the tag and so
+     * cannot see them.
+     */
+    private void retireGateStampedSubgoals(String gate, String reason,
+                                           java.util.function.Predicate<GoalEntity> retire) {
+        List<GoalEntity> candidates = new ArrayList<>();
+        GoalEntity current = goalPlannerService.getCurrentSubGoal();
+        if (current != null) candidates.add(current);
+        candidates.addAll(goalPlannerService.getRemainingGoals());
+        for (GoalEntity g : candidates) {
+            if (g == null || g.getStatus() != GoalStatus.ACTIVE) continue;
+            if (g.getMetadata() == null
+                    || !gate.equals(g.getMetadata().get(BlockerTypes.ORIGINATING_GATE_KEY))) {
+                continue;
+            }
+            if (!retire.test(g)) continue;
+            log.info("T4-DW: {} — marking {} work item [{}] SUBSUMED", reason, gate, g.getId());
+            goalPlannerService.transitionGoal(g.getId(), GoalStatus.SUBSUMED,
+                    "The " + gate + " observed the claim this item makes — no longer needed",
+                    com.walpro.autobuilder.goal.SubsumptionReason.COVERED);
+        }
     }
 
     private void retireActiveBuildFixSubgoals(String reason, java.util.function.Predicate<GoalEntity> retire) {

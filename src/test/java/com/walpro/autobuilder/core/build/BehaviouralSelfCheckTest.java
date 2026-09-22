@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -48,8 +49,8 @@ class BehaviouralSelfCheckTest {
     @Test
     void reportsWhatTheRunningApplicationContradicts() {
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
-        when(bootGate.verifyBootsAndServes(anyString(), any(), any()))
-                .thenReturn(Optional.of("POST /members → 400, but the running application answered 201"));
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean()))
+                .thenReturn(refuted("POST /members → 400, but the running application answered 201"));
 
         assertThat(check.observe(ctx(), SPEC, () -> REQS))
                 .contains("POST /members → 400, but the running application answered 201");
@@ -58,7 +59,7 @@ class BehaviouralSelfCheckTest {
     @Test
     void saysNothingWhenTheApplicationAgreesWithTheSpec() {
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
-        when(bootGate.verifyBootsAndServes(anyString(), any(), any())).thenReturn(Optional.empty());
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean())).thenReturn(clean());
 
         assertThat(check.observe(ctx(), SPEC, () -> REQS)).isEmpty();
     }
@@ -67,7 +68,7 @@ class BehaviouralSelfCheckTest {
     void observesOnlyOnTheInterval() {
         check.setIntervalCycles(3);
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
-        when(bootGate.verifyBootsAndServes(anyString(), any(), any())).thenReturn(Optional.empty());
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean())).thenReturn(clean());
 
         check.observe(ctx(), SPEC, () -> REQS);
         check.observe(ctx(), SPEC, () -> REQS);
@@ -85,14 +86,14 @@ class BehaviouralSelfCheckTest {
                 .thenReturn(Optional.of("cannot package: no main class"));
 
         assertThat(check.observe(ctx(), SPEC, () -> REQS)).isEmpty();
-        verify(bootGate, never()).verifyBootsAndServes(anyString(), any(), any());
+        verify(bootGate, never()).observeBootsAndServes(anyString(), any(), any(), anyBoolean());
     }
 
     @Test
     void theSameFindingIsNotReRaisedWhileItIsStillOpen() {
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
-        when(bootGate.verifyBootsAndServes(anyString(), any(), any()))
-                .thenReturn(Optional.of("POST /members → 400, but the application answered 201"));
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean()))
+                .thenReturn(refuted("POST /members → 400, but the application answered 201"));
 
         assertThat(check.observe(ctx(), SPEC, () -> REQS)).isPresent();
         assertThat(check.observe(ctx(), SPEC, () -> REQS)).isEmpty();
@@ -101,8 +102,8 @@ class BehaviouralSelfCheckTest {
     @Test
     void aNewFindingAfterACleanObservationIsRaisedAgain() {
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
-        when(bootGate.verifyBootsAndServes(anyString(), any(), any()))
-                .thenReturn(Optional.of("defect A"), Optional.empty(), Optional.of("defect A"));
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean()))
+                .thenReturn(refuted("defect A"), clean(), refuted("defect A"));
 
         assertThat(check.observe(ctx(), SPEC, () -> REQS)).contains("defect A");
         assertThat(check.observe(ctx(), SPEC, () -> REQS)).isEmpty();   // clean — memory cleared
@@ -144,7 +145,7 @@ class BehaviouralSelfCheckTest {
         CycleContextData broken = CycleContextData.builder()
                 .cycleName("cycle-broken").lastProbeOutcome(outcome).build();
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
-        when(bootGate.verifyBootsAndServes(anyString(), any(), any())).thenReturn(Optional.empty());
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean())).thenReturn(clean());
 
         // Cycles 1-3 are inside the interval; cycle 4 reaches the check and abstains on the build.
         for (int cycle = 1; cycle <= 4; cycle++) {
@@ -163,7 +164,7 @@ class BehaviouralSelfCheckTest {
         // cycle. Only the paths that spend time reset the counter.
         check.setIntervalCycles(4);
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
-        when(bootGate.verifyBootsAndServes(anyString(), any(), any())).thenReturn(Optional.empty());
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean())).thenReturn(clean());
 
         for (int cycle = 1; cycle <= 4; cycle++) {
             check.observe(ctx(), SPEC, () -> REQS);
@@ -191,7 +192,7 @@ class BehaviouralSelfCheckTest {
     @Test
     void anUnknownBuildStateStillAttempts_soALookIsNeverInvented() {
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
-        when(bootGate.verifyBootsAndServes(anyString(), any(), any())).thenReturn(Optional.empty());
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean())).thenReturn(clean());
 
         assertThat(check.observe(ctx(), SPEC, () -> REQS)).isEmpty();
         verify(packageGate, times(1)).verifyPackageable(anyString());
@@ -206,12 +207,12 @@ class BehaviouralSelfCheckTest {
         List<String> many = java.util.stream.IntStream.range(0, 60)
                 .mapToObj(i -> "GET /items returns HTTP 200 variant " + i).toList();
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
-        when(bootGate.verifyBootsAndServes(anyString(), any(), any())).thenReturn(Optional.empty());
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean())).thenReturn(clean());
 
         check.observe(ctx(), SPEC, () -> many);
 
         var captor = org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(bootGate).verifyBootsAndServes(anyString(), any(), captor.capture());
+        verify(bootGate).observeBootsAndServes(anyString(), any(), captor.capture(), anyBoolean());
         assertThat(captor.getValue()).hasSize(BehaviouralSelfCheck.MAX_REQUIREMENTS);
     }
 
@@ -221,4 +222,19 @@ class BehaviouralSelfCheckTest {
         assertThat(check.observe(ctx(), SPEC, () -> REQS)).isEmpty();
         verify(packageGate, never()).verifyPackageable(anyString());
     }
+
+    /**
+     * T4-DW: the self-check now asks the gate for its OBSERVATION, not only its verdict, because
+     * retiring work on {@code Optional.empty()} would retire it on the gate's eleven abstention
+     * paths too. These helpers keep the existing tests saying what they said — a finding, or none.
+     */
+    private static BootGate.BootObservation refuted(String description) {
+        return new BootGate.BootObservation(false, java.util.List.of(),
+                Optional.of(new com.walpro.autobuilder.goal.ClaimRefutation(description, java.util.List.of())));
+    }
+
+    private static BootGate.BootObservation clean() {
+        return new BootGate.BootObservation(true, java.util.List.of(), Optional.empty());
+    }
+
 }

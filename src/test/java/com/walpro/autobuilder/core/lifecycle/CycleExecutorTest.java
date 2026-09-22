@@ -48,6 +48,9 @@ class CycleExecutorTest {
     @org.mockito.Spy private com.walpro.autobuilder.core.build.BuildFixEscalator buildFixEscalator
             = new com.walpro.autobuilder.core.build.BuildFixEscalator();
 
+    @Mock private com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector blockerSubgoalInjector;
+    @Mock private com.walpro.autobuilder.core.build.BehaviouralSelfCheck behaviouralSelfCheck;
+
     @InjectMocks
     private CycleExecutor cycleExecutor;
 
@@ -1179,5 +1182,47 @@ class CycleExecutorTest {
         cycleExecutor.runCycle(baseContext("cycle-1"));
 
         verify(packageGate).declareEntryPointIfArchiveCannotRun();
+    }
+
+    /**
+     * T4-DW: reachability, the half of this ticket that the field has repeatedly decided. The
+     * retirement of a boot-gate work item is worthless at an edge the run does not reach: its own
+     * sibling, T2-EQ's packaging retirement, has exactly one caller (PreHaltPackagingCheck), and
+     * `deadline` — the terminal most firestarter runs end on — reaches no halt edge at all. So the
+     * assertion is not "the retirement is correct" (BlockerSubgoalInjectorTest owns that); it is
+     * that an ordinary cycle asks for it, with nothing else having to go right first.
+     */
+    @Test
+    void theEntryPointRetirementIsAskedOnAnOrdinaryCycle() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+        cycleExecutor.setBlockerSubgoalInjector(blockerSubgoalInjector);
+
+        cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(blockerSubgoalInjector).clearEntryPointBuildFixSubgoals(any());
+    }
+
+    /**
+     * T4-DW: the boot observation reaches the retirement, and it is the SELF-CHECK's observation —
+     * the one taken against the tree on disk. The evaluation agent re-runs the same gate against a
+     * STAGED candidate, and an OK there says nothing about the merged tree.
+     */
+    @Test
+    void theBootItemRetirementReadsTheObservationTakenAgainstTheTreeOnDisk() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+        com.walpro.autobuilder.core.build.BootGate.BootObservation observation =
+                new com.walpro.autobuilder.core.build.BootGate.BootObservation(
+                        true, List.of("GET /books returns HTTP 200"), java.util.Optional.empty());
+        when(behaviouralSelfCheck.observeWithEvidence(any(), any(), any()))
+                .thenReturn(new com.walpro.autobuilder.core.build.BehaviouralSelfCheck.SelfCheckResult(
+                        java.util.Optional.empty(), observation));
+        cycleExecutor.setBehaviouralSelfCheck(behaviouralSelfCheck);
+        cycleExecutor.setBlockerSubgoalInjector(blockerSubgoalInjector);
+
+        cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(blockerSubgoalInjector).clearBootBuildFixSubgoals(observation);
     }
 }

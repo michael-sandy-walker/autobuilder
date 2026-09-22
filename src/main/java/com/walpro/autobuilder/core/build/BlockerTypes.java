@@ -52,6 +52,39 @@ public final class BlockerTypes {
     public static final String GATE_CRITERIA = "criteria-gate";
 
     /**
+     * T4-DW: goal-metadata key naming WHICH CLAIM a boot-gate work item makes, so the observation
+     * that retires it can be the one that actually attests to it.
+     *
+     * <p>The gate stamp alone says who raised an item, which is enough to stop the wrong
+     * observation retiring it ({@link #ORIGINATING_GATE_KEY}) and not enough to let the right one
+     * do it: this gate raises three different claims and answers them with one
+     * {@code Optional.empty()}, which also means "abstained". An item saying the sources declare
+     * no entry point, one saying the packaged artifact does not serve what the specification
+     * names, and one quoting a contradicted acceptance criterion need three different pieces of
+     * evidence, and a gate run that judged none of them must retire none of them.
+     */
+    public static final String BOOT_CLAIM_KEY = "bootClaim";
+
+    /** The sources declare no runnable entry point (T4-CZ / T4-CV). Retired by the same scan. */
+    public static final String CLAIM_ENTRY_POINT = "entry-point";
+
+    /**
+     * The packaged artifact does not run, or does not answer the endpoints the specification
+     * names. Retired only by a launch that served every declared endpoint cleanly.
+     */
+    public static final String CLAIM_SERVES = "serves";
+
+    /**
+     * The running artifact contradicted stated acceptance criteria, which the item quotes.
+     * Retired only when those same criteria were probed again and passed — never by the absence
+     * of a contradiction, which is what a skipped criterion also looks like.
+     */
+    public static final String CLAIM_CRITERION = "criterion";
+
+    /** Metadata key holding the criteria a {@link #CLAIM_CRITERION} item was raised from. */
+    public static final String BOOT_CLAIM_CRITERIA_KEY = "bootClaimCriteria";
+
+    /**
      * T2-ES: a work item raised because one deterministic heuristic reported the SAME structural
      * defect on consecutive cycles. It wears a gate stamp for the reason the stamp exists — the
      * defect it names compiles perfectly (a parallel store is invisible to javac), so without one

@@ -585,6 +585,160 @@ class BlockerSubgoalInjectorTest {
         return new BuildOutcome(BuildResult.COMPILE_ERROR, stderr, 100L, "mvn compile", null);
     }
 
+    // ── T4-DW: the boot gate retires the items it raised, and only those ──────
+
+    private static GoalEntity bootItem(String id, String claim, List<String> criteria) {
+        Map<String, Object> meta = new HashMap<>();
+        meta.put(BlockerTypes.ORIGINATING_GATE_KEY, BlockerTypes.GATE_BOOT);
+        meta.put(BlockerTypes.BOOT_CLAIM_KEY, claim);
+        if (criteria != null) meta.put(BlockerTypes.BOOT_CLAIM_CRITERIA_KEY, criteria);
+        GoalEntity g = goalEntityWithMeta(meta);
+        g.setId(id);
+        g.setStatus(GoalStatus.ACTIVE);
+        return g;
+    }
+
+    private static com.walpro.autobuilder.core.build.BootGate.BootObservation cleanRun(String... passing) {
+        return new com.walpro.autobuilder.core.build.BootGate.BootObservation(
+                true, List.of(passing), java.util.Optional.empty());
+    }
+
+    private void expectSubsumed(String id) {
+        verify(goalPlannerService).transitionGoal(eq(id), eq(GoalStatus.SUBSUMED), anyString(),
+                eq(com.walpro.autobuilder.goal.SubsumptionReason.COVERED));
+    }
+
+    @Test
+    void bootItem_claimingTheArtifactDoesNotServe_isRetiredByALaunchThatServed() {
+        GoalEntity item = bootItem("goal-serves", BlockerTypes.CLAIM_SERVES, null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(item);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        injector.clearBootBuildFixSubgoals(cleanRun());
+
+        expectSubsumed("goal-serves");
+    }
+
+    /**
+     * The guard the whole ticket turns on. {@code BootGate} answers with the PROBLEM, so eleven
+     * abstention paths return the same empty a clean run returns — no packaged artifact, an
+     * artifact older than the sources, a process that could not be spawned. Retiring on that is
+     * retiring on "nothing was observed", which is how a gate can be satisfied instead of its
+     * requirement ([[project-false-completion-2]]).
+     */
+    @Test
+    void bootItem_survivesAnObservationThatEstablishedNothing() {
+        GoalEntity item = bootItem("goal-serves", BlockerTypes.CLAIM_SERVES, null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(item);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        injector.clearBootBuildFixSubgoals(
+                com.walpro.autobuilder.core.build.BootGate.BootObservation.abstained());
+
+        verify(goalPlannerService, never()).transitionGoal(anyString(), any(), anyString(), any());
+    }
+
+    @Test
+    void bootItem_survivesARunTheGateRefuted() {
+        GoalEntity item = bootItem("goal-serves", BlockerTypes.CLAIM_SERVES, null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(item);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        injector.clearBootBuildFixSubgoals(
+                new com.walpro.autobuilder.core.build.BootGate.BootObservation(false, List.of(),
+                        java.util.Optional.of(new com.walpro.autobuilder.goal.ClaimRefutation(
+                                "the application exits at startup (exit 1)", List.of()))));
+
+        verify(goalPlannerService, never()).transitionGoal(anyString(), any(), anyString(), any());
+    }
+
+    @Test
+    void criterionItem_isRetiredWhenItsOwnCriteriaWereProbedAgainAndPassed() {
+        GoalEntity item = bootItem("goal-criterion", BlockerTypes.CLAIM_CRITERION,
+                List.of("POST /books returns HTTP 400 when isbn is missing"));
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(item);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        injector.clearBootBuildFixSubgoals(
+                cleanRun("POST /books returns HTTP 400 when isbn is missing"));
+
+        expectSubsumed("goal-criterion");
+    }
+
+    /**
+     * About half the criteria handed to the probes are never judged in the field (1360 of 2693
+     * and 775 of 1544 across the two 20-run firestarter windows). A sweep that skipped this
+     * item's criterion reports no contradiction about it, which is not the same as passing it.
+     */
+    @Test
+    void criterionItem_survivesWhenItsCriterionWasSkippedRatherThanPassed() {
+        GoalEntity item = bootItem("goal-criterion", BlockerTypes.CLAIM_CRITERION,
+                List.of("POST /loans returns HTTP 422 when the member already holds three",
+                        "GET /books returns HTTP 200"));
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(item);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        injector.clearBootBuildFixSubgoals(cleanRun("GET /books returns HTTP 200"));
+
+        verify(goalPlannerService, never()).transitionGoal(anyString(), any(), anyString(), any());
+    }
+
+    @Test
+    void entryPointItem_isRetiredWhenTheSourcesDeclareOneAgain() {
+        GoalEntity item = bootItem("goal-entry", BlockerTypes.CLAIM_ENTRY_POINT, null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(item);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        injector.clearEntryPointBuildFixSubgoals(Map.of(
+                "src/main/java/com/example/App.java",
+                "package com.example; public class App { public static void main(String[] a) {} }"));
+
+        expectSubsumed("goal-entry");
+    }
+
+    @Test
+    void entryPointItem_survivesWhileTheSourcesStillDeclareNone() {
+        GoalEntity item = bootItem("goal-entry", BlockerTypes.CLAIM_ENTRY_POINT, null);
+        lenient().when(goalPlannerService.getCurrentSubGoal()).thenReturn(item);
+        lenient().when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        injector.clearEntryPointBuildFixSubgoals(Map.of(
+                "src/main/java/com/example/Book.java", "package com.example; public class Book {}"));
+
+        verify(goalPlannerService, never()).transitionGoal(anyString(), any(), anyString(), any());
+    }
+
+    /**
+     * The rule every mirror in this class obeys: an observation retires only what the check that
+     * made it can attest to. A boot observation says nothing about whether the tree packages.
+     */
+    @Test
+    void anItemFromAnotherGateIsNeverRetiredByABootObservation() {
+        GoalEntity packaging = goalEntityWithMeta(new HashMap<>(Map.of(
+                BlockerTypes.ORIGINATING_GATE_KEY, BlockerTypes.GATE_PACKAGE,
+                BlockerTypes.BOOT_CLAIM_KEY, BlockerTypes.CLAIM_SERVES)));
+        packaging.setId("goal-package");
+        packaging.setStatus(GoalStatus.ACTIVE);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(packaging);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        injector.clearBootBuildFixSubgoals(cleanRun());
+
+        verify(goalPlannerService, never()).transitionGoal(anyString(), any(), anyString(), any());
+    }
+
+    @Test
+    void anItemThatIsNoLongerActiveIsLeftAlone() {
+        GoalEntity item = bootItem("goal-done", BlockerTypes.CLAIM_SERVES, null);
+        item.setStatus(GoalStatus.COMPLETED);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(item);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        injector.clearBootBuildFixSubgoals(cleanRun());
+
+        verify(goalPlannerService, never()).transitionGoal(anyString(), any(), anyString(), any());
+    }
+
     private static GoalEntity activeBuildFixGoal() {
         GoalEntity g = goalEntityWithMeta(new HashMap<>(Map.of(BlockerTypes.METADATA_KEY, BlockerTypes.BUILD_FIX)));
         g.setStatus(GoalStatus.ACTIVE);

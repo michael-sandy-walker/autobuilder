@@ -138,10 +138,30 @@ public class BehaviouralSelfCheck implements CheckpointableState {
      * opinion on it). Repeating the same finding is suppressed, so a defect the loop has not yet
      * fixed does not re-inject every interval.
      */
+    /**
+     * T4-DW: what this check saw, not only what it wants fixed.
+     *
+     * <p>{@code finding} is exactly what {@link #observe} returns — the defect to raise as work,
+     * suppressed while the same one is still open. {@code observation} is the gate's positive
+     * reading, which a caller needs to RETIRE work the artifact no longer owes. The two are
+     * deliberately separate: an abstained interval has neither, and a clean observation has the
+     * second without the first.
+     */
+    public record SelfCheckResult(Optional<String> finding, BootGate.BootObservation observation) {
+        static SelfCheckResult none() {
+            return new SelfCheckResult(Optional.empty(), BootGate.BootObservation.abstained());
+        }
+    }
+
     public Optional<String> observe(CycleContextData context, String specText,
                                     Supplier<List<String>> requirements) {
-        if (!enabled) return Optional.empty();
-        if (++cyclesSinceCheck < Math.max(1, intervalCycles)) return Optional.empty();
+        return observeWithEvidence(context, specText, requirements).finding();
+    }
+
+    public SelfCheckResult observeWithEvidence(CycleContextData context, String specText,
+                                    Supplier<List<String>> requirements) {
+        if (!enabled) return SelfCheckResult.none();
+        if (++cyclesSinceCheck < Math.max(1, intervalCycles)) return SelfCheckResult.none();
 
         // The interval is deliberately NOT reset here. A cheap abstention below — a broken build, an
         // empty requirement list — must not consume a whole interval: run 2026-07-28_21-39-59 got
@@ -150,10 +170,10 @@ public class BehaviouralSelfCheck implements CheckpointableState {
         // next cycle retry, so the check waits for a moment it can actually use rather than for a
         // fixed number of cycles. It is reset only where an observation is genuinely attempted,
         // because that is the part that costs a package build and a boot.
-        if (specText == null || specText.isBlank()) return abstain(context, "no specification text");
+        if (specText == null || specText.isBlank()) return abstained(context, "no specification text");
         List<String> reqs = requirements != null ? requirements.get() : List.of();
         if (reqs == null || reqs.isEmpty()) {
-            return abstain(context, "the specification states no probeable requirements");
+            return abstained(context, "the specification states no probeable requirements");
         }
         // Hard cap. Each requirement costs at least one HTTP round trip against the booted
         // artifact, and on run 2026-07-28_23-16-15 an uncapped list of 73/77 turned two
@@ -176,7 +196,7 @@ public class BehaviouralSelfCheck implements CheckpointableState {
         // attempts, so this can lose a look but never invent one.
         if (context != null && context.lastProbeOutcome() != null
                 && context.lastProbeOutcome().result() == BuildResult.COMPILE_ERROR) {
-            return abstain(context, "the last compile probe was COMPILE_ERROR");
+            return abstained(context, "the last compile probe was COMPILE_ERROR");
         }
 
         // From here on the check spends real time (a package build, a boot, the probe requests), so
@@ -187,10 +207,13 @@ public class BehaviouralSelfCheck implements CheckpointableState {
         // Packageability is a precondition for observing, never a finding of this check: a tree
         // that cannot package is the build machinery's problem and it has its own gates.
         if (packageGate.verifyPackageable(cycleId).isPresent()) {
-            return abstain(context, "the artifact is not packageable");
+            return abstained(context, "the artifact is not packageable");
         }
 
-        Optional<String> finding = bootGate.verifyBootsAndServes(cycleId, specText, reqs);
+        BootGate.BootObservation observation =
+                bootGate.observeBootsAndServes(cycleId, specText, reqs, false);
+        Optional<String> finding = observation.refutation()
+                .map(com.walpro.autobuilder.goal.ClaimRefutation::description);
         long elapsed = System.currentTimeMillis() - start;
         // T6-J: deliberately NOT recorded as its own category. This check's elapsed time is
         // almost entirely the packageGate and bootGate calls above, both of which record
@@ -204,14 +227,20 @@ public class BehaviouralSelfCheck implements CheckpointableState {
         }
         if (finding.isEmpty()) {
             lastFinding = null;
-            return Optional.empty();
+            return new SelfCheckResult(Optional.empty(), observation);
         }
         if (finding.get().equals(lastFinding)) {
             log.info("T4-CY: same finding as last observation — not re-raising while it is still open");
-            return Optional.empty();
+            return new SelfCheckResult(Optional.empty(), observation);
         }
         lastFinding = finding.get();
-        return finding;
+        return new SelfCheckResult(finding, observation);
+    }
+
+    /** The abstention above, in the shape {@link #observeWithEvidence} returns. */
+    private SelfCheckResult abstained(CycleContextData context, String reason) {
+        abstain(context, reason);
+        return SelfCheckResult.none();
     }
 
     /**

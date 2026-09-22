@@ -190,6 +190,67 @@ public class BootGate {
     }
 
     /**
+     * T4-DW: what the gate POSITIVELY established, rather than only what it refuted.
+     *
+     * <p>Every prose overload above answers with the problem and {@code Optional.empty()} for
+     * "clean" — and this class returns that same empty for eleven abstentions: no packaged
+     * artifact, an artifact older than the sources, no free port, an unlaunchable command, a
+     * process that could not be spawned, a long-running process the specification expects nothing
+     * of. A caller that retires work on an empty is retiring it on "nothing was observed" as often
+     * as on "nothing was wrong", which is the completion-edge error this project has already paid
+     * for ([[project-false-completion-2]]).
+     *
+     * <p>{@code launchedAndServed} is set only on the path where the process started, answered
+     * HTTP, and every endpoint the specification names was probed without a failure.
+     * {@code criteriaObservedPassing} holds the acceptance criteria that were actually executed
+     * against the running artifact and matched — never the ones that were skipped, unparsed or
+     * left unobserved, which are about half of them in the field.
+     */
+    public record BootObservation(boolean launchedAndServed,
+                                  List<String> criteriaObservedPassing,
+                                  Optional<ClaimRefutation> refutation) {
+
+        public static BootObservation abstained() {
+            return new BootObservation(false, List.of(), Optional.empty());
+        }
+
+        /** True when the artifact was seen to run and serve what the specification names. */
+        public boolean servesCleanly() {
+            return launchedAndServed && refutation.isEmpty();
+        }
+
+        /** True when this criterion was executed against the running artifact and passed. */
+        public boolean observedPassing(String criterion) {
+            return criterion != null && criteriaObservedPassing.contains(criterion);
+        }
+    }
+
+    /** Collects what the launch established; see {@link BootObservation}. */
+    private static final class Evidence {
+        private boolean launchedAndServed;
+        private final List<String> passingCriteria = new ArrayList<>();
+    }
+
+    /**
+     * T4-DW: run the gate and report what it established as well as what it refuted.
+     *
+     * <p>The three prose overloads and the attribution overload all delegate here, so there is one
+     * launch path and one place that decides what "clean" means.
+     */
+    public BootObservation observeBootsAndServes(String cycleId, String specText,
+                                                 List<String> behaviouralCriteria,
+                                                 boolean allowModelFallback) {
+        long t0 = System.nanoTime();
+        try {
+            return observeTimed(cycleId, specText, behaviouralCriteria, allowModelFallback);
+        } finally {
+            if (buildCostTracker != null) {
+                buildCostTracker.record(cycleId, "boot-gate", (System.nanoTime() - t0) / 1_000_000L);
+            }
+        }
+    }
+
+    /**
      * T4-CU: as {@link #verifyBootsAndServes(String, String, List, boolean)}, but keeping WHICH
      * criteria the probes refuted instead of only the summary sentence.
      *
@@ -209,20 +270,25 @@ public class BootGate {
     public Optional<ClaimRefutation> verifyBootsAndServesWithAttribution(
             String cycleId, String specText, List<String> behaviouralCriteria,
             boolean allowModelFallback) {
-        long t0 = System.nanoTime();
-        try {
-            return verifyBootsAndServesTimed(cycleId, specText, behaviouralCriteria,
-                    allowModelFallback);
-        } finally {
-            if (buildCostTracker != null) {
-                buildCostTracker.record(cycleId, "boot-gate", (System.nanoTime() - t0) / 1_000_000L);
-            }
-        }
+        return observeBootsAndServes(cycleId, specText, behaviouralCriteria, allowModelFallback)
+                .refutation();
+    }
+
+    private BootObservation observeTimed(String cycleId, String specText,
+                                                       List<String> behaviouralCriteria,
+                                                       boolean allowModelFallback) {
+        Evidence evidence = new Evidence();
+        Optional<ClaimRefutation> refutation =
+                verifyBootsAndServesTimed(cycleId, specText, behaviouralCriteria,
+                        allowModelFallback, evidence);
+        return new BootObservation(evidence.launchedAndServed && refutation.isEmpty(),
+                List.copyOf(evidence.passingCriteria), refutation);
     }
 
     private Optional<ClaimRefutation> verifyBootsAndServesTimed(String cycleId, String specText,
                                                        List<String> behaviouralCriteria,
-                                                       boolean allowModelFallback) {
+                                                       boolean allowModelFallback,
+                                                       Evidence evidence) {
         if (!enabled || !buildExecutor.isEnabled()) {
             return Optional.empty();
         }
@@ -250,7 +316,7 @@ public class BootGate {
 
         long start = System.currentTimeMillis();
         Optional<ClaimRefutation> failure = launchAndObserve(artifact.get(), declared, workingDir,
-                specText, behaviouralCriteria, allowModelFallback);
+                specText, behaviouralCriteria, allowModelFallback, evidence);
         long elapsed = System.currentTimeMillis() - start;
         log.info("T4-BV: boot gate result={} (durationMs={})", failure.isEmpty() ? "OK" : "BLOCKED", elapsed);
         if (behaviourLogger != null) {
@@ -268,7 +334,8 @@ public class BootGate {
     private Optional<ClaimRefutation> launchAndObserve(Path artifact, Set<EndpointSurfaceQuery.Endpoint> declared,
                                               Path workingDir, String specText,
                                               List<String> behaviouralCriteria,
-                                              boolean allowModelFallback) {
+                                              boolean allowModelFallback,
+                                              Evidence evidence) {
         int port;
         try (ServerSocket socket = new ServerSocket(0)) {
             port = socket.getLocalPort();
@@ -444,7 +511,15 @@ public class BootGate {
             // for a reason that is not their own, and the reader needs the 500 before the five
             // symptoms. The shared cap keeps the item short.
             List<ProbeFailure> criterionFailures = probeBehaviouralCriteria(allowModelFallback,
-                    client, port, specText, behaviouralCriteria, workingDir);
+                    client, port, specText, behaviouralCriteria, workingDir, evidence);
+            // T4-DW: the process started, answered HTTP, and every endpoint the specification
+            // names was probed without a failure. This is the one path in this method that
+            // establishes the claim a boot-gate work item makes, so it is the one path that may
+            // retire one. Recorded BEFORE the criterion verdict below, because the endpoint claim
+            // and the criterion claims are different claims with different evidence: a
+            // contradicted criterion does not unsay "it runs and serves", and the observation's
+            // own refutation field keeps the caller from acting on a run that was refuted.
+            evidence.launchedAndServed = endpointFailures.isEmpty();
             if (!endpointFailures.isEmpty() || !criterionFailures.isEmpty()) {
                 StringBuilder summary = new StringBuilder("the application runs, but ");
                 if (!endpointFailures.isEmpty()) {
@@ -1026,7 +1101,8 @@ public class BootGate {
      */
     private List<ProbeFailure> probeBehaviouralCriteria(boolean allowModelFallback,
                                                   HttpClient client, int port, String specText,
-                                                  List<String> criteria, Path artifactRoot) {
+                                                  List<String> criteria, Path artifactRoot,
+                                                  Evidence evidence) {
         List<ProbeFailure> failures = new ArrayList<>();
         if (!criterionProbeEnabled || criterionProbeSynthesizer == null
                 || criteria == null || criteria.isEmpty()) {
@@ -1151,6 +1227,13 @@ public class BootGate {
                         "\"" + assertion.criterionText() + "\" — " + assertion.describe()
                         + ", but the running application answered " + observed.status()
                         + " to " + judged));
+            } else if (evidence != null) {
+                // T4-DW: reached only after a completed sequence whose final status matched, so
+                // this list holds criteria the artifact was actually asked and answered. Every
+                // `continue` above — unparsed, unprobeable, setup refused, body refused, transport
+                // failure — leaves the criterion OUT of it, which is the whole point: a criterion
+                // that was skipped must not retire the work item that quotes it.
+                evidence.passingCriteria.add(criterion);
             }
         }
         int unobservedTotal = unobserved.values().stream().mapToInt(Integer::intValue).sum();

@@ -54,6 +54,16 @@ public class CycleExecutor implements CheckpointableState {
             "${autobuilder.build.packaging-repair-per-cycle:true}")
     private boolean packagingRepairEnabled = true;
 
+    /** T4-DW: the retiring direction of the gate observations — optional, like its siblings. */
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector blockerSubgoalInjector;
+
+    /** T4-DW: one switch, matching T4-CZ's and T2-FK's, in case retirement misbehaves in the field. */
+    @org.springframework.beans.factory.annotation.Value(
+            "${autobuilder.goal.retire-boot-items-per-cycle:true}")
+    private boolean bootItemRetirementEnabled = true;
+
     /** T4-CZ: one switch, in case requiring the entry point early ever misbehaves in the field. */
     @org.springframework.beans.factory.annotation.Value(
             "${autobuilder.goal.entry-point-required-early:true}")
@@ -274,6 +284,15 @@ public class CycleExecutor implements CheckpointableState {
         // a runnable artifact and no entry point exists.
         if (entryPointRequirementEnabled) {
             goalPlannerService.requireEntryPointNow(context.previousOutput());
+            // T4-DW: the same scan in the retiring direction, on the same cycle and the same
+            // inputs. An entry-point requirement that the sources now satisfy is not work; it is
+            // an ACTIVE leaf, and one of those is enough to make autoCompleteRootIfSatisfied
+            // early-return for the rest of the run. Asking both directions here keeps the raise
+            // and the retirement in one place, so neither can be routed to an edge the other
+            // never reaches.
+            if (bootItemRetirementEnabled && blockerSubgoalInjector != null) {
+                blockerSubgoalInjector.clearEntryPointBuildFixSubgoals(context.previousOutput());
+            }
         }
 
         // T2-FK: the same routing problem as T4-CZ above, one step later in the artifact's life.
@@ -300,9 +319,21 @@ public class CycleExecutor implements CheckpointableState {
         if (behaviouralSelfCheck != null) {
             GoalEntity selfCheckRoot = goalPlannerService.getRootGoal();
             String spec = selfCheckRoot != null ? selfCheckRoot.getDescription() : null;
-            behaviouralSelfCheck
-                    .observe(context, spec, goalPlannerService::specDerivedRequirements)
-                    .ifPresent(goalPlannerService::injectObservedBehaviouralDefect);
+            com.walpro.autobuilder.core.build.BehaviouralSelfCheck.SelfCheckResult selfCheck =
+                    behaviouralSelfCheck.observeWithEvidence(
+                            context, spec, goalPlannerService::specDerivedRequirements);
+            selfCheck.finding().ifPresent(defect -> goalPlannerService.injectObservedBehaviouralDefect(
+                    defect,
+                    selfCheck.observation().refutation()
+                            .map(com.walpro.autobuilder.goal.ClaimRefutation::refutedCriteria)
+                            .orElse(java.util.List.of())));
+            // T4-DW: the same observation, read for what it ESTABLISHED. This is the only place a
+            // boot-gate item can be retired, because it is the only per-cycle caller that runs the
+            // gate against the tree on disk — the evaluation agent's re-run judges a STAGED
+            // candidate, which must never retire an item about the merged tree.
+            if (bootItemRetirementEnabled && blockerSubgoalInjector != null) {
+                blockerSubgoalInjector.clearBootBuildFixSubgoals(selfCheck.observation());
+            }
         }
 
         // T5-R: attribute interpretation's LLM call to the "interpretation" role.

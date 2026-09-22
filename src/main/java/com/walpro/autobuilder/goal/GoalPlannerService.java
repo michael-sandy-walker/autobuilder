@@ -369,6 +369,18 @@ public class GoalPlannerService {
         saveGoalMetadata(goal);
     }
 
+    /**
+     * T4-DW: stores the criteria a boot-gate work item was raised from, so the retirement can
+     * require those same criteria to be re-probed and pass rather than accepting the absence of a
+     * contradiction (which a sweep that judged nothing also produces).
+     */
+    public void setGoalMetadataStrings(String goalId, String key, List<String> values) {
+        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
+        if (goal == null || values == null || values.isEmpty()) return;
+        goal.getMetadata().put(key, List.copyOf(values));
+        saveGoalMetadata(goal);
+    }
+
     /** T4-CC: reads a string flag from goal metadata (null when absent or goal not found). */
     public String getGoalMetadataString(String goalId, String key) {
         GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
@@ -3752,6 +3764,10 @@ public class GoalPlannerService {
                         for (String id : injected.injectedIds()) {
                             setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
                                     com.walpro.autobuilder.core.build.BlockerTypes.GATE_BOOT);
+                            // T4-DW: the claim is that the packaged artifact does not run as the
+                            // specification states, so only a launch that served cleanly retires it.
+                            setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.BOOT_CLAIM_KEY,
+                                    com.walpro.autobuilder.core.build.BlockerTypes.CLAIM_SERVES);
                         }
                         log.warn("T4-BV: root closure blocked — {}; work item injected", bootFailure.get());
                         recordClosureRefusal("T4-BV", root.getId(), bootFailure.get(), List.of());
@@ -4167,13 +4183,34 @@ public class GoalPlannerService {
      * goal directly.
      */
     public boolean injectObservedBehaviouralDefect(String description) {
+        return injectObservedBehaviouralDefect(description, List.of());
+    }
+
+    /**
+     * T4-DW: as above, recording WHICH criteria the observation refuted.
+     *
+     * <p>A defect the probes attributed to named criteria is a claim about those criteria, and is
+     * answered by probing them again — not by a later run happening not to contradict anything.
+     * With nothing attributed the item is the whole-artifact claim the gate's summary describes,
+     * and the serving observation answers it.
+     */
+    public boolean injectObservedBehaviouralDefect(String description, List<String> refutedCriteria) {
         GoalEntity root = getRootGoal();
         if (root == null || description == null || description.isBlank()) return false;
         CoverageReviewResult injected = injectCoverageGaps(root, List.of(description));
         if (injected.injected().isEmpty()) return false;
+        boolean attributed = refutedCriteria != null && !refutedCriteria.isEmpty();
         for (String id : injected.injectedIds()) {
             setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
                     com.walpro.autobuilder.core.build.BlockerTypes.GATE_BOOT);
+            setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.BOOT_CLAIM_KEY,
+                    attributed ? com.walpro.autobuilder.core.build.BlockerTypes.CLAIM_CRITERION
+                               : com.walpro.autobuilder.core.build.BlockerTypes.CLAIM_SERVES);
+            if (attributed) {
+                setGoalMetadataStrings(id,
+                        com.walpro.autobuilder.core.build.BlockerTypes.BOOT_CLAIM_CRITERIA_KEY,
+                        refutedCriteria);
+            }
         }
         log.warn("T4-CY: observed behavioural defect injected as work: {}", description);
         return true;
@@ -4218,6 +4255,11 @@ public class GoalPlannerService {
                     com.walpro.autobuilder.core.persistence.EntryPointScan.ENTRY_POINT_CRITERION));
             setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
                     com.walpro.autobuilder.core.build.BlockerTypes.GATE_BOOT);
+            // T4-DW: a claim about the SOURCES, so the scan that raised it is the evidence that
+            // retires it — no launch required, which matters because this item lives in runs whose
+            // tree does not compile.
+            setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.BOOT_CLAIM_KEY,
+                    com.walpro.autobuilder.core.build.BlockerTypes.CLAIM_ENTRY_POINT);
         }
         log.warn("T4-CZ: the specification names endpoints and no source declares an entry point —"
                 + " requirement injected mid-run rather than waiting for a closure attempt");

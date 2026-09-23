@@ -40,7 +40,7 @@ metadata:
   every cycle ([[feedback-count-events-not-log-lines]] again, in a new costume). The
   *"static void main"* reader I was about to recommend next does not appear in the corpus top
   clusters at all — a one-run accident.
-- **`CriterionParseReport` (`tools/`, run against `~/.autobuilder/run-archive`) is the instrument.**
+- **`scripts/criterion_parse_report.sh` is the instrument** (wraps `tools/CriterionParseReport`; defaults to `~/.autobuilder/run-archive`, seconds, no model, safe beside a live run).
   Calls the REAL `claimOf` over all 106 archived goal stacks: **8862 authored, 3786 distinct per
   target, 44% readable.** By target: firestarter 46%, clitarget 38%, **flightsim 0 of 92**.
   - Unreadable families: **420 request-shaped** (264 clusters — query strings, backtick prose,

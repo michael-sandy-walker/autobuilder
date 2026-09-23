@@ -521,6 +521,7 @@
   <div class="mc-row"><span class="k">cycle</span><span class="v" id="mc-cycle">—</span></div>
   <div class="mc-row"><span class="k">mode</span><span class="v mode" id="mc-mode">—</span></div>
   <div class="mc-row"><span class="k">subgoal</span><span class="v sub" id="mc-subgoal">—</span></div>
+  <div class="mc-row"><span class="k">criteria</span><span class="v" id="mc-criteria" title="">—</span></div>
   <div class="mc-row"><span class="k">last agent</span><span class="v" id="mc-agent">—</span></div>
   <div class="mc-row"><span class="k">goals</span><span class="v" id="mc-goals">—</span></div>
   <div class="mc-row"><span class="k">runtime</span><span class="v" id="mc-runtime">—</span></div>
@@ -979,13 +980,20 @@ function mergeSnapshot(goals) {
     if (!incoming.has(id)) state.nodesById.delete(id);
   }
   // Rebuild links from parentId.
+  // T5-BO: the whole path from the root down to the current subgoal flows, not only the current
+  // subgoal's own edges, so the eye can follow where in the tree the work is happening.
+  const onPath = new Set();
+  for (let c = state.nodesById.get(state.currentSubGoalId); c && !onPath.has(c.id);
+       c = c.parentId ? state.nodesById.get(c.parentId) : null) {
+    onPath.add(c.id);
+  }
   state.links = [];
   for (const n of state.nodesById.values()) {
     if (n.parentId && state.nodesById.has(n.parentId)) {
       state.links.push({
         source: n.parentId,
         target: n.id,
-        current: n.id === state.currentSubGoalId || n.parentId === state.currentSubGoalId
+        current: onPath.has(n.id) || n.parentId === state.currentSubGoalId
       });
     }
   }
@@ -3050,6 +3058,25 @@ window.MissionControl = (function () {
     const el = $('mc-subgoal'); if (!el) return;
     el.textContent = crop(desc, 72);
     el.title = desc;
+    refreshCriteriaHud();
+  }
+
+  // T5-BO: which criteria the current subgoal is judged against, without opening its panel —
+  // met/total in the row, each criterion on hover, read from the same detail the panel uses.
+  async function refreshCriteriaHud() {
+    const el = $('mc-criteria'); if (!el) return;
+    const id = state.currentSubGoalId;
+    if (!id) { el.textContent = '—'; el.title = ''; return; }
+    try {
+      const r = await fetch(API + '/' + encodeURIComponent(id));
+      if (!r.ok || state.currentSubGoalId !== id) return;
+      const d = await r.json();
+      const list = Array.isArray(d.criteria) ? d.criteria : [];
+      if (!list.length) { el.textContent = 'none stated'; el.title = ''; return; }
+      const met = list.filter(c => c.cumulativePassed).length;
+      el.textContent = met + '/' + list.length + ' met';
+      el.title = list.map(c => (c.cumulativePassed ? '[met] ' : '[open] ') + (c.text || '')).join('\n');
+    } catch (e) { /* the row keeps its last value; the panel remains the full view */ }
   }
 
   // T5-BF: HUD runtime — total wall-clock since the loop's first behaviour event, ticking.
@@ -3128,6 +3155,7 @@ window.MissionControl = (function () {
       showPosition({ cycleId: p.toCycleId, rewound: true });
       refreshFromStatus();
     }
+    if (env.event === 'cycle_end') refreshCriteriaHud();
     if (env.event === 'agent_selected' && p.role) hudSet('mc-agent', p.role);
     if (env.event === 'cycle_end') {
       if (p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));

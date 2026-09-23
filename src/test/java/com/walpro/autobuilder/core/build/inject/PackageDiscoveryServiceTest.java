@@ -25,6 +25,8 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 /**
  * T4-BM: discovery answers from the project's own observations — a fake local-repository layout
@@ -441,6 +443,32 @@ class PackageDiscoveryServiceTest {
         assertThat(hit.get().source()).isEqualTo("coordinate-search");
         assertThat(hit.get().resolution().artifactId()).isEqualTo("spring-boot-starter-data-jpa");
         assertThat(hit.get().resolution().version()).isEqualTo("3.3.2");
+    }
+
+    @Test
+    void lookupUndeclaredPackage_asksForTheTypeTheFileImportsFromThePackage_notTheBuildsFirstSymbol()
+            throws IOException {
+        // T1-GF, run 2026-09-23_20-20-50: the build reported `package org.springframework.boot does
+        // not exist` and, first among its missing symbols, `SpringBootApplication` — which lives in
+        // `...boot.autoconfigure`. Pairing those two asked the index for a class that does not
+        // exist. The file's own import names the type that is really in the missing package.
+        projectSource("src/main/java/com/example/library/LibraryApplication.java", """
+                package com.example.library;
+                import org.springframework.boot.SpringApplication;
+                import org.springframework.boot.autoconfigure.SpringBootApplication;
+                @SpringBootApplication
+                public class LibraryApplication {}
+                """);
+        when(searchClient.findByFullyQualifiedName("org.springframework.boot.SpringApplication"))
+                .thenReturn(Optional.of(new CoordinateSearchClient.Coordinates(
+                        "org.springframework.boot", "spring-boot", "3.5.3")));
+
+        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupUndeclaredPackage(
+                "org.springframework.boot", "SpringBootApplication", projectRoot);
+
+        assertThat(hit).isPresent();
+        assertThat(hit.get().resolution().artifactId()).isEqualTo("spring-boot");
+        verify(searchClient, never()).findByFullyQualifiedName("org.springframework.boot.SpringBootApplication");
     }
 
     @Test

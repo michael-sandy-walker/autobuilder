@@ -226,19 +226,52 @@ public class PackageDiscoveryService {
         if (onClasspath.isPresent()) return onClasspath;
 
         if (packageName == null || packageName.isBlank() || !packageName.contains(".")) return Optional.empty();
-        if (typeName == null || !SIMPLE_TYPE_NAME.matcher(typeName).matches()) return Optional.empty();
         if (projectRoot == null || !Files.isDirectory(projectRoot)) return Optional.empty();
+
+        // The type half of the FQN. The project's own import of a type FROM this package is exact;
+        // the type the build names elsewhere is only a guess at the pairing. Run 2026-09-23_20-20-50
+        // paired `org.springframework.boot` with the build's first missing type,
+        // `SpringBootApplication` — which lives one package down — so the search was asked for a
+        // class that does not exist and answered nothing, while the file itself imported
+        // `org.springframework.boot.SpringApplication`.
+        List<String> typeNames = new ArrayList<>(importedTypesFrom(packageName, projectRoot));
+        if (typeName != null && SIMPLE_TYPE_NAME.matcher(typeName).matches() && !typeNames.contains(typeName)) {
+            typeNames.add(typeName);
+        }
+        if (typeNames.isEmpty()) return Optional.empty();
         if (sharesNamespaceWithProject(packageName, declaredPackages(projectRoot))) {
             log.debug("T2-FA: {} is inside the project's own namespace — a type it has not written,"
                     + " not a dependency to add; abstaining", packageName);
             return Optional.empty();
         }
 
-        String fqn = packageName + "." + typeName;
-        Optional<CoordinateSearchClient.Coordinates> coords = coordinateSearchClient.findByFullyQualifiedName(fqn);
-        if (coords.isEmpty()) return Optional.empty();
-        return Optional.of(discovered(packageName, "coordinate-search", new Resolution(
-                fqn, coords.get().groupId(), coords.get().artifactId(), coords.get().version())));
+        for (String type : typeNames) {
+            String fqn = packageName + "." + type;
+            Optional<CoordinateSearchClient.Coordinates> coords = coordinateSearchClient.findByFullyQualifiedName(fqn);
+            if (coords.isPresent()) {
+                return Optional.of(discovered(packageName, "coordinate-search", new Resolution(
+                        fqn, coords.get().groupId(), coords.get().artifactId(), coords.get().version())));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Simple names the project's sources import FROM exactly {@code packageName}, in first-seen
+     * order. Single-type imports only — a wildcard names no type.
+     */
+    static List<String> importedTypesFrom(String packageName, Path projectRoot) {
+        List<String> out = new ArrayList<>();
+        for (Set<String> fqns : importIndex(projectRoot).values()) {
+            for (String fqn : fqns) {
+                int lastDot = fqn.lastIndexOf('.');
+                if (lastDot > 0 && fqn.substring(0, lastDot).equals(packageName)) {
+                    String simple = fqn.substring(lastDot + 1);
+                    if (SIMPLE_TYPE_NAME.matcher(simple).matches() && !out.contains(simple)) out.add(simple);
+                }
+            }
+        }
+        return out;
     }
 
     /**
@@ -461,9 +494,9 @@ public class PackageDiscoveryService {
     private static Map<String, Set<String>> importIndex(Path projectRoot) {
         Path srcRoot = projectRoot.resolve("src");
         if (!Files.isDirectory(srcRoot)) return Map.of();
-        Map<String, Set<String>> index = new HashMap<>();
+        Map<String, Set<String>> index = new LinkedHashMap<>();
         try (Stream<Path> walk = Files.walk(srcRoot)) {
-            walk.filter(Files::isRegularFile)
+            walk.sorted().filter(Files::isRegularFile)
                     .filter(p -> p.getFileName().toString().endsWith(".java"))
                     .forEach(p -> {
                         try {

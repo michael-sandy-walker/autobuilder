@@ -99,8 +99,10 @@ public class CoordinateSearchClient {
         if (cached != null) return cached;
 
         Optional<Coordinates> result = query(fqn);
-        cache.put(fqn, result);
-        return result;
+        // T1-GF: a lookup that could not be consulted is NOT an answer. Caching it made one
+        // transient timeout read as "no artifact provides this class" for the rest of the session.
+        if (result != null) cache.put(fqn, result);
+        return result == null ? Optional.empty() : result;
     }
 
     /**
@@ -190,8 +192,68 @@ public class CoordinateSearchClient {
         }
     }
 
+    /**
+     * T1-GF: constrained by groupId, then versioned separately.
+     *
+     * <p>An unconstrained {@code fc:} query ranks every artifact that REPUBLISHES the class, one
+     * document per version, so a popular class's top rows are other projects' shims —
+     * {@code JpaRepository}'s top five were all {@code io.quarkus} — and the prefix filter in
+     * {@link #parse} then abstained. The filter's own convention (a groupId is a prefix of the
+     * package) is asked of the index instead: each segment-aligned prefix of the package, longest
+     * first, as an exact {@code g:} constraint. Those are the only groups {@link #parse} would
+     * accept anyway, so this cannot select anything it would have rejected.
+     *
+     * <p>The version is then asked as its own question ({@link #versionsOf}, newest first by
+     * publish time): the {@code fc:} rows are per version and in no useful order, and the first
+     * accepted one for {@code SpringApplication} was a 2015 release.
+     *
+     * @return the answer, or {@code null} when the index could not be consulted at all
+     */
     private Optional<Coordinates> query(String fqn) {
-        return queryBody("fc:" + fqn, 5, "").flatMap(body -> parse(body, fqn));
+        int lastDot = fqn.lastIndexOf('.');
+        if (lastDot <= 0) return Optional.empty();
+        String pkg = fqn.substring(0, lastDot);
+        for (String group : groupCandidates(pkg)) {
+            Optional<String> body = queryBody("fc:\"" + fqn + "\" AND g:\"" + group + "\"", 1, "");
+            if (body.isEmpty()) {
+                log.info("T1-GF: coordinate search for {} could not be consulted — abstaining, not cached", fqn);
+                return null;
+            }
+            Optional<Coordinates> hit = parse(body.get(), fqn);
+            if (hit.isEmpty()) continue;
+            Coordinates c = hit.get();
+            String version = preferredVersion(versionsOf(c.groupId(), c.artifactId())).orElse(c.version());
+            Coordinates chosen = new Coordinates(c.groupId(), c.artifactId(), version);
+            log.info("T1-GF: coordinate search resolved {} -> {}:{}:{}", fqn,
+                    chosen.groupId(), chosen.artifactId(), chosen.version());
+            return Optional.of(chosen);
+        }
+        log.info("T1-GF: coordinate search found no artifact whose group prefixes the package of {}", fqn);
+        return Optional.empty();
+    }
+
+    /** Segment-aligned prefixes of {@code pkg} with at least two segments, longest first. */
+    static List<String> groupCandidates(String pkg) {
+        List<String> out = new ArrayList<>();
+        String[] parts = pkg.split("\\.");
+        for (int n = parts.length; n >= 2; n--) {
+            out.add(String.join(".", java.util.Arrays.copyOfRange(parts, 0, n)));
+        }
+        return out;
+    }
+
+    /**
+     * The newest version whose string is plain dotted digits, else the newest of all. A
+     * qualifier-free version is the published-release convention, and a pre-release written into
+     * a manifest propagates into every later resolution (field 2026-07-09..14: a {@code -M1}
+     * milestone did exactly that). Reads only the string's shape, never an ordering.
+     */
+    static Optional<String> preferredVersion(ArtifactVersions versions) {
+        if (versions == null || versions.availability() != Availability.PRESENT) return Optional.empty();
+        for (String v : versions.versions()) {
+            if (v.matches("\\d+(\\.\\d+)*")) return Optional.of(v);
+        }
+        return versions.newest();
     }
 
     /** Shared transport: one request, one failure-budget decision. Empty = could not be consulted. */

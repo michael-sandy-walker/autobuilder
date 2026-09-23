@@ -78,4 +78,32 @@ class CoordinateSearchClientTest {
         assertThat(client.findByFullyQualifiedName(null)).isEmpty();
         assertThat(client.findByFullyQualifiedName("NoDotsHere")).isEmpty();
     }
+
+    // ── T1-GF: groupId-constrained query, version asked separately ──────────────────────────
+
+    @Test
+    void groupCandidates_areSegmentAlignedPrefixes_longestFirst_neverASingleSegment() {
+        assertThat(CoordinateSearchClient.groupCandidates("org.springframework.data.jpa.repository"))
+                .containsExactly("org.springframework.data.jpa.repository", "org.springframework.data.jpa",
+                        "org.springframework.data", "org.springframework");
+        assertThat(CoordinateSearchClient.groupCandidates("org")).isEmpty();
+    }
+
+    @Test
+    void preferredVersion_takesTheNewestPlainRelease_overANewerQualifiedOne() {
+        var versions = new CoordinateSearchClient.ArtifactVersions(CoordinateSearchClient.Availability.PRESENT,
+                java.util.List.of("4.0.0-M2", "3.5.3", "3.5.2", "1.2.8.RELEASE"));
+
+        assertThat(CoordinateSearchClient.preferredVersion(versions)).contains("3.5.3");
+    }
+
+    @Test
+    void preferredVersion_fallsBackToTheNewest_whenNoPlainReleaseExists_andAbstainsOnUnknown() {
+        var qualifiedOnly = new CoordinateSearchClient.ArtifactVersions(CoordinateSearchClient.Availability.PRESENT,
+                java.util.List.of("2.0.1.Final", "1.9.Final"));
+        assertThat(CoordinateSearchClient.preferredVersion(qualifiedOnly)).contains("2.0.1.Final");
+        assertThat(CoordinateSearchClient.preferredVersion(
+                new CoordinateSearchClient.ArtifactVersions(CoordinateSearchClient.Availability.UNKNOWN,
+                        java.util.List.of()))).isEmpty();
+    }
 }

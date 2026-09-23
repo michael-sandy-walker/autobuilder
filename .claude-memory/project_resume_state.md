@@ -1,17 +1,68 @@
 ---
 name: project-resume-state
-description: "2026-09-22 (Opus 5). The firestarter 'deterioration' is a RECOGNITION failure, not a build one. Canonical one-population numbers (firestarter, ledger rows, strict last-20 vs previous-20, real medians): 23/23 10/20 -> 9/20 and merges/cycle 0.27 -> 0.31, while GOAL_FULFILLED 10/20 -> 4/20 (9/10 -> 4/9 conditional on a perfect artifact) and runs ran ~40% shorter on operator caps. Residue: zero-residue runs 11/20 -> 5/19, boot-gate leaves 4 -> 17, ended 23/23 with an uncompleted root 1 -> 5. Root closure early-returns while ANY subgoal is ACTIVE, silently, and both 'is it done?' paths (verify-before-pause, the packaging mirror) hang off halt edges that a deadline kill bypasses. T4-DW filed for the missing boot-gate retirement. AND I answered one question off THREE of my own populations under one label, plus a non-median median -- the user caught it as target mixing when no clitarget row was ever in the numbers."
+description: "2026-09-23 evening (Opus 5). T2-FL instrumented, launch reader shipped, and a CORPUS READOUT that overturned the priority I had just acted on: CriterionParseReport over 106 archived goal stacks reads 8862 authored / 3786 distinct criteria at 44% readable (firestarter 46, clitarget 38, flightsim 0 of 92), and the launch reader I had just written covers 2 of 3786. I had picked it off ONE run whose 29 declines were 13 repeats of one criterion. Largest actionable family is 420 request-shaped criteria; 1330 of 1566 clusters are singletons, which is what settles the LLM-canonicalisation question. Two runs: 17-47-43 clean 23/23 zero-residue closed by T4-DW not by observation, 18-35-30 boot-failed with OPPORTUNITY-NO-FIRE(24). A promotion DID fulfil the goal -- by SCORE, not observation."
 metadata:
   node_type: memory
   type: project
   originSessionId: 609aab02-3d49-46ec-874f-e42f8a4aa75f
-  modified: 2026-09-22T12:00:00.000Z
+  modified: 2026-09-23T19:50:00.000Z
 ---
 
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-23 (Opus 5) — T2-FL BUILT: THE LOOP NEVER ASKED THE QUESTIONS THAT WOULD HAVE CLOSED THE RUN — START HERE
+## 2026-09-23 EVENING (Opus 5) — TWO FIELD RUNS, AND A CORPUS READOUT THAT OVERTURNED THE PRIORITY I HAD JUST ACTED ON — START HERE
+
+**Four commits: `6e7aba30` (sweep instrumentation + watch), `fac2a962` (launch reader), `74fc9ecb`
+(corpus readout), plus ledger/docs. Suite 3202 green. Nothing pushed.**
+
+- **Run `2026-09-23_17-47-43` — clean, and NOT this ticket's.** `GOAL_FULFILLED`, 23/23 final and
+  preserved, 29.8 min of a 45-min cap, 26 cycles, 11 merges, **zero residue** (24 SUBSUMED, 10
+  COMPLETED, root COMPLETED, peaked at the final cycle). The root closed because **`T4-DW`**
+  subsumed three boot-gate items; `promoteSatisfiedLeaves` promoted nothing.
+  - **The user asked the right question about this: "wasn't there a promotion?" There was — 9
+    `subgoal_promoted` events and 9 ACTIVE→COMPLETED.** My "the promotion path did not fire" was
+    too loose. What closed those leaves was a SCORE (`interpreter=FULFILLED`, `score-based closure
+    + meaningful diff`, `graduation: 7/8`), not an OBSERVATION. That distinction is the whole of
+    T2-FL, and it is also open `T2-ET`.
+- **The instrumentation defect, and it was in T2-FL's own fix:** the sweep reported refusals with
+  `log.debug` under a comment saying it existed *"because otherwise declined and never ran are the
+  same silence"* — and the runs log at INFO, **zero DEBUG lines in 26 cycles**. The fix reproduced
+  the ambiguity it was written to end. **A log level is part of a claim about visibility.**
+  Now a per-sweep `observed_leaf_promotion` behaviour event (emitted even with zero candidates — a
+  per-leaf event keeps the hole) plus watch `t2fl-leaf-promoted-by-observation`.
+- **Run `2026-09-23_18-35-30` — poor run, excellent readout.** `honest-halt:root-convergence-stall`,
+  `boot-failed`, 2 merges in 24 cycles, stalled on a compile error. Watch:
+  **`OPPORTUNITY-NO-FIRE(24)`** — 24 sweeps, every one with a candidate, zero promotions, each
+  naming its objection. Two runs are not a rate; what it bought is the decline distribution.
+- **THE ONE TO CARRY: I chose the next fix off that ONE run's decline counts, and the corpus
+  says it was worth 2 criteria out of 3786.** 13 of those 29 declines were ONE criterion re-examined
+  every cycle ([[feedback-count-events-not-log-lines]] again, in a new costume). The
+  *"static void main"* reader I was about to recommend next does not appear in the corpus top
+  clusters at all — a one-run accident.
+- **`CriterionParseReport` (`tools/`, run against `~/.autobuilder/run-archive`) is the instrument.**
+  Calls the REAL `claimOf` over all 106 archived goal stacks: **8862 authored, 3786 distinct per
+  target, 44% readable.** By target: firestarter 46%, clitarget 38%, **flightsim 0 of 92**.
+  - Unreadable families: **420 request-shaped** (264 clusters — query strings, backtick prose,
+    compound "or HTTP 404" clauses) · **185 source-structure** ("X.java exists at …") · 58
+    *"Create X.java"* which are CORRECT declines · **1330 of 1566 clusters are singletons**.
+  - **The singleton tail is the finding that settles the LLM question**: no number of hand-written
+    readers closes a 1330-shape tail. And the corpus is a ready-made 3786-criterion scoring set
+    with a known 44% deterministic baseline, which makes the LLM canonicalisation measurable
+    instead of a judgement call.
+- **NEXT, in order:** (1) widen the REQUEST reader — 420 criteria, one reader, not several;
+  (2) then LLM canonicalisation **at authoring time, stored on goal metadata**, never inside
+  `claimOf` (it ran 24 times in 26 minutes and its contract is to cost nothing); (3) source-structure
+  reader third. Field run last, read through the new watch.
+- **Two corrections worth keeping:** a NUL byte reached a source file via a `"\u0000"` map-key
+  separator written through a JSON tool — `file` read it as `data`, grep skipped it SILENTLY, and
+  that looks exactly like "no matches"; re-keyed to a record. And the watch's own check text
+  claimed a control run reports NOT-OBSERVED when it reports NO-OPPORTUNITY.
+- **Filed `T5-BQ`** on the user's note: `graph.html setGoalCounts` already receives the SUBSUMED
+  count and spends it only on the hover title, while firestarter trees end mostly SUBSUMED.
+
+
+## 2026-09-23 (Opus 5) — T2-FL BUILT: THE LOOP NEVER ASKED THE QUESTIONS THAT WOULD HAVE CLOSED THE RUN
 
 **No field run this session.** A build session off the previous entry's residue finding, on the
 user's choice between two scopes and a second steer mid-build.

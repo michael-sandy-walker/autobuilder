@@ -61,4 +61,27 @@ public interface ClosureClaimVerifier {
      *         made refusals uncountable. See {@link ClaimRefutation}.
      */
     Optional<ClaimRefutation> refute(String goalId, List<String> criteria, String specText);
+
+    /**
+     * T2-ET: asks whether the observation a work item was RAISED from still holds, at the moment
+     * the loop claims the item is done.
+     *
+     * <p>An item raised from an observation of the running artifact ("the application exits at
+     * startup — …") declares no acceptance criteria, so {@link #refute} has nothing to ask and a
+     * model score closed it unchecked. Measured over the September archive: 37 such closures whose
+     * next observation could be classified, 9 of them followed by the SAME defect — and the
+     * observer does not re-raise a finding identical to its last one, so each of those nine was
+     * lost rather than re-queued.
+     *
+     * <p>Same contract as {@link #refute}: it refutes, it never confirms. Only a reproduction of
+     * {@code observedDefect} itself counts — a DIFFERENT defect means this item's repair landed
+     * and the next one is another item's work, which is how 13 of those 37 closures were right.
+     *
+     * @return the reproduced defect, or empty when it was not reproduced or nothing could be
+     *         observed
+     */
+    default Optional<ClaimRefutation> refuteObservedDefect(String goalId, String observedDefect,
+                                                           String specText) {
+        return Optional.empty();
+    }
 }

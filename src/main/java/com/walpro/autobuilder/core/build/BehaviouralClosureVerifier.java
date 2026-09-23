@@ -157,4 +157,36 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
                 goalId, refutation.description(), refutation.refutedCriteria().size());
         return contradiction;
     }
+
+    /**
+     * T2-ET: the observation is re-taken the way the self-check took it — package, then launch
+     * against the endpoints the specification names — with no criteria, because an item carrying
+     * the whole-artifact claim was raised from a finding that attributed none.
+     *
+     * <p>"Same defect" is identity of the gate's own summary, not similarity. The summary is
+     * produced deterministically from what the launch reported, so a defect that persists yields
+     * the same sentence; anything else — a different startup failure, one endpoint of two now
+     * answering — reads as not reproduced, and closure proceeds as before. That errs toward the
+     * old behaviour whenever the two differ at all, which is the direction this interface requires.
+     */
+    @Override
+    public Optional<ClaimRefutation> refuteObservedDefect(String goalId, String observedDefect,
+                                                          String specText) {
+        if (!enabled || observedDefect == null || observedDefect.isBlank()) return Optional.empty();
+        String checkId = "closure-" + goalId;
+        if (packageGate.verifyPackageable(checkId).isPresent()) {
+            log.info("T2-ET: cannot re-observe {} — the artifact is not packageable", goalId);
+            return Optional.empty();
+        }
+        Optional<ClaimRefutation> now = bootGate.verifyBootsAndServesWithAttribution(
+                checkId, specText, List.of(), false);
+        if (now.isPresent() && observedDefect.strip().equals(now.get().description().strip())) {
+            log.warn("T2-ET: {} was about to be closed while the defect it was raised for is still"
+                    + " observed — {}", goalId, now.get().description());
+            return now;
+        }
+        log.info("T2-ET: {} — the defect it was raised for is no longer observed ({})", goalId,
+                now.isPresent() ? "a different one is" : "none is, or the launch abstained");
+        return Optional.empty();
+    }
 }

@@ -2716,9 +2716,11 @@ public class GoalPlannerService {
         // the item should keep being worked, not spawn a twin. Measured in run
         // 2026-09-20_09-43-23: three identical items in 100 seconds, one per refusal, until the
         // run was stopped; half the goal tree was duplicates.
+        // T2-ET widened this from the criteria gate to every gate: a boot-gate item refused on the
+        // criteria it quotes is in the same position — its done-when IS those criteria.
         GoalEntity refused = goalMap.get(goalId);
-        if (refused != null && BlockerTypes.isFromCriteriaGate(refused.getMetadata())) {
-            log.info("T4-CU: {} is itself a criteria-gate repair item — not injecting a twin;"
+        if (refused != null && BlockerTypes.isFromGate(refused.getMetadata())) {
+            log.info("T4-CU: {} is itself a gate-raised repair item — not injecting a twin;"
                     + " the existing item stays the work", goalId);
             return;
         }
@@ -2762,6 +2764,12 @@ public class GoalPlannerService {
         if (closureClaimVerifier == null) return Optional.empty();
         GoalEntity g = goalMap.get(goalId);
         if (g == null || g.getMetadata() == null) return Optional.empty();
+        // T2-ET: a work item the boot gate raised is a claim about an OBSERVATION, and it
+        // usually declares no criteria — so the check below abstained and a model score was the
+        // only thing that closed it. Ask the observation first; the criteria, if any, still
+        // follow.
+        Optional<ClaimRefutation> observed = refuteOriginatingObservation(g);
+        if (observed.isPresent()) return observed;
         Object raw = g.getMetadata().get("acceptanceCriteria");
         if (!(raw instanceof List<?> l) || l.isEmpty()) {
             // INFO, not DEBUG: this is the THIRD way this check can be silent, and until
@@ -2820,6 +2828,47 @@ public class GoalPlannerService {
                     goalId, e.toString());
             return Optional.empty();
         }
+    }
+
+    /**
+     * T2-ET: the originating gate's vote on the closure of an item it raised.
+     *
+     * <p>T4-CC gave the gate precedence over the model for accepting a MUTATION on such an item;
+     * nothing gave it a say in closing the item itself. Measured over the September archive: 45
+     * boot-gate items closed by score, none by the gate, and of the 37 whose next observation
+     * could be classified, 9 were followed by the very defect they named. The self-check does not
+     * re-raise a finding identical to its last one, so each of those nine was lost for the rest of
+     * the run rather than re-queued.
+     *
+     * <p>Read through the claim the injector stamped (T4-DW's {@code BOOT_CLAIM_KEY}), never
+     * through the item's prose: a whole-artifact item is re-observed for the same defect; an item
+     * quoting contradicted criteria has those criteria probed again. An entry-point item carries
+     * its own criterion and is answered below by the ordinary path. An unstamped item is left to
+     * that path too.
+     */
+    private Optional<ClaimRefutation> refuteOriginatingObservation(GoalEntity g) {
+        Map<String, Object> md = g.getMetadata();
+        if (!BlockerTypes.GATE_BOOT.equals(md.get(BlockerTypes.ORIGINATING_GATE_KEY))) {
+            return Optional.empty();
+        }
+        Object claim = md.get(BlockerTypes.BOOT_CLAIM_KEY);
+        GoalEntity specRoot = getRootGoal();
+        String specText = specRoot == null ? null : specRoot.getDescription();
+        try {
+            if (BlockerTypes.CLAIM_SERVES.equals(claim)) {
+                return closureClaimVerifier.refuteObservedDefect(g.getId(), g.getDescription(), specText);
+            }
+            if (BlockerTypes.CLAIM_CRITERION.equals(claim)
+                    && md.get(BlockerTypes.BOOT_CLAIM_CRITERIA_KEY) instanceof List<?> quoted
+                    && !quoted.isEmpty()) {
+                return closureClaimVerifier.refute(g.getId(),
+                        quoted.stream().map(String::valueOf).toList(), specText);
+            }
+        } catch (RuntimeException e) {
+            log.warn("T2-ET: originating-observation check for {} failed ({}) — treating as unchecked",
+                    g.getId(), e.toString());
+        }
+        return Optional.empty();
     }
 
     /**

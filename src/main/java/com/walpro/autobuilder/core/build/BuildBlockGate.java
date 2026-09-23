@@ -64,7 +64,7 @@ public class BuildBlockGate {
      * right BUILD_FIX subgoal description and acceptance criteria).
      *
      * <p>Strictly internal: never written back onto the context, so other readers of
-     * {@code ctx.buildOutcome()} (e.g. {@link com.walpro.autobuilder.analysis.heuristic.BuildResultHeuristic})
+     * {@code ctx.buildOutcome()} (the evaluation prompt's BUILD RESULT block, the build-fix heuristic)
      * continue to see the real outcome.</p>
      */
     private BuildOutcome effectiveBuildOutcome(CycleContextData ctx) {
@@ -75,7 +75,7 @@ public class BuildBlockGate {
         }
         RolledBackReport ev = ctx.lastRollback();
         if (ev != null) {
-            // cycleId from the rolled-back cycle — keeps BuildResultHeuristic.isFromCycle correct
+            // cycleId from the rolled-back cycle — keeps BuildOutcome.isFromCycle correct
             // (the rollback is from a previous cycle, not the current one).
             return new BuildOutcome(BuildResult.COMPILE_ERROR, ev.stderrSummary(),
                     0L, "<rollback>", ev.cycleId());

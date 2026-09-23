@@ -49,7 +49,7 @@ import com.walpro.autobuilder.core.build.ContainerMismatchExtractor;
  *   named in the build stderr's file-coordinate prefixes.</li>
  * </ol>
  *
- * <p>If the fix doesn't resolve the error, the post-merge build gate ({@code BuildResultHeuristic})
+ * <p>If the fix doesn't resolve the error, the post-merge build gate
  * will catch it next cycle and inject a new BUILD_FIX subgoal.
  */
 @Slf4j

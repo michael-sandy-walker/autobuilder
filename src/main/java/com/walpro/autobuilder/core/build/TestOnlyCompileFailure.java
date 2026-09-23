@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  * <p>T4-BN-2 made the per-cycle probe compile {@code src/test/java} as well as {@code src/main/java}
  * so test breaks steer evolution in-cycle. But the probe returns one undifferentiated
  * {@link BuildResult#COMPILE_ERROR}, and both the pre-merge probe ({@code CompileProbeService}) and
- * the post-merge gate ({@code BuildResultHeuristic}) reject + roll back the whole mutation on it.
+ * the post-merge gate reject + roll back the whole mutation on it.
  * Consequence (field-confirmed across the 06-17→06-23 test-seed runs, which fulfilled 0/15 vs 3/3 on
  * plain seeds): a mutation whose MAIN code compiles perfectly is thrown away whenever a test source
  * fails to compile — so once tests exist on disk, main evolution freezes and tests can never iterate

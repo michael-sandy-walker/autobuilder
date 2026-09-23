@@ -8,7 +8,7 @@ package com.walpro.autobuilder.core.build;
  * @param stderrTail  last N lines of stderr (truncated; never null — empty on success/skip)
  * @param durationMs  wall-clock duration of the build invocation
  * @param command     command line that was executed (for logging/prompt context)
- * @param cycleId     cycle in which this build ran — used by BuildResultHeuristic to detect stale results
+ * @param cycleId     cycle in which this build ran — used to tell a stale result from this cycle's
  */
 public record BuildOutcome(
         BuildResult result,

@@ -231,7 +231,7 @@ public record CycleContextData(
         // T4-AN-1: outcome of the post-merge compile gate. Set by MergeAgent when the build
         // executor is enabled (autobuilder.build.enabled=true). Carried forward across cycles
         // by ContextLineageTracker — represents the latest known compilation state of the
-        // target codebase, not a cycle-scoped fact. Consumed by BuildResultHeuristic and
+        // target codebase, not a cycle-scoped fact. Consumed by BuildFixAcceptanceHeuristic and
         // surfaced in the evaluation prompt as a --- BUILD RESULT --- block.
         BuildOutcome buildOutcome,
 

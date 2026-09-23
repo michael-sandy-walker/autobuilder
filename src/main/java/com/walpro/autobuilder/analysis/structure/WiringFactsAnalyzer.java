@@ -143,7 +143,7 @@ public class WiringFactsAnalyzer {
         boolean anyPersistenceCall = calledMethodNames.stream().anyMatch(n -> MUTATOR_CALL.matcher(n).matches());
         boolean anyEntityType = units.stream().anyMatch(u ->
                 u.findAll(com.github.javaparser.ast.expr.AnnotationExpr.class).stream()
-                        .anyMatch(a -> "Entity".equals(a.getNameAsString())));
+                        .anyMatch(a -> AnnotationVocabularies.PERSISTENT_TYPE.contains(a.getNameAsString())));
 
         for (CompilationUnit cu : units) {
             for (TypeDeclaration<?> type : cu.getTypes()) {
@@ -671,7 +671,7 @@ public class WiringFactsAnalyzer {
         for (CompilationUnit cu : units) {
             for (com.github.javaparser.ast.expr.AnnotationExpr a
                     : cu.findAll(com.github.javaparser.ast.expr.AnnotationExpr.class)) {
-                if (!"ExceptionHandler".equals(a.getNameAsString())) continue;
+                if (!AnnotationVocabularies.EXCEPTION_HANDLER.equals(a.getNameAsString())) continue;
                 List<String> targets = new ArrayList<>();
                 // @ExceptionHandler(X.class) / ({X.class, Y.class}) — collect the class literals.
                 a.findAll(com.github.javaparser.ast.expr.ClassExpr.class)
@@ -693,7 +693,7 @@ public class WiringFactsAnalyzer {
             // A type annotated @ResponseStatus maps itself.
             for (TypeDeclaration<?> type : cu.getTypes()) {
                 type.getAnnotations().stream()
-                        .filter(a -> "ResponseStatus".equals(a.getNameAsString()))
+                        .filter(a -> AnnotationVocabularies.STATUS_DECLARATION.equals(a.getNameAsString()))
                         .findFirst()
                         .ifPresent(a -> {
                             mapped.add(type.getNameAsString());
@@ -775,7 +775,7 @@ public class WiringFactsAnalyzer {
      */
     private static String handlerStatusText(MethodDeclaration handler) {
         for (com.github.javaparser.ast.expr.AnnotationExpr a : handler.getAnnotations()) {
-            if ("ResponseStatus".equals(a.getNameAsString())) {
+            if (AnnotationVocabularies.STATUS_DECLARATION.equals(a.getNameAsString())) {
                 return a.findFirst(com.github.javaparser.ast.expr.FieldAccessExpr.class)
                         .map(Object::toString)
                         .orElse(a.toString());

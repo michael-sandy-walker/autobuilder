@@ -2,6 +2,7 @@ package com.walpro.autobuilder.tools;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery;
 import com.walpro.autobuilder.core.build.ExercisableCriterionQuery;
 
@@ -130,16 +131,40 @@ public final class CriterionParseReport {
     private static void collect(JsonNode node, String runId, String target, String spec,
                                 List<Authored> into) {
         JsonNode criteria = node.path("metadata").path("acceptanceCriteria");
+        List<String> texts = new ArrayList<>();
         if (criteria.isArray()) {
             for (JsonNode c : criteria) {
                 String text = c.asText("").strip();
-                if (!text.isEmpty()) into.add(new Authored(runId, target, spec, text));
+                if (!text.isEmpty()) {
+                    into.add(new Authored(runId, target, spec, text));
+                    texts.add(text);
+                }
             }
         }
-        for (JsonNode child : node.path("subGoals")) {
+        JsonNode children = node.path("subGoals");
+        boolean isLeaf = !children.isArray() || children.isEmpty();
+        if (isLeaf && !texts.isEmpty() && "SUBGOAL".equals(node.path("type").asText(""))) {
+            LEAVES.add(new Leaf(target, spec, List.copyOf(texts),
+                    "ACTIVE".equals(node.path("status").asText(""))));
+        }
+        for (JsonNode child : children) {
             collect(child, runId, target, spec, into);
         }
     }
+
+    /**
+     * A leaf and the criteria it states. The unit that matters for promotion: a leaf is promoted
+     * only when EVERY criterion it states is read and observed passing, so a leaf with one
+     * unreadable criterion is unpromotable however readable the rest are — and a per-criterion
+     * rate says nothing about how many leaves that leaves reachable.
+     */
+    private record Leaf(String target, String spec, List<String> criteria, boolean activeAtEnd) {
+    }
+
+    private static final List<Leaf> LEAVES = new ArrayList<>();
+
+    private static final com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery SURFACE =
+            new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery();
 
     // ------------------------------------------------------------------ the report
 
@@ -195,6 +220,8 @@ public final class CriterionParseReport {
                     t.getKey(), p, u, pct(p, p + u));
         }
 
+        reportLeaves(query);
+
         System.out.println("\nREADABLE — what the claim looks like");
         claimShapes.entrySet().stream()
                 .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
@@ -212,6 +239,54 @@ public final class CriterionParseReport {
                             .forEach(x -> System.out.println("          e.g. "
                                     + (x.length() > 120 ? x.substring(0, 117) + "..." : x)));
                 });
+    }
+
+    /**
+     * Per target: distinct leaves (by the set of criteria they state), how many have EVERY
+     * criterion readable, and the same for the leaves still ACTIVE when their run ended — the
+     * residue an observation-driven promotion exists to retire. Readable means what
+     * {@code whyNotSatisfied} can decide: the structural endpoint-existence template (asked through
+     * the planner's own public predicate, not a copy of it) or a {@code claimOf} answer.
+     */
+    private static void reportLeaves(ExercisableCriterionQuery query) {
+        Map<String, Boolean> readable = new LinkedHashMap<>();
+        Map<String, int[]> perTarget = new TreeMap<>();   // target -> {leaves, allReadable, residue, residueAllReadable}
+        Map<String, Integer> blockers = new LinkedHashMap<>();
+        java.util.Set<List<Object>> seen = new java.util.HashSet<>();
+        for (Leaf leaf : LEAVES) {
+            List<Object> key = List.of(leaf.target(), new java.util.TreeSet<>(leaf.criteria()), leaf.activeAtEnd());
+            if (!seen.add(key)) continue;
+            int unreadable = 0;
+            String firstBlocker = null;
+            for (String c : leaf.criteria()) {
+                boolean ok = readable.computeIfAbsent(leaf.target() + "\n" + c,
+                        k -> GoalPlannerService.endpointWhoseExistenceIsDemanded(c, SURFACE).isPresent()
+                                || query.claimOf(c, leaf.spec()).isPresent());
+                if (!ok) {
+                    unreadable++;
+                    if (firstBlocker == null) firstBlocker = shapeOf(c);
+                }
+            }
+            int[] tally = perTarget.computeIfAbsent(leaf.target(), k -> new int[4]);
+            tally[0]++;
+            if (unreadable == 0) tally[1]++;
+            if (leaf.activeAtEnd()) {
+                tally[2]++;
+                if (unreadable == 0) tally[3]++;
+                if (unreadable == 1) blockers.merge(firstBlocker, 1, Integer::sum);
+            }
+        }
+        System.out.println("\nLEAVES  (promotable only if EVERY criterion is readable; deduplicated by criterion set)");
+        for (Map.Entry<String, int[]> t : perTarget.entrySet()) {
+            int[] v = t.getValue();
+            System.out.printf("  %-14s %4d leaves, %4d all-readable (%d%%) · residue %3d, %3d all-readable (%d%%)%n",
+                    t.getKey(), v[0], v[1], pct(v[1], v[0]), v[2], v[3], pct(v[3], v[2]));
+        }
+        System.out.println("  residue leaves ONE unreadable criterion away from all-readable, by that criterion's shape:");
+        blockers.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .limit(12)
+                .forEach(b -> System.out.printf("    %4d  %s%n", b.getValue(), b.getKey()));
     }
 
     private static int pct(int n, int of) {

@@ -2104,13 +2104,24 @@ public class GoalPlannerService {
     private Optional<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint>
             endpointWhoseExistenceIsDemanded(String criterion) {
         if (criterion == null || endpointSurfaceQuery == null) return Optional.empty();
+        return endpointWhoseExistenceIsDemanded(criterion, endpointSurfaceQuery);
+    }
+
+    /**
+     * The template inversion itself, public so an offline readout (the criterion parse report)
+     * asks THIS question rather than re-deriving it — one home for one predicate.
+     */
+    public static Optional<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint>
+            endpointWhoseExistenceIsDemanded(String criterion,
+                    com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery surfaceQuery) {
+        if (criterion == null || surfaceQuery == null) return Optional.empty();
         String text = criterion.strip();
         if (!text.startsWith(MAPPING_EXISTS_PREFIX) || !text.endsWith(MAPPING_EXISTS_SUFFIX)) {
             return Optional.empty();
         }
         String middle = text.substring(MAPPING_EXISTS_PREFIX.length(),
                 text.length() - MAPPING_EXISTS_SUFFIX.length()).strip();
-        var declared = endpointSurfaceQuery.declaredInSpec(middle);
+        var declared = surfaceQuery.declaredInSpec(middle);
         // Exactly one endpoint, and the template's whole middle must be it — a criterion naming
         // two is not this template however much of it matches.
         return declared.size() == 1 ? Optional.of(declared.iterator().next()) : Optional.empty();

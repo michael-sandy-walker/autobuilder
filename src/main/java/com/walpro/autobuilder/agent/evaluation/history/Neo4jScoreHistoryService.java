@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.agent.evaluation.history;
 
+import com.walpro.autobuilder.graph.HistoryRead;
+import com.walpro.autobuilder.graph.HistorySpan;
+import com.walpro.autobuilder.graph.HistoryUse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.neo4j.core.Neo4jClient;
@@ -80,6 +83,8 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
         }
     }
 
+    @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.ADVISORY,
+            note = "One file's score series in this run; feeds computeRecentDeltas, carried on the scoring result as context. A previous run's series describes a different tree.")
     @Override
     public List<Double> getScoreHistory(String filePath) {
         if (filePath == null || filePath.isBlank()) return List.of();
@@ -115,6 +120,8 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
         return out;
     }
 
+    @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.ADVISORY,
+            note = "ScoringService carries this run's per-file history on the scoring result as context; nothing decides on it.")
     @Override
     public Map<String, List<Double>> getAllScoreHistories() {
         String runId = currentRunId();
@@ -164,6 +171,8 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
                     .run();
     }
 
+    @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.BINDING,
+            note = "The baseline a regression is measured from (DeterministicScoreHeuristic, EvaluationAgent's fallback baseline). A previous run's last score describes a different tree, so it is this run's only.")
     @Override
     public Optional<Double> getLastGlobalScore() {
         // return "previous" if available (2nd latest), to mimic typical "lastScore" semantics
@@ -286,6 +295,8 @@ public class Neo4jScoreHistoryService implements ScoreHistoryService {
                     .run();
     }
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.BINDING,
+            note = "The goal's own last evaluation/acceptance score, the within-goal regression baseline. A goal id belongs to one lineage, and a resumed lineage continuing its goal's baseline is intended.")
     private OptionalDouble getLastGoalEvent(String goalId, String label) {
         if (goalId == null || goalId.isBlank()) return OptionalDouble.empty();
 

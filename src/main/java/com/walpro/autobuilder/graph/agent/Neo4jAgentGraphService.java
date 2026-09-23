@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.graph.agent;
 
+import com.walpro.autobuilder.graph.HistoryRead;
+import com.walpro.autobuilder.graph.HistorySpan;
+import com.walpro.autobuilder.graph.HistoryUse;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -7,14 +10,12 @@ import java.util.Map;
 
 import com.walpro.autobuilder.graph.evaluation.CriterionResultEntity;
 import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
-import com.walpro.autobuilder.graph.planner.PlannerInflowStats;
 import com.walpro.autobuilder.graph.scope.ScopeActionSnapshot;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.walpro.autobuilder.graph.core.ActionEntity;
-import com.walpro.autobuilder.graph.core.AgentEntity;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
 
 import lombok.RequiredArgsConstructor;
@@ -28,115 +29,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
 
     private final Neo4jClient neo4jClient;
     private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
-
-    @Override
-    public void registerAgent(AgentEntity agent) {
-        neo4jClient.query("""
-            MERGE (a:Agent { id: $id })
-            SET a.name = $name,
-                a.lineagePath = $lineagePath,
-                a.roleType = $roleType,
-                a.spawnedInCycle = $cycle,
-                a.status = $status,
-                a.lineageId = $lineageId,
-                a.runId = $runId
-        """)
-        .bindAll(Map.of(
-            "id", agent.id(),
-            "name", agent.name(),
-            "lineagePath", agent.lineagePath(),
-            "roleType", agent.roleType(),
-            "cycle", agent.spawnedInCycle(),
-            "status", agent.status(),
-            "lineageId", runIdentity.lineageId(),
-            "runId", runIdentity.runId()
-        ))
-        .run();
-
-        log.info("Registered agent: {} ({})", agent.name(), agent.id());
-    }
-
-    @Override
-    public void linkToSubgoal(String agentId, String goalId) {
-        neo4jClient.query("""
-            MATCH (a:Agent { id: $agentId })
-            MERGE (g:Goal { id: $goalId })
-            MERGE (a)-[:ASSIGNED_TO]->(g)
-        """)
-        .bind(agentId).to("agentId")
-        .bind(goalId).to("goalId")
-        .run();
-
-        log.info("🔗 Linked agent {} → goal {}", agentId, goalId);
-    }
-
-    @Override
-    public void linkSpawn(String parentAgentId, String spawnedAgentId) {
-        neo4jClient.query("""
-            MATCH (parent:Agent { id: $parentId })
-            MATCH (child:Agent { id: $childId })
-            MERGE (parent)-[:SPAWNED]->(child)
-        """)
-        .bind(parentAgentId).to("parentId")
-        .bind(spawnedAgentId).to("childId")
-        .run();
-
-        log.info("Linked spawn: {} → {}", parentAgentId, spawnedAgentId);
-    }
-    
-    @Override
-    public List<AgentEntity> getAllAgents() {
-        return neo4jClient.query("""
-                MATCH (a:Agent)
-                RETURN a.id AS id, a.name AS name, a.lineagePath AS lineagePath, a.roleType AS roleType, a.spawnedInCycle AS cycle, a.status AS status
-           \s""")
-            .fetch()
-            .all()
-            .stream()
-            .map(row -> new AgentEntity(
-                (String) row.get("id"),
-                (String) row.get("name"),
-                (String) row.get("lineagePath"),
-                (String) row.get("roleType"),
-                (String) row.get("cycle"),
-                (String) row.get("status")
-            ))
-            .toList();
-    }
-    
-    @Override
-    public void updateAgentStatus(String agentId, String status) {
-        neo4jClient.query("""
-            MATCH (a:Agent { id: $agentId })
-            SET a.status = $status
-        """)
-        .bind(agentId).to("agentId")
-        .bind(status).to("status")
-        .run();
-
-        log.info("Updated agent status: {} → {}", agentId, status);
-    }
-    
-    @Override
-    public List<AgentEntity> getActiveUnassignedAgents() {
-        return neo4jClient.query("""
-            MATCH (a:Agent)
-            WHERE a.status = 'active' AND NOT (a)-[:ASSIGNED_TO]->(:Goal)
-            RETURN a.id AS id, a.name AS name, a.lineagePath AS lineagePath, a.roleType AS roleType, a.spawnedInCycle AS cycle, a.status AS status
-        """)
-        .fetch()
-        .all()
-        .stream()
-        .map(row -> new AgentEntity(
-            (String) row.get("id"),
-            (String) row.get("name"),
-            (String) row.get("lineagePath"),
-            (String) row.get("roleType"),
-            (String) row.get("cycle"),
-            (String) row.get("status")
-        ))
-        .toList();
-    }
 
     @Override
     public void registerAction(ActionEntity action) {
@@ -218,89 +110,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         .run();
     }
     
-    @Override
-    public List<AgentEntity> getAgentsByRoleAndGoal(String roleType, String goalId) {
-        String query = """
-            MATCH (a:Agent)-[:ASSIGNED_TO]->(g:Goal {id: $goalId})
-            WHERE a.roleType = $roleType
-            RETURN a.id AS id, a.name AS name, a.lineagePath AS lineagePath,
-                   a.roleType AS roleType, a.spawnedInCycle AS spawnedInCycle, a.status AS status
-            """;
-
-        Map<String, Object> params = Map.of(
-            "roleType", roleType,
-            "goalId", goalId
-        );
-
-        return neo4jClient.query(query)
-                .bindAll(params)
-                .fetch()
-                .all()
-                .stream()
-                .map(row -> new AgentEntity(
-                    (String) row.get("id"),
-                    (String) row.get("name"),
-                    (String) row.get("lineagePath"),
-                    (String) row.get("roleType"),
-                    (String) row.get("cycle"),
-                    (String) row.get("status")
-                )).toList();
-    }
-
-    @Override
-    public long countAllAgents() {
-        return neo4jClient.query("""
-            MATCH (a:Agent)
-            RETURN count(a) AS c
-        """).fetchAs(Long.class).one().orElse(0L);
-    }
-
-    @Override
-    public long countActiveAgents() {
-        return neo4jClient.query("""
-            MATCH (a:Agent)
-            WHERE a.status = 'active'
-            RETURN count(a) AS c
-        """).fetchAs(Long.class).one().orElse(0L);
-    }
-
-    @Override
-    public long countActiveUnassignedAgents() {
-        // NOTE: this query is the one that produced the warning earlier when ASSIGNED_TO never existed.
-        // If we add the bootstrap initializer, we can keep it typed like this.
-        return neo4jClient.query("""
-            MATCH (a:Agent)
-            WHERE a.status = 'active' AND NOT (a)-[:ASSIGNED_TO]->(:Goal)
-            RETURN count(a) AS c
-        """).fetchAs(Long.class).one().orElse(0L);
-    }
-
-    @Override
-    public long countActiveAgentsByRoleAndGoal(String roleType, String goalId) {
-        return neo4jClient.query("""
-            MATCH (a:Agent)-[:ASSIGNED_TO]->(g:Goal { id: $goalId })
-            WHERE a.status = 'active' AND a.roleType = $roleType
-            RETURN count(a) AS c
-        """)
-                .bindAll(Map.of("roleType", roleType, "goalId", goalId))
-                .fetchAs(Long.class).one().orElse(0L);
-    }
-
-    @Override
-    public long pruneInactiveUnassignedAgents(int limit) {
-        // Deletes up to {limit} agents that are inactive AND have no goal assignment.
-        // This is intentionally conservative and avoids needing a "lastSeen" field.
-        return neo4jClient.query("""
-            MATCH (a:Agent)
-            WHERE a.status = 'inactive' AND NOT (a)-[:ASSIGNED_TO]->(:Goal)
-            WITH a LIMIT $limit
-            DETACH DELETE a
-            RETURN count(*) AS c
-        """)
-                .bind(limit).to("limit")
-                .fetchAs(Long.class).one().orElse(0L);
-    }
-
+    @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.ADVISORY,
+            note = "The interpretation agent's recent summaries for the active goal, rendered into its prompt.")
     @Override
     public List<ArtifactEntity> findRecentArtifactsForGoal(String goalId, List<String> artifactTypes, int limit) {
         if (goalId == null || goalId.isBlank()) {
@@ -360,6 +171,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .run();
     }
 
+    @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.BINDING,
+            note = "PlannerRepetitionHeuristic counts consecutive planner outputs; a streak reaching into a previous run is not a streak.")
     @Override
     public List<PlannerActionSnapshot> findRecentPlannerActions(String scopeGoalId, int limit) {
         // T4-CJ slice 2: RUN-SCOPED. Its consumer (PlannerRepetitionHeuristic) measures
@@ -404,31 +217,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     }
 
     @Override
-    public PlannerInflowStats getPlannerInflowSince(String scopeGoalId, Instant since) {
-        Map<String, Object> row = neo4jClient.query("""
-            MATCH (a:Action)
-            WHERE a.type = 'planner'
-              AND a.targetsGoalId = $scopeGoalId
-              AND a.timestamp >= datetime($since)
-            RETURN
-              sum(CASE WHEN coalesce(a.plannerUpdated,false) = true THEN 1 ELSE 0 END) AS updatedActions,
-              sum(CASE WHEN coalesce(a.plannerUpdated,false) = true THEN coalesce(a.plannerNewGoalsCount,0) ELSE 0 END) AS totalNewGoals
-        """)
-                .bindAll(Map.of(
-                        "scopeGoalId", scopeGoalId,
-                        "since", since.toString()
-                ))
-                .fetch()
-                .one()
-                .orElse(Map.of());
-
-        int updatedActions = row.get("updatedActions") == null ? 0 : ((Number) row.get("updatedActions")).intValue();
-        int totalNewGoals = row.get("totalNewGoals") == null ? 0 : ((Number) row.get("totalNewGoals")).intValue();
-
-        return new PlannerInflowStats(updatedActions, totalNewGoals);
-    }
-
-    @Override
     public void linkCriterionResults(List<CriterionResultEntity> results) {
         if (results == null || results.isEmpty()) return;
         for (CriterionResultEntity cr : results) {
@@ -463,6 +251,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         }
     }
 
+    @HistoryRead(span = HistorySpan.ALL_LINEAGES, use = HistoryUse.BINDING,
+            note = "T4-BR's completion-verification cache: a recorded verdict is reused instead of asking the model again, and a hit banks the criterion.",
+            crossLineageBecause = "Keyed by the criterion AND the digest of the code it was judged against, so a hit from any lineage is the same question asked of byte-identical code. The span adds reuse, never a different answer.")
     @Override
     public Map<String, Boolean> findCriterionResults(java.util.Collection<String> criterionKeys, String codeDigest) {
         if (criterionKeys == null || criterionKeys.isEmpty() || codeDigest == null || codeDigest.isBlank()) {
@@ -510,6 +301,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         }
     }
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.BINDING,
+            note = "EvolutionAgent reads the subgoal's last verdict. Deliberately spans the runs of the goal's lineage (2026-07-26): a resumed run must see that its subgoal's last attempt was rejected, and scoping it to the run would remove that safeguard.")
     @Override
     public String findLatestEvaluationStatusForSubgoal(String subGoalId) {
         return neo4jClient.query("""
@@ -527,6 +320,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .orElse(null);
     }
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.BINDING,
+            note = "The within-subgoal regression baseline (ScoreRegressionHeuristic, ProblemReductionHeuristic via CycleContextCoordinator). Spans the runs of the goal's lineage by design.")
     @Override
     public java.util.Optional<Double> findLatestAcceptedScoreForSubgoal(String subGoalId) {
         if (subGoalId == null || subGoalId.isBlank()) return java.util.Optional.empty();
@@ -546,6 +341,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .map(row -> row.get("score") == null ? null : ((Number) row.get("score")).doubleValue());
     }
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.ADVISORY,
+            note = "The subgoal's accepted-score trend, carried on the cycle context for rendering and trend reads.")
     @Override
     public java.util.List<Double> findScoreHistoryForSubgoal(String subGoalId, int limit) {
         if (subGoalId == null || subGoalId.isBlank()) return List.of();
@@ -569,6 +366,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .toList();
     }
 
+    @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.BINDING,
+            note = "ScopeThrashSignalAnalyzer counts CONSECUTIVE out-of-scope assessments; a streak reaching into a previous run is not a streak.")
     public List<ScopeActionSnapshot> findRecentScopeActions(String subGoalId, int limit) {
         // T4-CJ slice 2: RUN-SCOPED. ScopeThrashSignalAnalyzer counts CONSECUTIVE out-of-scope
         // assessments; a streak that reaches back into a previous run is not a streak.

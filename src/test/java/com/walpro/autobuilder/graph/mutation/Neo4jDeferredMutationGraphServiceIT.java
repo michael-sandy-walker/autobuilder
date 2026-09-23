@@ -149,4 +149,31 @@ class Neo4jDeferredMutationGraphServiceIT {
                     .isInstanceOf(RuntimeException.class);
         }
     }
+
+    @Autowired
+    private com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
+
+    /**
+     * T2-ER: parked work is this lineage's. Unscoped, a fresh lineage's first sweep found another
+     * lineage's parked mutations, judged their intent goal missing, and rewrote that lineage's
+     * records as dropped.
+     */
+    @Test
+    void anotherLineagesParkedMutationsAreInvisible() {
+        try (Session s = driver.session()) {
+            for (String[] row : new String[][]{{"mine", runIdentity.lineageId()}, {"theirs", "lineage-elsewhere"}}) {
+                s.run("""
+                        CREATE (m:DeferredMutation { id: $id, state: 'DEFERRED', lineageId: $lineage,
+                            attemptId: 'a', cycleId: 'c', intentSubgoalId: 'g', intentGoalId: 'g',
+                            llmScore: 0.5, heuristicScore: 0.5, deferredAtCycleIndex: 1,
+                            deferredAt: '2026-01-01T00:00:00Z', mutationDir: 'd' })
+                        """, java.util.Map.of("id", row[0], "lineage", row[1])).consume();
+            }
+        }
+
+        assertThat(ledger.findOpen()).extracting(d -> d.id()).containsExactly("mine");
+        assertThat(ledger.dropBlockersAndFindCleared(java.util.Set.of("any-fingerprint")))
+                .as("an unblocked parked mutation of another lineage is not this lineage's to restage")
+                .containsExactly("mine");
+    }
 }

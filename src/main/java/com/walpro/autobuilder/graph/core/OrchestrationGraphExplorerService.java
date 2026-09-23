@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.graph.core;
 
+import com.walpro.autobuilder.graph.HistoryRead;
+import com.walpro.autobuilder.graph.HistorySpan;
+import com.walpro.autobuilder.graph.HistoryUse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.neo4j.core.Neo4jClient;
@@ -58,6 +61,8 @@ public class OrchestrationGraphExplorerService {
                                String firstAt, String lastAt) {}
 
     /** The filter vocabulary: which labels, lineages and runs exist right now, with counts. */
+    @HistoryRead(span = HistorySpan.ALL_LINEAGES, use = HistoryUse.ADVISORY,
+            note = "The operator's graph browser. It spans every retained lineage on purpose: it is how history is inspected, and nothing the loop decides reads it.")
     public GraphOverview overview() {
         List<LabelCount> labels = neo4jClient.query("""
                         MATCH (n) UNWIND labels(n) AS label
@@ -69,6 +74,8 @@ public class OrchestrationGraphExplorerService {
         return new GraphOverview(labels, stampCounts("lineageId"), stampCounts("runId"));
     }
 
+    @HistoryRead(span = HistorySpan.ALL_LINEAGES, use = HistoryUse.ADVISORY,
+            note = "The operator's graph browser: per-stamp node counts across every retained lineage.")
     private List<StampCount> stampCounts(String property) {
         return neo4jClient.query("""
                         MATCH (n) WHERE n[$property] IS NOT NULL
@@ -84,6 +91,8 @@ public class OrchestrationGraphExplorerService {
      * Nodes matching the optional label / lineage / run filters. Filters compose with AND;
      * all of them absent browses the whole graph (bounded by {@code limit}).
      */
+    @HistoryRead(span = HistorySpan.ALL_LINEAGES, use = HistoryUse.ADVISORY,
+            note = "The operator's graph browser: node listing across every retained lineage.")
     public List<GraphNodeView> nodes(String label, String lineageId, String runId, Integer limit) {
         String match = "MATCH (n" + labelFragment(label) + ")";
         StringBuilder where = new StringBuilder();
@@ -105,6 +114,8 @@ public class OrchestrationGraphExplorerService {
     }
 
     /** One node plus its full relationship neighborhood (both directions, bounded). */
+    @HistoryRead(span = HistorySpan.ALL_LINEAGES, use = HistoryUse.ADVISORY,
+            note = "The operator's graph browser: the neighbourhood of a node the operator picked.")
     public Optional<NodeNeighborhood> neighbors(String elementId) {
         Optional<GraphNodeView> node = neo4jClient.query("""
                         MATCH (n) WHERE elementId(n) = $id
@@ -144,6 +155,8 @@ public class OrchestrationGraphExplorerService {
      * explorer previously sent a reader to {@code autobuilder.log} for. Empty when the goal has no
      * actions, which is itself an answer: nothing was done about it.
      */
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.ADVISORY,
+            note = "The operator's view of what was done about one goal.")
     public Optional<GoalActivity> goalActivity(String goalId) {
         if (goalId == null || goalId.isBlank()) return Optional.empty();
         List<GoalActivityKind> kinds = new ArrayList<>();

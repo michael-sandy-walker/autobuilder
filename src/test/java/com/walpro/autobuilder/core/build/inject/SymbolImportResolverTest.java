@@ -121,6 +121,53 @@ class SymbolImportResolverTest {
                 .contains("spring-boot-starter-data-jpa");
     }
 
+    // ── T1-GF: an unmanaged dependency always gets the most suitable version ──────────────
+
+    private static final String ACME_STDERR = """
+            [ERROR] /out/src/main/java/x/App.java:[3,20] package org.acme.web does not exist
+            [ERROR]   symbol: class Router
+            """;
+
+    private void discoveredWithoutVersion() {
+        when(discovery.lookupUndeclaredPackage(
+                org.mockito.ArgumentMatchers.eq("org.acme.web"), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(new PackageDiscoveryService.Discovery(
+                        new Resolution("org.acme.web.Router", "org.acme", "acme-web", null), "coordinate-search")));
+    }
+
+    @Test
+    void resolve_unversionedRowOnABomlessPom_alignsToTheGroupVersionThePomAlreadyUses() throws IOException {
+        writeOutput("pom.xml", """
+                <project><dependencies>
+                    <dependency><groupId>org.acme</groupId><artifactId>acme-core</artifactId><version>2.4.1</version></dependency>
+                </dependencies></project>
+                """);
+        discoveredWithoutVersion();
+        when(discovery.suitableVersion("org.acme", "acme-web", "2.4.1")).thenReturn(Optional.of("2.4.1"));
+
+        Optional<FixProposal> proposal = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "org.acme.web", ACME_STDERR, ctx);
+
+        assertThat(proposal).isPresent();
+        assertThat(proposal.get().mutations().get(0).content())
+                .contains("<artifactId>acme-web</artifactId>").contains("<version>2.4.1</version>");
+    }
+
+    @Test
+    void resolve_unversionedRowWithNothingToAlignTo_asksForTheMostSuitableVersion_ratherThanWritingNone()
+            throws IOException {
+        // Before: a row carrying no version (it assumed a BOM) became a <dependency> with no
+        // <version> on a pom that has no BOM — a manifest the build tool rejects.
+        writeOutput("pom.xml", "<project><dependencies></dependencies></project>");
+        discoveredWithoutVersion();
+        when(discovery.suitableVersion("org.acme", "acme-web", null)).thenReturn(Optional.of("5.0.0"));
+
+        Optional<FixProposal> proposal = resolver.resolve(cls(Kind.PACKAGE_DOES_NOT_EXIST), "org.acme.web", ACME_STDERR, ctx);
+
+        assertThat(proposal).isPresent();
+        assertThat(proposal.get().mutations().get(0).content()).contains("<version>5.0.0</version>");
+    }
+
     @Test
     void resolve_undeclaredDependency_abstainsWhenNoProbeCanNameIt() throws IOException {
         writeOutput("pom.xml", BASE_POM);

@@ -106,4 +106,25 @@ class CoordinateSearchClientTest {
                 new CoordinateSearchClient.ArtifactVersions(CoordinateSearchClient.Availability.UNKNOWN,
                         java.util.List.of()))).isEmpty();
     }
+
+    @Test
+    void versionSuitability_prefersAnAlignedVersionWhenItIsPublished() {
+        assertThat(VersionSuitability.choose(java.util.List.of("3.5.3", "3.3.5", "3.2.0"), "3.3.5")).contains("3.3.5");
+        assertThat(VersionSuitability.choose(java.util.List.of("3.5.3", "3.3.5"), "9.9.9")).contains("3.5.3");
+        assertThat(VersionSuitability.choose(java.util.List.of(), "3.3.5")).isEmpty();
+    }
+
+    @Test
+    void pomEditor_findsALiteralVersionDeclaredForTheSameGroup_andSkipsPropertyReferences() {
+        String pom = """
+                <project><dependencies>
+                  <dependency><groupId>org.acme</groupId><artifactId>a-props</artifactId><version>${acme.version}</version></dependency>
+                  <dependency><groupId>org.acme</groupId><artifactId>a-core</artifactId><version>2.4.1</version></dependency>
+                  <dependency><groupId>org.other</groupId><artifactId>x</artifactId><version>9.0</version></dependency>
+                </dependencies></project>
+                """;
+
+        assertThat(PomDependencyEditor.declaredVersionInGroup(pom, "org.acme")).contains("2.4.1");
+        assertThat(PomDependencyEditor.declaredVersionInGroup(pom, "org.none")).isEmpty();
+    }
 }

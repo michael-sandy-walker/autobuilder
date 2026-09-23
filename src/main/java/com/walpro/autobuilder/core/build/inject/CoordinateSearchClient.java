@@ -222,7 +222,10 @@ public class CoordinateSearchClient {
             Optional<Coordinates> hit = parse(body.get(), fqn);
             if (hit.isEmpty()) continue;
             Coordinates c = hit.get();
-            String version = preferredVersion(versionsOf(c.groupId(), c.artifactId())).orElse(c.version());
+            // No version rather than the hit row's own: those rows are per version and in no
+            // useful order. An absent version is filled by the local repository, then by the
+            // resolver's own version question.
+            String version = preferredVersion(versionsOf(c.groupId(), c.artifactId())).orElse(null);
             Coordinates chosen = new Coordinates(c.groupId(), c.artifactId(), version);
             log.info("T1-GF: coordinate search resolved {} -> {}:{}:{}", fqn,
                     chosen.groupId(), chosen.artifactId(), chosen.version());
@@ -242,18 +245,10 @@ public class CoordinateSearchClient {
         return out;
     }
 
-    /**
-     * The newest version whose string is plain dotted digits, else the newest of all. A
-     * qualifier-free version is the published-release convention, and a pre-release written into
-     * a manifest propagates into every later resolution (field 2026-07-09..14: a {@code -M1}
-     * milestone did exactly that). Reads only the string's shape, never an ordering.
-     */
+    /** {@link VersionSuitability} over what the index publishes; empty when it could not say. */
     static Optional<String> preferredVersion(ArtifactVersions versions) {
         if (versions == null || versions.availability() != Availability.PRESENT) return Optional.empty();
-        for (String v : versions.versions()) {
-            if (v.matches("\\d+(\\.\\d+)*")) return Optional.of(v);
-        }
-        return versions.newest();
+        return VersionSuitability.choose(versions.versions(), null);
     }
 
     /** Shared transport: one request, one failure-budget decision. Empty = could not be consulted. */

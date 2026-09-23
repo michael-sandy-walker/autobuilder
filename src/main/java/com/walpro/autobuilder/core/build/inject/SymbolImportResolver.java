@@ -492,7 +492,7 @@ public class SymbolImportResolver implements CompileFixResolver {
         }
         String patched = PomDependencyEditor.appendDependency(
                 pom, resolution.groupId(), resolution.artifactId(),
-                versionUnlessManaged(resolution, context));
+                versionUnlessManaged(resolution, context, pom));
         if (patched == null) return Optional.empty();
         return Optional.of(new FileMutation(POM_PATH, patched));
     }
@@ -505,9 +505,9 @@ public class SymbolImportResolver implements CompileFixResolver {
      * propagated into later classpath resolutions). Applies to every resolution source alike
      * (discovery, registry, LLM).
      */
-    private String versionUnlessManaged(Resolution resolution, CycleContextData context) {
+    private String versionUnlessManaged(Resolution resolution, CycleContextData context, String pom) {
         String version = resolution.version();
-        if (version == null || version.isBlank() || bomManagedVersions == null) return version;
+        if (bomManagedVersions == null) return suitableUnmanaged(resolution, version, pom);
         try {
             Path outputRoot = fileService.resolveSecurePath(OUTPUT_DIR);
             Optional<String> managed = bomManagedVersions.managedVersion(
@@ -520,7 +520,29 @@ public class SymbolImportResolver implements CompileFixResolver {
         } catch (IOException e) {
             log.debug("T4-BM: managed-version check unavailable — {}", e.getMessage());
         }
-        return version;
+        return suitableUnmanaged(resolution, version, pom);
+    }
+
+    /**
+     * T1-GF: an unmanaged dependency always gets a version, and the most suitable one. A version
+     * the pom already declares for the same group wins — the group's artifacts are released
+     * together — when the remote index or the local repository confirms it exists; a row that
+     * carries no version (the registry's platform rows assume a BOM) asks the same question
+     * instead of writing a dependency the build tool rejects for lacking one.
+     */
+    private String suitableUnmanaged(Resolution resolution, String version, String pom) {
+        Optional<String> aligned = PomDependencyEditor.declaredVersionInGroup(pom, resolution.groupId());
+        boolean needsAnswer = version == null || version.isBlank() || aligned.isPresent();
+        if (!needsAnswer || discoveryService == null) return version;
+        Optional<String> chosen = discoveryService.suitableVersion(
+                resolution.groupId(), resolution.artifactId(), aligned.orElse(null));
+        if (chosen.isPresent() && !chosen.get().equals(version)) {
+            log.info("T1-GF: {}:{} gets version {} ({}; was {})", resolution.groupId(), resolution.artifactId(),
+                    chosen.get(), aligned.filter(chosen.get()::equals).isPresent()
+                            ? "aligned to its group in this pom" : "most suitable published or local",
+                    version == null ? "unversioned" : version);
+        }
+        return chosen.orElse(version);
     }
 
     /**

@@ -47,6 +47,26 @@ public final class PomDependencyEditor {
         return false;
     }
 
+    private static final Pattern VERSION_ELEMENT = Pattern.compile("<version>\\s*([^<$\\s][^<]*?)\\s*</version>");
+
+    /**
+     * T1-GF: a literal version the pom already declares for ANOTHER artifact of {@code groupId} —
+     * the version a new artifact of the same group should align to. Property references
+     * ({@code ${...}}) are skipped: their value is not in the block.
+     */
+    public static java.util.Optional<String> declaredVersionInGroup(String pom, String groupId) {
+        if (pom == null || groupId == null || groupId.isBlank()) return java.util.Optional.empty();
+        String groupTag = "<groupId>" + groupId + "</groupId>";
+        var matcher = DEPENDENCY_BLOCK.matcher(pom);
+        while (matcher.find()) {
+            String block = matcher.group(1);
+            if (!block.contains(groupTag)) continue;
+            var v = VERSION_ELEMENT.matcher(block);
+            if (v.find()) return java.util.Optional.of(v.group(1));
+        }
+        return java.util.Optional.empty();
+    }
+
     /**
      * T4-DH: removes every {@code <dependency>} block declaring {@code groupId:artifactId}.
      *

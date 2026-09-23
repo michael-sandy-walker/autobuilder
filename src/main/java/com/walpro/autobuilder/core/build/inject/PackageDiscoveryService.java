@@ -71,6 +71,11 @@ public class PackageDiscoveryService {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T1-GF: the offline answer when the remote index cannot give one. */
+    @Setter
+    @Autowired(required = false)
+    private LocalArtifactRepository localRepository;
+
     /** A discovery result: the resolution plus which source produced it. */
     public record Discovery(Resolution resolution, String source) {}
 
@@ -249,11 +254,44 @@ public class PackageDiscoveryService {
             String fqn = packageName + "." + type;
             Optional<CoordinateSearchClient.Coordinates> coords = coordinateSearchClient.findByFullyQualifiedName(fqn);
             if (coords.isPresent()) {
+                CoordinateSearchClient.Coordinates c = coords.get();
+                // The index named the artifact but could not say which versions exist: the most
+                // suitable locally present one, which also resolves without a network.
+                String version = c.version() != null ? c.version()
+                        : localRepository == null ? null
+                        : VersionSuitability.choose(localRepository.versionsOf(c.groupId(), c.artifactId()), null)
+                                .orElse(null);
                 return Optional.of(discovered(packageName, "coordinate-search", new Resolution(
-                        fqn, coords.get().groupId(), coords.get().artifactId(), coords.get().version())));
+                        fqn, c.groupId(), c.artifactId(), version)));
+            }
+        }
+        // T1-GF: no answer from the index — unreachable, rate-limited, timed out, or no hit. The
+        // machine's own repository answers the same question offline.
+        if (localRepository != null) {
+            for (String type : typeNames) {
+                String fqn = packageName + "." + type;
+                Optional<CoordinateSearchClient.Coordinates> local = localRepository.findByFullyQualifiedName(fqn, null);
+                if (local.isPresent()) {
+                    return Optional.of(discovered(packageName, "local-repository", new Resolution(
+                            fqn, local.get().groupId(), local.get().artifactId(), local.get().version())));
+                }
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * T1-GF: the most suitable version of {@code groupId:artifactId} ({@link VersionSuitability}),
+     * from what the remote index publishes, else from what the local repository holds. Empty when
+     * neither can say — never a guess.
+     */
+    public Optional<String> suitableVersion(String groupId, String artifactId, String alignedVersion) {
+        CoordinateSearchClient.ArtifactVersions remote = coordinateSearchClient.versionsOf(groupId, artifactId);
+        if (remote.availability() == CoordinateSearchClient.Availability.PRESENT) {
+            return VersionSuitability.choose(remote.versions(), alignedVersion);
+        }
+        if (localRepository == null) return Optional.empty();
+        return VersionSuitability.choose(localRepository.versionsOf(groupId, artifactId), alignedVersion);
     }
 
     /**

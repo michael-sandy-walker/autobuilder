@@ -11,7 +11,21 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-23 EVENING (Opus 5) — TWO FIELD RUNS, AND A CORPUS READOUT THAT OVERTURNED THE PRIORITY I HAD JUST ACTED ON — START HERE
+## 2026-09-23 NIGHT (Opus 5.5) — T1-GE, T5-BQ, T1-GF CLOSED; TWO DEFECTS UPSTREAM OF T2-FL FIXED; ONE FIELD RUN — START HERE
+
+**Commits `01d4e937`..(this session's last). Nothing pushed.**
+
+- **MEMORY.md compacted** 25.1KB -> 19.2KB (it was being truncated at load).
+- **`T1-GE` closed.** `BuildExecutor` kept the TRAILING 50 lines; a compiler reports the cause first, so any build with more than ~20 diagnostics lost it (451 of 1436 failing builds in the archive). Now a head+tail `BuildOutputWindow` shared with `JavacDirectProbe`, and an injector fix whose CREATED file is itself an error location is neither preserved (T2-EZ) nor recorded as progress. Suite 3213/0/5 at that commit.
+- **`T2-FL` leaf-level readout** (`CriterionParseReport` now counts LEAVES, the unit promotion needs): firestarter residue 41 of 88 all-readable (47%); the request reader would add ~5. **Readability is not the lever; the field clause needs an artifact that boots with residue left.**
+- **`T5-BQ` closed** on the user's question why mission control "hasn't changed": the tree's changes were all landing in SUBSUMED, which the HUD showed only on hover. Now shown when non-zero.
+- **Field run `2026-09-23_20-20-50`:** deadline, boot-failed, 4 merges, T2-FL watch `OPPORTUNITY-NO-FIRE(26)`. It exposed two defects, both fixed:
+  - **self-check skipped on a rejected candidate's probe** (`361757a2`) -- now reads the tree-on-disk build state.
+  - **`T1-GF`: undeclared dependency never added** -- the lookup paired the missing package with the wrong class (0 hits), cached failed lookups as "none", and an unconstrained index query returned shims or 2015 versions. Now: FQN from the file's own import, groupId-constrained query, `VersionSuitability` (aligned > newest plain > newest), and on the user's steer a `LocalArtifactRepository` fallback for when the index fails. Local version order is NUMERIC -- build time was refuted by reproducible jars' fixed 1980 timestamp.
+- **THE ONE TO CARRY:** the user reminded me the current targets are TOY CASES. Every rule written tonight is phrased over conventions (group prefix, version shape, same-group alignment) and tested on invented coordinates; keep it that way.
+- **NEXT:** a field run on a build carrying `361757a2` + `T1-GF`, read through `t2fl-leaf-promoted-by-observation` and the `T1-GF:` log lines. Open T1-GF follow-ups: the index's three-failure session budget; whether the bootstrap pom should read the seed's stated stack.
+
+## 2026-09-23 EVENING (Opus 5) — TWO FIELD RUNS, AND A CORPUS READOUT THAT OVERTURNED THE PRIORITY I HAD JUST ACTED ON
 
 **Four commits: `6e7aba30` (sweep instrumentation + watch), `fac2a962` (launch reader), `74fc9ecb`
 (corpus readout), plus ledger/docs. Suite 3202 green. Nothing pushed.**

@@ -472,6 +472,23 @@ class PackageDiscoveryServiceTest {
     }
 
     @Test
+    void lookupUndeclaredPackage_fallsBackToTheLocalRepository_whenTheIndexCannotAnswer() {
+        // T1-GF: the index is unreachable, rate-limited or empty — the search client returns empty
+        // (the lenient default) — and the machine's own repository answers the same question.
+        LocalArtifactRepository local = mock(LocalArtifactRepository.class);
+        when(local.findByFullyQualifiedName("org.acme.kit.core.Engine", null)).thenReturn(Optional.of(
+                new CoordinateSearchClient.Coordinates("org.acme.kit", "kit-core", "2.10.1")));
+        discovery.setLocalRepository(local);
+
+        Optional<PackageDiscoveryService.Discovery> hit = discovery.lookupUndeclaredPackage(
+                "org.acme.kit.core", "Engine", projectRoot);
+
+        assertThat(hit).isPresent();
+        assertThat(hit.get().source()).isEqualTo("local-repository");
+        assertThat(hit.get().resolution().version()).isEqualTo("2.10.1");
+    }
+
+    @Test
     void lookupUndeclaredPackage_prefersTheClasspathWhenItCanAnswer() throws IOException {
         repositoryJar("jakarta.validation", "jakarta.validation-api", "3.0.2",
                 "jakarta.validation.constraints.NotNull");

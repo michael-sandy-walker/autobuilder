@@ -355,7 +355,10 @@ public class CriterionProbeSynthesizer {
             List<Message> messages = List.of(
                     new Message("system", SYSTEM_PROMPT),
                     new Message("user", buildPrompt(specification, assertion)));
-            ResponseEntity<ChatResponse> r = llmClient.ask(messages);
+            ResponseEntity<ChatResponse> r;
+            try (var llmPurpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("probe-synthesis")) {
+                r = llmClient.ask(messages);
+            }
             response = r.getBody() != null ? r.getBody().getFirstContent() : null;
         } catch (Exception e) {
             log.warn("T4-CU: probe synthesis failed for [{}] ({}) — criterion not probed",

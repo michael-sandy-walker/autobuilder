@@ -141,7 +141,10 @@ public class GoalAdoptionService {
             List<Message> messages = List.of(
                     new Message("system", SYSTEM_PROMPT),
                     new Message("user", prompt.apply(subject, rankedCandidates)));
-            ResponseEntity<ChatResponse> response = llmClient.ask(messages);
+            ResponseEntity<ChatResponse> response;
+            try (var llmPurpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("goal-adoption")) {
+                response = llmClient.ask(messages);
+            }
             if (response.getBody() == null || response.getBody().getFirstContent() == null) {
                 log.warn("T4-AJ: empty LLM response — no match");
                 return Optional.empty();

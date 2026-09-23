@@ -161,7 +161,10 @@ public class BuildErrorClassifierAgent {
                     new Message("system", SYSTEM_PROMPT),
                     new Message("user", promptStderr)
             );
-            ResponseEntity<ChatResponse> response = llmClient.ask(conversation);
+            ResponseEntity<ChatResponse> response;
+            try (var llmPurpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("build-error-classifier")) {
+                response = llmClient.ask(conversation);
+            }
             String content = response.getBody() != null ? response.getBody().getFirstContent() : null;
             return parseResponse(content, stderr);
         } catch (RuntimeException e) {

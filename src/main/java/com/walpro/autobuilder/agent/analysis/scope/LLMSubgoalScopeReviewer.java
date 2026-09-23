@@ -47,13 +47,16 @@ public class LLMSubgoalScopeReviewer implements SubgoalScopeReviewer {
         String systemPrompt = SubgoalScopeProtocolContract.getSystemPrompt();
         String userPrompt = SubgoalScopePromptBuilder.buildUserPrompt(ctx, remainingGoals, completedGoals);
 
-        var result = invoker.callWithValidation(
-                llmClient,
-                systemPrompt,
-                userPrompt,
-                SubgoalScopeProtocolContract::isValidResponse,
-                parser::parse
-        );
+        com.walpro.autobuilder.agent.shared.LLMResponseResult<ScopeAssessment> result;
+        try (var llmPurpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("scope-review")) {
+            result = invoker.callWithValidation(
+                    llmClient,
+                    systemPrompt,
+                    userPrompt,
+                    SubgoalScopeProtocolContract::isValidResponse,
+                    parser::parse
+            );
+        }
 
         if (!result.success()) {
             log.warn("SubgoalScopeReviewer fail-open: {}", result.failureReason());

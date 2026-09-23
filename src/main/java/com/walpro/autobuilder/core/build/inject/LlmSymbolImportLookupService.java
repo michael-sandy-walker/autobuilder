@@ -109,7 +109,10 @@ public class LlmSymbolImportLookupService implements SymbolImportLookupService {
                     new Message("system", SYSTEM_PROMPT),
                     new Message("user", "Resolve symbol: " + simpleName)
             );
-            ResponseEntity<ChatResponse> response = llmClient.ask(conversation);
+            ResponseEntity<ChatResponse> response;
+            try (var llmPurpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("symbol-import-lookup")) {
+                response = llmClient.ask(conversation);
+            }
             String content = response.getBody() != null ? response.getBody().getFirstContent() : null;
             return parseResponse(content, simpleName);
         } catch (RuntimeException e) {

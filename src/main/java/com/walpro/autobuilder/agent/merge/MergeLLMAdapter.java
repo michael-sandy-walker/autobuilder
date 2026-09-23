@@ -36,7 +36,13 @@ public class MergeLLMAdapter {
                 new Message("user", userPrompt)
         );
 
-        ResponseEntity<ChatResponse> response = llmClient.ask(conversation);
+        ResponseEntity<ChatResponse> response;
+
+        try (var llmPurpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("merge")) {
+
+            response = llmClient.ask(conversation);
+
+        }
         ChatResponse body = response.getBody();
 
         if (body == null || body.getFirstContent() == null) {

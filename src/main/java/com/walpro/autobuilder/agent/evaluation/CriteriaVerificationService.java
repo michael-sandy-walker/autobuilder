@@ -213,7 +213,10 @@ public class CriteriaVerificationService {
             List<Message> messages = List.of(
                     new Message("system", SYSTEM_PROMPT),
                     new Message("user", evidence.prompt()));
-            ResponseEntity<ChatResponse> r = llmClient.ask(messages);
+            ResponseEntity<ChatResponse> r;
+            try (var llmPurpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("criteria-verification")) {
+                r = llmClient.ask(messages);
+            }
             response = r.getBody() != null ? r.getBody().getFirstContent() : null;
         } catch (Exception e) {
             log.warn("T4-BP-1: verification LLM call failed ({}) — no observation recorded", e.getMessage());

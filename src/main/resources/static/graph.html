@@ -830,9 +830,38 @@ function freshness(n) {
  */
 function wasApproached(n) {
   if (!n) return false;
+  return ownApproachEvidence(n) || approachedBeneath().has(n.id);
+}
+
+function ownApproachEvidence(n) {
   return state.visited.has(n.id)
+      || n.id === state.currentSubGoalId
       || (n.mergeCount || 0) > 0
       || n.status === 'COMPLETED' || n.status === 'GIVEN_UP' || n.status === 'SUBSUMED';
+}
+
+/**
+ * Ancestors of every approached goal. Working a leaf is working its parent, so the path down to
+ * the loop's position stays lit; before this the ROOT was drawn as never approached for the whole
+ * run, because it is never itself the current subgoal and never merges or closes until the end.
+ * Recomputed only when the tree, the visits or the position change: nodeColor runs every frame.
+ */
+let approachedBeneathCache = { key: null, ids: new Set() };
+function approachedBeneath() {
+  const key = state.nodesById.size + '|' + state.visited.size + '|' + state.currentSubGoalId
+      + '|' + state.treeVersion;
+  if (approachedBeneathCache.key === key) return approachedBeneathCache.ids;
+  const ids = new Set();
+  for (const m of state.nodesById.values()) {
+    if (!ownApproachEvidence(m)) continue;
+    let p = m.parentId ? state.nodesById.get(m.parentId) : null;
+    while (p && !ids.has(p.id)) {
+      ids.add(p.id);
+      p = p.parentId ? state.nodesById.get(p.parentId) : null;
+    }
+  }
+  approachedBeneathCache = { key, ids };
+  return ids;
 }
 
 function noteVisit(id) {
@@ -918,6 +947,7 @@ function labelFor(n) {
 
 // ------ build graph data from flat snapshots ------
 function mergeSnapshot(goals) {
+  state.treeVersion = (state.treeVersion || 0) + 1;
   // Preserve existing node objects (so positions / velocities survive).
   const incoming = new Set();
   for (const g of goals) {
@@ -1192,7 +1222,13 @@ function connect() {
   setConn('connecting');
   es = new EventSource(API + '/stream');
   es.onopen = () => setConn('live');
-  es.onerror = () => { setConn('disconnected'); /* EventSource auto-reconnects */ };
+  // EventSource retries a dropped connection by itself, but NOT an error RESPONSE: a request
+  // answered with a failure status while a new instance is still starting leaves it CLOSED for
+  // good, and the view then sits frozen (no refresh, nothing to narrate) until a manual reload.
+  es.onerror = () => {
+    setConn('disconnected');
+    if (es.readyState === EventSource.CLOSED) setTimeout(connect, 3000);
+  };
   es.addEventListener('hello', e => handleEvent(JSON.parse(e.data)));
   es.addEventListener('cycle-end', e => handleEvent(JSON.parse(e.data)));
   es.addEventListener('tree-changed', e => handleEvent(JSON.parse(e.data)));
@@ -2578,10 +2614,23 @@ window.MissionControl = (function () {
     el.className = 'mc-conn ' + (live ? 'live' : 'disconnected');
     el.textContent = live ? 'live' : 'offline';
   }
+  // What the per-cycle deliberation decided. UNDIRECTED is the ordinary case (about nine cycles in
+  // ten across the last 40 runs): nothing called for steering, so the agents run in the order
+  // their signals rank them.
+  const MODE_MEANING = {
+    UNDIRECTED: 'No steering this cycle: agents run in the order their signals rank them.',
+    REPLAN: 'Steering toward the planner and analysis: the plan needs changing.',
+    EVALUATE: 'Steering toward evaluation of a pending change.',
+    EVOLVE: 'Steering toward proposing a change.',
+    MERGE: 'Steering toward merging an accepted change.',
+    PAUSE: 'The loop is paused.',
+    BOOTSTRAP: 'First cycle of the run.'
+  };
   function hudSet(id, txt, cls) {
     const el = $(id); if (!el) return;
     el.textContent = txt;
     if (cls != null) el.className = 'v ' + cls;
+    if (id === 'mc-mode') el.title = MODE_MEANING[txt] || '';
   }
   async function pollUsage() {
     try {
@@ -2793,6 +2842,13 @@ window.MissionControl = (function () {
             (p.goalsRestored || 0) + '</b> goal status(es)<span class="arrow">·</span>' +
             (p.trigger === 'operator' ? 'by operator' : esc(p.trigger || '')) +
             (fails ? '<span class="arrow">·</span><span style="color:#fcd34d">' + fails + ' problem(s)</span>' : '') };
+      }
+      // T5-BO: what the loop is editing right now, shown briefly and then gone.
+      case 'mutation_proposed': {
+        const n = (p.files && p.files.length) || 0;
+        if (!n) return null;
+        return { title: 'Editing ' + n + ' file' + (n === 1 ? '' : 's'), dot: '#c4b5fd',
+          html: esc(fileList(p.files, 4)) };
       }
       case 'mutation_merged':
         return { title: 'Merged ' + ((p.files && p.files.length) || 0) + ' file(s)', dot: '#6ee7b7',
@@ -3163,7 +3219,11 @@ window.MissionControl = (function () {
     if (bes) { try { bes.close(); } catch (e) {} }
     bes = new EventSource('/events/behaviour');
     bes.onopen = () => setConn(true);
-    bes.onerror = () => setConn(false); // EventSource auto-reconnects
+    bes.onerror = () => {
+      setConn(false);
+      // Same reason as the goal stream above: an error response closes the stream for good.
+      if (bes.readyState === EventSource.CLOSED) setTimeout(connect, 3000);
+    };
     bes.addEventListener('hello', e => { try { seedFromHello(JSON.parse(e.data)); } catch (err) {} });
     Object.keys(FAMILY).forEach(name => {
       bes.addEventListener(name, e => { try { onEvent(JSON.parse(e.data)); } catch (err) {} });

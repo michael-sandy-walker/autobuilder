@@ -469,6 +469,7 @@
 
 ## Tier 5 — Quality / observability (47)
 
+- [x] `T5-BQ` — Mission-control goals field showed only active/done; subsumed (where most status changes land) was hover-only. Now shown when non-zero. CLOSED 2026-09-23
 - [x] `T5-BH` — Disposition pass on `analysis/pattern/` (keep/recalibrate/delete per rule); gated on T6-D, now unblocked
 - [ ] `T5-BI` — Narrate what the loop SAID (model prose) instead of event templates **Measured 2026-09-20 from the user's question: the data is NOT truncated** (descriptions to 2,115 chars, criteria complete) — both caps are on the SPEECH path (`cropForSpeech` ~240, boundary-aware; `TtsController.MAX_CHARS` 600, blunt). **The cap is not the problem:** `announceNode` speaks `detail.description`, so a work item's 240 chars go on the templated prefix and the criteria fall off the end. Speaking the criteria is the fix, not a bigger cap
 - [ ] `T5-C` — SMS Phase 2

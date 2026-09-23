@@ -1,11 +1,11 @@
 ---
 name: project-invented-facts-have-authorities
-description: "2026-08-28 session lens, extended 2026-09-11 with a sharper variant -- an authority the loop CROPPED and then trusted (a 150-line cap cut the method the requirement was about; the same model answers correctly on the full file, proven by controlled ablation, so ask what it actually SAW before concluding it cannot read): every defect found tonight is the loop INVENTING a fact whose cheap, consultable AUTHORITY sat unconsulted — and the session's own method errors were the same shape one level up. Triage question: 'what is the authority for this fact, and who consulted it?'"
+description: "2026-08-28 session lens, extended 2026-09-11 with a sharper variant -- an authority the loop CROPPED and then trusted, and 2026-09-23 with a third -- an authority CONSULTED FIVE TIMES and asked someone else's question (a 150-line cap cut the method the requirement was about; the same model answers correctly on the full file, proven by controlled ablation, so ask what it actually SAW before concluding it cannot read): every defect found tonight is the loop INVENTING a fact whose cheap, consultable AUTHORITY sat unconsulted — and the session's own method errors were the same shape one level up. Triage question: 'what is the authority for this fact, and who consulted it?'"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 08a0057e-31eb-4f9d-a1db-8717c69fbf03
-  modified: 2026-09-11T19:05:00.000Z
+  modified: 2026-09-23T02:30:00.000Z
 ---
 
 # Invented facts have authorities
@@ -98,3 +98,44 @@ writing), probe time (reject after), or closure time (audit before claiming)? To
 of each: T4-DL wants proposal-time, T4-DF/T4-DH act at probe time, T4-DK wants closure time. If a
 future slice can only afford one, the false-completion record says closure time is where the
 damage concentrates.
+
+
+---
+
+# 2026-09-23 — THE THIRD VARIANT: the authority was consulted, repeatedly, and asked the WRONG QUESTION
+
+The note's two shapes are *unconsulted* (2026-08-28) and *cropped, then trusted* (2026-09-11).
+T2-FL found a third, and it is the most expensive of the three because every instrument reads
+healthy while it happens.
+
+**Run `2026-09-22_15-59-33` ended at its deadline with a 23/23 artifact and four ACTIVE leaves the
+loop could have retired.** The authority for "are these leaves done?" is the boot gate, and it was
+not unconsulted and not cropped: over the last 54 minutes it ran **five times**, on the per-cycle
+path, against the tree on disk, reporting `probed=9 skipped=6 … contradicted=0` each time.
+
+**It was asked the SPECIFICATION's questions and never the WORK ITEMS'.** The self-check's
+requirement supplier was `specDerivedRequirements` alone. Two of the four leaves state claims the
+specification's prose cannot yield at all — `GET /members/{} → 200` and
+`POST /loans/{}/return → 200`, because a success status stated once per resource does not attach
+to a path the way an error status does — and the derivable ones were exactly the `unprobeable`
+skips. So the evidence that would have closed the run was never gathered, by a mechanism that ran
+five times and reported clean each time.
+
+## Why this one is worse than the first two
+
+An unconsulted authority leaves a hole you can grep for. A cropped one leaves a truncation you can
+measure. **A consulted authority asked the wrong question leaves a green log line** — `probed=9,
+contradicted=0` is indistinguishable from the same line on a run where the right questions were
+asked. Same failure family as [[project-detector-went-silent-as-the-fault-spread]]: the instrument
+kept reporting, and what it reported stopped being about the thing you cared about.
+
+## The triage question, extended
+
+The note's question was *"what is the authority for this fact, and who consulted it?"*. Add a
+third clause: ***and what was it asked?*** A consultation is identified by its INPUT, not by the
+component that performed it. Before concluding an authority has no answer, read the argument list.
+
+**Corollary for any probe, sweep or verifier:** if it takes a question set from one source and its
+answers are consumed by another, name the mismatch before trusting a clean report. Here the probe
+took its questions from the specification and its answers were wanted by the goal tree, and the
+two had drifted 11 criteria apart without a single warning.

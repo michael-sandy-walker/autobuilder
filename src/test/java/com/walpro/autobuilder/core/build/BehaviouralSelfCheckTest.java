@@ -199,12 +199,12 @@ class BehaviouralSelfCheckTest {
     }
 
     @Test
-    void aRunawayRequirementListIsCapped() {
+    void aRunawayRequirementListIsCappedBeforeAnyCostHasBeenMeasured() {
         // Run 2026-07-28_23-16-15: an uncapped list of 73/77 requirements turned two observations
-        // into 29.5 and 14.9 minutes of a 90-minute run and tripped the LLM circuit breaker,
-        // because each unseen requirement costs a probe-synthesis call. The spec-derived set is
-        // ~11, so this never binds normally — it exists so that cannot consume a run again.
-        List<String> many = java.util.stream.IntStream.range(0, 60)
+        // into 29.5 and 14.9 minutes of a 90-minute run and tripped the LLM circuit breaker.
+        // T2-FL: the backstop still holds on the FIRST observation, when there is no measured cost
+        // to spend against — but it is a pathology bound now, far above any real set.
+        List<String> many = java.util.stream.IntStream.range(0, 400)
                 .mapToObj(i -> "GET /items returns HTTP 200 variant " + i).toList();
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
         when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean())).thenReturn(clean());
@@ -214,6 +214,67 @@ class BehaviouralSelfCheckTest {
         var captor = org.mockito.ArgumentCaptor.forClass(List.class);
         verify(bootGate).observeBootsAndServes(anyString(), any(), captor.capture(), anyBoolean());
         assertThat(captor.getValue()).hasSize(BehaviouralSelfCheck.MAX_REQUIREMENTS);
+    }
+
+    /**
+     * T2-FL: the bound is what the budget BUYS at the cost this run measured, and the cost is the
+     * PROBE PHASE — not the whole observation. Charging the launch to the requirements made the
+     * estimate rise as the count fell, so one slow boot ratcheted the bound down: on run
+     * 2026-09-23_02-48-06 a 65 s observation took it from 76 to 6 and the next sweep asked 6 of 16
+     * answerable claims while reporting "probed=6 skipped=0 contradicted=0".
+     */
+    @Test
+    void theBoundIsWhatTheBudgetBuysAtTheProbeCostThisRunMeasured() {
+        List<String> many = java.util.stream.IntStream.range(0, 120)
+                .mapToObj(i -> "GET /items returns HTTP 200 variant " + i).toList();
+        when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
+        check.setIntervalCycles(1);
+
+        // 120 requirements probed in 12 s = 100 ms each; the 20 s budget buys 200, so the
+        // backstop bounds it and the full list is admitted.
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean()))
+                .thenReturn(cleanCosting(12_000));
+        check.observe(ctx(), SPEC, () -> many);
+
+        // Same list probed in 120 s = 1000 ms each; the budget now buys 20.
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean()))
+                .thenReturn(cleanCosting(120_000));
+        check.observe(ctx(), SPEC, () -> many);
+        check.observe(ctx(), SPEC, () -> many);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(bootGate, org.mockito.Mockito.atLeast(3))
+                .observeBootsAndServes(anyString(), any(), captor.capture(), anyBoolean());
+        assertThat(captor.getAllValues().get(captor.getAllValues().size() - 1)).hasSize(20);
+    }
+
+    /**
+     * T2-FL: a LAUNCH that takes forever says nothing about what a requirement costs, so it must
+     * not shrink the next observation. This is the run-2026-09-23_02-48-06 defect in unit form.
+     */
+    @Test
+    void aSlowLaunchDoesNotRationTheNextObservation() {
+        List<String> many = java.util.stream.IntStream.range(0, 20)
+                .mapToObj(i -> "GET /items returns HTTP 200 variant " + i).toList();
+        when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
+        check.setIntervalCycles(1);
+
+        // 65 seconds of observation, of which the probes were 200 ms: a slow boot, cheap questions.
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean()))
+                .thenReturn(cleanCosting(200));
+        check.observe(ctx(), SPEC, () -> many);
+        check.observe(ctx(), SPEC, () -> many);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(bootGate, org.mockito.Mockito.atLeast(2))
+                .observeBootsAndServes(anyString(), any(), captor.capture(), anyBoolean());
+        assertThat(captor.getAllValues().get(captor.getAllValues().size() - 1)).hasSize(20);
+    }
+
+    /** A clean observation whose criterion probing took {@code probeMs}. */
+    private static BootGate.BootObservation cleanCosting(long probeMs) {
+        return new BootGate.BootObservation(true, java.util.List.of(), java.util.List.of(),
+                probeMs, Optional.empty());
     }
 
     @Test
@@ -229,12 +290,12 @@ class BehaviouralSelfCheckTest {
      * paths too. These helpers keep the existing tests saying what they said — a finding, or none.
      */
     private static BootGate.BootObservation refuted(String description) {
-        return new BootGate.BootObservation(false, java.util.List.of(),
+        return new BootGate.BootObservation(false, java.util.List.of(), java.util.List.of(), 0L,
                 Optional.of(new com.walpro.autobuilder.goal.ClaimRefutation(description, java.util.List.of())));
     }
 
     private static BootGate.BootObservation clean() {
-        return new BootGate.BootObservation(true, java.util.List.of(), Optional.empty());
+        return new BootGate.BootObservation(true, java.util.List.of(), java.util.List.of(), 0L, Optional.empty());
     }
 
 }

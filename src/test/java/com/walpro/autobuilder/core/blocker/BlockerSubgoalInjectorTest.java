@@ -600,7 +600,7 @@ class BlockerSubgoalInjectorTest {
 
     private static com.walpro.autobuilder.core.build.BootGate.BootObservation cleanRun(String... passing) {
         return new com.walpro.autobuilder.core.build.BootGate.BootObservation(
-                true, List.of(passing), java.util.Optional.empty());
+                true, List.of(passing), List.of(), 0L, java.util.Optional.empty());
     }
 
     private void expectSubsumed(String id) {
@@ -645,7 +645,7 @@ class BlockerSubgoalInjectorTest {
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
 
         injector.clearBootBuildFixSubgoals(
-                new com.walpro.autobuilder.core.build.BootGate.BootObservation(false, List.of(),
+                new com.walpro.autobuilder.core.build.BootGate.BootObservation(false, List.of(), List.of(), 0L,
                         java.util.Optional.of(new com.walpro.autobuilder.goal.ClaimRefutation(
                                 "the application exits at startup (exit 1)", List.of()))));
 

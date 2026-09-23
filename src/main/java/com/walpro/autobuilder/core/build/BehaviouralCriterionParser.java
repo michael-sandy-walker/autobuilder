@@ -72,6 +72,41 @@ public final class BehaviouralCriterionParser {
      * component into the request it builds. Both derive it from HERE rather than re-deriving it,
      * which is how the two would drift apart.
      */
+    /**
+     * T2-FL: whether the criterion states that the input it names is ABSENT — the shape whose
+     * probe is the bare request, because omitting the parameter IS the exercise.
+     *
+     * <p><b>Anchored to the parameter, which is the whole of its safety.</b> An absence word alone
+     * matches things that are not this shape: the corpus contains <i>"the 422 response is produced
+     * without the loan being persisted (subsequent GET /loans?memberId={id} ...)"</i>, where
+     * "without" governs the loan and not the parameter. Requiring the word to sit against the
+     * parameter's own name rejects it.
+     *
+     * <p><b>Measured over 103 archived trees before it was written:</b> of 94 criteria stating a
+     * query pattern, this fires on 10, with ZERO false positives and one known miss —
+     * <i>"with a missing or invalid `memberId` parameter"</i>, where the absence word precedes the
+     * name. The miss abstains, which is the safe direction; a false positive would probe a
+     * different input from the one the requirement describes, which is the T1-FW defect.
+     */
+    public static boolean statesAbsentInput(String criterion, String parameter) {
+        if (criterion == null || parameter == null || parameter.isBlank()) return false;
+        String p = Pattern.quote(parameter);
+        return Pattern.compile("\\b" + p + "\\b(?:\\s+query)?(?:\\s+parameter)?\\s+is\\s+"
+                        + "(?:missing|absent|omitted|not\\s+(?:provided|supplied))",
+                        Pattern.CASE_INSENSITIVE).matcher(criterion).find()
+                || Pattern.compile("without\\s+(?:the\\s+)?\\b" + p + "\\b",
+                        Pattern.CASE_INSENSITIVE).matcher(criterion).find();
+    }
+
+    /** The name of the single query parameter the criterion states, or empty. */
+    public static Optional<String> statedParameterName(String criterion) {
+        return statedInput(criterion).map(QUERY_PARAMETER::matcher)
+                .filter(Matcher::matches).map(m -> m.group(1));
+    }
+
+    private static final Pattern QUERY_PARAMETER =
+            Pattern.compile("([A-Za-z_][A-Za-z0-9_]*)=.*");
+
     public static Optional<String> statedInput(String criterion) {
         if (criterion == null) return Optional.empty();
         Matcher em = ENDPOINT.matcher(criterion);

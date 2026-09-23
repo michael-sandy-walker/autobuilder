@@ -84,8 +84,41 @@ public class BehaviouralSelfCheck implements CheckpointableState {
     @Value("${autobuilder.build.self-check.enabled:true}")
     private boolean enabled = true;
 
-    /** Upper bound on requirements per observation — a runaway list must not consume a run. */
-    static final int MAX_REQUIREMENTS = 15;
+    /**
+     * T2-FL: the bound on an observation is a TIME IT MAY SPEND, charged against the cost this run
+     * has actually measured — not a count of requirements.
+     *
+     * <p><b>Why the count had to go.</b> It was 15, chosen when a requirement cost a model call:
+     * an uncapped list of 73/77 turned two observations into 29.5 and 14.9 minutes. Deterministic
+     * synthesis then made a requirement cost about 180 ms — measured on run
+     * {@code 2026-09-23_02-16-41}, {@code durationMs=2705} for 15 — so the same number came to
+     * mean something roughly 140x stricter than the budget it was chosen to express, and nothing
+     * announced the change. <b>A count is a proxy for cost, and a proxy whose exchange rate moves
+     * is a constant that quietly redefines itself</b> ([[feedback-relative-thresholds]]: limits
+     * relative to the run's environment, constants only for measurable environmental facts).
+     *
+     * <p>A time budget is such a fact, and it stays true across boxes: a loaded machine measures a
+     * higher per-requirement cost and admits fewer requirements for the same wall clock, which is
+     * the behaviour a count could only approximate on the machine it was tuned on. Same arithmetic
+     * {@code RootConvergenceTracker.budgetAllowsAnotherWindow} already uses — spend against
+     * this run's own measured pace rather than against a number someone picked.
+     */
+    @Value("${autobuilder.build.self-check.requirement-budget-ms:20000}")
+    private long requirementBudgetMs = 20_000;
+
+    /**
+     * Backstop against pathology only, governing the observations before any cost has been
+     * measured — never the operating limit. The original 15 is what this must not silently
+     * become again.
+     */
+    static final int MAX_REQUIREMENTS = 200;
+
+    /**
+     * What one requirement cost this run, from the last completed observation. Zero until one has
+     * been measured, which is the only state the backstop above governs.
+     */
+    private long measuredPerRequirementMs;
+
 
     private final PackageGate packageGate;
     private final BootGate bootGate;
@@ -175,16 +208,21 @@ public class BehaviouralSelfCheck implements CheckpointableState {
         if (reqs == null || reqs.isEmpty()) {
             return abstained(context, "the specification states no probeable requirements");
         }
-        // Hard cap. Each requirement costs at least one HTTP round trip against the booted
-        // artifact, and on run 2026-07-28_23-16-15 an uncapped list of 73/77 turned two
-        // observations into 29.5 and 14.9 minutes of a 90-minute run and tripped the circuit
-        // breaker. Synthesis is deterministic now so the per-requirement cost is far lower, but the
-        // spec-derived set is ~11 either way: this never binds in normal operation and exists so a
-        // pathological list cannot consume a run again.
-        if (reqs.size() > MAX_REQUIREMENTS) {
-            log.warn("T4-CY: {} requirements exceeds the cap of {} — observing the first {} only",
-                    reqs.size(), MAX_REQUIREMENTS, MAX_REQUIREMENTS);
-            reqs = reqs.subList(0, MAX_REQUIREMENTS);
+        // T2-FL: admit what this run's own measured cost says the budget buys. The count this
+        // replaced was sized against a model call per requirement (73/77 requirements once cost
+        // 29.5 and 14.9 minutes) and kept its number after deterministic synthesis made a
+        // requirement ~180 ms, so it had come to ration a normal set rather than stop a runaway
+        // one. Before any observation has been timed there is no measurement to spend against, and
+        // the pathology backstop stands in.
+        //
+        // The caller orders claim-bearing requirements first, so a trim here drops the ones no
+        // probe could have judged before it drops a question that has an answer.
+        int admissible = admissibleRequirements();
+        if (reqs.size() > admissible) {
+            log.warn("T4-CY: {} requirements is more than the {} ms budget buys at this run's measured {} ms each — observing the first {}",
+                    reqs.size(), requirementBudgetMs,
+                    measuredPerRequirementMs > 0 ? measuredPerRequirementMs : "(unmeasured)", admissible);
+            reqs = reqs.subList(0, admissible);
         }
 
         String cycleId = context != null ? context.cycleName() : "self-check";
@@ -219,8 +257,26 @@ public class BehaviouralSelfCheck implements CheckpointableState {
         // almost entirely the packageGate and bootGate calls above, both of which record
         // themselves — a "self-check" category would overlap them and the readout would sum to
         // more than the run. An instrument that double-counts is worse than one that omits.
-        log.info("T4-CY: behavioural self-check ran (durationMs={}, requirements={}, finding={})",
-                elapsed, reqs.size(), finding.isPresent() ? "yes" : "none");
+        // T2-FL, CORRECTED after the field: charge the budget the PROBE PHASE only, which is the
+        // marginal cost of a requirement. The first version divided the WHOLE observation by the
+        // requirement count, reasoning that overestimating "errs toward admitting fewer, which is
+        // the safe direction". That reasoning was wrong twice over. Admitting fewer is not safe
+        // when what is being rationed is the loop's only behavioural correctness signal; and
+        // because the launch is a FIXED cost, dividing it by n makes the estimate rise as n falls,
+        // so the bound ratchets itself downward. Measured on run 2026-09-23_02-48-06: one 65 s
+        // observation (a slow boot, not expensive requirements) took the bound from 76 to 6, and
+        // the next sweep asked 6 of 16 answerable claims while reporting
+        // "probed=6 skipped=0 contradicted=0" — a clean-looking report on a quarter of the
+        // questions. The launch is paid whether one criterion is asked or fifty, so the
+        // requirements must not be charged for it.
+        long probeMs = observation.criterionProbeMs();
+        if (!reqs.isEmpty() && probeMs > 0) {
+            measuredPerRequirementMs = Math.max(1, probeMs / reqs.size());
+        }
+        log.info("T4-CY: behavioural self-check ran (durationMs={}, probeMs={}, requirements={}, {} ms each, budget admits {}, finding={})",
+                elapsed, probeMs, reqs.size(),
+                measuredPerRequirementMs > 0 ? measuredPerRequirementMs : "(unmeasured)",
+                admissibleRequirements(), finding.isPresent() ? "yes" : "none");
         if (behaviourLogger != null) {
             behaviourLogger.buildFixAttempt(cycleId, "behavioural-self-check", 0, null, null,
                     null, List.of(), finding.isPresent() ? "DEFECT" : "CLEAN", elapsed);
@@ -235,6 +291,18 @@ public class BehaviouralSelfCheck implements CheckpointableState {
         }
         lastFinding = finding.get();
         return new SelfCheckResult(finding, observation);
+    }
+
+    /**
+     * How many requirements the budget buys at this run's measured cost — the backstop until
+     * one has been measured. Never zero: an observation that can ask nothing is not an
+     * observation, and a box slow enough for the budget to buy less than one requirement has a
+     * problem this bound cannot fix and must not hide.
+     */
+    private int admissibleRequirements() {
+        if (measuredPerRequirementMs <= 0) return MAX_REQUIREMENTS;
+        long affordable = requirementBudgetMs / measuredPerRequirementMs;
+        return (int) Math.max(1, Math.min(MAX_REQUIREMENTS, affordable));
     }
 
     /** The abstention above, in the shape {@link #observeWithEvidence} returns. */

@@ -19,7 +19,7 @@ class CriteriaExecutabilityReadoutTest {
      * so every existing assertion here is a regression check on that half.
      */
     private static final ExercisableCriterionQuery QUERY =
-            new ExercisableCriterionQuery(new CommandSurfaceQuery());
+            new ExercisableCriterionQuery(new CommandSurfaceQuery(), "java -jar {artifact}");
 
     /** Verbatim declarations from data/clitarget/bootstrap/seed.txt. */
     private static final String CLI_SPEC = """

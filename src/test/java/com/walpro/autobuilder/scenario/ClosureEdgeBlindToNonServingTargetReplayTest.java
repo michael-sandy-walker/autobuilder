@@ -95,7 +95,7 @@ class ClosureEdgeBlindToNonServingTargetReplayTest {
     @BeforeEach
     void setUp() {
         verifier = new BehaviouralClosureVerifier(packageGate, bootGate,
-                new ExercisableCriterionQuery(new CommandSurfaceQuery()));
+                new ExercisableCriterionQuery(new CommandSurfaceQuery(), "java -jar {artifact}"));
         lenient().when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
     }
 

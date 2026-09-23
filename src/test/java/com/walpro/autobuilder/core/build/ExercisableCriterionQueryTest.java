@@ -4,6 +4,7 @@ import com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ExercisableCriterionQueryTest {
 
     private final ExercisableCriterionQuery query =
-            new ExercisableCriterionQuery(new CommandSurfaceQuery());
+            new ExercisableCriterionQuery(new CommandSurfaceQuery(), "java -jar {artifact}");
 
     /** Verbatim: the four criteria the gate refused closure on at 00:15:12 and then let through. */
     private static final List<String> CONTENT_CRITERIA = List.of(
@@ -196,5 +197,43 @@ class ExercisableCriterionQueryTest {
     void nullAndEmptyInputsYieldNoSelection() {
         assertThat(query.exercisable(null, CLI_SPEC)).isEmpty();
         assertThat(query.exercisable(List.of(), CLI_SPEC)).isEmpty();
+    }
+
+    // ------------------------------------------------------------------ T2-FL: the claim
+
+    /**
+     * T2-FL: the identity two spellings of one requirement share. A work item states its criterion
+     * in its author's words and the specification states the same requirement in its own; a reader
+     * matching prose answers "never observed" to a question whose answer is yes.
+     */
+    @Test
+    void oneRequirementStatedTwoWaysYieldsOneClaim() {
+        assertThat(query.claimOf(
+                "GET /members/{id} returns HTTP 404 with JSON body {\"message\": \"<reason>\"} when the member does not exist",
+                null))
+                .contains("GET /members/{} \u2192 404");
+        assertThat(query.claimOf("GET /members/{} returns HTTP 404 \u2014 if absent", null))
+                .contains("GET /members/{} \u2192 404");
+    }
+
+    /**
+     * T2-FL: the same call answers for a target with no network surface at all — the half that
+     * makes the promotion it feeds domain-neutral rather than REST-shaped with a CLI exception.
+     */
+    @Test
+    void aTerminatingTargetsCriterionYieldsAClaimWithNoEndpointInIt() {
+        Optional<String> claim =
+                query.claimOf("Running `java -jar app.jar unknown` exits with code 3", CLI_SPEC);
+
+        assertThat(claim).isPresent();
+        assertThat(claim.get()).contains("exit 3").doesNotContain("/");
+    }
+
+    /** A criterion no reader of either shape can parse has no claim, and empty is no opinion. */
+    @Test
+    void aCriterionNoReaderCanParseHasNoClaim() {
+        assertThat(query.claimOf("The system should be robust and well documented", CLI_SPEC)).isEmpty();
+        assertThat(query.claimOf(null, CLI_SPEC)).isEmpty();
+        assertThat(query.claimOf("   ", CLI_SPEC)).isEmpty();
     }
 }

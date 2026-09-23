@@ -208,10 +208,12 @@ public class BootGate {
      */
     public record BootObservation(boolean launchedAndServed,
                                   List<String> criteriaObservedPassing,
+                                  List<String> claimsObservedPassing,
+                                  long criterionProbeMs,
                                   Optional<ClaimRefutation> refutation) {
 
         public static BootObservation abstained() {
-            return new BootObservation(false, List.of(), Optional.empty());
+            return new BootObservation(false, List.of(), List.of(), 0L, Optional.empty());
         }
 
         /** True when the artifact was seen to run and serve what the specification names. */
@@ -223,12 +225,44 @@ public class BootGate {
         public boolean observedPassing(String criterion) {
             return criterion != null && criteriaObservedPassing.contains(criterion);
         }
+
+        /**
+         * True when this CLAIM was executed against the running artifact and held.
+         *
+         * <p>The same evidence as {@link #observedPassing}, keyed by what was asserted rather
+         * than by the words that asserted it. Two authors state one requirement differently —
+         * a specification renders "GET /members/{} returns HTTP 200 — when the member exists"
+         * while a work item states "GET /members/{id} returns HTTP 200 with the member body when
+         * the member exists" — and a reader matching prose concludes the second was never
+         * observed. Both parse to one assertion, so the assertion is what is recorded.
+         *
+         * <p>Claims are produced by the criterion parsers, one per target shape, so this answers
+         * for an artifact that serves and for one that terminates without either kind of caller
+         * knowing which it is holding.
+         */
+        public boolean observedClaimPassing(String claim) {
+            return claim != null && claimsObservedPassing.contains(claim);
+        }
     }
 
     /** Collects what the launch established; see {@link BootObservation}. */
     private static final class Evidence {
         private boolean launchedAndServed;
         private final List<String> passingCriteria = new ArrayList<>();
+        private final List<String> passingClaims = new ArrayList<>();
+        /**
+         * T2-FL: wall clock spent ASKING criteria, excluding launch and packaging. The marginal
+         * cost of a requirement; the launch is a fixed cost paid whether one criterion is asked
+         * or fifty, and charging it to the requirements is what collapsed the observation budget
+         * from 76 to 6 on one slow boot in run 2026-09-23_02-48-06.
+         */
+        private long criterionProbeMs;
+
+        /** Record one criterion that was exercised and held, in both the shapes callers read. */
+        private void passed(String criterionText, String claim) {
+            if (criterionText != null) passingCriteria.add(criterionText);
+            if (claim != null) passingClaims.add(claim);
+        }
     }
 
     /**
@@ -282,7 +316,8 @@ public class BootGate {
                 verifyBootsAndServesTimed(cycleId, specText, behaviouralCriteria,
                         allowModelFallback, evidence);
         return new BootObservation(evidence.launchedAndServed && refutation.isEmpty(),
-                List.copyOf(evidence.passingCriteria), refutation);
+                List.copyOf(evidence.passingCriteria), List.copyOf(evidence.passingClaims),
+                evidence.criterionProbeMs, refutation);
     }
 
     private Optional<ClaimRefutation> verifyBootsAndServesTimed(String cycleId, String specText,
@@ -455,7 +490,10 @@ public class BootGate {
                     // Ask them. Item 3 alone left the gate with nothing to ask a terminating
                     // artifact — measured on run 2026-08-26_02-20-47, which fulfilled with
                     // criteria_executable_pct=0: correct output, and nothing in the loop checking it.
-                    List<ProbeFailure> commandFailures = probeCommandCriteria(artifact, specText, behaviouralCriteria);
+                    long commandProbeStart = System.currentTimeMillis();
+                    List<ProbeFailure> commandFailures =
+                            probeCommandCriteria(artifact, specText, behaviouralCriteria, evidence);
+                    evidence.criterionProbeMs += System.currentTimeMillis() - commandProbeStart;
                     if (!commandFailures.isEmpty()) {
                         return Optional.of(new ClaimRefutation(
                                 "the tool runs, but acceptance criteria fail when exercised"
@@ -510,8 +548,10 @@ public class BootGate {
             // creation 500s, a probe's setup sequence fails and later criteria are contradicted
             // for a reason that is not their own, and the reader needs the 500 before the five
             // symptoms. The shared cap keeps the item short.
+            long probeStart = System.currentTimeMillis();
             List<ProbeFailure> criterionFailures = probeBehaviouralCriteria(allowModelFallback,
                     client, port, specText, behaviouralCriteria, workingDir, evidence);
+            evidence.criterionProbeMs += System.currentTimeMillis() - probeStart;
             // T4-DW: the process started, answered HTTP, and every endpoint the specification
             // names was probed without a failure. This is the one path in this method that
             // establishes the claim a boot-gate work item makes, so it is the one path that may
@@ -572,7 +612,8 @@ public class BootGate {
      * ({@code Running `<launch> unknown` … exits with code 3}), so reading it is a parser's job.
      */
     private List<ProbeFailure> probeCommandCriteria(Path artifact, String specText,
-                                              List<String> behaviouralCriteria) {
+                                              List<String> behaviouralCriteria,
+                                              Evidence evidence) {
         List<ProbeFailure> failures = new ArrayList<>();
         if (!criterionProbeEnabled || behaviouralCriteria == null || behaviouralCriteria.isEmpty()) {
             return failures;
@@ -611,6 +652,12 @@ public class BootGate {
                 failures.add(ProbeFailure.of(a.criterionText(),
                         "\"" + a.criterionText() + "\" — " + a.describe()
                         + ", but running it exited " + observed.getAsInt()));
+            } else if (evidence != null) {
+                // T2-FL: the terminating half of what the serving path has recorded since T4-DW.
+                // The criterion named one invocation and one exit status, the artifact was run
+                // with it, and it terminated as stated — the same standard of evidence, reached
+                // by the channel this shape of target actually answers on.
+                evidence.passed(criterion, a.describe());
             }
         }
 
@@ -681,7 +728,8 @@ public class BootGate {
                     failures.add(ProbeFailure.of(e.criterionText(), unmentioned.get()));
                     continue;
                 }
-                if (judgesLineNumber(e, grounded.get())) messageProbed++;
+                boolean judgedLineNumber = judgesLineNumber(e, grounded.get());
+                if (judgedLineNumber) messageProbed++;
                 // T4-DT: the value the SPECIFICATION says the tool should print for its own worked
                 // example.
                 //
@@ -689,11 +737,22 @@ public class BootGate {
                 // artifact of run 2026-09-10_21-46-44 printed "b,c,de" where the seed states
                 // "b,c" — and "b,c,de".contains("b,c") is TRUE, so a containment check would have
                 // called the defect satisfied exactly as the source-reading verifier did.
-                if (e.expectedStdout().isPresent() && observed.get().output() != null) valueProbed++;
+                boolean judgedStdout = e.expectedStdout().isPresent() && observed.get().output() != null;
+                if (judgedStdout) valueProbed++;
                 Optional<String> contradiction = e.contradictedBy(observed.get().output());
                 if (contradiction.isPresent()) {
                     valueContradicted++;
                     failures.add(ProbeFailure.of(e.criterionText(), contradiction.get()));
+                    continue;
+                }
+                // T2-FL: recorded only when the exercise actually ASSERTED something that then
+                // held. An exercise can be built, run and contradicted by nothing while asserting
+                // nothing at all — no stated status, no stated message, no stated output — and
+                // that is an abstention wearing a pass's clothes, which is the failure T4-DW's
+                // guard exists for ([[project-false-completion-2]]).
+                if (evidence != null
+                        && (e.assertsExitStatus() || want.isPresent() || judgedLineNumber || judgedStdout)) {
+                    evidence.passed(criterion, e.describe());
                 }
             }
         } catch (IOException io) {
@@ -1233,7 +1292,11 @@ public class BootGate {
                 // `continue` above — unparsed, unprobeable, setup refused, body refused, transport
                 // failure — leaves the criterion OUT of it, which is the whole point: a criterion
                 // that was skipped must not retire the work item that quotes it.
-                evidence.passingCriteria.add(criterion);
+                //
+                // T2-FL: the assertion is recorded beside the prose, because a reader asking
+                // "was THIS requirement observed?" holds it in different words than the caller
+                // that supplied it here.
+                evidence.passed(criterion, assertion.describe());
             }
         }
         int unobservedTotal = unobserved.values().stream().mapToInt(Integer::intValue).sum();

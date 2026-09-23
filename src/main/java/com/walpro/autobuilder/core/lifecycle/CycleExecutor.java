@@ -64,6 +64,11 @@ public class CycleExecutor implements CheckpointableState {
             "${autobuilder.goal.retire-boot-items-per-cycle:true}")
     private boolean bootItemRetirementEnabled = true;
 
+    /** T2-FL: one switch, matching the retirement's, in case promoting on observation misbehaves. */
+    @org.springframework.beans.factory.annotation.Value(
+            "${autobuilder.goal.promote-observed-leaves-per-cycle:true}")
+    private boolean observedLeafPromotionEnabled = true;
+
     /** T4-CZ: one switch, in case requiring the entry point early ever misbehaves in the field. */
     @org.springframework.beans.factory.annotation.Value(
             "${autobuilder.goal.entry-point-required-early:true}")
@@ -321,7 +326,7 @@ public class CycleExecutor implements CheckpointableState {
             String spec = selfCheckRoot != null ? selfCheckRoot.getDescription() : null;
             com.walpro.autobuilder.core.build.BehaviouralSelfCheck.SelfCheckResult selfCheck =
                     behaviouralSelfCheck.observeWithEvidence(
-                            context, spec, goalPlannerService::specDerivedRequirements);
+                            context, spec, goalPlannerService::requirementsWorthObserving);
             selfCheck.finding().ifPresent(defect -> goalPlannerService.injectObservedBehaviouralDefect(
                     defect,
                     selfCheck.observation().refutation()
@@ -333,6 +338,16 @@ public class CycleExecutor implements CheckpointableState {
             // candidate, which must never retire an item about the merged tree.
             if (bootItemRetirementEnabled && blockerSubgoalInjector != null) {
                 blockerSubgoalInjector.clearBootBuildFixSubgoals(selfCheck.observation());
+            }
+            // T2-FL: the same observation asked the remaining question. T4-DW retires the items a
+            // GATE raised; these are the ones a PLANNER authored, which no gate owns and nothing
+            // re-checks — 14 of them alive at the end of the latest firestarter window against
+            // the boot gate's 17. It reads the observation already taken, so it costs nothing and
+            // it sits here for the reason the retirement does: this is the only per-cycle caller
+            // that runs the gate against the tree ON DISK, and a staged candidate's answer must
+            // never promote a leaf about the merged tree.
+            if (observedLeafPromotionEnabled) {
+                goalPlannerService.promoteSatisfiedLeaves(selfCheck.observation());
             }
         }
 

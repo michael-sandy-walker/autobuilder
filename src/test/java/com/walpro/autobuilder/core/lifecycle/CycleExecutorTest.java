@@ -1214,7 +1214,8 @@ class CycleExecutorTest {
         stubIdentityPipeline();
         com.walpro.autobuilder.core.build.BootGate.BootObservation observation =
                 new com.walpro.autobuilder.core.build.BootGate.BootObservation(
-                        true, List.of("GET /books returns HTTP 200"), java.util.Optional.empty());
+                        true, List.of("GET /books returns HTTP 200"), List.of("GET /books \u2192 200"), 0L,
+                        java.util.Optional.empty());
         when(behaviouralSelfCheck.observeWithEvidence(any(), any(), any()))
                 .thenReturn(new com.walpro.autobuilder.core.build.BehaviouralSelfCheck.SelfCheckResult(
                         java.util.Optional.empty(), observation));
@@ -1224,5 +1225,29 @@ class CycleExecutorTest {
         cycleExecutor.runCycle(baseContext("cycle-1"));
 
         verify(blockerSubgoalInjector).clearBootBuildFixSubgoals(observation);
+    }
+
+    /**
+     * T2-FL: the same observation reaches the promoting direction, on the same per-cycle path and
+     * from the same on-disk source. Asserted separately from the retirement above because the two
+     * answer different questions of one observation — what a GATE raised, and what a PLANNER
+     * authored — and a call site that goes missing must fail the assertion for its own half.
+     */
+    @Test
+    void theObservedLeafPromotionIsAskedOnAnOrdinaryCycle() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+        com.walpro.autobuilder.core.build.BootGate.BootObservation observation =
+                new com.walpro.autobuilder.core.build.BootGate.BootObservation(
+                        true, List.of("GET /books returns HTTP 200"), List.of("GET /books \u2192 200"), 0L,
+                        java.util.Optional.empty());
+        when(behaviouralSelfCheck.observeWithEvidence(any(), any(), any()))
+                .thenReturn(new com.walpro.autobuilder.core.build.BehaviouralSelfCheck.SelfCheckResult(
+                        java.util.Optional.empty(), observation));
+        cycleExecutor.setBehaviouralSelfCheck(behaviouralSelfCheck);
+
+        cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(goalPlannerService).promoteSatisfiedLeaves(observation);
     }
 }

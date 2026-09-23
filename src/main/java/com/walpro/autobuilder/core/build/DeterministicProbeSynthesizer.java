@@ -87,6 +87,13 @@ public final class DeterministicProbeSynthesizer {
         // while stopping it from colliding with the previous criterion's leftovers.
         CRITERION_TOKEN.set(tokenFor(assertion.criterionText()));
         try {
+            // T2-FL: an input the requirement says is ABSENT is exercised by omitting it, which
+            // needs no fixture and no body {D} and is therefore reachable for a GET, where every
+            // other 4xx shape abstains. Checked before the status shapes because it is a claim
+            // about the INPUT rather than about the resource, and `rejectedInput` would otherwise
+            // answer for it with an empty body a GET never carries.
+            Optional<List<ProbeRequest>> omitted = omittedInput(assertion);
+            if (omitted.isPresent()) return omitted;
             return switch (assertion.expectedStatus()) {
                 case 200, 201 -> succeeded(assertion, artifactRoot);
                 case 400 -> rejectedInput(assertion, artifactRoot);
@@ -157,6 +164,32 @@ public final class DeterministicProbeSynthesizer {
         }
         return acceptableBody(a.path(), artifactRoot)
                 .map(body -> List.of(new ProbeRequest(a.verb(), a.path(), body)));
+    }
+
+    /**
+     * T2-FL: the requirement says the input is absent, so the probe is the request WITHOUT it.
+     *
+     * <p>One request, no setup, no fixture — the cheapest shape in this class, and the only one
+     * available for a {@code GET} asserting a client error, which is why criteria of this shape
+     * went unprobed. Measured on run {@code 2026-09-22_15-59-33}: one such criterion was the
+     * second of two on the leaf that kept a 23/23 artifact from closing its root.
+     *
+     * <p><b>Gated on a client-error status.</b> Omitting a required parameter is a claim about the
+     * application REFUSING; reading it for a success status would assert that the endpoint works
+     * without its input, which no criterion here says. And the absence must be stated against the
+     * parameter's own name — see {@code BehaviouralCriterionParser.statesAbsentInput} for the
+     * corpus measurement and the false positive that anchoring rejects.
+     */
+    private static Optional<List<ProbeRequest>> omittedInput(BehaviouralCriterionParser.Assertion a) {
+        if (a.expectedStatus() < 400 || a.expectedStatus() > 499) return Optional.empty();
+        Optional<String> parameter = BehaviouralCriterionParser.statedParameterName(a.criterionText());
+        if (parameter.isEmpty()) return Optional.empty();
+        if (!BehaviouralCriterionParser.statesAbsentInput(a.criterionText(), parameter.get())) {
+            return Optional.empty();
+        }
+        // The asserted path already has its query stripped by normalization, so this IS the
+        // request with the parameter omitted.
+        return Optional.of(List.of(new ProbeRequest(a.verb(), a.path(), null)));
     }
 
     /**

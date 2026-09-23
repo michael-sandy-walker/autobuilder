@@ -798,6 +798,180 @@ public class GoalPlannerService {
     }
 
     /**
+     * T2-FL: promote every ACTIVE leaf whose criteria the artifact has already been OBSERVED to
+     * satisfy — the direction the loop has never had.
+     *
+     * <p><b>The asymmetry this closes.</b> {@link #isOpenStructuralRepairLeaf} answers "this leaf
+     * is NOT built" and {@link #reconcileCriteriaAgainstStructure} un-banks a criterion the
+     * structure refutes. Both run toward refusal. Nothing asks the complement, so the loop can
+     * prove a work item unfinished in microseconds and has no path that proves one finished, and
+     * a leaf nobody re-checks stays ACTIVE — which does not merely delay the closure edge,
+     * it removes it, because {@link #autoCompleteRootIfSatisfied()} early-returns while any
+     * subgoal is ACTIVE and every closure gate sits past that line.
+     *
+     * <p><b>Measured, run {@code 2026-09-22_15-59-33}:</b> {@code terminal=deadline} with a
+     * 23/23 artifact, 36 of its 69 cycles spent after the artifact was already complete, and four
+     * ACTIVE leaves naming endpoints that artifact served — {@code GET /members/{id}},
+     * {@code POST /loans}, {@code POST /loans/{id}/return}, {@code GET /loans?memberId={id}}.
+     * Over the last 54 minutes the boot gate probed nine criteria at a time and contradicted
+     * none, and none of that reached the leaves.
+     *
+     * <p><b>Evidence, not inference, and never a new one.</b> The observation is what the
+     * per-cycle boot gate already took against the tree on disk. This adds no probe, no build, no
+     * model call and no cost — it reads what was spent and thrown away. A criterion that was
+     * skipped, unparsed, unprobeable or refused is absent from the observation, so a leaf quoting
+     * it is not promoted: an abstention is not a pass ([[project-false-completion-2]]).
+     *
+     * <p><b>Nothing here knows what kind of target it is holding.</b> The claim is derived by
+     * {@code ExercisableCriterionQuery}, which reads a served surface and a terminating one
+     * through the same call, so a command-line artifact is promoted on its exit statuses exactly
+     * as a service is on its response statuses.
+     *
+     * <p><b>The structural gate applies only where it can speak.</b> Where the leaf's description
+     * names an endpoint and the surface query has a definite opinion, that endpoint must be
+     * built: criteria can be stated about one endpoint while the description demands another, and
+     * a mapping existing is not the behaviour being right. Where the query has no opinion — a
+     * target with no served surface, an ungroundable mapping — it withholds one rather than
+     * blocking, which is the same abstain contract the rest of this class keeps.
+     *
+     * @param observation what the boot gate established on the tree on disk this cycle
+     * @return the number of leaves promoted (0 = nothing was provable, the common case)
+     */
+    public int promoteSatisfiedLeaves(com.walpro.autobuilder.core.build.BootGate.BootObservation observation) {
+        if (exercisableCriterionQuery == null) return 0;
+        // T2-FL: NOT gated on the observation carrying anything. An empty observation still leaves
+        // every structural criterion decidable from the sources, and the first shipped version
+        // returned here instead — which is precisely why run 2026-09-23_02-48-06 spent its whole
+        // length with a built endpoint's coverage item ACTIVE. An abstained observation is a
+        // reason to answer less, never a reason to stop reading what needs no observation.
+        com.walpro.autobuilder.core.build.BootGate.BootObservation seen = observation != null
+                ? observation
+                : com.walpro.autobuilder.core.build.BootGate.BootObservation.abstained();
+
+        GoalEntity root = getRootGoal();
+        String specText = root != null ? root.getDescription() : null;
+        Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+
+        // Snapshotted before the loop: a promotion re-points currentSubGoalId and can mark
+        // ancestors, so iterating the live map while promoting would be reading a tree that the
+        // previous iteration changed underneath.
+        List<GoalEntity> leaves = goalMap.values().stream()
+                .filter(g -> g.getType() == GoalType.SUBGOAL && g.getStatus() == GoalStatus.ACTIVE)
+                .filter(g -> !isStaleOrphan(g))
+                .filter(g -> getSubGoals(g.getId()).stream()
+                        .noneMatch(c -> c.getStatus() == GoalStatus.ACTIVE))
+                .toList();
+
+        int promoted = 0;
+        for (GoalEntity leaf : leaves) {
+            if (leaf.getStatus() != GoalStatus.ACTIVE) continue; // a sibling's promotion may have moved it
+            List<String> criteria = criteriaTextOf(leaf);
+            if (criteria.isEmpty()) continue; // nothing stated is nothing observed
+            Optional<String> refusal = whyNotSatisfied(criteria, specText, seen, output);
+            if (refusal.isPresent()) {
+                // T2-FL: said out loud, because otherwise "declined" and "never ran" are the same
+                // silence. Run 2026-09-23_02-48-06 declined on every cycle and the only way to
+                // establish it had run at all was noticing T4-DW logging beside it.
+                log.debug("T2-FL: goalId={} not promoted {} {}", leaf.getId(), "—", refusal.get());
+                continue;
+            }
+            if (!descriptionSurfaceIsBuilt(leaf, output)) continue;
+
+            log.info("T2-FL: goalId={} — the artifact was observed to satisfy all {} of its criteria; promoting [{}]",
+                    leaf.getId(), criteria.size(), leaf.getDescription());
+            var applied = applyGoalProgress(leaf.getId(), GoalProgressState.FULFILLED);
+            if (applied != null && applied.promoted()) {
+                promoted++;
+            } else if (leaf.getStatus() != GoalStatus.ACTIVE) {
+                promoted++; // marked completed off the current branch
+            } else {
+                log.info("T2-FL: goalId={} stayed ACTIVE — an existing guard refused the promotion, which stands",
+                        leaf.getId());
+            }
+        }
+        return promoted;
+    }
+
+    /**
+     * Empty when every criterion is satisfied by evidence this cycle already holds; otherwise the
+     * reason the first unsatisfied one gives, in the words a reader of the run log needs.
+     *
+     * <p><b>Two kinds of criterion, two kinds of evidence, and the second was missing until a run
+     * showed what it cost.</b> A criterion stating runtime behaviour can only be answered by
+     * having ASKED the artifact. A criterion demanding that an endpoint merely EXIST is answered
+     * by reading the sources, and no observation could add anything to that answer  {@code —}
+     * which is why it must not be gated on one. Run {@code 2026-09-23_02-48-06} spent its whole
+     * length with one ACTIVE leaf of the second kind, whose endpoint was built in
+     * {@code LoanController} the entire time, and this method as first shipped refused it for want
+     * of a behavioural claim it was never going to have.
+     */
+    private Optional<String> whyNotSatisfied(
+            List<String> criteria, String specText,
+            com.walpro.autobuilder.core.build.BootGate.BootObservation observation,
+            Map<String, String> output) {
+        for (String criterion : criteria) {
+            // The criterion's own words first: when the probe was handed this very string, that
+            // is the most direct evidence there is and no parse can improve on it.
+            if (observation.observedPassing(criterion)) continue;
+
+            // A demand that an endpoint EXIST is decided by the sources, not by a probe.
+            Optional<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint> demanded =
+                    endpointWhoseExistenceIsDemanded(criterion);
+            if (demanded.isPresent()) {
+                if (!goalPlannerConfig.isStructureQueryEnabled()) {
+                    return Optional.of("the structure query is disabled, so \"" + criterion + "\" cannot be decided");
+                }
+                Optional<Boolean> built = endpointSurfaceQuery.isBuilt(demanded.get(), output);
+                if (built.isEmpty()) {
+                    return Optional.of("the built surface could not be read, so \"" + criterion + "\" is undecided");
+                }
+                if (!built.get()) {
+                    return Optional.of(demanded.get() + " is still absent from the output");
+                }
+                continue;
+            }
+
+            Optional<String> claim = exercisableCriterionQuery.claimOf(criterion, specText);
+            if (claim.isEmpty()) {
+                return Optional.of("no probe of any shape can read a claim out of \"" + criterion + "\"");
+            }
+            if (!observation.observedClaimPassing(claim.get())) {
+                return Optional.of(claim.get() + " was not among the claims this observation judged");
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Where the leaf's description names an endpoint the surface query has a definite opinion
+     * about, that opinion must be "built". No opinion — including every target with no served
+     * surface at all — withholds the gate rather than closing it.
+     */
+    private boolean descriptionSurfaceIsBuilt(GoalEntity leaf, Map<String, String> output) {
+        if (!goalPlannerConfig.isStructureQueryEnabled() || endpointSurfaceQuery == null) return true;
+        if (output == null || output.isEmpty()) return true;
+        for (var endpoint : endpointSurfaceQuery.declaredInSpec(leaf.getDescription())) {
+            Optional<Boolean> built = endpointSurfaceQuery.isBuilt(endpoint, output);
+            if (built.isPresent() && !built.get()) {
+                log.info("T2-FL: goalId={} not promoted — its criteria were observed passing but {} has no request mapping in the output",
+                        leaf.getId(), endpoint);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** A goal's acceptance criteria as stated, or empty when it declares none. */
+    private List<String> criteriaTextOf(GoalEntity goal) {
+        Object raw = goal.getMetadata() == null ? null : goal.getMetadata().get("acceptanceCriteria");
+        if (!(raw instanceof List<?> list)) return List.of();
+        return list.stream()
+                .filter(String.class::isInstance).map(String.class::cast)
+                .filter(c -> !c.isBlank())
+                .toList();
+    }
+
+    /**
      * T1-CF: Returns true when all acceptance criteria for the given subgoal have been
      * cumulatively satisfied (every criterion in the pass-status map is true).
      * Falls back to {@code mergeCount > 0 && consecutiveSuppressedEvictions == 0} for
@@ -1865,6 +2039,36 @@ public class GoalPlannerService {
      * is required from the moment the endpoint is, and is executable by the criterion probes.
      * Silent when the spec states nothing for it: no invented expectations.
      */
+    // T2-FL: the coverage item's done-when, owned here as parts so the criterion that STATES it
+    // and the read that RECOGNISES it are built from the same strings. Two spellings of one
+    // template is how a matcher silently stops matching what a generator emits.
+    private static final String MAPPING_EXISTS_PREFIX = "A request mapping for ";
+    private static final String MAPPING_EXISTS_SUFFIX = " exists in the application sources";
+
+    /**
+     * T2-FL: the endpoint a criterion demands the mere EXISTENCE of, or empty when the criterion
+     * is not that template.
+     *
+     * <p>Inverting a template this class owns, never parsing prose ([[feedback-string-consumption-path]]
+     * governs control flow, and this is control flow). The same discipline as
+     * {@code EndpointSurfaceQuery.endpointFromWorkItem}, and for the same reason: a criterion that
+     * merely resembles this one must not be read as it.
+     */
+    private Optional<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint>
+            endpointWhoseExistenceIsDemanded(String criterion) {
+        if (criterion == null || endpointSurfaceQuery == null) return Optional.empty();
+        String text = criterion.strip();
+        if (!text.startsWith(MAPPING_EXISTS_PREFIX) || !text.endsWith(MAPPING_EXISTS_SUFFIX)) {
+            return Optional.empty();
+        }
+        String middle = text.substring(MAPPING_EXISTS_PREFIX.length(),
+                text.length() - MAPPING_EXISTS_SUFFIX.length()).strip();
+        var declared = endpointSurfaceQuery.declaredInSpec(middle);
+        // Exactly one endpoint, and the template's whole middle must be it — a criterion naming
+        // two is not this template however much of it matches.
+        return declared.size() == 1 ? Optional.of(declared.iterator().next()) : Optional.empty();
+    }
+
     private List<String> coverageItemCriteria(
             com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint endpoint, String specText) {
         // T2-EV CORRECTED 2026-07-28: the spec's stated statuses are NOT attached here. Attaching
@@ -1879,7 +2083,7 @@ public class GoalPlannerService {
         // nothing else. The spec-derived requirements reach the criterion probes through
         // specBoundBehaviouralCriteria() instead — T4-CU takes a list of requirements and never
         // needed them to be any goal's criteria.
-        return List.of("A request mapping for " + endpoint + " exists in the application sources");
+        return List.of(MAPPING_EXISTS_PREFIX + endpoint + MAPPING_EXISTS_SUFFIX);
     }
 
     /**
@@ -1906,6 +2110,71 @@ public class GoalPlannerService {
      * run, and independent of how the planner decomposed — so after the first observation the
      * synthesis cache covers all of it and later checks cost only the boot and the HTTP calls.
      */
+    /**
+     * T2-FL: what the per-cycle observation should ASK — the specification's own requirements plus
+     * the questions the open work items are waiting on an answer to.
+     *
+     * <p><b>The gap this closes, measured on run {@code 2026-09-22_15-59-33}.</b> The self-check
+     * was handed {@link #specDerivedRequirements} alone, so the probe spent that run asking
+     * seventeen questions the specification stated and none of the eleven its four ACTIVE leaves
+     * stated. Two of those leaf claims — {@code GET /members/{} → 200} and
+     * {@code POST /loans/{}/return → 200} — are not derivable from the specification's prose at
+     * all, because a success status stated once for every resource does not attach to a path the
+     * way an error status does. The artifact served both, all run, and nothing ever asked.
+     *
+     * <p><b>Deduplicated by CLAIM, not by prose</b>, which is where the budget comes from: an
+     * author and a specification state one requirement in two spellings, and probing both spends
+     * two launches on one question. On that run's inputs the union of 17 specification
+     * requirements and 11 leaf criteria is 16 distinct claims.
+     *
+     * <p><b>Claim-bearing requirements come first</b> so that the observation cap — which exists
+     * to stop a pathological list consuming a run — trims what cannot be judged rather than what
+     * can. A requirement no parser can read is still passed along, because the probe may yet
+     * contradict it and that is evidence of a different kind; it simply does not get to displace
+     * a question that has an answer.
+     */
+    public List<String> requirementsWorthObserving() {
+        List<String> specDerived = specDerivedRequirements();
+        if (exercisableCriterionQuery == null) return specDerived;
+
+        GoalEntity root = getRootGoal();
+        String specText = root != null ? root.getDescription() : null;
+
+        List<String> candidates = new ArrayList<>(specDerived);
+        for (GoalEntity leaf : getRemainingGoals()) {
+            if (getSubGoals(leaf.getId()).stream().anyMatch(c -> c.getStatus() == GoalStatus.ACTIVE)) continue;
+            candidates.addAll(criteriaTextOf(leaf));
+        }
+
+        List<String> answerable = new ArrayList<>();
+        List<String> unreadable = new ArrayList<>();
+        Set<String> seenClaims = new LinkedHashSet<>();
+        Set<String> seenText = new LinkedHashSet<>();
+        for (String candidate : candidates) {
+            if (!seenText.add(candidate)) continue;
+            Optional<String> claim = exercisableCriterionQuery.claimOf(candidate, specText);
+            if (claim.isEmpty()) {
+                unreadable.add(candidate);
+            } else if (seenClaims.add(claim.get())) {
+                answerable.add(candidate);
+            }
+        }
+        List<String> merged = new ArrayList<>(answerable);
+        merged.addAll(unreadable);
+        if (merged.size() != specDerived.size()) {
+            // Says what this IS: the question set assembled for whatever observation follows. It
+            // is NOT a record that one happened — the supplier runs before the self-check's own
+            // abstention checks, so on run 2026-09-23_02-16-41 two of the first four emissions
+            // were followed by "no behavioural observation this interval — the last compile probe
+            // was COMPILE_ERROR". The earlier wording said "observing", which would have let a
+            // later reader count preparations and report them as askings
+            // ([[feedback-activity-not-progress]]).
+            log.info("T2-FL: requirement set assembled — {} to ask, {} distinct claim(s) from the specification and the open work items, {} unreadable (the specification alone stated {}); whether they are asked is the self-check's next line",
+                    merged.size(), answerable.size(), unreadable.size(), specDerived.size());
+        }
+        return merged;
+    }
+
     public List<String> specDerivedRequirements() {
         List<String> out = new ArrayList<>();
         GoalEntity specRoot = getRootGoal();

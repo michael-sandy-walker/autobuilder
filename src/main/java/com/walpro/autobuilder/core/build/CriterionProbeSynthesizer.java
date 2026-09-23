@@ -155,7 +155,7 @@ public class CriterionProbeSynthesizer {
         if (deterministic.isPresent()) {
             log.debug("T4-CY: probe for [{}] synthesized deterministically as {}",
                     assertion.describe(), deterministic.get());
-            return carryStatedInput(deterministic.get(), assertion);
+            return carryStatedInput(deterministic.get(), assertion, specification, artifactRoot);
         }
         if (!llmFallbackEnabled && !allowModelFallback) {
             log.debug("T4-CY: no deterministic probe for [{}] and the model fallback is off — not probed",
@@ -171,7 +171,94 @@ public class CriterionProbeSynthesizer {
         log.info("T4-DB: model fallback for [{}] -> {} ({} ms)", assertion.describe(),
                 viaModel.map(seq -> seq.size() + " request(s)").orElse("no usable probe"),
                 System.currentTimeMillis() - t0);
-        return viaModel.flatMap(seq -> carryStatedInput(seq, assertion));
+        return viaModel.flatMap(seq -> carryStatedInput(seq, assertion, specification, artifactRoot));
+    }
+
+    /**
+     * T2-FL: ground a query reference by CREATING what it points at, never by inventing an id.
+     *
+     * <p><b>Why only this direction.</b> The sibling case — grounding a pattern where the
+     * requirement asserts the reference resolves to NOTHING — was built and then withdrawn on
+     * measurement, because criteria asserting a 404 for an absent member state something the
+     * specification never does, and probing them reports a correct artifact as defective. That
+     * withdrawal stands. This grounds the opposite assertion: the resource EXISTS, so the setup
+     * creates it and the probe asks about a reference that genuinely resolves.
+     *
+     * <p><b>The one convention this accepts, and its limit.</b> A reference parameter is matched
+     * to a collection by removing a trailing id-suffix and comparing the stem to the collections
+     * THE SPECIFICATION ITSELF DECLARES — so no domain name is written down here
+     * ([[feedback-no-target-domain-in-framework-strings]]), and a project whose specification
+     * declares no matching collection gets no probe. Exactly one collection must match: zero is
+     * nothing to create, and two would make the choice a guess.
+     *
+     * <p>Abstains, leaving the caller's existing refusal in place, on: more than one query
+     * component, a component that is not {@code name={var}}, an unmatched or ambiguous stem, and
+     * a collection whose model yields no derivable body — the same condition that already stops
+     * a path-variable setup being sent against a resource that was never created.
+     */
+    private static Optional<List<ProbeRequest>> groundQueryReference(
+            List<ProbeRequest> sequence, BehaviouralCriterionParser.Assertion assertion,
+            String component, String specification, Path artifactRoot) {
+        if (specification == null || specification.isBlank()) return Optional.empty();
+
+        // — THE GATE THAT KEEPS THE WITHDRAWAL INTACT. The setup below CREATES the resource, so
+        // it establishes that the reference resolves. A criterion asserting what happens when it
+        // does NOT resolve has the opposite premise, and grounding it this way would assert a 404
+        // against an application that correctly answers 200 for an existing member — precisely
+        // the manufactured contradiction that got the absent-id grounding withdrawn. Only a
+        // success status may be probed against a resource this sequence just created.
+        if (assertion.expectedStatus() < 200 || assertion.expectedStatus() > 299) {
+            return Optional.empty();
+        }
+        Matcher m = SINGLE_QUERY_REFERENCE.matcher(component.trim());
+        if (!m.matches()) return Optional.empty();
+        String parameter = m.group(1);
+
+        Optional<String> collection = collectionDeclaredFor(parameter, specification);
+        if (collection.isEmpty()) return Optional.empty();
+
+        Optional<String> setupBody = DeterministicProbeSynthesizer.derivedBody(collection.get(), artifactRoot);
+        if (setupBody.isEmpty()) return Optional.empty();
+
+        ProbeRequest asserted = sequence.get(sequence.size() - 1);
+        if (asserted.path().contains("?")) return Optional.empty();  // already carries an input
+        log.info("T2-FL: grounding {} by creating a resource in {} first",
+                component, collection.get());
+        return Optional.of(List.of(
+                new ProbeRequest("POST", collection.get(), setupBody.get()),
+                new ProbeRequest(asserted.method(),
+                        asserted.path() + "?" + parameter + "=" + CREATED_REFERENCE,
+                        asserted.body())));
+    }
+
+    /** {@code name={var}} and nothing else — two components make the subject ambiguous. */
+    private static final Pattern SINGLE_QUERY_REFERENCE =
+            Pattern.compile("([A-Za-z_][A-Za-z0-9_]*)=\\{[^}]*}");
+
+    /** The id of the resource the setup request created, in the sequence runner's own notation. */
+    private static final String CREATED_REFERENCE = "$1.id";
+
+    /** A trailing id-suffix, the only naming assumption this file makes. */
+    private static final Pattern ID_SUFFIX = Pattern.compile("(?i)(_id|id)$");
+
+    /**
+     * The spec-declared collection a reference parameter points at, or empty when the stem
+     * matches no declared collection or more than one.
+     */
+    private static Optional<String> collectionDeclaredFor(String parameter, String specification) {
+        String stem = ID_SUFFIX.matcher(parameter).replaceFirst("");
+        if (stem.isBlank()) return Optional.empty();
+        String wanted = stem.toLowerCase(java.util.Locale.ROOT);
+
+        java.util.Set<String> matches = new java.util.LinkedHashSet<>();
+        for (var endpoint : new EndpointSurfaceQuery().declaredInSpec(specification)) {
+            String path = endpoint.path();
+            if (path.contains("{")) continue;                       // a collection, not a member
+            String last = path.substring(path.lastIndexOf('/') + 1);
+            String singular = last.endsWith("s") ? last.substring(0, last.length() - 1) : last;
+            if (last.equals(wanted) || singular.equals(wanted)) matches.add(path);
+        }
+        return matches.size() == 1 ? Optional.of(matches.iterator().next()) : Optional.empty();
     }
 
     /**
@@ -187,12 +274,40 @@ public class CriterionProbeSynthesizer {
      * job is to create state, not to exercise the requirement.
      */
     private static Optional<List<ProbeRequest>> carryStatedInput(List<ProbeRequest> sequence,
-                                                                 BehaviouralCriterionParser.Assertion assertion) {
+                                                                 BehaviouralCriterionParser.Assertion assertion,
+                                                                 String specification,
+                                                                 Path artifactRoot) {
         Optional<String> stated = BehaviouralCriterionParser.statedInput(assertion.criterionText());
         if (stated.isEmpty() || sequence.isEmpty()) return Optional.of(sequence);
 
         String component = stated.get();
+
+        // T2-FL: when the requirement says the input is ABSENT, the exercise is the request
+        // without it — which is what the sequence already is. Carrying the component back in
+        // here would probe the opposite of what the criterion states, and the pattern refusal
+        // below would discard the sequence entirely.
+        // Gated on the same client-error status as the shape it protects, so the two cannot
+        // disagree: without it, a success-status criterion saying "when memberId is missing" kept
+        // a bare request here that `omittedInput` had deliberately refused to build — the same
+        // exercise reached by a second route, which is how one gate silently stops meaning
+        // anything ([[feedback-one-invariant-one-home]]).
+        Optional<String> parameter = BehaviouralCriterionParser.statedParameterName(assertion.criterionText());
+        if (parameter.isPresent()
+                && assertion.expectedStatus() >= 400 && assertion.expectedStatus() <= 499
+                && BehaviouralCriterionParser.statesAbsentInput(assertion.criterionText(), parameter.get())) {
+            return Optional.of(sequence);
+        }
+
         if (component.contains("{")) {
+            // T2-FL: a pattern the probe CAN ground, by creating the resource it refers to and
+            // using that id — the direction the withdrawal below deliberately left open. It is
+            // the create-then-reference shape `rejectedInput` already performs for a PATH
+            // variable; only the query-borne case was unreachable. Measured across 103 archived
+            // trees: 94 distinct criteria state a query pattern, against 521 path ones that other
+            // shapes already handle.
+            Optional<List<ProbeRequest>> grounded =
+                    groundQueryReference(sequence, assertion, component, specification, artifactRoot);
+            if (grounded.isPresent()) return grounded;
             // A PATTERN, and it is NOT probed whatever status it asserts.
             //
             // Grounding it where the requirement asserts the reference RESOLVES needs a resource

@@ -77,7 +77,7 @@ class ClosureClaimRefutalEndToEndTest {
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
 
         return new BehaviouralClosureVerifier(packageGate, bootGate,
-                new ExercisableCriterionQuery(new CommandSurfaceQuery()));
+                new ExercisableCriterionQuery(new CommandSurfaceQuery(), "java -jar {artifact}"));
     }
 
     @Test

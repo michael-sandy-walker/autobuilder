@@ -11,7 +11,55 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-22 (Opus 5) — THE FIRESTARTER "DETERIORATION" IS A RECOGNITION FAILURE, NOT A BUILD ONE — AND I ANSWERED IT OFF THREE DIFFERENT POPULATIONS — START HERE
+## 2026-09-23 (Opus 5) — T2-FL BUILT: THE LOOP NEVER ASKED THE QUESTIONS THAT WOULD HAVE CLOSED THE RUN — START HERE
+
+**No field run this session.** A build session off the previous entry's residue finding, on the
+user's choice between two scopes and a second steer mid-build.
+
+- **The residue split had an owner for one half only.** `T4-DW` retires GATE-raised leaves; the
+  PLANNER-authored half (14 alive in the latest firestarter window, coverage-retro 17) had nothing.
+  `T2-FL` is that half.
+- **Two of the ticket's own premises died on its own archived data, and I checked before building
+  rather than after** ([[project-ticket-premises-expire]]):
+  - `endpointFromWorkItem` inverts a TEMPLATE (*"Provide the X endpoint named in…"*) and matches
+    **none** of the four planner-prose leaves. `declaredInSpec(description)` is the reader.
+  - The ticket's boundary clause (*do not promote a leaf whose criteria state runtime behaviour*)
+    and its DoD addition (*the four leaves are resolved by the structural check alone*) contradict
+    each other **on the same leaf**. All four carry behavioural criteria; none has a banked one.
+    **Structure-only fires on zero of four.** The boundary was right and the DoD was wrong.
+- **🔴 THE FINDING WORTH KEEPING is a third shape of [[project-invented-facts-have-authorities]]:
+  the authority was consulted FIVE times and asked someone else's question.** The boot gate ran
+  per-cycle against the tree on disk over the run's last 54 minutes — `probed=9 … contradicted=0`,
+  five times — while the four leaves sat ACTIVE. Its question set was `specDerivedRequirements`
+  ALONE. Two leaf claims (`GET /members/{} → 200`, `POST /loans/{}/return → 200`) are not derivable
+  from spec prose at all; the derivable ones were the `unprobeable{404,422}` skips. **A green log
+  line, about the wrong question.**
+- **Shipped:** `BootObservation.claimsObservedPassing` (match on the parsed claim, not the prose —
+  spec and work item spell one requirement two ways and both parse to `GET /members/{} → 404`);
+  `GoalPlannerService.promoteLeavesObservedSatisfied` promoting through `applyGoalProgress` so every
+  existing guard still votes; `requirementsWorthObserving()` handing the probe the open leaves'
+  criteria too, **deduplicated BY CLAIM** (17 spec + 11 leaf = 16 distinct, so the additions are
+  paid for by the duplicates removed, not by raising the cap).
+- **User steer mid-build: "make this also work for non Webservice ones" — and it changed the build,
+  not just its reach.** `evidence.passingCriteria.add(...)` existed at exactly ONE site, inside the
+  HTTP probe: **`T4-DW`'s retirement was already blind on a terminating target.** Both command
+  paths now feed the same evidence, and the claim is derived by `ExercisableCriterionQuery.claimOf`
+  — the class already chartered to answer once for every target shape. Nothing in the promotion
+  names a protocol; a CLI leaf promotes on `→ exit 3`.
+- **What is NOT claimed:** that those four leaves would have been promoted. Two of their claims were
+  never probed in any run, so the artifact's answer is unmeasured in-loop — the smoke's 23/23 is
+  external evidence, not the loop's ([[feedback-activity-not-progress]]). The questions now reach
+  the probe; whether it judges them is the next run's readout.
+- **Reachability proven by deletion, not asserted:** removing the `CycleExecutor` call site fails
+  `theObservedLeafPromotionIsAskedOnAnOrdinaryCycle` and nothing else (1 of 109).
+  Flag `autobuilder.goal.promote-observed-leaves-per-cycle`.
+- **NEXT:** a short field run — this changes what the per-cycle observation is ASKED and what the
+  goal tree does with the answer, which is exactly the integration surface a green suite cannot see
+  ([[feedback-short-field-run-after-context-change]]). Watch item: does a leaf get promoted by an
+  observation, and does the root then reach a closure attempt it could not previously reach?
+
+
+## 2026-09-22 (Opus 5) — THE FIRESTARTER "DETERIORATION" IS A RECOGNITION FAILURE, NOT A BUILD ONE — AND I ANSWERED IT OFF THREE DIFFERENT POPULATIONS
 
 - **THE ONE THING TO CARRY: the user said *"I think you already mixed different cases (firestarter and cli) again"* — no clitarget row had entered the numbers, and the mixing was real anyway, one level in.** Census of the run dirs: 75 firestarter, 24 clitarget, 3 flightsim; every filter was `target.txt == firestarter` and every cited run verified individually. **What was actually mixed was three of MY OWN populations for one claim:** outcome windows from the 54 firestarter runs that have a ledger row; the productivity table from a date cutoff that silently gave 19 and 21 runs under a "last 20" header; the residue analysis from all 71 firestarter dirs with a `GoalStack.json`, **17 of which have no ledger row and are precisely the 2026-08-24..08-31 runs carrying the single-boot-gate-leaf shape I then generalised from**. A denominator is part of a claim. **And my `sorted(x)[len//2]` is not a median for even n** — that alone moved window A's duration from 44.4 to 50.0 min and put two numbers for one quantity in consecutive messages. Extends [[feedback-dont-evaluate-a-build-with-older-runs]] from targets to populations.
 - **CANONICAL NUMBERS — one population, stated so nothing has to be re-derived: firestarter only, ledger rows, strict last-20 (B: `2026-09-02`..`2026-09-21`) against previous-20 (A: `2026-08-26`..`2026-09-02`), real medians.**

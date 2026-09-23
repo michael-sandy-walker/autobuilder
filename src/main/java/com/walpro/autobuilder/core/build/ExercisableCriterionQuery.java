@@ -2,7 +2,6 @@ package com.walpro.autobuilder.core.build;
 
 import com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery;
 import com.walpro.autobuilder.analysis.structure.InputFormatExample;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -38,10 +37,24 @@ import java.util.regex.Pattern;
  * question, decided by running it.
  */
 @Component
-@RequiredArgsConstructor
 public class ExercisableCriterionQuery {
 
     private final CommandSurfaceQuery commandSurfaceQuery;
+
+    /**
+     * The launch spelling the boot gate runs the artifact with, read from the same property, so a
+     * criterion naming an invocation is recognised here exactly as it is there. Config data, not
+     * an ecosystem literal ([[feedback-no-ecosystem-jargon-in-framework-code]]).
+     */
+    private final String commandTemplate;
+
+    public ExercisableCriterionQuery(
+            CommandSurfaceQuery commandSurfaceQuery,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${autobuilder.build.boot-gate.command:java -jar {artifact}}") String commandTemplate) {
+        this.commandSurfaceQuery = commandSurfaceQuery;
+        this.commandTemplate = commandTemplate;
+    }
 
     /**
      * The criteria worth booting the artifact for.
@@ -104,5 +117,49 @@ public class ExercisableCriterionQuery {
         return surface.keySet().stream().anyMatch(w -> Pattern.compile(
                         "(?i)(?:^|[^a-z0-9_-])" + Pattern.quote(w) + "(?:[^a-z0-9_-]|$)")
                 .matcher(criterion).find());
+    }
+
+    /**
+     * T2-FL: what this criterion ASSERTS, in the canonical spelling the boot gate records when it
+     * observes an assertion holding — or empty when no probe of any shape can read one out.
+     *
+     * <p><b>Why a claim and not the criterion's own words.</b> The evidence a work item needs is
+     * "was this requirement observed to hold?", and the requirement reaches the probe in the
+     * specification's wording while the item states it in its author's. Matching prose answers no
+     * to a question whose answer is yes: run {@code 2026-09-22_15-59-33} ended at its deadline
+     * with four leaves stating endpoints the artifact served and the sweep had probed. The
+     * assertion is the identity both spellings share.
+     *
+     * <p><b>Why it lives here.</b> This class already exists to ask one question of every target
+     * shape rather than once per shape ({@code T4-DK}), and it already holds both readers. A
+     * caller gets an answer for an artifact that serves and for one that terminates without
+     * knowing which it is holding — which is the whole of the non-service support: nothing above
+     * this line names a protocol.
+     *
+     * <p>Abstains on exactly the terms its readers do. A criterion that does not parse into one
+     * assertion has no claim, and empty always means "no opinion", never "unmet".
+     */
+    public Optional<String> claimOf(String criterion, String specText) {
+        if (criterion == null || criterion.isBlank()) return Optional.empty();
+
+        Optional<BehaviouralCriterionParser.Assertion> served =
+                BehaviouralCriterionParser.exercisable(criterion);
+        if (served.isPresent()) return Optional.of(served.get().describe());
+
+        List<String> launchTokens = CommandCriterionParser.launchTokensOf(commandTemplate);
+        if (!launchTokens.isEmpty()) {
+            Optional<CommandCriterionParser.CommandAssertion> invoked =
+                    CommandCriterionParser.parse(criterion, launchTokens);
+            if (invoked.isPresent()) return Optional.of(invoked.get().describe());
+        }
+
+        if (specText == null || specText.isBlank()) return Optional.empty();
+        Optional<CommandExerciseSynthesizer.Exercise> exercised = CommandExerciseSynthesizer.synthesize(
+                criterion,
+                commandSurfaceQuery.declaredInSpec(specText),
+                commandSurfaceQuery.unrecognisedWord(specText),
+                InputFormatExample.readFrom(specText),
+                specText);
+        return exercised.map(CommandExerciseSynthesizer.Exercise::describe);
     }
 }

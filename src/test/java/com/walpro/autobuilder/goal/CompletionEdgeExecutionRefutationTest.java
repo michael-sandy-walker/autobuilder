@@ -74,7 +74,7 @@ class CompletionEdgeExecutionRefutationTest {
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setCriteriaVerificationService(verifier);
         service.setClosureClaimVerifier(closureVerifier);
-        service.setExercisableCriterionQuery(new ExercisableCriterionQuery(new CommandSurfaceQuery()));
+        service.setExercisableCriterionQuery(new ExercisableCriterionQuery(new CommandSurfaceQuery(), "java -jar {artifact}"));
         service.setCurrentCycleContext(CycleContextData.builder()
                 .cycleName("execution-refutation")
                 .outputPath("output")

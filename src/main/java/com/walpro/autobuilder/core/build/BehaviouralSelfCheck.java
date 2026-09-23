@@ -227,14 +227,20 @@ public class BehaviouralSelfCheck implements CheckpointableState {
 
         String cycleId = context != null ? context.cycleName() : "self-check";
 
-        // The loop already compiles every cycle, so its own probe result says whether packaging
-        // could possibly succeed. Consulting it costs nothing and skips a `mvn package` that is
-        // certain to fail — in run 2026-07-28_21-39-59 all four observations were spent exactly
-        // that way. Only a KNOWN-broken build is skipped: an absent or unknown result still
-        // attempts, so this can lose a look but never invent one.
-        if (context != null && context.lastProbeOutcome() != null
-                && context.lastProbeOutcome().result() == BuildResult.COMPILE_ERROR) {
-            return abstained(context, "the last compile probe was COMPILE_ERROR");
+        // The loop already knows whether the tree ON DISK compiles, so consulting that costs
+        // nothing and skips a `mvn package` that is certain to fail — in run 2026-07-28_21-39-59
+        // all four observations were spent exactly that way. Only a KNOWN-broken tree is skipped:
+        // an absent or unknown result still attempts, so this can lose a look but never invent one.
+        //
+        // The authority is the post-merge build state, NOT the last compile probe. A probe judges
+        // a STAGED candidate, and a rejected one is rolled back — its COMPILE_ERROR describes a
+        // tree that no longer exists. Run 2026-09-23_20-20-50 skipped every look from 20:33 on
+        // because six rejected candidates failed to compile, while every one of those cycles ended
+        // with the merged tree compiling; the observation that could have promoted a leaf was
+        // withheld on the answer to someone else's question.
+        if (context != null && context.buildOutcome() != null
+                && context.buildOutcome().result() == BuildResult.COMPILE_ERROR) {
+            return abstained(context, "the tree on disk does not compile (last post-merge build was COMPILE_ERROR)");
         }
 
         // From here on the check spends real time (a package build, a boot, the probe requests), so

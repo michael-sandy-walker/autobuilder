@@ -127,10 +127,30 @@ class BehaviouralSelfCheckTest {
         var outcome = mock(com.walpro.autobuilder.core.build.BuildOutcome.class);
         when(outcome.result()).thenReturn(BuildResult.COMPILE_ERROR);
         CycleContextData broken = CycleContextData.builder()
-                .cycleName("cycle-1").lastProbeOutcome(outcome).build();
+                .cycleName("cycle-1").buildOutcome(outcome).build();
 
         assertThat(check.observe(broken, SPEC, () -> REQS)).isEmpty();
         verify(packageGate, never()).verifyPackageable(anyString());
+    }
+
+    @Test
+    void aRejectedCandidatesFailedProbe_doesNotWithholdTheLook_whenTheTreeOnDiskCompiles() {
+        // Run 2026-09-23_20-20-50: from 20:33 every candidate failed its compile probe and was
+        // rolled back, while the merged tree compiled at the end of every cycle. The check read
+        // the candidate's probe and skipped four looks in a row. The probe describes a tree that
+        // was rolled back; the post-merge build describes the one on disk.
+        var failedCandidate = mock(com.walpro.autobuilder.core.build.BuildOutcome.class);
+        when(failedCandidate.result()).thenReturn(BuildResult.COMPILE_ERROR);
+        var mergedTree = mock(com.walpro.autobuilder.core.build.BuildOutcome.class);
+        when(mergedTree.result()).thenReturn(BuildResult.COMPILE_OK);
+        CycleContextData ctx = CycleContextData.builder().cycleName("cycle-1")
+                .lastProbeOutcome(failedCandidate).buildOutcome(mergedTree).build();
+        when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean())).thenReturn(clean());
+
+        check.observe(ctx, SPEC, () -> REQS);
+
+        verify(packageGate, times(1)).verifyPackageable(anyString());
     }
 
     @Test
@@ -143,7 +163,7 @@ class BehaviouralSelfCheckTest {
         var outcome = mock(com.walpro.autobuilder.core.build.BuildOutcome.class);
         when(outcome.result()).thenReturn(BuildResult.COMPILE_ERROR);
         CycleContextData broken = CycleContextData.builder()
-                .cycleName("cycle-broken").lastProbeOutcome(outcome).build();
+                .cycleName("cycle-broken").buildOutcome(outcome).build();
         when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
         when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean())).thenReturn(clean());
 

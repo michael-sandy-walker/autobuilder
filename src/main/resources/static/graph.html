@@ -3033,8 +3033,12 @@ window.MissionControl = (function () {
     noteSessionStart(env.timestamp); // fallback when hello carried no session start
     const evMs = env.timestamp ? Date.parse(env.timestamp) : NaN;
     lastEventMs = Number.isNaN(evMs) ? Date.now() : evMs;
-    if (FAMILY[env.event] === 'halt') loopHalted = true;
-    else if (env.event === 'system_resumed') loopHalted = false;
+    // The 'halt' FAMILY is a chip colour for alarming events; only a pause actually stops the
+    // loop. pattern_detected, recurring_defect_dominant and guard_violated are diagnostics the loop
+    // acts on and keeps running — reading them as a halt showed "(ended)" on a live run
+    // (2026-09-23_21-22-40: four EmptyDiffDetector findings from 21:39, the loop still cycling).
+    if (env.event === 'system_paused') loopHalted = true;
+    else if (env.event === 'system_resumed' || env.event === 'cycle_start') loopHalted = false;
     // per-event story flags (consumed by the ghost chain + narrationText below)
     subgoalSwitched = false;
     repairedAfter = 0;

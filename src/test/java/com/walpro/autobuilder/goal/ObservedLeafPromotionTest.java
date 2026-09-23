@@ -297,6 +297,64 @@ class ObservedLeafPromotionTest {
         assertThat(service.getRemainingGoals()).hasSize(1);
     }
 
+    // ------------------------------------------- a demand that a source FILE exist (T2-FL)
+
+    /**
+     * Run 2026-09-23_21-22-40 declined every sweep on criteria shaped "Create MemberService.java"
+     * while its artifact ran. File presence is decided by the output's file map, but never on its
+     * own: beside it, a claim of the same leaf observed on the running artifact.
+     */
+    @Test
+    void aFileDemandBesideAnObservedClaimIsDecidedByTheFileMap() throws IOException {
+        Map<String, List<String>> leaf = new LinkedHashMap<>(Map.of(
+                "Create the loan controller", List.of(
+                        "Create LoanController.java",
+                        "POST /loans returns HTTP 201 with the created loan body on success")));
+        GoalPlannerService service = serviceWith(SEED, SERVED_ARTIFACT, leaf);
+
+        assertThat(service.promoteSatisfiedLeaves(observing(claimsOf(service, leaf)))).isEqualTo(1);
+    }
+
+    /** The false-completion boundary: an empty stub satisfies existence and nothing else. */
+    @Test
+    void fileDemandsAloneNeverPromoteALeaf_evenWhenEveryFileExists() throws IOException {
+        GoalPlannerService service = serviceWith(SEED, SERVED_ARTIFACT, new LinkedHashMap<>(Map.of(
+                "Create the member controller with its endpoints", List.of(
+                        "Create MemberController.java",
+                        "A class `LoanController` exists at `src/main/java/com/example/library/api/LoanController.java`."))));
+
+        assertThat(service.promoteSatisfiedLeaves(observing(List.of("launch \u2192 runs")))).isZero();
+        assertThat(service.getRemainingGoals()).hasSize(1);
+    }
+
+    @Test
+    void aFileTheOutputDoesNotHoldKeepsTheLeafInPlace() throws IOException {
+        Map<String, List<String>> leaf = new LinkedHashMap<>(Map.of(
+                "Create the book controller", List.of(
+                        "Create BookController.java",
+                        "POST /loans returns HTTP 201 with the created loan body on success")));
+        GoalPlannerService service = serviceWith(SEED, SERVED_ARTIFACT, leaf);
+
+        assertThat(service.promoteSatisfiedLeaves(observing(claimsOf(service, leaf)))).isZero();
+    }
+
+    @Test
+    void fileDemandShapes_areWholeSentenceOnly_andResolveToAPathFragment() {
+        assertThat(GoalPlannerService.sourceFileWhoseExistenceIsDemanded("Create BookController.java"))
+                .contains("BookController.java");
+        assertThat(GoalPlannerService.sourceFileWhoseExistenceIsDemanded(
+                "Book.java exists at src/main/java/x/Book.java")).contains("src/main/java/x/Book.java");
+        assertThat(GoalPlannerService.sourceFileWhoseExistenceIsDemanded(
+                "A Java class `Member` exists in `src/main/java/x/Member.java`.")).contains("src/main/java/x/Member.java");
+        assertThat(GoalPlannerService.sourceFileWhoseExistenceIsDemanded(
+                "A BookService class exists under src/main/java/x/")).contains("src/main/java/x/BookService.");
+        assertThat(GoalPlannerService.sourceFileWhoseExistenceIsDemanded(
+                "A Loan class exists in `src/main/java/x/Loan.java` with fields for id and bookId"))
+                .as("a sentence that also states CONTENT is not a demand for existence").isEmpty();
+        assertThat(GoalPlannerService.sourceFileWhoseExistenceIsDemanded(
+                "A `BookDTO` class exists in the `com.example.library.domain.dto` package.")).isEmpty();
+    }
+
     private static final String COVERAGE_TAIL =
             "— no request mapping for it exists in the output.";
 

@@ -956,10 +956,30 @@ public class GoalPlannerService {
             List<String> criteria, String specText,
             com.walpro.autobuilder.core.build.BootGate.BootObservation observation,
             Map<String, String> output) {
+        boolean observedAny = false;
+        boolean decidedByFilePresence = false;
         for (String criterion : criteria) {
             // The criterion's own words first: when the probe was handed this very string, that
             // is the most direct evidence there is and no parse can improve on it.
-            if (observation.observedPassing(criterion)) continue;
+            if (observation.observedPassing(criterion)) {
+                observedAny = true;
+                continue;
+            }
+
+            // T2-FL: a demand that a source FILE exist is decided by the output's file map, as an
+            // endpoint's existence is decided by its mappings. Run 2026-09-23_21-22-40 declined
+            // every sweep on "Create MemberService.java"-shaped criteria while the artifact ran.
+            Optional<String> demandedFile = sourceFileWhoseExistenceIsDemanded(criterion);
+            if (demandedFile.isPresent()) {
+                if (output == null || output.isEmpty()) {
+                    return Optional.of("the output file map could not be read, so \"" + criterion + "\" is undecided");
+                }
+                if (!outputHoldsFile(output, demandedFile.get())) {
+                    return Optional.of(demandedFile.get() + " is still absent from the output");
+                }
+                decidedByFilePresence = true;
+                continue;
+            }
 
             // A demand that an endpoint EXIST is decided by the sources, not by a probe.
             Optional<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint> demanded =
@@ -985,8 +1005,84 @@ public class GoalPlannerService {
             if (!observation.observedClaimPassing(claim.get())) {
                 return Optional.of(claim.get() + " was not among the claims this observation judged");
             }
+            observedAny = true;
+        }
+        // A file that exists is not work that is done: the leaf that demands it usually demands
+        // what the file must CONTAIN, and a stub satisfies existence ([[project-false-completion-unmasked]]).
+        // So file presence may complete a leaf's reading only beside a claim observed on the
+        // running artifact — never as the whole evidence.
+        if (decidedByFilePresence && !observedAny) {
+            return Optional.of("its only evidence would be that files exist — no claim of it was observed on the running artifact");
         }
         return Optional.empty();
+    }
+
+    // A path or file name with an extension, optionally in backticks.
+    private static final String FILE_TOKEN = "`?([\\w./-]+\\.[A-Za-z]\\w*)`?";
+    private static final java.util.regex.Pattern CREATE_FILE = java.util.regex.Pattern.compile(
+            "^(?:Create|Add)\\s+" + FILE_TOKEN + "\\s*\\.?$");
+    private static final java.util.regex.Pattern FILE_EXISTS = java.util.regex.Pattern.compile(
+            "^(?:The\\s+file\\s+)?" + FILE_TOKEN + "\\s+exists(?:\\s+(?:at|in|under)\\s+`?([\\w./-]+?)`?)?\\s*\\.?$");
+    private static final String TYPE_KIND = "(?:Java\\s+)?(?:class|interface|type|record|enum|file)";
+    private static final java.util.regex.Pattern TYPE_EXISTS_AT = java.util.regex.Pattern.compile(
+            "^An?\\s+(?:" + TYPE_KIND + "\\s+`?(\\w+)`?|`?(\\w+)`?\\s+" + TYPE_KIND + ")"
+                    + "\\s+exists\\s+(?:at|in|under)\\s+`?([\\w./-]+?)`?\\s*\\.?$");
+
+    /**
+     * T2-FL: the source file a criterion demands exist, when the criterion says NOTHING else —
+     * the whole sentence must be one of three shapes, so a criterion that also states what the
+     * file must do is never read as mere existence. Returns a path fragment: a file name, a
+     * relative path, or a directory joined to a type name with a trailing dot (any extension).
+     */
+    public static Optional<String> sourceFileWhoseExistenceIsDemanded(String criterion) {
+        if (criterion == null) return Optional.empty();
+        String text = criterion.strip();
+        java.util.regex.Matcher m = CREATE_FILE.matcher(text);
+        if (m.matches()) return Optional.of(m.group(1));
+        m = FILE_EXISTS.matcher(text);
+        if (m.matches()) {
+            String file = m.group(1);
+            String dir = m.group(2);
+            if (dir == null || file.contains("/")) return Optional.of(file);
+            String where = trimSlashes(dir);
+            // "X.java exists at a/b/X.java" names the file twice — the location already is it.
+            if (where.equals(file) || where.endsWith("/" + file)) return Optional.of(where);
+            return Optional.of(where + "/" + file);
+        }
+        m = TYPE_EXISTS_AT.matcher(text);
+        if (m.matches()) {
+            String type = m.group(1) != null ? m.group(1) : m.group(2);
+            String where = trimSlashes(m.group(3));
+            String last = where.substring(where.lastIndexOf('/') + 1);
+            if (last.startsWith(type + ".")) return Optional.of(where);
+            if (last.contains(".")) return Optional.empty(); // a file that is not the named type's
+            if (!where.contains("/")) return Optional.empty(); // a package name, not a path
+            return Optional.of(where + "/" + type + ".");
+        }
+        return Optional.empty();
+    }
+
+    private static String trimSlashes(String s) {
+        String out = s;
+        while (out.endsWith("/")) out = out.substring(0, out.length() - 1);
+        while (out.startsWith("/")) out = out.substring(1);
+        return out;
+    }
+
+    /** A fragment ending in '.' matches any extension; otherwise exact name or path-suffix match. */
+    static boolean outputHoldsFile(Map<String, String> output, String fragment) {
+        for (String path : output.keySet()) {
+            String p = path.replace('\\', '/');
+            if (fragment.endsWith(".")) {
+                int slash = p.lastIndexOf('/');
+                String withoutExt = p.contains(".") ? p.substring(0, p.lastIndexOf('.') + 1) : p;
+                if (withoutExt.equals(fragment) || withoutExt.endsWith("/" + fragment)) return true;
+                if (slash < 0 && withoutExt.equals(fragment)) return true;
+            } else if (p.equals(fragment) || p.endsWith("/" + fragment)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

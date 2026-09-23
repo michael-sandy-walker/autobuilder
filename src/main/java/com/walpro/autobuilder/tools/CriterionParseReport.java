@@ -261,6 +261,7 @@ public final class CriterionParseReport {
             for (String c : leaf.criteria()) {
                 boolean ok = readable.computeIfAbsent(leaf.target() + "\n" + c,
                         k -> GoalPlannerService.endpointWhoseExistenceIsDemanded(c, SURFACE).isPresent()
+                                || GoalPlannerService.sourceFileWhoseExistenceIsDemanded(c).isPresent()
                                 || query.claimOf(c, leaf.spec()).isPresent());
                 if (!ok) {
                     unreadable++;
@@ -282,6 +283,7 @@ public final class CriterionParseReport {
             System.out.printf("  %-14s %4d leaves, %4d all-readable (%d%%) · residue %3d, %3d all-readable (%d%%)%n",
                     t.getKey(), v[0], v[1], pct(v[1], v[0]), v[2], v[3], pct(v[3], v[2]));
         }
+        System.out.println("  (readable includes the file-existence shapes; a leaf decided partly by them still needs one claim observed on the running artifact)");
         System.out.println("  residue leaves ONE unreadable criterion away from all-readable, by that criterion's shape:");
         blockers.entrySet().stream()
                 .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())

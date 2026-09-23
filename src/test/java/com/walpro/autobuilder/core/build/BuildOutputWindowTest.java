@@ -88,4 +88,17 @@ class BuildOutputWindowTest {
         assertThat(BuildErrorClassifier.classify(outcome.stderrTail()).kind())
                 .isEqualTo(BuildErrorClassifier.Kind.PACKAGE_DOES_NOT_EXIST);
     }
+
+    @Test
+    void terminalColourEscapesNeverReachTheWindow() {
+        // Verbatim shape of a coloured build line from run 2026-09-23_20-20-50's evaluation prompt.
+        BuildOutputWindow w = new BuildOutputWindow();
+        w.add("\u001B[1;31mERROR\u001B[m] Widget.java:[4,9] incompatible types");
+        w.add("\u001B[1;34mINFO\u001B[m] \u001B[1m-----\u001B[m");
+
+        assertThat(w.render())
+                .doesNotContain("\u001B")
+                .contains("ERROR] Widget.java:[4,9] incompatible types")
+                .contains("INFO] -----");
+    }
 }

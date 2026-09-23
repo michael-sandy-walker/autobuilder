@@ -35,9 +35,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * worse than abstaining; the LLM fallback keeps its place for that case).
  *
  * <p>Degrades gracefully: per-session result cache, hard timeout per query, and a consecutive-
- * failure budget that disables the source for the rest of the session once the network proves
- * unavailable — a run without connectivity pays the timeout at most {@value #FAILURE_BUDGET}
- * times.
+ * failure budget after which the source is skipped for a cooldown and then retried with one
+ * query (T1-GF) — an unreachable index costs at most one timeout per cooldown.
  */
 @Slf4j
 @Component
@@ -89,12 +88,26 @@ public class CoordinateSearchClient {
     private final AtomicInteger consecutiveFailures = new AtomicInteger();
 
     /**
+     * T1-GF: how long the index is skipped once the failure budget is spent, before ONE query is
+     * let through to find out whether it is back. It replaces a disable that lasted the whole
+     * session: the index measured flaky, not absent (two 20-second timeouts, then an answer in a
+     * third of a second), so one bad minute switched it off for a run that then never asked again.
+     * The loop's documented scheduler cadence — a retry at most once a cycle, costing at most one
+     * query timeout.
+     */
+    static final long COOLDOWN_MS = 60_000L;
+
+    @Setter
+    private java.util.function.LongSupplier clock = System::currentTimeMillis;
+    private volatile long retryAfterMs;
+
+    /**
      * The coordinates providing {@code fqn}, or empty (no result / disabled / budget exhausted /
      * network failure). Never throws.
      */
     public Optional<Coordinates> findByFullyQualifiedName(String fqn) {
         if (!enabled || fqn == null || fqn.isBlank() || !fqn.contains(".")) return Optional.empty();
-        if (consecutiveFailures.get() >= FAILURE_BUDGET) return Optional.empty();
+        if (cooling()) return Optional.empty();
         Optional<Coordinates> cached = cache.get(fqn);
         if (cached != null) return cached;
 
@@ -119,7 +132,7 @@ public class CoordinateSearchClient {
         if (groupId == null || groupId.isBlank() || artifactId == null || artifactId.isBlank()) {
             return ArtifactVersions.unknown();
         }
-        if (consecutiveFailures.get() >= FAILURE_BUDGET) return ArtifactVersions.unknown();
+        if (cooling()) return ArtifactVersions.unknown();
         String key = groupId + ":" + artifactId;
         ArtifactVersions cached = versionCache.get(key);
         if (cached != null) return cached;
@@ -171,7 +184,7 @@ public class CoordinateSearchClient {
      */
     public Availability publishesClass(String fqn) {
         if (!enabled || fqn == null || fqn.isBlank() || !fqn.contains(".")) return Availability.UNKNOWN;
-        if (consecutiveFailures.get() >= FAILURE_BUDGET) return Availability.UNKNOWN;
+        if (cooling()) return Availability.UNKNOWN;
         Availability cached = publishedCache.get(fqn);
         if (cached != null) return cached;
         Availability result = queryBody("fc:" + fqn, 1, "")
@@ -313,13 +326,20 @@ public class CoordinateSearchClient {
         }
     }
 
-    private void registerFailure(String reason) {
+    void registerFailure(String reason) {
         int failures = consecutiveFailures.incrementAndGet();
-        log.debug("T4-BM: coordinate search failed ({}) — {}/{} before source disables for the session",
+        log.debug("T4-BM: coordinate search failed ({}) — {}/{} before the source cools down",
                 reason, failures, FAILURE_BUDGET);
-        if (failures == FAILURE_BUDGET) {
-            log.info("T4-BM: coordinate search disabled for the session after {} consecutive failures", failures);
+        if (failures >= FAILURE_BUDGET) {
+            retryAfterMs = clock.getAsLong() + COOLDOWN_MS;
+            log.info("T1-GF: coordinate search unavailable after {} consecutive failures — skipped for {} s, then retried",
+                    failures, COOLDOWN_MS / 1000);
         }
+    }
+
+    /** True while the spent budget's cooldown runs; afterwards one query is let through. */
+    boolean cooling() {
+        return consecutiveFailures.get() >= FAILURE_BUDGET && clock.getAsLong() < retryAfterMs;
     }
 
     /** Test-only — reset session state. */

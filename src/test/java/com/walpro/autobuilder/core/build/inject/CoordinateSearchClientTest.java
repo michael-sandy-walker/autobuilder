@@ -127,4 +127,27 @@ class CoordinateSearchClientTest {
         assertThat(PomDependencyEditor.declaredVersionInGroup(pom, "org.acme")).contains("2.4.1");
         assertThat(PomDependencyEditor.declaredVersionInGroup(pom, "org.none")).isEmpty();
     }
+
+    @Test
+    void aSpentFailureBudget_coolsDown_andIsRetriedAfterward_ratherThanDisablingTheSession() {
+        // T1-GF: the index measured flaky, not absent. The old budget switched it off for the
+        // rest of the session after three failures in a row.
+        long[] now = {1_000_000L};
+        CoordinateSearchClient client = new CoordinateSearchClient();
+        client.setClock(() -> now[0]);
+
+        client.registerFailure("timeout");
+        client.registerFailure("timeout");
+        assertThat(client.cooling()).as("budget not yet spent").isFalse();
+        client.registerFailure("timeout");
+        assertThat(client.cooling()).isTrue();
+
+        now[0] += CoordinateSearchClient.COOLDOWN_MS - 1;
+        assertThat(client.cooling()).isTrue();
+        now[0] += 1;
+        assertThat(client.cooling()).as("one query is let through once the cooldown ends").isFalse();
+
+        client.registerFailure("still down");
+        assertThat(client.cooling()).as("a failed retry cools down again").isTrue();
+    }
 }

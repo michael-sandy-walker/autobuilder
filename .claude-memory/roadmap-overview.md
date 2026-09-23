@@ -512,7 +512,7 @@
 - [x] `T5-BG` — Orchestration-graph explorer (full persisted graph, provenance-filtered)
 - [x] `T5-BF` — Mission-control cockpit tells the run's story
 - [x] `T5-P2` — Unify cycle reference field name across artifact types
-- [ ] `T5-BK` — Six integration-test classes holding 20 passing tests never run in `mvn test` (surefire defaults do not match `*IT.java`, no failsafe configured); all 20 pass when named explicitly, so this is invisibility not rot — fix deferred because 3 need Docker
+- [x] `T5-BK` — Six *IT classes (22 tests) never ran in `mvn test`; closed 2026-09-23 by a surefire include, since the suite already needed Docker
 - [x] `T5-BJ` — No index on `Goal`: dedup full-scans every lineage's goals — MEASURED+BUILT 2026-08-24 (6,057 DbHits for 96 rows at 3,028 goals; T6-J's `goal_id_idx` indexed the wrong property); after-measurement pending a free box
 - [ ] `T5-BL` — A deletion session: the apparatus only ever grows and nothing argues for its own removal; delete on measured zero-firing, nothing gets built, net line count must be negative
 - [x] `T5-BM` — A goal node does not show what was DONE about it: the graph view filters actions globally, so answering "what happened to this subgoal?" meant reading the log; filed 2026-09-11 from the user's note. BUILT 2026-09-11, and the GRAPH SETTLED THE DESIGN QUESTION the filing left open — the busiest goal carries 216 actions over 50 minutes, so the filed "actions rendered around the node" would have been 216 items at the worst moment; verified end to end against the live store (endpoint returned 216 with the full breakdown, 404 for a goal with none) and the page's `renderGoalActivity` executed under Node against the REAL payload

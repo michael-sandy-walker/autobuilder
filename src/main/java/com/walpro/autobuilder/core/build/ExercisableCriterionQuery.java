@@ -146,6 +146,11 @@ public class ExercisableCriterionQuery {
                 BehaviouralCriterionParser.exercisable(criterion);
         if (served.isPresent()) return Optional.of(served.get().describe());
 
+        // Before the invocation reader, because a launch assertion names no invocation and would
+        // otherwise fall through every remaining reader to an empty.
+        Optional<String> launched = BootOutcomeCriterionParser.parse(criterion);
+        if (launched.isPresent()) return launched;
+
         List<String> launchTokens = CommandCriterionParser.launchTokensOf(commandTemplate);
         if (!launchTokens.isEmpty()) {
             Optional<CommandCriterionParser.CommandAssertion> invoked =

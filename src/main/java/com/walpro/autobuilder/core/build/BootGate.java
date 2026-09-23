@@ -500,6 +500,11 @@ public class BootGate {
                                 + " against it: " + joinMessages(commandFailures),
                                 attributedCriteria(commandFailures)));
                     }
+                    // T2-FL: the terminating shape's launch claim, the mirror of the serving
+                    // path's. Recorded only past the entry-point guard above, because T1-GD's
+                    // hole is exactly an archive that terminates without executing a line: that
+                    // is not a launch, and this claim must never be readable from one.
+                    evidence.passed(null, BootOutcomeCriterionParser.CLAIM);
                     return Optional.empty();
                 }
                 if (exit != 0) {
@@ -560,6 +565,13 @@ public class BootGate {
             // contradicted criterion does not unsay "it runs and serves", and the observation's
             // own refutation field keeps the caller from acting on a run that was refuted.
             evidence.launchedAndServed = endpointFailures.isEmpty();
+            if (evidence.launchedAndServed) {
+                // T2-FL: the launch itself, recorded as a claim so a work item asserting only
+                // "it starts" is answerable. Criterion text is null because no criterion was
+                // exercised to establish it -- the launch did, and claimsObservedPassing is
+                // keyed by the assertion rather than by the words that asserted it.
+                evidence.passed(null, BootOutcomeCriterionParser.CLAIM);
+            }
             if (!endpointFailures.isEmpty() || !criterionFailures.isEmpty()) {
                 StringBuilder summary = new StringBuilder("the application runs, but ");
                 if (!endpointFailures.isEmpty()) {

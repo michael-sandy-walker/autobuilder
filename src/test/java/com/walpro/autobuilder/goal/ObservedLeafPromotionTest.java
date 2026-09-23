@@ -105,6 +105,34 @@ class ObservedLeafPromotionTest {
                     "POST /loans/{id}/return returns HTTP 404 with JSON body {\"message\": \"<reason>\"} when the loan does not exist",
                     "POST /loans/{id}/return returns HTTP 409 with JSON body {\"message\": \"<reason>\"} when the loan is already returned")));
 
+    // ------------------------------------------- a leaf asserting only the launch (T2-FL)
+
+    @Test
+    void aLeafAssertingOnlyThatTheArtifactRunsIsPromotedWhenTheLaunchWasObserved() throws IOException {
+        // The exact criterion run 2026-09-23_18-35-30 declined three times as unreadable, while
+        // that run's boot gate ran twice and establishes precisely it.
+        GoalPlannerService service = serviceWith(SEED, SERVED_ARTIFACT, new LinkedHashMap<>(Map.of(
+                "Make the application boot",
+                List.of("The application starts successfully without exiting with code 1."))));
+
+        int promoted = service.promoteSatisfiedLeaves(observing(List.of("launch \u2192 runs")));
+
+        assertThat(promoted).isEqualTo(1);
+        assertThat(service.getRemainingGoals()).isEmpty();
+    }
+
+    @Test
+    void thatSameLeafKeepsItsPlaceWhenTheLaunchWasNotObserved() throws IOException {
+        // The claim now PARSES, so the decline has to come from the evidence rather than from the
+        // reader -- which is the difference this change is supposed to make.
+        GoalPlannerService service = serviceWith(SEED, SERVED_ARTIFACT, new LinkedHashMap<>(Map.of(
+                "Make the application boot",
+                List.of("The application starts successfully without exiting with code 1."))));
+
+        assertThat(service.promoteSatisfiedLeaves(observing(List.of("GET /books \u2192 200")))).isZero();
+        assertThat(service.getRemainingGoals()).hasSize(1);
+    }
+
     // ------------------------------------------------- the sweep says what it did (T2-FL)
     //
     // Run 2026-09-23_17-47-43 promoted nothing and could not say why: the refusals went to

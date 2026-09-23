@@ -46,6 +46,15 @@ public class GoalPlannerService {
     private static final String META_ATTEMPT_ID = "activeAttemptId";
     private static final String META_PARENT_ATTEMPT_ID = "parentAttemptId";
 
+    /**
+     * T2-FL: how many declined-leaf reasons one promotion sweep carries onto its behaviour event.
+     * A sample, not a census -- the counts on the event are the measurement and they are exact;
+     * these are there so a reader learns WHAT the sweep objected to without opening an archived
+     * log, and a sweep facing thirty leaves would otherwise put thirty prose lines into every
+     * cycle's trace.
+     */
+    private static final int PROMOTION_REASON_SAMPLE_CAP = 5;
+
     private static final int DEFAULT_MAX_NEW_SUBGOALS = 8;
     private static final int DEFAULT_MIN_CHARS = 12;
 
@@ -838,7 +847,18 @@ public class GoalPlannerService {
      * @return the number of leaves promoted (0 = nothing was provable, the common case)
      */
     public int promoteSatisfiedLeaves(com.walpro.autobuilder.core.build.BootGate.BootObservation observation) {
-        if (exercisableCriterionQuery == null) return 0;
+        if (exercisableCriterionQuery == null) {
+            // Said out loud for the same reason the refusals are: an unwired sweep and a sweep
+            // with nothing to consider both promoted nothing, and the whole point of the event is
+            // that those must not read alike.
+            if (behaviourLogger != null) {
+                behaviourLogger.observedLeafPromotion(
+                        currentCycleContext != null ? currentCycleContext.cycleName() : null,
+                        0, 0, 0, 0,
+                        List.of("the criterion query is not wired, so no leaf could be judged"));
+            }
+            return 0;
+        }
         // T2-FL: NOT gated on the observation carrying anything. An empty observation still leaves
         // every structural criterion decidable from the sources, and the first shipped version
         // returned here instead — which is precisely why run 2026-09-23_02-48-06 spent its whole
@@ -863,19 +883,40 @@ public class GoalPlannerService {
                 .toList();
 
         int promoted = 0;
+        int candidates = 0;
+        int declined = 0;
+        int guardRefused = 0;
+        List<String> reasons = new ArrayList<>();
         for (GoalEntity leaf : leaves) {
             if (leaf.getStatus() != GoalStatus.ACTIVE) continue; // a sibling's promotion may have moved it
             List<String> criteria = criteriaTextOf(leaf);
             if (criteria.isEmpty()) continue; // nothing stated is nothing observed
+            // Counted here rather than at the filter above: a leaf stating no criteria is not one
+            // this sweep declined, it is one the sweep has no question to ask about.
+            candidates++;
             Optional<String> refusal = whyNotSatisfied(criteria, specText, seen, output);
             if (refusal.isPresent()) {
                 // T2-FL: said out loud, because otherwise "declined" and "never ran" are the same
                 // silence. Run 2026-09-23_02-48-06 declined on every cycle and the only way to
-                // establish it had run at all was noticing T4-DW logging beside it.
+                // establish it had run at all was noticing T4-DW logging beside it. The debug line
+                // below did NOT achieve that: the runs log at INFO and emit zero DEBUG lines, so
+                // run 2026-09-23_17-47-43 reproduced the same ambiguity with this fix in place.
+                // The behaviour event below is what carries it; the debug line stays for a
+                // developer running the loop at DEBUG.
                 log.debug("T2-FL: goalId={} not promoted {} {}", leaf.getId(), "—", refusal.get());
+                declined++;
+                if (reasons.size() < PROMOTION_REASON_SAMPLE_CAP) {
+                    reasons.add(leaf.getId() + " — " + refusal.get());
+                }
                 continue;
             }
-            if (!descriptionSurfaceIsBuilt(leaf, output)) continue;
+            if (!descriptionSurfaceIsBuilt(leaf, output)) {
+                declined++;
+                if (reasons.size() < PROMOTION_REASON_SAMPLE_CAP) {
+                    reasons.add(leaf.getId() + " — the surface its description names is not built yet");
+                }
+                continue;
+            }
 
             log.info("T2-FL: goalId={} — the artifact was observed to satisfy all {} of its criteria; promoting [{}]",
                     leaf.getId(), criteria.size(), leaf.getDescription());
@@ -887,7 +928,13 @@ public class GoalPlannerService {
             } else {
                 log.info("T2-FL: goalId={} stayed ACTIVE — an existing guard refused the promotion, which stands",
                         leaf.getId());
+                guardRefused++;
             }
+        }
+        if (behaviourLogger != null) {
+            behaviourLogger.observedLeafPromotion(
+                    currentCycleContext != null ? currentCycleContext.cycleName() : null,
+                    candidates, promoted, declined, guardRefused, reasons);
         }
         return promoted;
     }

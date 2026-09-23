@@ -330,6 +330,21 @@
         "pattern": "no main manifest attribute"
       },
       "check": "THE CLAIM IS ABOUT TIMING, NOT OCCURRENCE -- this repair already fired before the change, so a FIRED count alone proves nothing. Read the firing TIMESTAMP against the run's first cycle: minutes in is the per-cycle path; seconds before the terminal is the halt-edge check doing what it always did. OPPORTUNITY-NO-FIRE IS NOT BY ITSELF A REGRESSION -- as first written this check said it was, and on run 2026-09-21_20-41-36 it reported OPPORTUNITY-NO-FIRE(112) while the repair was CORRECTLY abstaining: the sources declared no entry point at all (grep -rln 'static void main' over that artifact returns nothing), so there was nothing to declare and the abstention is the documented library carve-out. A correct decline and a real miss look identical under a count. To tell them apart, read the T4-DO abstention lines: 'the sources name no single one' means correct decline; 'carries no Main-Class' followed by no repair line means a real miss. Note also that the opportunity phrase travels into the injected work item and re-matches on every echo -- 61 of those 112 were echoed goal text."
+    },
+    {
+      "id": "t2fl-leaf-promoted-by-observation",
+      "ticket": "T2-FL",
+      "type": "watch",
+      "description": "T2-FL promotes an ACTIVE leaf when the running artifact is observed to satisfy every criterion the leaf states. On run 2026-09-23_17-47-43 it promoted nothing, the root closed anyway via T4-DW retiring three boot-gate items, and the run could not say which of two things had happened -- the sweep declined on every leaf, or it never had a candidate -- because the refusal was reported with log.debug alone and the runs log at INFO (zero DEBUG lines in the whole run). The observed_leaf_promotion behaviour event is emitted once per sweep, including sweeps with no candidates, so the two readings are now distinguishable.",
+      "fired": {
+        "file": "behaviour",
+        "pattern": "\"event\" : \"observed_leaf_promotion\",[^}]*\"promoted\" : [1-9]"
+      },
+      "opportunity": {
+        "file": "behaviour",
+        "pattern": "\"event\" : \"observed_leaf_promotion\",[^}]*\"candidates\" : [1-9]"
+      },
+      "check": "A FIRED count is sweeps that promoted at least one leaf, NOT leaves promoted -- one sweep can promote several, so read the promoted field before quoting a number. Then confirm BY EYE that the promoted leaf's criteria were actually observed rather than merely unrefuted: the claim is that the artifact was seen to satisfy them, and an abstained observation still lets structural criteria through by design. OPPORTUNITY-NO-FIRE IS THE INTERESTING READING HERE, not a regression -- it means candidate leaves existed and the sweep declined every one, and the reasons field on the event names what it objected to. NO-OPPORTUNITY means no ACTIVE leaf stated a criterion, which on a run that closed its root cleanly is the ordinary case and says nothing about the mechanism. Control: the same registry entry over run 2026-09-23_17-47-43 reports NO-OPPORTUNITY (verified), because that run predates the event -- so on any run built before this change the watch is BLIND and its NO-OPPORTUNITY is not evidence of anything. Check the jar carries observed_leaf_promotion before reading it."
     }
   ]
 }

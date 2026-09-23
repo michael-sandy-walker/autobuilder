@@ -862,6 +862,41 @@ public sealed interface BehaviourEvent {
     }
 
     /**
+     * T2-FL: one sweep of the observed-leaf promotion — the whole sweep, not one leaf.
+     *
+     * <p>It exists because the first shipped version reported its refusals with {@code log.debug}
+     * alone, and the runs log at INFO: a sweep that declined on every leaf and a sweep that never
+     * had a candidate produced BYTE-IDENTICAL silence. Run 2026-09-23_17-47-43 closed its root
+     * with zero promotions and there was no way to tell, from the run's own output, which of the
+     * two had happened. A per-leaf event would have the same hole — it emits nothing when there
+     * are no leaves, which is exactly the case that needs saying out loud — so the sweep is the
+     * unit and {@code candidates} is the field that separates the two.
+     *
+     * <p>{@code candidates} counts ACTIVE leaves carrying at least one stated criterion, i.e. the
+     * leaves this sweep could in principle have promoted. {@code candidates == 0} is NO
+     * OPPORTUNITY; {@code candidates > 0 && promoted == 0} is an opportunity that did not fire and
+     * is the shape worth chasing; {@code guardRefused} counts leaves this sweep judged satisfied
+     * where an existing guard then refused the promotion, which is a DIFFERENT finding from a
+     * refusal of its own and must not be pooled with {@code declined}.
+     *
+     * <p>{@code reasons} carries one {@code goalId — reason} line per declined leaf, capped, so a
+     * reader learns what the sweep objected to without an archived log. Reasons describe the
+     * artifact and the criteria, never a ticket id.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record ObservedLeafPromotion(
+            Instant timestamp,
+            String cycleId,
+            int candidates,
+            int promoted,
+            int declined,
+            int guardRefused,
+            java.util.List<String> reasons
+    ) implements BehaviourEvent {
+        public String event() { return "observed_leaf_promotion"; }
+    }
+
+    /**
      * T5-I: one planner wave finished applying its proposals. {@code deduped} counts proposals
      * blocked before injection (similarity dedup, given-up-retry limit, missing criteria).
      * {@code trigger} distinguishes the in-cycle planner pass ({@code cycle-planning}) from the

@@ -1,9 +1,12 @@
 package com.walpro.autobuilder.goal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery;
 import com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery;
@@ -14,6 +17,7 @@ import com.walpro.autobuilder.core.build.ExercisableCriterionQuery;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
+import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,6 +29,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -99,6 +104,56 @@ class ObservedLeafPromotionTest {
                     "POST /loans/{id}/return returns HTTP 200 with the updated loan body on success",
                     "POST /loans/{id}/return returns HTTP 404 with JSON body {\"message\": \"<reason>\"} when the loan does not exist",
                     "POST /loans/{id}/return returns HTTP 409 with JSON body {\"message\": \"<reason>\"} when the loan is already returned")));
+
+    // ------------------------------------------------- the sweep says what it did (T2-FL)
+    //
+    // Run 2026-09-23_17-47-43 promoted nothing and could not say why: the refusals went to
+    // log.debug and the run logged at INFO, emitting zero DEBUG lines all run, so "declined on
+    // every leaf" and "never had a candidate" were byte-identical silence. These three tests pin
+    // the distinction that ambiguity cost, one per reading the watch has to tell apart.
+
+    @Test
+    void aSweepThatPromotesReportsTheCandidatesItConsidered() throws IOException {
+        GoalPlannerService service = serviceWith(SEED, SERVED_ARTIFACT, RESIDUAL_LEAVES);
+        BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
+        service.setBehaviourLogger(behaviourLogger);
+
+        service.promoteSatisfiedLeaves(observing(claimsOf(service, RESIDUAL_LEAVES)));
+
+        verify(behaviourLogger).observedLeafPromotion(
+                eq("observed-leaf-promotion"), eq(3), eq(3), eq(0), eq(0), any());
+    }
+
+    @Test
+    void aSweepThatDeclinesEveryLeafSaysSoAndNamesWhatItObjectedTo() throws IOException {
+        GoalPlannerService service = serviceWith(SEED, SERVED_ARTIFACT, RESIDUAL_LEAVES);
+        BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
+        service.setBehaviourLogger(behaviourLogger);
+
+        // An abstained observation judged nothing, so every leaf carrying a behavioural criterion
+        // is declined -- the shape the watch reads as OPPORTUNITY-NO-FIRE.
+        service.promoteSatisfiedLeaves(BootGate.BootObservation.abstained());
+
+        ArgumentCaptor<List<String>> reasons = ArgumentCaptor.forClass(List.class);
+        verify(behaviourLogger).observedLeafPromotion(
+                anyString(), eq(3), eq(0), eq(3), eq(0), reasons.capture());
+        assertThat(reasons.getValue()).isNotEmpty();
+    }
+
+    @Test
+    void aSweepWithNoCandidateLeafIsDistinguishableFromOneThatDeclinedThemAll() throws IOException {
+        // The leaf states no criteria, so the sweep has no question to ask about it. candidates=0
+        // is what separates this from the test above; both promote nothing.
+        GoalPlannerService service = serviceWith(SEED, SERVED_ARTIFACT,
+                new LinkedHashMap<>(Map.of("Implement GET /members/{id} endpoint in MemberController", List.of())));
+        BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
+        service.setBehaviourLogger(behaviourLogger);
+
+        service.promoteSatisfiedLeaves(observing(List.of("GET /members/{} \u2192 200")));
+
+        verify(behaviourLogger).observedLeafPromotion(
+                anyString(), eq(0), eq(0), eq(0), eq(0), any());
+    }
 
     // ---------------------------------------------------------------- the archived run
 

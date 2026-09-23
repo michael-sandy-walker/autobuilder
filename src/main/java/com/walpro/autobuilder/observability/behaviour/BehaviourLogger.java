@@ -465,6 +465,17 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.ClosureRefused(Instant.now(), cycleId, gate, goalId, reason, criteria));
     }
 
+    /**
+     * T2-FL: one observed-leaf promotion sweep. Emitted on EVERY sweep, including the ones with no
+     * candidates — a sweep that found nothing to consider is the reading that the debug-only
+     * refusal log could not distinguish from a sweep that declined on every leaf.
+     */
+    public void observedLeafPromotion(String cycleId, int candidates, int promoted, int declined,
+                                      int guardRefused, java.util.List<String> reasons) {
+        emit(new BehaviourEvent.ObservedLeafPromotion(Instant.now(), cycleId, candidates, promoted,
+                declined, guardRefused, reasons));
+    }
+
     /** T5-I: one planner wave finished applying its proposals. */
     public void planningRun(String cycleId, String goalId, String trigger, int injected, int deduped) {
         emit(new BehaviourEvent.PlanningRun(Instant.now(), cycleId, goalId, trigger, injected, deduped));

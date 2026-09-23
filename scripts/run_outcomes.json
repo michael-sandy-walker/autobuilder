@@ -3562,6 +3562,33 @@
    "start_tree": "LOOP_AUTHORED",
    "terminal": "deadline",
    "total_cycles": "26"
+  },
+  "2026-09-23_21-22-40": {
+   "clauses_closed_vs_control": "1",
+   "cost_readout": "sms-commit=714725ms/1 build=184186ms/34 package-gate=67575ms/10 boot-gate=60280ms/10 sms-batch-build=337ms/2 sms-lineage-stamp=99ms/1 sms-cycle-merge=8ms/1",
+   "criteria_authored": "81",
+   "criteria_elaboration": "42",
+   "criteria_executable_count": "21",
+   "criteria_executable_pct": "26",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "15",
+   "median_cycle_seconds": "71",
+   "merges": "9",
+   "peaked_at_cycle": "cycle-1790191599190 (5/20)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-09-23",
+   "run_duration_min": "23.8",
+   "score_delta": "n/a (SMOKE: 23/23 vs boot-failed)",
+   "smoke": "SMOKE: 23/23",
+   "smoke_pass": 23,
+   "smoke_preserved": "boot-failed",
+   "smoke_strict": "23/23 discounted=none",
+   "smoke_total": 23,
+   "start_cleared_tree": "yes",
+   "start_mode": "NEW_PROJECT",
+   "start_tree": "LOOP_AUTHORED",
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "20"
   }
  },
  "updated": "2026-09-23"

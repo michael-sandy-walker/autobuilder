@@ -309,8 +309,14 @@ run_live() {
             # terminal record stayed the PARENT's halt end report. Wait for the pause line
             # (bounded by the run deadline + a short grace so a wedged tick can't hang us).
             local settle_end=$(( $(date +%s) + 180 ))
+            # The pause LINE is the start of that branch, not its end: preservation (T4-CA, a
+            # verification build) and the end report (T4-CD) run after it. Run 2026-09-23_21-22-40
+            # was killed at the pause line, before its preserve finished, and shipped a
+            # preserved copy from 20 minutes earlier that did not boot (smoke 23/23 final,
+            # boot-failed preserved). So wait for the end report -- the branch's last step,
+            # logged whether it was written or failed -- AFTER the pause line.
             while [ "$(date +%s)" -lt "$t_end" ] && [ "$(date +%s)" -lt "$settle_end" ]; do
-                grep -q 'Goal fulfilled\. Pausing' "$applog" && break
+                awk '/Goal fulfilled\. Pausing/{p=1} p && /T4-CD: run end report w/{f=1} END{exit !f}' "$applog" && break
                 kill -0 "$pid" 2>/dev/null || break
                 sleep 10
             done

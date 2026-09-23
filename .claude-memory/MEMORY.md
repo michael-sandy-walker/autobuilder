@@ -146,7 +146,7 @@ Ticket and scope discipline:
 
 Code and design constraints:
 - `feedback_no_internal_ids_in_model_facing_text.md`: an identifier belongs in a prompt only if that prompt DEFINES it. (reviewed 2026-09-17)
-- `feedback_no_target_domain_in_framework_strings.md`: no target-shaped names or constants in framework strings or analysis scripts. (reviewed 2026-09-21)
+- `feedback_no_target_domain_in_framework_strings.md`: no target-shaped names or constants in framework strings or analysis scripts. 2026-09-23: the user reminded that current targets are TOY CASES -- rules over conventions, invented-coordinate tests. (reviewed 2026-09-23)
 - `feedback_no_ecosystem_jargon_in_framework_code.md`: never name a framework/version in framework code; ecosystem knowledge lives in data tables. (reviewed 2026-07-09)
 - `feedback_no_hardcoded_ecosystem_data.md`: even data tables are debt; prefer discovery (pom -> classpath -> Maven Central), and row-adds always file the discovery follow-up. (reviewed 2026-07-09)
 - `feedback_ecosystem_gated_heuristics.md`: ecosystem-specific heuristics must self-gate on the ecosystem's own markers; no opinion on marker-free projects. (reviewed 2026-07-09)

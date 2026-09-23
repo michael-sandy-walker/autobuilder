@@ -26,3 +26,11 @@ Trigger: any new entry in a static map keyed on a diagnostic shape (hint maps, c
 - **Analysis and reporting code is not exempt because it is not production.** It decides what we believe about the run population, so a target-specific constant there manufactures findings rather than misleading a model. The same pinned denominator had ALREADY been recorded as a defect in the baseline this very ticket (`T6-M`) was filed about, and it came back one axis over: that one dropped rows with no number, this one dropped rows with a different number.
 
 **How to apply:** before trusting any cross-run number, ask what the denominator MEANS in each row ([[feedback-baseline-before-accuracy]]'s fourth lie). And when adding a test for a target-sensitive rule, add the second target's case in the same change — a single-target test suite reads exactly like a passing one.
+
+## 2026-09-23 -- the user's reminder: the current targets are TOY CASES
+
+Said mid-build of the dependency-version work (T1-GF): *"Please keep in mind, that the current testable files are just toy cases."* firestarter, clitarget and flightsim are probes of the loop, not the population it is for, so a mechanism that works on them has proven only that it works on them.
+
+**Why:** tuning to the toy set is invisible from inside it -- every green result on firestarter looks like progress, and a rule shaped by Spring or by one library passes all of it.
+
+**How to apply:** phrase every new rule over a CONVENTION (a group that prefixes a package, the shape of a version string, same-group alignment), never over a library or framework name; test it on INVENTED coordinates (`org.acme.kit`); and check it on at least one non-firestarter case before claiming it generalises (T1-GF was checked on LWJGL and JUnit as well as Spring).

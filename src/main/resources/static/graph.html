@@ -3016,7 +3016,11 @@ window.MissionControl = (function () {
   // T5-BF: HUD goal tally — fed by the goal stream (the authoritative tree source).
   function setGoalCounts(active, completed, givenUp, subsumed) {
     const el = $('mc-goals'); if (!el) return;
+    // T5-BQ: subsumed is shown like given-up — present when non-zero. A firestarter tree ends
+    // mostly SUBSUMED (gate retirement and replanning both report there), so a field showing only
+    // active and done looked frozen while most of the tree's status changes were landing here.
     el.textContent = active + ' active · ' + completed + ' done'
+        + (subsumed ? ' · ' + subsumed + ' subsumed' : '')
         + (givenUp ? ' · ' + givenUp + ' given up' : '');
     el.title = active + ' active, ' + completed + ' completed, ' + givenUp + ' given up, '
         + subsumed + ' subsumed';

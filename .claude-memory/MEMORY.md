@@ -67,6 +67,7 @@ Design notes, read before touching their area:
 - `project_project_portability_vision.md`: import/continue/store/restore/merge a project's code layer (T4-CQ/CR/CS open). Read before import/export work. (reviewed 2026-09-08)
 - `project_cross_run_knowledge_base.md`: T4-CJ slice 2 -> T4-CN -> T4-CM is ONE chain: reconciling graphs from DIFFERENT runs. (reviewed 2026-07-23)
 - `project_reliability_plan.md`: rationale behind the reliability work (floor up, ceiling free). NOT a queue; everything it selected is filed or closed. (reviewed 2026-07-14)
+- `reference_undone_ideas.md`: the user's unbuilt ideas with document and line in ~/Documents/autobuilder; a reference, never a queue. (reviewed 2026-09-23)
 
 Measurement and yardsticks:
 - `project_yardstick_must_not_outrun_the_spec.md`: a yardstick may only assert what the SPEC states. Audit it against the seed before attributing a score change. (reviewed 2026-09-08)

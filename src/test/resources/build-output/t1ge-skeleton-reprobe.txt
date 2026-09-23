@@ -1,0 +1,123 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------------------< com.example:library >-------------------------
+[INFO] Building library 0.0.1-SNAPSHOT
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- maven-resources-plugin:3.3.1:resources (default-resources) @ library ---
+[INFO] skip non existing resourceDirectory /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/resources
+[INFO] 
+[INFO] --- maven-compiler-plugin:3.11.0:compile (default-compile) @ library ---
+[INFO] Changes detected - recompiling the module! :source
+[INFO] Compiling 13 source files with javac [debug release 17] to target/classes
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/repository/MemberRepository.java:[3,47] package org.springframework.data.jpa.repository does not exist
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/repository/MemberRepository.java:[5,43] cannot find symbol
+  symbol: class JpaRepository
+  symbol:   class Loan
+  location: class com.example.library.domain.service.LoanService
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/LoanService.java:[38,25] cannot find symbol
+  symbol:   class Loan
+  location: class com.example.library.domain.service.LoanService
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/LoanService.java:[46,9] cannot find symbol
+  symbol:   class Loan
+  location: class com.example.library.domain.service.LoanService
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/controller/MemberController.java:[45,17] incompatible types: bad return type in lambda expression
+    inference variable T has incompatible bounds
+      equality constraints: com.example.library.domain.Member
+      lower bounds: java.util.Map<K,V>
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[20,29] cannot find symbol
+  symbol:   method findByEmail(java.lang.String)
+  location: variable memberRepository of type com.example.library.domain.repository.MemberRepository
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[24,15] cannot find symbol
+  symbol:   method setName(java.lang.String)
+  location: variable member of type com.example.library.domain.Member
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[25,15] cannot find symbol
+  symbol:   method setEmail(java.lang.String)
+  location: variable member of type com.example.library.domain.Member
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[26,32] cannot find symbol
+  symbol:   method save(com.example.library.domain.Member)
+  location: variable memberRepository of type com.example.library.domain.repository.MemberRepository
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[30,32] cannot find symbol
+  symbol:   method findAll()
+  location: variable memberRepository of type com.example.library.domain.repository.MemberRepository
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[34,32] cannot find symbol
+  symbol:   method findById(java.lang.Long)
+  location: variable memberRepository of type com.example.library.domain.repository.MemberRepository
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/controller/LoanController.java:[35,13] cannot find symbol
+  symbol:   class Loan
+  location: class com.example.library.domain.controller.LoanController
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/controller/LoanController.java:[51,13] cannot find symbol
+  symbol:   class Loan
+  location: class com.example.library.domain.controller.LoanController
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/controller/LoanController.java:[65,14] cannot find symbol
+  symbol:   class Loan
+  location: class com.example.library.domain.controller.LoanController
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/controller/BookController.java:[53,17] incompatible types: bad return type in lambda expression
+    inference variable T has incompatible bounds
+      equality constraints: com.example.library.domain.Book
+      lower bounds: java.util.Map<K,V>
+[INFO] 24 errors 
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  2.912 s
+[INFO] Finished at: 2026-09-21T20:04:07+02:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.11.0:compile (default-compile) on project library: Compilation failure: Compilation failure: 
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/repository/MemberRepository.java:[3,47] package org.springframework.data.jpa.repository does not exist
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/repository/MemberRepository.java:[5,43] cannot find symbol
+[ERROR]   symbol: class JpaRepository
+[ERROR]   symbol:   class Loan
+[ERROR]   location: class com.example.library.domain.service.LoanService
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/LoanService.java:[38,25] cannot find symbol
+[ERROR]   symbol:   class Loan
+[ERROR]   location: class com.example.library.domain.service.LoanService
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/LoanService.java:[46,9] cannot find symbol
+[ERROR]   symbol:   class Loan
+[ERROR]   location: class com.example.library.domain.service.LoanService
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/controller/MemberController.java:[45,17] incompatible types: bad return type in lambda expression
+[ERROR]     inference variable T has incompatible bounds
+[ERROR]       equality constraints: com.example.library.domain.Member
+[ERROR]       lower bounds: java.util.Map<K,V>
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[20,29] cannot find symbol
+[ERROR]   symbol:   method findByEmail(java.lang.String)
+[ERROR]   location: variable memberRepository of type com.example.library.domain.repository.MemberRepository
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[24,15] cannot find symbol
+[ERROR]   symbol:   method setName(java.lang.String)
+[ERROR]   location: variable member of type com.example.library.domain.Member
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[25,15] cannot find symbol
+[ERROR]   symbol:   method setEmail(java.lang.String)
+[ERROR]   location: variable member of type com.example.library.domain.Member
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[26,32] cannot find symbol
+[ERROR]   symbol:   method save(com.example.library.domain.Member)
+[ERROR]   location: variable memberRepository of type com.example.library.domain.repository.MemberRepository
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[30,32] cannot find symbol
+[ERROR]   symbol:   method findAll()
+[ERROR]   location: variable memberRepository of type com.example.library.domain.repository.MemberRepository
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/service/MemberService.java:[34,32] cannot find symbol
+[ERROR]   symbol:   method findById(java.lang.Long)
+[ERROR]   location: variable memberRepository of type com.example.library.domain.repository.MemberRepository
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/controller/LoanController.java:[35,13] cannot find symbol
+[ERROR]   symbol:   class Loan
+[ERROR]   location: class com.example.library.domain.controller.LoanController
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/controller/LoanController.java:[51,13] cannot find symbol
+[ERROR]   symbol:   class Loan
+[ERROR]   location: class com.example.library.domain.controller.LoanController
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/controller/LoanController.java:[65,14] cannot find symbol
+[ERROR]   symbol:   class Loan
+[ERROR]   location: class com.example.library.domain.controller.LoanController
+[ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/src/main/java/com/example/library/domain/controller/BookController.java:[53,17] incompatible types: bad return type in lambda expression
+[ERROR]     inference variable T has incompatible bounds
+[ERROR]       equality constraints: com.example.library.domain.Book
+[ERROR]       lower bounds: java.util.Map<K,V>
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

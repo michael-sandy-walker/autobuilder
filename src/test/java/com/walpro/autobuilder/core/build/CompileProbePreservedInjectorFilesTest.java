@@ -121,6 +121,50 @@ class CompileProbePreservedInjectorFilesTest {
     }
 
     /**
+     * T1-GE, the field case: run {@code 2026-09-21_19-39-14}'s repository skeleton removed "cannot
+     * find symbol MemberRepository" by importing a package the project never declared, so the
+     * final build reports an error LOCATED IN the file the skeleton created. The target cleared,
+     * the defect moved into the skeleton — it must neither survive the rollback nor be recorded
+     * on the ledger as progress. The diagnostic line is the run's own, re-rooted.
+     */
+    @Test
+    void skeletonThatIsItselfAnErrorLocation_isNotPreserved_andNotProgress() throws IOException {
+        String repo = "src/main/java/com/example/demo/repository/MemberRepository.java";
+        String fieldLine = "[ERROR] " + tmp + "/output/" + repo
+                + ":[3,47] package org.springframework.data.jpa.repository does not exist";
+        when(buildExecutor.execute(any(), any())).thenReturn(
+                new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class MemberRepository", 1L, "mvn", "p"),
+                new BuildOutcome(BuildResult.COMPILE_ERROR, fieldLine, 1L, "mvn", "p"));
+        when(injector.inject(any(), any())).thenReturn(Optional.of(skeleton(repo, "MemberRepository")));
+
+        probe.probe(context(), true);
+
+        assertThat(fileService.exists("output/" + repo)).isFalse();
+        verify(injector).recordReProbeOutcome(any(), eq(BuildResult.COMPILE_ERROR), any(), any(), any(),
+                eq(List.of(repo)));
+    }
+
+    /**
+     * The pairing that keeps the rule from reading as "a red build discards skeletons": the same
+     * chain, but the remaining error is located in a DIFFERENT file. The skeleton stays and nothing
+     * is charged to it.
+     */
+    @Test
+    void skeletonWhoseTargetClearedAndErrorIsElsewhere_isStillPreserved() throws IOException {
+        String elsewhere = "[ERROR] " + tmp + "/output/" + LLM_FILE + ":[12,5] cannot find symbol";
+        when(buildExecutor.execute(any(), any())).thenReturn(
+                new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class Loan", 1L, "mvn", "p"),
+                new BuildOutcome(BuildResult.COMPILE_ERROR, elsewhere + "\n  symbol: class LoanService", 1L, "mvn", "p"));
+        when(injector.inject(any(), any())).thenReturn(Optional.of(skeleton(SKELETON, "Loan")));
+
+        probe.probe(context(), true);
+
+        assertThat(fileService.exists("output/" + SKELETON)).isTrue();
+        verify(injector).recordReProbeOutcome(any(), eq(BuildResult.COMPILE_ERROR), any(), any(), any(),
+                eq(List.of()));
+    }
+
+    /**
      * An injector fix that EDITS a file the LLM staged (the {@code symbol-import} shape) is a
      * modification of the content being rejected, not a new type. Preserving it would merge the
      * rejected mutation by the back door, so the file is restored to its pre-probe bytes.

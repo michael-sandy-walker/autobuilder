@@ -191,6 +191,23 @@ class CompileFixInjectorTest {
     }
 
     @Test
+    void recordReProbeOutcome_targetClearedButCreatedFileIsAnErrorLocation_recordsFailure() {
+        // T1-GE: the same cleared target as the test above, but the file the fix created is itself
+        // where the build now fails. The diagnostic was moved, not removed — not progress.
+        FixAttemptLedger ledger = mock(FixAttemptLedger.class);
+        CompileFixInjector injector = new CompileFixInjector(
+                List.of(), ledger, staticAgent(), mockLookup(), mockRegistry());
+        FixProposal proposal = proposalWithToken("skeleton-repository", "MemberRepository");
+
+        injector.recordReProbeOutcome(proposal, BuildResult.COMPILE_ERROR,
+                "[ERROR] /o/src/main/java/x/MemberRepository.java:[3,47] package a.b does not exist",
+                "output", "c-1", List.of("src/main/java/x/MemberRepository.java"));
+
+        verify(ledger).recordAttempt(proposal, BuildResult.COMPILE_ERROR, "output", "c-1");
+        verify(ledger, org.mockito.Mockito.never()).recordAttempt(proposal, BuildResult.COMPILE_OK, "output", "c-1");
+    }
+
+    @Test
     void recordReProbeOutcome_symbolImportStillFailing_propagatesToLookupAndRegistry() {
         FixAttemptLedger ledger = mock(FixAttemptLedger.class);
         SymbolImportLookupService lookup = mockLookup();

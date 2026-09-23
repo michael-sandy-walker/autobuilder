@@ -219,6 +219,42 @@ public final class BuildStderrLines {
                 .transform(BuildStderrLines::truncate);
     }
 
+    /**
+     * A diagnostic's location: a path ending in a file extension, immediately followed by a line
+     * number — {@code Foo.java:[3,47]} in a build tool's report, {@code Foo.java:3: error} in the
+     * compiler's own. Anchored on whitespace or line start so a prefix such as {@code [ERROR]} is
+     * not taken into the path.
+     */
+    private static final Pattern DIAGNOSTIC_LOCATION = Pattern.compile(
+            "(?m)(?:^|\\s)([^\\s\\[\\]]+\\.[A-Za-z]\\w*):\\[?\\d+");
+
+    /**
+     * T1-GE: of {@code relativePaths}, those some diagnostic in {@code stderr} is located in. A
+     * diagnostic path is usually absolute, so a relative path matches when the diagnostic path
+     * equals it or ends with it at a directory boundary. Order follows {@code relativePaths}.
+     */
+    public static List<String> pathsCarryingDiagnostics(java.util.Collection<String> relativePaths, String stderr) {
+        if (relativePaths == null || relativePaths.isEmpty() || stderr == null || stderr.isBlank()) return List.of();
+        Set<String> located = new java.util.HashSet<>();
+        var m = DIAGNOSTIC_LOCATION.matcher(ANSI_ESCAPE.matcher(stderr).replaceAll(""));
+        while (m.find()) {
+            located.add(m.group(1).replace('\\', '/'));
+        }
+        if (located.isEmpty()) return List.of();
+        List<String> out = new ArrayList<>();
+        for (String rel : relativePaths) {
+            if (rel == null || rel.isBlank()) continue;
+            String norm = rel.replace('\\', '/');
+            for (String loc : located) {
+                if (loc.equals(norm) || loc.endsWith("/" + norm)) {
+                    out.add(rel);
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
     private static boolean matchesAny(String line, List<Pattern> patterns) {
         for (Pattern p : patterns) {
             if (p.matcher(line).find()) return true;

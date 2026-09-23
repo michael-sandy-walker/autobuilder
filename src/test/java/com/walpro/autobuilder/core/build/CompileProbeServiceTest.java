@@ -254,9 +254,9 @@ class CompileProbeServiceTest {
         assertThat(result.appliedFixes()).hasSize(2);
         // Both attempts recorded so any prior blacklists clear.
         org.mockito.Mockito.verify(injector).recordReProbeOutcome(
-                org.mockito.ArgumentMatchers.eq(first), any(), any(), any(), any());
+                org.mockito.ArgumentMatchers.eq(first), any(), any(), any(), any(), any());
         org.mockito.Mockito.verify(injector).recordReProbeOutcome(
-                org.mockito.ArgumentMatchers.eq(second), any(), any(), any(), any());
+                org.mockito.ArgumentMatchers.eq(second), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -279,7 +279,7 @@ class CompileProbeServiceTest {
         // Working tree restored: the probe-written file was new, so rollback removes it entirely.
         assertThat(fileService.exists("output/" + MEMBER_CONTROLLER)).isFalse();
         org.mockito.Mockito.verify(injector, org.mockito.Mockito.times(1)).recordReProbeOutcome(
-                any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any());
     }
 
     @Test

@@ -107,6 +107,21 @@ public class CompileFixInjector {
      */
     public boolean recordReProbeOutcome(FixProposal proposal, BuildResult reProbeResult, String reProbeStderr,
                                         String outputPath, String cycleId) {
+        return recordReProbeOutcome(proposal, reProbeResult, reProbeStderr, outputPath, cycleId, List.of());
+    }
+
+    /**
+     * T1-GE: as above, with the files this proposal CREATED that the build still reports a
+     * diagnostic in. Clearing the targeted diagnostic is progress only if the fix did not bring a
+     * defect of its own: a created file that is itself an error location means the diagnostic was
+     * moved, not removed, so the attempt is recorded as the failure it is — without that, a
+     * skeleton importing an undeclared package was logged as progress while its own error went
+     * unattributed. Edited pre-existing files are not charged: they may carry errors the fix
+     * never touched.
+     */
+    public boolean recordReProbeOutcome(FixProposal proposal, BuildResult reProbeResult, String reProbeStderr,
+                                        String outputPath, String cycleId,
+                                        List<String> createdFilesCarryingDiagnostics) {
         String token = proposal.record().missingToken();
         // T2-EN: the run-level tally sees the RAW result — the progress-aware translation below
         // records a creation rule as success forever (creating X always removes "cannot find
@@ -120,7 +135,12 @@ public class CompileFixInjector {
         boolean targetedDiagnosticGone = reProbeResult == BuildResult.COMPILE_OK
                 || com.walpro.autobuilder.core.build.CompileProbeService.fixTargetCleared(proposal, reProbeStderr);
 
-        if (reProbeResult == BuildResult.COMPILE_ERROR && targetedDiagnosticGone) {
+        boolean introducedDefect = createdFilesCarryingDiagnostics != null && !createdFilesCarryingDiagnostics.isEmpty();
+        if (reProbeResult == BuildResult.COMPILE_ERROR && targetedDiagnosticGone && introducedDefect) {
+            log.info("CompileFixInjector: rule={} removed its targeted diagnostic ({}) but a file it created is itself "
+                            + "an error location {} — NOT recording as progress",
+                    proposal.record().rule(), token, createdFilesCarryingDiagnostics);
+        } else if (reProbeResult == BuildResult.COMPILE_ERROR && targetedDiagnosticGone) {
             log.info("CompileFixInjector: rule={} removed its targeted diagnostic ({}) — recording as progress despite overall COMPILE_ERROR",
                     proposal.record().rule(), token);
             ledger.recordAttempt(proposal, BuildResult.COMPILE_OK, outputPath, cycleId);

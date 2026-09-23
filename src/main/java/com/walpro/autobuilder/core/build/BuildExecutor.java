@@ -15,9 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -88,7 +86,8 @@ public class BuildExecutor {
      *
      * <p>Process management notes:
      * <ul>
-     *   <li>stderr is captured and stored as the trailing 50 lines (~hard cap on size).</li>
+     *   <li>stderr is captured through a {@link BuildOutputWindow} — its first and last lines, so the
+     *       cause a compiler reports first survives a long cascade (T1-GE).</li>
      *   <li>stdout is drained to prevent buffer-fill deadlocks but not stored.</li>
      *   <li>If the timeout fires the process is forcibly destroyed.</li>
      *   <li>If the executor is disabled the call is a no-op returning {@link BuildResult#SKIPPED}.</li>
@@ -175,8 +174,8 @@ public class BuildExecutor {
                     .redirectErrorStream(true);
             process = pb.start();
 
-            Deque<String> stderrTail = new ArrayDeque<>();
-            Thread outputCapture = drainerThread(process.getInputStream(), stderrTail);
+            BuildOutputWindow stderrWindow = new BuildOutputWindow();
+            Thread outputCapture = drainerThread(process.getInputStream(), stderrWindow);
 
             outputCapture.start();
 
@@ -185,7 +184,7 @@ public class BuildExecutor {
                 process.destroyForcibly();
                 outputCapture.join(1000);
                 long elapsed = System.currentTimeMillis() - start;
-                String tail = String.join("\n", stderrTail);
+                String tail = stderrWindow.render();
                 log.warn("BuildExecutor: timeout after {}ms running '{}' in {}", timeoutMs, effectiveCommand, effectiveDir);
                 return new BuildOutcome(BuildResult.TIMEOUT, tail, elapsed, effectiveCommand, cycleId);
             }
@@ -193,10 +192,11 @@ public class BuildExecutor {
             outputCapture.join(1000);
             long elapsed = System.currentTimeMillis() - start;
             int exit = process.exitValue();
-            String tail = String.join("\n", stderrTail);
+            String tail = stderrWindow.render();
 
             BuildResult result = exit == 0 ? BuildResult.COMPILE_OK : BuildResult.COMPILE_ERROR;
-            log.info("BuildExecutor: {} (exit={}, durationMs={}, stderrLines={})", result, exit, elapsed, stderrTail.size());
+            log.info("BuildExecutor: {} (exit={}, durationMs={}, stderrLines={}, totalLines={})",
+                    result, exit, elapsed, stderrWindow.retainedLines(), stderrWindow.totalLines());
             return new BuildOutcome(result, tail, elapsed, effectiveCommand, cycleId);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
@@ -234,7 +234,7 @@ public class BuildExecutor {
                     .directory(dir)
                     .redirectErrorStream(true);
             Process probe = pb.start();
-            Deque<String> out = new ArrayDeque<>();
+            BuildOutputWindow out = new BuildOutputWindow();
             Thread drainer = drainerThread(probe.getInputStream(), out);
             drainer.start();
             boolean finished = probe.waitFor(ENV_PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -244,7 +244,7 @@ public class BuildExecutor {
                 return;
             }
             drainer.join(500);
-            log.info("T5-S: spawned '{} -v' output:\n{}", buildTool, String.join("\n", out));
+            log.info("T5-S: spawned '{} -v' output:\n{}", buildTool, out.render());
         } catch (IOException e) {
             log.warn("T5-S: '{} -v' probe failed: {}", buildTool, e.getMessage());
         } catch (InterruptedException e) {
@@ -256,18 +256,13 @@ public class BuildExecutor {
     /** T5-S: probe must finish quickly — `mvn -v` typically returns in < 200ms. */
     private static final long ENV_PROBE_TIMEOUT_MS = 5_000L;
 
-    private static final int STDERR_TAIL_LINES = 50;
-
-    private static Thread drainerThread(InputStream in, Deque<String> tail) {
+    private static Thread drainerThread(InputStream in, BuildOutputWindow window) {
         Thread t = new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    if (tail != null) {
-                        tail.addLast(line);
-                        while (tail.size() > STDERR_TAIL_LINES) {
-                            tail.removeFirst();
-                        }
+                    if (window != null) {
+                        window.add(line);
                     }
                 }
             } catch (IOException ignored) {

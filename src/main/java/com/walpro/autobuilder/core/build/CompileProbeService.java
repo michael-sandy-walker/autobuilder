@@ -494,7 +494,8 @@ public class CompileProbeService {
         // ledger keys blacklist invalidation off this digest, so it must match what the next cycle's
         // shouldSkip will read from disk — otherwise the blacklist self-clears on the rollback.
         for (Map.Entry<FixProposal, BuildOutcome> a : attempts) {
-            recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context);
+            recordReProbeSafely(a.getKey(), a.getValue(), outputPath, context,
+                    createdFilesCarryingDiagnostics(a.getKey(), llmStagedPaths, newlyAddedPaths, currentOutcome));
         }
         return new ProbeResult(currentOutcome, null, applied);
     }
@@ -542,6 +543,16 @@ public class CompileProbeService {
                 if (!newlyAddedPaths.contains(m.path())) continue;
                 candidates.put(m.path(), m.content() == null ? "" : m.content());
             }
+        }
+        // T1-GE: a created file that is itself the location of a diagnostic in the final output
+        // did not clear a defect, it moved one — the skeleton that removed "cannot find symbol
+        // MemberRepository" by importing a package the project never declared is the observed case.
+        // Keeping it would leave the live tree carrying a defect no later probe of a mutation
+        // compiles, because every mutation that writes that path stages its own copy over it.
+        for (String path : BuildStderrLines.pathsCarryingDiagnostics(
+                new ArrayList<>(candidates.keySet()), finalOutcome == null ? "" : finalOutcome.stderrTail())) {
+            log.info("T2-EZ: not preserving {} — the final build reports a diagnostic located in it", path);
+            candidates.remove(path);
         }
         if (candidates.isEmpty()) return Set.of();
 
@@ -675,12 +686,40 @@ public class CompileProbeService {
         return diagnosticLines > 0 ? (int) diagnosticLines : 1;
     }
 
+    /**
+     * T1-GE: the files {@code proposal} created (not the LLM's, not pre-existing) that a diagnostic
+     * in {@code finalOutcome} is located in. Judged against the chain's FINAL output rather than
+     * the re-probe right after the proposal, so a skeleton referencing a type a later pass creates
+     * is not charged with a diagnostic that pass then cleared.
+     */
+    static List<String> createdFilesCarryingDiagnostics(FixProposal proposal, Set<String> llmStagedPaths,
+                                                        Set<String> newlyAddedPaths, BuildOutcome finalOutcome) {
+        if (proposal == null || finalOutcome == null || finalOutcome.result() != BuildResult.COMPILE_ERROR) {
+            return List.of();
+        }
+        List<String> created = new ArrayList<>();
+        for (FileMutation m : proposal.mutations()) {
+            if (m == null || m.path() == null) continue;
+            if (llmStagedPaths != null && llmStagedPaths.contains(m.path())) continue;
+            if (newlyAddedPaths == null || !newlyAddedPaths.contains(m.path())) continue;
+            created.add(m.path());
+        }
+        return BuildStderrLines.pathsCarryingDiagnostics(created, finalOutcome.stderrTail());
+    }
+
     /** T2-DY: records the re-probe outcome on the ledger, swallowing ledger failures. */
     private void recordReProbeSafely(FixProposal proposal, BuildOutcome reProbeOutcome,
                                      String outputPath, CycleContextData context) {
+        recordReProbeSafely(proposal, reProbeOutcome, outputPath, context, List.of());
+    }
+
+    private void recordReProbeSafely(FixProposal proposal, BuildOutcome reProbeOutcome,
+                                     String outputPath, CycleContextData context,
+                                     List<String> createdFilesCarryingDiagnostics) {
         try {
             boolean runLevelCapped = compileFixInjector.recordReProbeOutcome(proposal,
-                    reProbeOutcome.result(), reProbeOutcome.stderrTail(), outputPath, context.cycleName());
+                    reProbeOutcome.result(), reProbeOutcome.stderrTail(), outputPath, context.cycleName(),
+                    createdFilesCarryingDiagnostics);
             // T2-EN: the same (rule, token) fix has now been re-derived across the cap's worth
             // of cycles without ever landing — hand the recurrence to the T2-EF redirect channel
             // so the planner is told to create the missing type for real, instead of the injector

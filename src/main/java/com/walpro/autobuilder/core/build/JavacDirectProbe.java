@@ -16,9 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
@@ -53,8 +51,6 @@ import java.util.stream.Stream;
 @Slf4j
 @Component
 public class JavacDirectProbe {
-
-    private static final int STDERR_TAIL_LINES = 50;
 
     /**
      * T4-BN-2: also compile {@code src/test/java} each probe. Without this the per-cycle probe is
@@ -182,10 +178,12 @@ public class JavacDirectProbe {
      * {@code <file>:<line>: error: <message>} — native javac format, which
      * {@link BlockerExtractor#ERROR_DIAGNOSTIC_LINE} accepts via the {@code error:} branch.
      * NOTE/WARNING/MANDATORY_WARNING are dropped (the downstream extractors don't reason about
-     * them and including them would dilute the {@code stderrTail} window).
+     * them and including them would dilute the {@code stderrTail} window). Bounded by the same
+     * {@link BuildOutputWindow} as the external build, so javac's first diagnostic — the cause —
+     * is kept here too (T1-GE).
      */
     private static String formatDiagnostics(List<Diagnostic<? extends JavaFileObject>> diagnostics) {
-        Deque<String> tail = new ArrayDeque<>();
+        BuildOutputWindow window = new BuildOutputWindow();
         for (Diagnostic<? extends JavaFileObject> d : diagnostics) {
             if (d.getKind() != Diagnostic.Kind.ERROR) continue;
             String location = d.getSource() != null ? d.getSource().toUri().getPath() : "(unknown)";
@@ -193,11 +191,10 @@ public class JavacDirectProbe {
             String message = d.getMessage(Locale.ROOT);
             String formatted = location + ":" + (line > 0 ? line : 0) + ": error: " + message;
             for (String l : formatted.split("\\r?\\n")) {
-                tail.addLast(l);
-                while (tail.size() > STDERR_TAIL_LINES) tail.removeFirst();
+                window.add(l);
             }
         }
-        return String.join("\n", tail);
+        return window.render();
     }
 
     /** Test-only — clear the classpath cache so a fresh resolve happens on next probe. */

@@ -219,4 +219,35 @@ class BuildStderrLinesTest {
         assertThat(BuildStderrLines.errorLines("", BuildStderrLines.Options.compileErrorsBlock(10)))
                 .isEmpty();
     }
+
+    // ----- T1-GE: pathsCarryingDiagnostics ------------------------------------------------------
+
+    private static final String REPO = "src/main/java/x/repository/MemberRepository.java";
+
+    @Test
+    void pathsCarryingDiagnostics_buildToolCoordinate_matchesTheRelativePath() {
+        String stderr = "[ERROR] /home/u/output/" + REPO + ":[3,47] package a.b does not exist";
+
+        assertThat(BuildStderrLines.pathsCarryingDiagnostics(List.of(REPO, "src/main/java/x/Other.java"), stderr))
+                .containsExactly(REPO);
+    }
+
+    @Test
+    void pathsCarryingDiagnostics_compilerCoordinate_andAnsiColouring_match() {
+        String javac = "/o/" + REPO + ":3: error: package a.b does not exist";
+        String coloured = "[\u001B[1;31mERROR\u001B[m] /o/" + REPO + ":[3,47] package a.b does not exist";
+
+        assertThat(BuildStderrLines.pathsCarryingDiagnostics(List.of(REPO), javac)).containsExactly(REPO);
+        assertThat(BuildStderrLines.pathsCarryingDiagnostics(List.of(REPO), coloured)).containsExactly(REPO);
+    }
+
+    /** A file NAMED in a message is not a file an error is LOCATED in, nor is a same-named file elsewhere. */
+    @Test
+    void pathsCarryingDiagnostics_mentionOrSameNameElsewhere_doesNotMatch() {
+        String stderr = "[ERROR] /o/src/main/java/x/service/MemberService.java:[20,29] cannot find symbol\n"
+                + "  location: variable repo of type MemberRepository\n"
+                + "[ERROR] /o/src/main/java/y/repository/MemberRepository.java:[1,1] class, interface expected";
+
+        assertThat(BuildStderrLines.pathsCarryingDiagnostics(List.of(REPO), stderr)).isEmpty();
+    }
 }

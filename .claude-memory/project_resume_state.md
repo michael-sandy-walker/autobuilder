@@ -11,7 +11,21 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-23 NIGHT (Opus 5.5) — T1-GE, T5-BQ, T1-GF CLOSED; TWO DEFECTS UPSTREAM OF T2-FL FIXED; ONE FIELD RUN — START HERE
+## 2026-09-23 LATE NIGHT (Opus 5.5, session 2) — T5-BK, T3-BX, T2-ER CLOSED; T2-ET SCORE HALF BUILT; ONE FIELD RUN — START HERE
+
+**Commits `af483edf`..`93a171b7` plus this docs commit. Nothing pushed.** Suite 3271/0/5 (22 `*IT` tests now counted).
+
+- **`T5-BK` closed:** the deferral's premise had expired; `mvn test` already needed Docker. Surefire now includes `*IT`.
+- **`T2-ET` score half built** (`2f3aafb5`): boot-gate items declare no criteria, so T4-CU abstained and a score closed them. September archive: 45 score closures, 0 by the gate; 9 of 37 classifiable were followed by their own defect, and the self-check never re-raises a finding equal to its last one, so those were LOST. Now `refuteClosureClaim` re-observes a `serves` item (refuse only on an IDENTICAL gate summary) and re-probes a `criterion` item's quoted criteria. Field: `OPPORTUNITY-NO-FIRE(1)`, the correct reading (gate OK at the closure).
+- **`T2-ER` closed** (`d7439316`): `@HistoryRead` on all 46 graph reads, build-checked; the deferred-mutation ledger was the one violation (unscoped; could rewrite another lineage's parked records), now lineage-scoped. The dead Agent-node surface deleted (counted on `T5-BL`). `T4-CK`'s reopened read-surface scope closed with it.
+- **`T3-BX` closed:** its shape appears in 0 of 114 preflight trees since 2026-08-22.
+- **User's interface questions answered in code** (`93a171b7`, on `T5-BO`): "llm unknown" was 40% of calls from auxiliary services, now named; "mode undirected" is 91% of cycles (no steering, signal ranking), now explained on hover; grey goals were "never approached", which wrongly included the root, now ancestors stay lit; the view froze on a new instance because EventSource never retries an error RESPONSE, now it reconnects (candidate cause for "TTS stops", unproven). Paths are spoken as names. The edited file pops up briefly.
+- **`reference_undone_ideas.md`** written from the Documents folder (TODO_20260921 request).
+- **Mistake to know about:** `d3e8c4de` (docs) accidentally carries the four Agent-file deletions, so that commit alone does not compile; `d7439316` completes it. Not rewritten (no history edits without the user).
+- **Field run `2026-09-23_22-38-19`:** deadline at 45 min, smoke 22/23, preserved 5/23, 5 score closures. The box was saturated (IntelliJ ~90% CPU, swap full, load ~110; one boot gate took 108 s), so its pace says nothing about the build.
+- **NEXT:** queue from `next_work.py`. Open from tonight: T5-BO's criteria-on-graph and flowing lines; T2-ET's first refusal still unobserved.
+
+## 2026-09-23 NIGHT (Opus 5.5) — T1-GE, T5-BQ, T1-GF CLOSED; TWO DEFECTS UPSTREAM OF T2-FL FIXED; ONE FIELD RUN
 
 **Commits `01d4e937`..(this session's last). Nothing pushed.**
 

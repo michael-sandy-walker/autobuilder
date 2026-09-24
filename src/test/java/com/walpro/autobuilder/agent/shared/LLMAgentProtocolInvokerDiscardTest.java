@@ -57,4 +57,38 @@ class LLMAgentProtocolInvokerDiscardTest {
 
         verify(logger, never()).llmResponseDiscarded(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyInt());
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theRetrySaysWhatWasWrongAndAStreakWarnsTheNextFirstAttempt() {
+        LLMAgentProtocolInvoker invoker = new LLMAgentProtocolInvoker();
+        LLMClient malformed = answering("Sure! Here is the file.");
+        java.util.function.Function<String, String> why = c -> "no block names a file";
+
+        try (var scope = LlmCallContext.scope("evolution", "cycle-1")) {
+            for (int i = 0; i < 3; i++) {
+                invoker.callWithValidation(malformed, "sys", "the task", c -> false, c -> c, why);
+            }
+        }
+
+        var captor = org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        verify(malformed, org.mockito.Mockito.times(6)).ask(captor.capture());
+        var calls = captor.getAllValues();
+        var retry = (java.util.List<com.walpro.autobuilder.client.dto.Message>) calls.get(1);
+        org.assertj.core.api.Assertions.assertThat(retry.get(3).getContent())
+                .as("the retry names the defect").contains("no block names a file");
+        var secondFirst = (java.util.List<com.walpro.autobuilder.client.dto.Message>) calls.get(2);
+        org.assertj.core.api.Assertions.assertThat(secondFirst.get(1).getContent())
+                .as("one discard is not yet a streak").isEqualTo("the task");
+        var thirdFirst = (java.util.List<com.walpro.autobuilder.client.dto.Message>) calls.get(4);
+        org.assertj.core.api.Assertions.assertThat(thirdFirst.get(1).getContent())
+                .startsWith("the task")
+                .contains("Your last 2 answers were discarded unread, because no block names a file");
+    }
+
+    @Test
+    void withoutADescriberTheRetryQuotesHowTheAnswerBegan() {
+        org.assertj.core.api.Assertions.assertThat(LLMAgentProtocolInvoker.retryInstruction(null))
+                .startsWith("Your previous response did not match the required format.");
+    }
 }

@@ -70,7 +70,8 @@ public class EvolutionLLMAdapter {
                 systemPrompt,
                 userPrompt,
                 EvolutionProtocolContract::isValidResponse,
-                parser::parse
+                parser::parse,
+                EvolutionProtocolContract::describeMismatch
         );
 
         EvolutionOutcome outcome;

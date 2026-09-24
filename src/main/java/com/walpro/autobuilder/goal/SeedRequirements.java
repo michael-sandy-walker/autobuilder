@@ -291,7 +291,32 @@ public final class SeedRequirements {
      * edge's precision requirement does not soften because a human approved the wording.
      */
     public static List<String> obligationsOrSplit(String specText, String obligationsFileText) {
-        return written(specText, obligationsFileText, () -> statedIn(specText));
+        return withoutRuleMarkers(written(specText, obligationsFileText, () -> statedIn(specText)));
+    }
+
+    /**
+     * T4-CQ: marks a written obligation as a RULE about how the work is done rather than a property
+     * the result can be checked for ("A test must assert what the route actually does", "Work inside
+     * the project as it is"). A rule still guides the work -- it reaches every consumer that reads
+     * obligations, without the marker -- but it never blocks completion: nothing can execute it, and
+     * the first adopted project's seventh run halted with a finished artifact because a model would
+     * not confirm one. The file is already the operator's to correct; this is one more correction
+     * it can carry.
+     */
+    public static final String RULE_MARKER = "rule:";
+
+    static boolean isRule(String line) {
+        return line != null && line.strip().toLowerCase(java.util.Locale.ROOT).startsWith(RULE_MARKER);
+    }
+
+    private static String withoutRuleMarker(String line) {
+        return isRule(line) ? line.strip().substring(RULE_MARKER.length()).strip() : line;
+    }
+
+    private static List<String> withoutRuleMarkers(List<String> lines) {
+        List<String> out = new ArrayList<>(lines.size());
+        for (String l : lines) out.add(withoutRuleMarker(l));
+        return out;
     }
 
     private static List<String> written(String specText, String obligationsFileText,
@@ -321,13 +346,14 @@ public final class SeedRequirements {
      * reported as unclaimed.
      */
     public static List<String> obligationsOrClauses(String specText, String obligationsFileText) {
-        return written(specText, obligationsFileText, () -> clausesOf(specText));
+        return withoutRuleMarkers(written(specText, obligationsFileText, () -> clausesOf(specText)));
     }
 
     /** {@link #obligationsOrSplit} narrowed to the clauses carrying an obligation verb. */
     public static List<String> verifiableObligationsOrSplit(String specText, String obligationsFileText) {
         List<String> strict = new ArrayList<>();
-        for (String r : obligationsOrSplit(specText, obligationsFileText)) {
+        for (String r : written(specText, obligationsFileText, () -> statedIn(specText))) {
+            if (isRule(r)) continue;   // guides the work, never blocks completion
             if (OBLIGATION.matcher(r).find()) strict.add(r);
         }
         return strict;

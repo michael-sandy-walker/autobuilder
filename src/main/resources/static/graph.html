@@ -1185,12 +1185,18 @@ const TTS = (function () {
     if (layer === layers.ambient && layer.playing) return;
 
     ensureCtx();
+    // A suspended context (the browser's autoplay rule after every load) does not play, and a source
+    // started on it never ends -- so its layer stayed "playing" and every later utterance was dropped
+    // as "mid-utterance". That is the voice going mute after a reload until a tab switch resumed the
+    // context. Never start while suspended; ask for the gesture that unlocks it instead.
+    if (ctx.state !== 'running') { needGesture(); return; }
 
     const ac = new AbortController();
     pending.set(clean, ac);
 
     fetchAndDecode(clean, ac.signal).then(buffer => {
       if (!enabled) return;                   // toggled off while fetching
+      if (ctx.state !== 'running') return;    // suspended while fetching: never leave a layer jammed
       if (layer === layers.front) {
         stopLayer(layers.front);              // a newer front utterance may have started meanwhile
       } else if (layer.playing) {
@@ -1235,16 +1241,32 @@ const TTS = (function () {
     const lastBreak = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf(', '), cut.lastIndexOf('; '));
     return (lastBreak > 120 ? cut.substring(0, lastBreak + 1) : cut) + '…';
   }
+  // The autoplay rule is lifted only by a user gesture on the page, so every gesture tries to
+  // resume, and a visible tab does too. One hint per suspension, not per utterance.
+  let gestureHinted = false;
+  function needGesture() {
+    if (gestureHinted || !enabled) return;
+    gestureHinted = true;
+    if (typeof toast === 'function') toast('Voice is paused by the browser. Click anywhere on the page to enable it.');
+  }
+  function unlock() {
+    if (!ctx || ctx.state === 'running') return;
+    ctx.resume().then(() => { if (ctx.state === 'running') gestureHinted = false; }).catch(() => {});
+  }
+  ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
+      document.addEventListener(ev, () => { if (enabled) { ensureCtx(); unlock(); } }, { capture: true }));
   return {
     supported, setEnabled, restore, cancel, speak,
-    announceCycle, announceNode,
+    announceCycle, announceNode, unlock,
     isEnabled: () => enabled,
   };
 })();
 
-// Stop narration when the tab loses focus — avoids voice leaking past a tab switch.
+// Stop narration when the tab loses focus — avoids voice leaking past a tab switch — and try to
+// resume the audio when it comes back.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) TTS.cancel();
+  else TTS.unlock();
 });
 
 // ------ connection ------

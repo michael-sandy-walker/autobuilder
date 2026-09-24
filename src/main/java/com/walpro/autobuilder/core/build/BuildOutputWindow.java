@@ -47,19 +47,17 @@ public final class BuildOutputWindow {
         this.tailLines = tailLines;
     }
 
-    /**
-     * Terminal colour and style escapes. A build tool that decides it is talking to a terminal
-     * wraps every level marker in them, and they then travelled verbatim into the evaluation
-     * prompt's build block: 600 to 3000 escape sequences per run across the archive, tokens the
-     * model paid for that carried nothing.
+    /*
+     * Terminal colour escapes are stripped on the way in, with the classifier's pattern (one home).
+     * A build tool that decides it is talking to a terminal wraps every level marker in them, and
+     * they then travelled verbatim into the evaluation prompt's build block: 600 to 3000 escape
+     * sequences per run across the archive, tokens the model paid for that carried nothing.
      */
-    private static final java.util.regex.Pattern TERMINAL_ESCAPE =
-            java.util.regex.Pattern.compile("\u001B\\[[0-9;?]*[ -/]*[@-~]");
 
     /** Appends one line. Thread-confined: the drainer thread writes, the caller reads after join. */
     public synchronized void add(String line) {
         if (line != null && line.indexOf('\u001B') >= 0) {
-            line = TERMINAL_ESCAPE.matcher(line).replaceAll("");
+            line = BuildErrorClassifier.ANSI_ESCAPE.matcher(line).replaceAll("");
         }
         if (head.size() < headLines) {
             head.add(line);

@@ -72,12 +72,6 @@ public class MutationSnapshotService {
         return mutations;
     }
 
-    public List<CycleContextData> listMergedMutations(CycleContextData context) {
-        return listAllMutations(context).stream()
-                .filter(CycleContextData::merged)
-                .toList();
-    }
-
     /**
      * T1-ED: Persists {@code ctx.mutationState()} to the mutation meta.json on disk.
      *

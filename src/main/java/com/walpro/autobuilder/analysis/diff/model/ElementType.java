@@ -8,12 +8,6 @@ public enum ElementType {
     FIELD,
     CONSTRUCTOR,
     ANNOTATION,
-    CONFIG_SECTION,
-    CONFIG_ENTRY,
-    JSON_OBJECT,
-    JSON_KEY,
-    FUNCTION,
-    MODULE,
     FILE,
     PROJECT,
     UNKNOWN

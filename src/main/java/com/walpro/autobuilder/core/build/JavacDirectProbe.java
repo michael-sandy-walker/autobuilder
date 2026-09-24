@@ -121,7 +121,6 @@ public class JavacDirectProbe {
         try {
             Files.createDirectories(classesDir);
         } catch (IOException e) {
-            long elapsed = System.currentTimeMillis() - start;
             return BuildOutcome.skipped("failed to create target/classes: " + e.getMessage());
         }
 

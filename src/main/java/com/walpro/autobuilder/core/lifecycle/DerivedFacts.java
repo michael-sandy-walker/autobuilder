@@ -34,10 +34,6 @@ public class DerivedFacts {
         this.recurringDefectTracker = tracker;
     }
 
-    public void setGoalPlannerService(GoalPlannerService service) {
-        this.goalPlannerService = service;
-    }
-
     // T4-BZ-5: the migration bridge is gone — every fact derives from its carrier alone.
 
     /** T1-DU: the codebase is effectively broken — carried COMPILE_ERROR or a rollback observation. */
@@ -87,25 +83,6 @@ public class DerivedFacts {
     /** T2-EF: a failure shape dominates the run's residual failure mix across >=2 subgoals. */
     public boolean recurringDefectDominant() {
         return recurringDefectTracker != null && recurringDefectTracker.dominantDefect().isPresent();
-    }
-
-    /**
-     * T1-EI: ids of goals permanently re-given-up at the rehabilitation fail-cap. The planner
-     * stamps {@code metadata["irreducibleGap"]=true} at the cap decision; this fact reads the
-     * durable marker (one home for the decision, computed read).
-     */
-    public java.util.List<String> irreducibleGoalIds() {
-        if (goalPlannerService == null) return java.util.List.of();
-        return goalPlannerService.getAllGoals().stream()
-                .filter(g -> g.getStatus() == GoalStatus.GIVEN_UP)
-                .filter(g -> Boolean.TRUE.equals(g.getMetadata().get("irreducibleGap")))
-                .map(GoalEntity::getId)
-                .toList();
-    }
-
-    /** T1-EI: at least one goal sits permanently at the rehabilitation fail-cap. */
-    public boolean irreducibleGap() {
-        return !irreducibleGoalIds().isEmpty();
     }
 
     /**

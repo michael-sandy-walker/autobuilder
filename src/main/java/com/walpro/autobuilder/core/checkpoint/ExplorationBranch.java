@@ -63,11 +63,6 @@ public record ExplorationBranch(
 
         public static final BranchOutcome NONE = new BranchOutcome(0, 0, 0, null, null, false);
 
-        /** Merges per cycle — reported, never used as the ranking key (see BranchExplorer). */
-        public double mergeRate() {
-            return cycles == 0 ? 0.0 : (double) merges / cycles;
-        }
-
         public boolean tipCompiles() {
             return "COMPILE_OK".equals(tipBuildResult);
         }

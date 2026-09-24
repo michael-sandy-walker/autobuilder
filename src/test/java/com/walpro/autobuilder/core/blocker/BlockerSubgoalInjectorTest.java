@@ -923,4 +923,43 @@ class BlockerSubgoalInjectorTest {
         }
     }
 
+    // ── T4-DW: the archive-entry-point item, retired by the build config and the jar ──────────
+
+    @Test
+    void archiveEntryPointItem_isRetiredWhenTheEntryPointIsDeclared() {
+        GoalEntity item = bootItem("goal-archive", BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT, null);
+        when(goalPlannerService.getCurrentSubGoal()).thenReturn(item);
+        when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        int retired = injector.clearArchiveEntryPointSubgoals(() -> true);
+
+        assertThat(retired).isEqualTo(1);
+        expectSubsumed("goal-archive");
+    }
+
+    @Test
+    void archiveEntryPointItem_survivesWhileTheEntryPointIsNotDeclared() {
+        GoalEntity item = bootItem("goal-archive", BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT, null);
+        lenient().when(goalPlannerService.getCurrentSubGoal()).thenReturn(item);
+        lenient().when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+
+        assertThat(injector.clearArchiveEntryPointSubgoals(() -> false)).isZero();
+
+        verify(goalPlannerService, never()).transitionGoal(anyString(), any(), anyString(), any());
+    }
+
+    /** The evidence reads the source tree; a cycle with no such item must not pay for it. */
+    @Test
+    void theEvidenceIsNotAskedWhenNoArchiveEntryPointItemIsOpen() {
+        GoalEntity serves = bootItem("goal-serves", BlockerTypes.CLAIM_SERVES, null);
+        lenient().when(goalPlannerService.getCurrentSubGoal()).thenReturn(serves);
+        lenient().when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
+        java.util.concurrent.atomic.AtomicInteger asked = new java.util.concurrent.atomic.AtomicInteger();
+
+        int retired = injector.clearArchiveEntryPointSubgoals(() -> { asked.incrementAndGet(); return true; });
+
+        assertThat(retired).isZero();
+        assertThat(asked.get()).isZero();
+        verify(goalPlannerService, never()).transitionGoal(anyString(), any(), anyString(), any());
+    }
 }

@@ -141,15 +141,6 @@ public class StateManifest {
         return new Restore(List.copyOf(restored), List.copyOf(reset), List.copyOf(failures));
     }
 
-    /** A rendered one-line register for logs and the readout endpoint. */
-    public Map<String, String> registerReadout() {
-        Map<String, String> out = new LinkedHashMap<>();
-        for (CheckpointableState holder : holders()) {
-            out.put(holder.stateKey(), holder.getClass().getSimpleName());
-        }
-        return out;
-    }
-
     /** Captured state plus whatever refused to be captured. */
     public record Capture(Map<String, Object> state, List<String> failures) {
         public boolean complete() {

@@ -11,7 +11,6 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
-import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.goal.AttemptIds;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -88,7 +87,7 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
     private static final int REHABILITATION_VOTE_THRESHOLD = 2;
 
     // T1-EI: number of times a single GIVEN_UP goal may be auto-rehabilitated before it is
-    // permanently re-given-up with IRREDUCIBLE_GAP. Counter is reset by a successful merge on
+    // permanently left GIVEN_UP. Counter is reset by a successful merge on
     // the rehabilitated goal (see MergeAgent rehabilitation accounting).
     private static final int REHABILITATION_FAIL_CAP = 2;
 
@@ -278,9 +277,6 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
             context = context.withSkippedProposalMatches(
                     injection.proposalMatches().isEmpty() ? null : injection.proposalMatches());
 
-            // T1-EI / T4-BZ-2: goals at the rehabilitation fail-cap carry a durable
-            // metadata marker (stamped in attemptRehabilitation); DerivedFacts.irreducibleGap
-            // reads it at render time — no stored signal.
             // T1-EI: surface auto-reactivated ids so downstream agents see them as fresh subgoals.
             if (!injection.reactivatedGoalIds().isEmpty()) {
                 log.info("T1-EI: auto-reactivated {} goal(s) this cycle: {}",
@@ -513,42 +509,12 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
         Set<String> undefinedAll = new LinkedHashSet<>();
         Map<String, Set<String>> undefinedPerDesc = new LinkedHashMap<>();
 
-        List<String> rewrittenGoals = new ArrayList<>(in.newGoals() != null ? in.newGoals().size() : 0);
-        Map<String, List<String>> rewrittenCriteria = new LinkedHashMap<>();
-        if (in.newGoals() != null) {
-            for (String desc : in.newGoals()) {
-                Set<String> perDescUndefined = new LinkedHashSet<>();
-                // Ground only to DETECT undefined symbols (populates perDescUndefined); persist the
-                // marker-free text. The [UNDEFINED] marker is a render-time prompt hint, re-applied to
-                // descriptions by refreshGoalAnnotations on the prompt copy — it must never be baked
-                // into the stored description/criteria. Baking it in made criteria verify literally
-                // ("…ProductRepository [UNDEFINED] interface") so they could never pass, manufacturing
-                // permanent root-closure blockers. The clean "Create X.java" criterion below carries
-                // the creation-framing intent; the marker is redundant for it and harmful for verification.
-                groundingService.groundSymbolReferences(desc, perDescUndefined);
-                rewrittenGoals.add(desc);
-
-                List<String> origCriteria = in.goalCriteria() != null ? in.goalCriteria().get(desc) : null;
-                List<String> newCriteria = new ArrayList<>();
-                for (String sym : perDescUndefined) {
-                    newCriteria.add("Create " + sym + ".java");
-                }
-                if (origCriteria != null) {
-                    for (String c : origCriteria) {
-                        // Symbols cited only in criteria text also count as undefined for this desc.
-                        groundingService.groundSymbolReferences(c, perDescUndefined);
-                        newCriteria.add(c);
-                    }
-                }
-                if (!newCriteria.isEmpty()) {
-                    rewrittenCriteria.put(desc, newCriteria);
-                }
-                undefinedAll.addAll(perDescUndefined);
-                if (!perDescUndefined.isEmpty()) {
-                    undefinedPerDesc.put(desc, perDescUndefined);
-                }
-            }
-        }
+        var grounded = SymbolGroundingService.groundProposedGoals(
+                groundingService, in.newGoals(), in.goalCriteria());
+        List<String> rewrittenGoals = grounded.goals();
+        Map<String, List<String>> rewrittenCriteria = grounded.criteria();
+        undefinedAll.addAll(grounded.undefined());
+        undefinedPerDesc.putAll(grounded.undefinedPerDescription());
 
         // No grounding needed — pass the original outcome through unchanged. Preserves object
         // identity for healthy LLM output (no hallucinated symbols, no rewriting) so downstream
@@ -681,27 +647,23 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
     }
 
     private record InjectionResult(List<String> skipped, int injected,
-                                   List<String> reactivatedGoalIds, List<String> irreducibleGoalIds,
+                                   List<String> reactivatedGoalIds,
                                    Map<String, String> proposalMatches) {
         InjectionResult(List<String> skipped, int injected) {
-            this(skipped, injected, List.of(), List.of(), Map.of());
-        }
-        InjectionResult(List<String> skipped, int injected,
-                        List<String> reactivatedGoalIds, List<String> irreducibleGoalIds) {
-            this(skipped, injected, reactivatedGoalIds, irreducibleGoalIds, Map.of());
+            this(skipped, injected, List.of(), Map.of());
         }
     }
 
-    private record RehabResult(String matchedId, String reactivatedId, String irreducibleId) {
-        static RehabResult none() { return new RehabResult(null, null, null); }
+    private record RehabResult(String matchedId, String reactivatedId) {
+        static RehabResult none() { return new RehabResult(null, null); }
     }
 
     /**
      * T1-EI: when a dedup block fires against a candidate proposal, vote on the closest
      * matching GIVEN_UP goal. After {@link #REHABILITATION_VOTE_THRESHOLD} distinct cycles
      * of votes the goal is auto-reactivated; after {@link #REHABILITATION_FAIL_CAP}
-     * reactivations without an intervening merge it is permanently re-given-up with the
-     * IRREDUCIBLE_GAP signal so the planner cannot loop on it forever.
+     * reactivations without an intervening merge it stays GIVEN_UP for good, so the planner
+     * cannot loop on it forever.
      */
     private RehabResult attemptRehabilitation(String candidate, String cycleName) {
         if (candidate == null || candidate.isBlank()) return RehabResult.none();
@@ -718,42 +680,34 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
             log.warn("T1-EI: rehabilitation fail-cap reached for goalId={} ({} reactivations) — IRREDUCIBLE_GAP",
                     match.getId(), reactivationCount);
             goalPlannerService.clearRehabilitationVotes(match.getId());
-            // T4-BZ-2: durable marker — DerivedFacts.irreducibleGoalIds reads it at render time.
-            match.getMetadata().put("irreducibleGap", true);
-            goalPlannerService.saveGoalMetadata(match);
-            return new RehabResult(match.getId(), null, match.getId());
+            return new RehabResult(match.getId(), null);
         }
 
         int votes = goalPlannerService.registerRehabilitationVote(match.getId(), cycleName);
         log.info("T1-EI: rehabilitation vote +1 for goalId={} (total={}, candidate='{}')",
                 match.getId(), votes, candidate);
         if (votes < REHABILITATION_VOTE_THRESHOLD) {
-            return new RehabResult(match.getId(), null, null);
+            return new RehabResult(match.getId(), null);
         }
 
         log.info("T1-EI: vote threshold reached for goalId={} — reactivating", match.getId());
         List<String> flipped = goalPlannerService.reactivateGoal(match.getId());
         if (flipped.isEmpty()) {
             goalPlannerService.clearRehabilitationVotes(match.getId());
-            return new RehabResult(match.getId(), null, null);
+            return new RehabResult(match.getId(), null);
         }
         goalPlannerService.clearRehabilitationVotes(match.getId());
         goalPlannerService.incrementGoalMetadataInt(match.getId(), "rehabilitationCount");
-        return new RehabResult(match.getId(), match.getId(), null);
-    }
-
-    private InjectionResult injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId,
-                                               Map<String, Set<String>> undefinedPerDescription) {
-        return injectOutcomeGoals(outcome, parentGoalId, undefinedPerDescription, null, List.of());
+        return new RehabResult(match.getId(), match.getId());
     }
 
     private InjectionResult injectOutcomeGoals(PlannerOutcome outcome, String parentGoalId,
                                                Map<String, Set<String>> undefinedPerDescription,
                                                CycleContextData ctx, List<String> retiredThisResponse) {
-        if (outcome == null || !outcome.updated()) return new InjectionResult(List.of(), 0, List.of(), List.of());
+        if (outcome == null || !outcome.updated()) return new InjectionResult(List.of(), 0);
 
         var sanitized = goalPlannerService.sanitizeProposedSubGoals(outcome.newGoals());
-        if (sanitized.isEmpty()) return new InjectionResult(List.of(), 0, List.of(), List.of());
+        if (sanitized.isEmpty()) return new InjectionResult(List.of(), 0);
 
         // T1-DG: advance the planning run counter so this wave's subgoals are stamped with a
         // run-id distinct from the prior wave (initial bootstrap → 1, first re-plan → 2, etc.).
@@ -764,7 +718,6 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
         List<String> knownDescriptions = buildKnownDescriptions(retiredThisResponse);
         List<String> skipped = new ArrayList<>();
         List<String> reactivated = new ArrayList<>();
-        List<String> irreducible = new ArrayList<>();
         Map<String, String> proposalMatches = new LinkedHashMap<>();
         int injected = 0;
         boolean isFirst = true;
@@ -774,7 +727,6 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
                 log.warn("Skipped similar subgoal: '{}'", goal);
                 RehabResult rehab = attemptRehabilitation(goal, cycleName);
                 if (rehab.reactivatedId() != null) reactivated.add(rehab.reactivatedId());
-                if (rehab.irreducibleId() != null) irreducible.add(rehab.irreducibleId());
                 if (rehab.matchedId() != null) proposalMatches.put(goal, rehab.matchedId());
                 skipped.add(goal);
                 continue;
@@ -786,7 +738,6 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
                         givenUpCount, GIVEN_UP_RETRY_LIMIT, goal);
                 RehabResult rehab = attemptRehabilitation(goal, cycleName);
                 if (rehab.reactivatedId() != null) reactivated.add(rehab.reactivatedId());
-                if (rehab.irreducibleId() != null) irreducible.add(rehab.irreducibleId());
                 if (rehab.matchedId() != null) proposalMatches.put(goal, rehab.matchedId());
                 skipped.add(goal);
                 continue;
@@ -842,7 +793,7 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
                     injected, skipped.size());
         }
 
-        return new InjectionResult(skipped, injected, reactivated, irreducible, proposalMatches);
+        return new InjectionResult(skipped, injected, reactivated, proposalMatches);
     }
 
     /**

@@ -1,10 +1,10 @@
 package com.walpro.autobuilder.graph.planner;
 
-import java.time.Instant;
+import com.walpro.autobuilder.graph.core.GraphActions;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import com.walpro.autobuilder.util.HashingUtils;
 import org.springframework.stereotype.Component;
@@ -13,41 +13,22 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.agent.planner.model.PlannerOutcome;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
-import com.walpro.autobuilder.graph.core.ActionEntity;
-import com.walpro.autobuilder.graph.core.ArtifactEntity;
 
 import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
 public class PlannerActionRegistrar {
-
     private final AgentGraphService agentGraphService;
     private final ObjectMapper objectMapper;
 
     public void registerPlannerAction(String agentId, CycleContextData ctx, PlannerOutcome outcome) {
         if (ctx == null || outcome == null) return;
 
-        String actionId = UUID.randomUUID().toString();
-
-        String scopeGoalId = (ctx.currentSubGoalId() != null && !ctx.currentSubGoalId().isBlank())
-                ? ctx.currentSubGoalId()
-                : ctx.currentGoalId();
-
-        ActionEntity action = new ActionEntity(
-                actionId,
-                "planner",
+        String scopeGoalId = GraphActions.activeGoalId(ctx);
+        String actionId = GraphActions.register(agentGraphService, "planner",
                 outcome.updated() ? "applied" : "rejected",
-                agentId,
-                scopeGoalId,
-                ctx.currentGoalId(),
-                ctx.cycleName(),
-                Instant.now(),
-                ctx.lastAttemptId(),
-                ctx.parentAttemptId()
-        );
-
-        agentGraphService.registerAction(action);
+                agentId, ctx);
 
         String fingerprint = fingerprint(outcome);
 
@@ -77,15 +58,7 @@ public class PlannerActionRegistrar {
             content = "{\"error\":\"failed_to_serialize_planner_outcome\"}";
         }
 
-        ArtifactEntity artifact = new ArtifactEntity(
-                UUID.randomUUID().toString(),
-                "planner_outcome",
-                null,
-                content,
-                null
-        );
-
-        agentGraphService.linkActionOutput(actionId, artifact);
+        GraphActions.link(agentGraphService, actionId, "planner_outcome", content, null);
     }
 
     private static String fingerprint(PlannerOutcome outcome) {

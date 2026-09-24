@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 
 import com.walpro.autobuilder.graph.evaluation.CriterionResultEntity;
-import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
 import com.walpro.autobuilder.graph.scope.ScopeActionSnapshot;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
@@ -17,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.walpro.autobuilder.graph.core.ActionEntity;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
+import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -150,27 +150,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .toList();
     }
 
-    public void attachPlannerMetadata(
-            String actionId,
-            String fingerprint,
-            boolean updated,
-            int newGoalsCount
-    ) {
-        neo4jClient.query("""
-        MATCH (a:Action { id: $actionId })
-        SET a.fingerprint = $fingerprint,
-            a.plannerUpdated = $updated,
-            a.plannerNewGoalsCount = $newGoalsCount
-    """)
-                .bindAll(Map.of(
-                        "actionId", actionId,
-                        "fingerprint", fingerprint,
-                        "updated", updated,
-                        "newGoalsCount", newGoalsCount
-                ))
-                .run();
-    }
-
     @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.BINDING,
             note = "PlannerRepetitionHeuristic counts consecutive planner outputs; a streak reaching into a previous run is not a streak.")
     @Override
@@ -216,6 +195,30 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .toList();
     }
 
+    @Override
+    public void attachPlannerMetadata(
+            String actionId,
+            String fingerprint,
+            boolean updated,
+            int newGoalsCount
+    ) {
+        neo4jClient.query("""
+        MATCH (a:Action { id: $actionId })
+        SET a.fingerprint = $fingerprint,
+            a.plannerUpdated = $updated,
+            a.plannerNewGoalsCount = $newGoalsCount
+    """)
+                .bindAll(Map.of(
+                        "actionId", actionId,
+                        "fingerprint", fingerprint,
+                        "updated", updated,
+                        "newGoalsCount", newGoalsCount
+                ))
+                .run();
+    }
+
+    @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.BINDING,
+            note = "PlannerRepetitionHeuristic counts consecutive planner outputs; a streak reaching into a previous run is not a streak.")
     @Override
     public void linkCriterionResults(List<CriterionResultEntity> results) {
         if (results == null || results.isEmpty()) return;

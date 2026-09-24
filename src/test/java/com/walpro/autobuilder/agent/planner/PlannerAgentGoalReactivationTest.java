@@ -101,7 +101,7 @@ class PlannerAgentGoalReactivationTest {
     }
 
     @Test
-    void failCapReached_emitsIrreducibleGap_doesNotReactivate() {
+    void failCapReached_doesNotReactivate() {
         CycleContextData ctx = ctxNoSubgoal("cycle-9");
         GoalEntity givenUpMatch = givenUp("g-loans", "Implement loans endpoints");
         givenUpMatch.getMetadata().put("rehabilitationCount", 2);
@@ -114,8 +114,7 @@ class PlannerAgentGoalReactivationTest {
 
         verify(goalPlannerService, never()).reactivateGoal(anyString());
         verify(goalPlannerService, never()).registerRehabilitationVote(anyString(), anyString());
-        verify(goalPlannerService).saveGoalMetadata(givenUpMatch);
-        assertThat(givenUpMatch.getMetadata().get("irreducibleGap")).isEqualTo(true);
+        verify(goalPlannerService).clearRehabilitationVotes("g-loans");
     }
 
     @Test

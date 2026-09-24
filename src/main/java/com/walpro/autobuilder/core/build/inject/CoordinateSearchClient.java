@@ -342,11 +342,4 @@ public class CoordinateSearchClient {
         return consecutiveFailures.get() >= FAILURE_BUDGET && clock.getAsLong() < retryAfterMs;
     }
 
-    /** Test-only — reset session state. */
-    void __resetForTest() {
-        cache.clear();
-        versionCache.clear();
-        publishedCache.clear();
-        consecutiveFailures.set(0);
-    }
 }

@@ -1,13 +1,13 @@
 package com.walpro.autobuilder.graph.evaluation;
 
-import java.time.Instant;
+import com.walpro.autobuilder.graph.core.GraphActions;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -18,8 +18,6 @@ import com.walpro.autobuilder.agent.evaluation.model.EvaluationOutcome;
 import com.walpro.autobuilder.analysis.heuristic.HeuristicOpinion;
 import com.walpro.autobuilder.analysis.heuristic.NegotiationResult;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
-import com.walpro.autobuilder.graph.core.ActionEntity;
-import com.walpro.autobuilder.graph.core.ArtifactEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import lombok.RequiredArgsConstructor;
@@ -27,7 +25,6 @@ import lombok.RequiredArgsConstructor;
 @Component
 @RequiredArgsConstructor
 public class EvaluationActionRegistrar {
-
     private final AgentGraphService agentGraphService;
 
     private final ObjectMapper objectMapper;
@@ -44,29 +41,13 @@ public class EvaluationActionRegistrar {
         if (outcome == null) {
         	return;
         }
-        
-        String actionId = UUID.randomUUID().toString();
-        String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
-                ? context.currentSubGoalId()
-                : context.currentGoalId();
 
         String state = outcome.mutationState() != null
                 ? outcome.mutationState().name()
                 : "NOT_EVALUATED";
         
-        ActionEntity action = new ActionEntity(
-            actionId,
-            "evaluation",
-            state,
-            agentId,
-            activeGoalId,
-            context.currentGoalId(),
-            context.cycleName(),
-            Instant.now(),
-            context.lastAttemptId(),
-            context.parentAttemptId()
-        );
-        agentGraphService.registerAction(action);
+        String actionId = GraphActions.register(agentGraphService, "evaluation", state,
+                agentId, context);
 
         String jsonPayload;
         try {
@@ -104,15 +85,8 @@ public class EvaluationActionRegistrar {
             jsonPayload = "{\"error\":\"failed_to_serialize_evaluation_payload\"}";
         }
 
-        ArtifactEntity artifact = new ArtifactEntity(
-            UUID.randomUUID().toString(),
-            "evaluation_payload",
-            null,
-            jsonPayload,
-            outcome.score()
-        );
-
-        agentGraphService.linkActionOutput(actionId, artifact);
+        GraphActions.link(agentGraphService, actionId, "evaluation_payload",
+                jsonPayload, outcome.score());
 
         // T3-BB: persist per-criterion pass/fail as CriterionResult nodes linked from this action.
         // When the LLM omits CriteriaCheck (common for rejected mutations), fill in any defined

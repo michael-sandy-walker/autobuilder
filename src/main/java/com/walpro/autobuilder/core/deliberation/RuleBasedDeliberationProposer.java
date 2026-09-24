@@ -16,7 +16,6 @@ import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
 import com.walpro.autobuilder.model.GoalProgressState;
-import com.walpro.autobuilder.model.MutationAcceptanceState;
 
 import static com.walpro.autobuilder.goal.GoalKindClassifier.GoalKind.EXECUTABLE;
 import static com.walpro.autobuilder.goal.GoalKindClassifier.GoalKind.HYBRID;
@@ -211,7 +210,6 @@ public class RuleBasedDeliberationProposer implements DeliberationProposer {
         // Use what we already compute (evaluation outcome / goal progress / mutation state).
         var outcome = context.evaluationOutcome();
         GoalProgressState gp = outcome != null ? outcome.goalProgress() : null;
-        MutationAcceptanceState ms = outcome != null ? outcome.mutationState() : null;
 
         // Stagnation handling: prefer divergent evolution when DIVERGENCE_REQUEST is already set
         // (injected by AutobuilderService on the previous STAGNATING cycle), otherwise replan.

@@ -337,10 +337,9 @@ public class AutobuilderService implements CheckpointableState {
      * <p>{@code ADOPT_PROJECT} deliberately does not invent a goal for a codebase the loop did not
      * write. It then has to actually WAIT for one, which is not the same as being refused: the
      * start succeeded, the tree is adopted, and only the purpose is missing. Cycling anyway walks
-     * into the planner's no-goals fallback, which invents the ids
-     * {@code bootstrap-project-structure} / {@code create-basic-structure} for a context that has
-     * no such goals — and the first thing to treat one as a real parent throws
-     * {@code Parent goal not found}, which is how the first adopted run died at boot.
+     * into the planner's no-goals fallback, which then invented placeholder parent ids; the first
+     * lookup of one threw {@code Parent goal not found}, which is how the first adopted run died
+     * at boot. (The fallback now points at the real root, or changes nothing when there is none.)
      */
     private volatile boolean awaitingGoal = false;
 

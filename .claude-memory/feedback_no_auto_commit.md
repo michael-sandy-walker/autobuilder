@@ -1,6 +1,6 @@
 ---
 name: no-automatic-commits
-description: Commit only with user authorization (standing or per-task); NEVER push
+description: Commit only with user authorization (standing or per-task); NEVER push, except to the session's claude/ branch in cloud sessions
 metadata: 
   node_type: memory
   type: feedback
@@ -10,6 +10,8 @@ metadata:
 Never commit code without authorization. Default: after finishing an implementation, show the changes and stop — wait for explicit instruction ("commit this").
 
 **Update 2026-06-11:** during explicitly-authorized autonomous operation ("Run and fix further autonomously" + "Commits are ok, but no pushes"), committing at sensible checkpoints is allowed. **Pushing is never allowed** — no `git push` under any circumstances; the user pushes manually.
+
+**Update 2026-09-24 (CLOUD SESSIONS ONLY):** in a Claude Code on the web CLOUD CONTAINER -- test `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE` starting with `cloud` (e.g. `cloud_default`), NOT `CLAUDE_CODE_REMOTE` alone, which a Remote Control session on the user's own machine may also set -- committing AND pushing to the session's own designated `claude/...` branch is allowed once the user has approved the change. The container is ephemeral, so unpushed work is lost when it is reclaimed. Still never push to any other branch, never open a PR unasked. Everywhere else (local sessions) the rule above is unchanged: never push.
 
 **Why:** permanent standing order after an unrequested auto-commit of T2-AU; relaxed for autonomous sessions on 2026-06-11 because uncommitted multi-fix working trees make checkpointing impossible.
 

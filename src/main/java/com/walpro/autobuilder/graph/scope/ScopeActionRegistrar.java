@@ -1,27 +1,22 @@
 package com.walpro.autobuilder.graph.scope;
 
-import java.time.Instant;
+import com.walpro.autobuilder.graph.core.GraphActions;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.analysis.scope.ScopeAssessment;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
-import com.walpro.autobuilder.graph.core.ActionEntity;
-import com.walpro.autobuilder.graph.core.ArtifactEntity;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ScopeActionRegistrar {
-
     private static final String AGENT_ID = "StaticScopeGuard";
 
     private final AgentGraphService agentGraphService;
@@ -32,24 +27,8 @@ public class ScopeActionRegistrar {
             return;
         }
 
-        String actionId = UUID.randomUUID().toString();
-        String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
-                ? context.currentSubGoalId()
-                : context.currentGoalId();
-
-        ActionEntity action = new ActionEntity(
-                actionId,
-                "scope",
-                assessment.fit().name(),
-                AGENT_ID,
-                activeGoalId,
-                context.currentGoalId(),
-                context.cycleName(),
-                Instant.now(),
-                context.lastAttemptId(),
-                context.parentAttemptId()
-        );
-        agentGraphService.registerAction(action);
+        String actionId = GraphActions.register(agentGraphService, "scope", assessment.fit().name(),
+                AGENT_ID, context);
 
         String jsonPayload;
         try {
@@ -68,14 +47,7 @@ public class ScopeActionRegistrar {
             jsonPayload = "{\"error\":\"failed_to_serialize_scope_payload\"}";
         }
 
-        ArtifactEntity artifact = new ArtifactEntity(
-                UUID.randomUUID().toString(),
-                "scope_payload",
-                null,
-                jsonPayload,
-                assessment.confidence()
-        );
-
-        agentGraphService.linkActionOutput(actionId, artifact);
+        GraphActions.link(agentGraphService, actionId, "scope_payload",
+                jsonPayload, assessment.confidence());
     }
 }

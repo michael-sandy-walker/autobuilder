@@ -60,27 +60,6 @@ public class DiffSummarizer {
         }
     }
     
-    public static String summarizePlainText(StructuralDiffNode root) {
-        StringBuilder sb = new StringBuilder();
-        summarizePlainTextRecursive(root, sb, 0);
-        return sb.toString().isBlank() ? "(no changes)" : sb.toString();
-    }
-
-    private static void summarizePlainTextRecursive(StructuralDiffNode node, StringBuilder sb, int indent) {
-        if (!node.isUnchanged()) {
-            sb.append("  ".repeat(indent));
-            sb.append("- ").append(node.getType());
-            if (node.isAdded()) sb.append(" (added)");
-            else if (node.isDeleted()) sb.append(" (deleted)");
-            else if (node.isModified()) sb.append(" (modified)");
-            sb.append(": ").append(node.getId()).append("\n");
-        }
-
-        for (StructuralDiffNode child : node.children()) {
-            summarizePlainTextRecursive(child, sb, indent + 1);
-        }
-    }
-    
     public static String summarizeForPrompt(StructuralDiffNode root) {
         StringBuilder sb = new StringBuilder();
         if (root != null) {

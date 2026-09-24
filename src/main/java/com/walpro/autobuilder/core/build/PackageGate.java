@@ -138,6 +138,17 @@ public class PackageGate {
         return true;
     }
 
+    /**
+     * T4-DW: whether the project's archive entry point is now declared — the evidence that retires
+     * the boot gate's archive-entry-point item. Same project root the repair above writes to.
+     * False whenever it cannot be established, including a disabled gate.
+     */
+    public boolean archiveEntryPointDeclared() {
+        if (!enabled || !buildExecutor.isEnabled()) return false;
+        String projectRoot = buildExecutor.resolveWorkingDir(fileBasePath);
+        return projectRoot != null && RunnableJarGuarantee.entryPointDeclared(java.nio.file.Path.of(projectRoot));
+    }
+
     private Optional<String> verifyPackageableTimed(String cycleId) {
         if (!enabled || !buildExecutor.isEnabled()) {
             return Optional.empty();

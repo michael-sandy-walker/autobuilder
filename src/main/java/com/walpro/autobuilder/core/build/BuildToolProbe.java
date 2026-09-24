@@ -61,11 +61,6 @@ public class BuildToolProbe {
         return tools;
     }
 
-    /** Union of the detection filenames (for T2-CW/T4-AU build-config-file detection — exposed now). */
-    public Set<String> configFilenames() {
-        return new LinkedHashSet<>(props.getToolDetection().keySet());
-    }
-
     /**
      * Run the configured diagnostic commands for every detected tool in {@code workingDir} and
      * return their trimmed, concatenated output — or {@code null} when disabled, no tool is

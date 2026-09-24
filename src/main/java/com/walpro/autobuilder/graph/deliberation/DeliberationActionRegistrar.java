@@ -1,22 +1,19 @@
 package com.walpro.autobuilder.graph.deliberation;
 
-import java.time.Instant;
-import java.util.UUID;
+import com.walpro.autobuilder.graph.core.GraphActions;
+
 
 import org.springframework.stereotype.Component;
 
 import com.walpro.autobuilder.core.deliberation.DeliberationResult;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.graph.agent.AgentGraphService;
-import com.walpro.autobuilder.graph.core.ActionEntity;
-import com.walpro.autobuilder.graph.core.ArtifactEntity;
 
 import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
 public class DeliberationActionRegistrar {
-
     private final AgentGraphService agentGraphService;
 
     public void registerDeliberation(String agentId, CycleContextData context, DeliberationResult result) {
@@ -24,24 +21,9 @@ public class DeliberationActionRegistrar {
             return;
         }
 
-        String actionId = UUID.randomUUID().toString();
-        String activeGoalId = context.currentSubGoalId() != null && !context.currentSubGoalId().isBlank()
-                ? context.currentSubGoalId()
-                : context.currentGoalId();
-
-        ActionEntity action = new ActionEntity(
-                actionId,
-                "deliberate",
+        String actionId = GraphActions.register(agentGraphService, "deliberate",
                 result.mode().name(),
-                agentId,
-                activeGoalId,
-                context.currentGoalId(),
-                context.cycleName(),
-                Instant.now(),
-                context.lastAttemptId(),
-                context.parentAttemptId()
-        );
-        agentGraphService.registerAction(action);
+                agentId, context);
 
         String summary = """
                 mode: %s
@@ -57,14 +39,6 @@ public class DeliberationActionRegistrar {
                 String.valueOf(result.meta())
         );
 
-        ArtifactEntity artifact = new ArtifactEntity(
-                UUID.randomUUID().toString(),
-                "deliberation_summary",
-                null,
-                summary,
-                null
-        );
-
-        agentGraphService.linkActionOutput(actionId, artifact);
+        GraphActions.link(agentGraphService, actionId, "deliberation_summary", summary, null);
     }
 }

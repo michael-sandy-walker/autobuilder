@@ -43,8 +43,7 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
 
     private static final Set<SignalType> DERIVED = Set.of(
             BasicSignals.BUILD_BROKEN, BasicSignals.TEST_REPAIR_FOCUS,
-            BasicSignals.BUILD_FIX_LOCUS_STUCK, BasicSignals.RECURRING_DEFECT_DOMINANT,
-            BasicSignals.IRREDUCIBLE_GAP, BasicSignals.SCOPE_OUT_OF_SCOPE,
+            BasicSignals.BUILD_FIX_LOCUS_STUCK, BasicSignals.SCOPE_OUT_OF_SCOPE,
             BasicSignals.SUBGOAL_SCOPE_MISMATCH, BasicSignals.GOAL_EXHAUSTED,
             BasicSignals.EVOLUTION_OCCURRED, BasicSignals.EVOLUTION_FINGERPRINT_CHANGED);
 
@@ -96,11 +95,7 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
         return new SignalReadout(ctx.cycleName(), List.copyOf(entries), raw);
     }
 
-    /**
-     * Computed entries for the derived facts that are true on this context. Tracker/goal-backed
-     * facts (RECURRING_DEFECT_DOMINANT, IRREDUCIBLE_GAP) need beans and are absent from the
-     * static readout — their decision carriers never were the signal map (T4-J consumer map).
-     */
+    /** Computed entries for the derived facts that are true on this context. */
     private static List<Signal> derivedEntries(CycleContextData ctx) {
         List<Signal> out = new ArrayList<>();
         if (DerivedFacts.buildBroken(ctx)) {

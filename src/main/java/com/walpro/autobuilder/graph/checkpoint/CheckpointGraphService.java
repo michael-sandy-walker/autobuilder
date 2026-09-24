@@ -39,11 +39,6 @@ public interface CheckpointGraphService {
         return Optional.empty();
     }
 
-    /** The runs that have recorded points, newest first, for the operator's run selector. */
-    default List<StoredRun> runsWithCheckpoints(String lineageId, int limit) {
-        return List.of();
-    }
-
     /**
      * A checkpoint as the graph holds it: the record itself plus where its tree copy was archived.
      *

@@ -389,18 +389,6 @@ public class GoalTransitionLog {
                        int transitionsUndone, boolean historyAvailable) {}
 
     /**
-     * The transitions a rewind to {@code seq} would undo, newest first. Rendered into the rewind's
-     * behaviour event so what a rewind cost is visible without re-reading the log.
-     */
-    public List<GoalTransition> transitionsAfter(long seq) {
-        List<GoalTransition> after = new ArrayList<>();
-        for (GoalTransition t : readAll()) {
-            if (t.seq() > seq) after.add(t);
-        }
-        return after;
-    }
-
-    /**
      * The highest sequence recorded at or before {@code cycleId} — the cut point for a rewind
      * addressed by cycle rather than by sequence. Returns 0 when nothing was recorded that early,
      * which correctly folds to "no goal existed yet".

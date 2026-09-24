@@ -4,8 +4,8 @@ import java.util.List;
 
 import com.walpro.autobuilder.graph.core.ActionEntity;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
-import com.walpro.autobuilder.graph.evaluation.CriterionResultEntity;
 import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
+import com.walpro.autobuilder.graph.evaluation.CriterionResultEntity;
 import com.walpro.autobuilder.graph.scope.ScopeActionSnapshot;
 
 public interface AgentGraphService {
@@ -19,9 +19,9 @@ public interface AgentGraphService {
      */
     List<ArtifactEntity> findRecentArtifactsForGoal(String goalId, List<String> artifactTypes, int limit);
 
-    void attachPlannerMetadata(String actionId, String fingerprint, boolean updated, int newGoalsCount);
-
     List<PlannerActionSnapshot> findRecentPlannerActions(String scopeGoalId, int limit);
+
+    void attachPlannerMetadata(String actionId, String fingerprint, boolean updated, int newGoalsCount);
 
     List<ScopeActionSnapshot> findRecentScopeActions(String subGoalId, int limit);
 

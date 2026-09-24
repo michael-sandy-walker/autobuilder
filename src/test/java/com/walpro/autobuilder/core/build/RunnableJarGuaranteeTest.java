@@ -199,4 +199,44 @@ class RunnableJarGuaranteeTest {
             Files.writeString(f, e.getValue());
         }
     }
+
+    // ── T4-DW: evidence that retires the archive-entry-point item ────────────────────────────
+
+    /** The item's own instruction is "declare the entry point the sources provide": done in the pom. */
+    @Test
+    void entryPointDeclared_whenThePomDeclaresTheOneTheSourcesName_evenBeforeARebuild() throws IOException {
+        writeJar("demo.jar", null);
+        writeProjectOnDisk(POM_WITH_DEPENDENCY);
+        assertThat(RunnableJarGuarantee.entryPointDeclared(root)).isFalse();
+
+        assertThat(RunnableJarGuarantee.repairOnDisk(root)).isTrue();
+
+        // The jar still carries no Main-Class; the declaration alone answers the item.
+        assertThat(RunnableJarGuarantee.entryPointDeclared(root)).isTrue();
+    }
+
+    @Test
+    void entryPointDeclared_whenTheArchiveAlreadyNamesAMainClass() throws IOException {
+        writeJar("demo.jar", "com.demo.Main");
+
+        assertThat(RunnableJarGuarantee.entryPointDeclared(root)).isTrue();
+    }
+
+    /** A declaration of some OTHER class is not the instruction carried out. */
+    @Test
+    void entryPointNotDeclared_whenThePomNamesADifferentClass() throws IOException {
+        writeJar("demo.jar", null);
+        writeProjectOnDisk(POM_WITH_DEPENDENCY.replace("</project>",
+                "<build><plugins><plugin><configuration><mainClass>com.demo.Other</mainClass>"
+                        + "</configuration></plugin></plugins></build></project>"));
+
+        assertThat(RunnableJarGuarantee.entryPointDeclared(root)).isFalse();
+    }
+
+    /** An abstention is not a pass: no pom, no archive, nothing to read answers false. */
+    @Test
+    void entryPointNotDeclared_whenNothingCanBeEstablished() {
+        assertThat(RunnableJarGuarantee.entryPointDeclared(root)).isFalse();
+        assertThat(RunnableJarGuarantee.entryPointDeclared(null)).isFalse();
+    }
 }

@@ -11,7 +11,6 @@ import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import com.walpro.autobuilder.core.service.FileService;
@@ -982,7 +981,9 @@ public class GoalPlannerService {
             // every sweep on "Create MemberService.java"-shaped criteria while the artifact ran.
             Optional<String> demandedFile = sourceFileWhoseExistenceIsDemanded(criterion);
             if (demandedFile.isPresent()) {
-                if (output == null || output.isEmpty()) {
+                // Null is unreadable; an EMPTY map is a tree with nothing written yet, where the
+                // file is simply absent (flightsim 2026-09-24 was told "could not be read" twice).
+                if (output == null) {
                     return Optional.of("the output file map could not be read, so \"" + criterion + "\" is undecided");
                 }
                 if (!outputHoldsFile(output, demandedFile.get())) {
@@ -2853,7 +2854,8 @@ public class GoalPlannerService {
      *
      * <p>Read through the claim the injector stamped (T4-DW's {@code BOOT_CLAIM_KEY}), never
      * through the item's prose: a whole-artifact item is re-observed for the same defect; an item
-     * quoting contradicted criteria has those criteria probed again. An entry-point item carries
+     * quoting contradicted criteria has those criteria probed again; an archive-entry-point item
+     * is checked against the build config and the jar (T4-DW). An entry-point item carries
      * its own criterion and is answered below by the ordinary path. An unstamped item is left to
      * that path too.
      */
@@ -2874,6 +2876,16 @@ public class GoalPlannerService {
                     && !quoted.isEmpty()) {
                 return closureClaimVerifier.refute(g.getId(),
                         quoted.stream().map(String::valueOf).toList(), specText);
+            }
+            // T4-DW: the archive's missing entry point is answered by the build config and the jar,
+            // not by a launch. Closing on a score while that evidence is absent is the hole T2-ET
+            // closed for the other claims; an absent answer (no gate, nothing readable) refuses too,
+            // because an abstention is not a pass.
+            if (BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT.equals(claim)
+                    && (packageGate == null || !packageGate.archiveEntryPointDeclared())) {
+                return Optional.of(ClaimRefutation.archiveEntryPoint(
+                        "the packaged archive still declares no entry point, and the build config does not"
+                        + " declare the one the sources name"));
             }
         } catch (RuntimeException e) {
             log.warn("T2-ET: originating-observation check for {} failed ({}) — treating as unchecked",
@@ -4144,49 +4156,6 @@ public class GoalPlannerService {
                     return;
                 }
             }
-            // Coverage gate: "every loaded subgoal closed clean" is not "the root's named
-            // features are implemented" — the loaded set only reflects what the planner happened
-            // to decompose. Before completing, ask the coverage retrospective whether root-level
-            // features were never targeted; inject them instead of completing when found.
-            // An LLM failure is an unanswered check, not a pass: on 2026-07-02 the reviewer timed out 3×,
-            // the abstain collapsed into "no gaps", and the root COMPLETED with two of the spec's
-            // three resources never decomposed (false completion #2). No answer → defer this
-            // closure attempt; the T4-I brake / T1-EI backstop bound how long deferral can repeat.
-            //
-            // T2-EG: DEMOTED to off-by-default. The gate's leading "is this gap already implemented?"
-            // filter (dropGapsAlreadyImplemented) false-positived 18/18 on the 2026-06-16 hollow
-            // artifact; T4-BP-3 below answers "is the work done?" with the inverse, per-criterion
-            // framing and is now the single home for that invariant ([[feedback-one-invariant-one-home]]).
-            // Re-arm via autobuilder.goal.completion-coverage-gate-enabled if T4-BP-3 underperforms.
-            if (goalPlannerConfig.isCompletionCoverageGateEnabled() && coverageRetrospectiveService != null) {
-                java.util.Optional<List<String>> coverageReview = coverageRetrospectiveService
-                        .reviewMissingFeatures(root.getDescription(), getAllGoals());
-                if (coverageReview.isEmpty()) {
-                    log.warn("T2-DR coverage gate: reviewer returned no answer (LLM failure) — deferring completion; an unanswered check must not complete the root");
-                    return;
-                }
-                List<String> missing = coverageReview.get();
-                // T4-BP consumer #2: the description-level reviewer over-reports (first field
-                // firing 2026-06-10 15:46: 10 candidates, ~all already implemented — it diffs
-                // the spec against work-item TITLES and echoes spec bullets back). Verify each
-                // candidate against the actual output files; drop the ones the code already
-                // satisfies. "Is the work actually done?" gets one home: code verification.
-                if (!missing.isEmpty()) {
-                    missing = dropGapsAlreadyImplemented(root, missing);
-                }
-                if (!missing.isEmpty()) {
-                    CoverageReviewResult injected = injectCoverageGaps(root, missing);
-                    if (!injected.injected().isEmpty()) {
-                        log.warn("T2-DR coverage gate: root closure blocked — {} uncovered feature(s) injected instead of completing: {}",
-                                injected.injected().size(), injected.injected());
-                        recordClosureRefusal("T2-DR", root.getId(),
-                                injected.injected().size() + " uncovered feature(s)", List.of());
-                        return;
-                    }
-                    refuseClosureUnrepairable("T2-DR coverage gate", missing.size() + " uncovered feature(s)");
-                    return;
-                }
-            }
             // T4-AN-8: the compile-only probes never check that the artifact is a startable
             // application (no criterion names the entry point). One package-level build at the
             // completion edge; a failure is injected as a work item instead of completing. If
@@ -4686,43 +4655,6 @@ public class GoalPlannerService {
     }
 
     /**
-     * T4-BP consumer #2: verifies each description-level gap candidate against the actual output
-     * files (one LLM pass via {@code CriteriaVerificationService.verifyFeatures}) and drops the
-     * candidates the code already satisfies. Conservative on absent verifier, absent output, or
-     * verification failure (empty pass map): all candidates are kept — the gate then behaves as
-     * before. A candidate with no entry in the pass map is also kept (unassessed ≠ implemented).
-     */
-    List<String> dropGapsAlreadyImplemented(GoalEntity root, List<String> candidates) {
-        if (criteriaVerificationService == null) return candidates;
-        Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
-        if (output == null || output.isEmpty()) return candidates;
-
-        Map<Integer, Boolean> verified;
-        try {
-            verified = criteriaVerificationService.verifyFeatures(root.getDescription(), candidates, output);
-        } catch (RuntimeException e) {
-            log.warn("T4-BP coverage-gate verification failed ({}) — keeping all {} candidates", e.getMessage(), candidates.size());
-            return candidates;
-        }
-        if (verified.isEmpty()) return candidates;
-
-        List<String> stillMissing = new ArrayList<>();
-        for (int i = 0; i < candidates.size(); i++) {
-            Boolean present = verified.get(i + 1);
-            if (Boolean.TRUE.equals(present)) {
-                log.info("T4-BP coverage gate: candidate gap already implemented in output — dropping '{}'", candidates.get(i));
-            } else {
-                stillMissing.add(candidates.get(i));
-            }
-        }
-        if (stillMissing.size() < candidates.size()) {
-            log.warn("T4-BP coverage gate: {} of {} candidate gap(s) verified as already implemented — {} remain",
-                    candidates.size() - stillMissing.size(), candidates.size(), stillMissing.size());
-        }
-        return stillMissing;
-    }
-
-    /**
      * T4-I: total work items ever injected through the closure edge this session. Monotonic;
      * read by {@code RootConvergenceTracker} as a progress class — a closure-gate injection is
      * measured distance-to-done materializing as fresh required work, which the planner cannot
@@ -4764,6 +4696,17 @@ public class GoalPlannerService {
      * and the serving observation answers it.
      */
     public boolean injectObservedBehaviouralDefect(String description, List<String> refutedCriteria) {
+        return injectObservedBehaviouralDefect(description, refutedCriteria, null);
+    }
+
+    /**
+     * T4-DW: as above, with the claim the gate named for this defect. {@code null} keeps the
+     * default, where attribution alone chooses between {@code CLAIM_CRITERION} and
+     * {@code CLAIM_SERVES}; a named claim (the archive's missing entry point) is stamped as given
+     * so the evidence that retires the item is the evidence about that claim.
+     */
+    public boolean injectObservedBehaviouralDefect(String description, List<String> refutedCriteria,
+                                                   String claim) {
         GoalEntity root = getRootGoal();
         if (root == null || description == null || description.isBlank()) return false;
         CoverageReviewResult injected = injectCoverageGaps(root, List.of(description), true);
@@ -4773,7 +4716,8 @@ public class GoalPlannerService {
             setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
                     com.walpro.autobuilder.core.build.BlockerTypes.GATE_BOOT);
             setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.BOOT_CLAIM_KEY,
-                    attributed ? com.walpro.autobuilder.core.build.BlockerTypes.CLAIM_CRITERION
+                    claim != null ? claim
+                    : attributed ? com.walpro.autobuilder.core.build.BlockerTypes.CLAIM_CRITERION
                                : com.walpro.autobuilder.core.build.BlockerTypes.CLAIM_SERVES);
             if (attributed) {
                 setGoalMetadataStrings(id,
@@ -5043,16 +4987,6 @@ public class GoalPlannerService {
             if (best == null || best.getStatus() == GoalStatus.GIVEN_UP) best = g;
         }
         return best;
-    }
-
-    /**
-     * T2-CH: returns true when any ACTIVE goal in the map is a descendant of parentId.
-     * Used to detect T1-CP replacement subgoals injected under GIVEN_UP parents so that
-     * autoCompleteRootIfSatisfied can defer firing until those replacements are worked on.
-     */
-    private boolean hasActiveDescendantsOf(String parentId) {
-        return goalMap.values().stream()
-                .anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE && isDescendantOf(g, parentId));
     }
 
     private boolean isDescendantOf(GoalEntity g, String ancestorId) {

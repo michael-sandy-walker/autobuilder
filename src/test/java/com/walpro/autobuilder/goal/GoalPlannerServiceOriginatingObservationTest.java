@@ -135,4 +135,63 @@ class GoalPlannerServiceOriginatingObservationTest {
                 .as("no criteria and no stamp - the ordinary path, unchanged")
                 .isEqualTo(GoalStatus.COMPLETED);
     }
+
+    // ── T4-DW: the archive-entry-point claim votes with the build config and the jar ─────────
+
+    private void withPackageGate(boolean entryPointDeclared) {
+        com.walpro.autobuilder.core.build.PackageGate gate =
+                org.mockito.Mockito.mock(com.walpro.autobuilder.core.build.PackageGate.class);
+        lenient().when(gate.archiveEntryPointDeclared()).thenReturn(entryPointDeclared);
+        ReflectionTestUtils.setField(service, "packageGate", gate);
+    }
+
+    @Test
+    void anArchiveEntryPointItemStaysActiveWhileTheEntryPointIsUndeclared() {
+        stamp(BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT);
+        withVerifier(false);
+        withPackageGate(false);
+
+        service.transitionGoal("A", GoalStatus.COMPLETED, "fulfilled (score=0.80): score-based closure");
+
+        assertThat(service.getGoalById("A").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(observedAsked).as("answered by the archive, not by a launch").isEmpty();
+    }
+
+    @Test
+    void anArchiveEntryPointItemClosesOnceTheEntryPointIsDeclared() {
+        stamp(BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT);
+        withVerifier(false);
+        withPackageGate(true);
+
+        service.transitionGoal("A", GoalStatus.COMPLETED, "fulfilled (score=0.80): score-based closure");
+
+        assertThat(service.getGoalById("A").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    /** With no gate to ask, the item cannot be shown fixed — an abstention is not a pass. */
+    @Test
+    void anArchiveEntryPointItemStaysActiveWhenNothingCanAnswer() {
+        stamp(BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT);
+        withVerifier(false);
+
+        service.transitionGoal("A", GoalStatus.COMPLETED, "fulfilled (score=0.80): score-based closure");
+
+        assertThat(service.getGoalById("A").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void anInjectedDefectIsStampedWithTheClaimTheGateNamed() {
+        boolean injected = service.injectObservedBehaviouralDefect(
+                "the packaged artifact declares no entry point, so it cannot be launched",
+                List.of(), BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT);
+
+        assertThat(injected).isTrue();
+        @SuppressWarnings("unchecked")
+        Map<String, GoalEntity> goals = (Map<String, GoalEntity>) ReflectionTestUtils.getField(service, "goalMap");
+        assertThat(goals.values())
+                .filteredOn(g -> g.getDescription().contains("declares no entry point"))
+                .singleElement()
+                .satisfies(g -> assertThat(g.getMetadata().get(BlockerTypes.BOOT_CLAIM_KEY))
+                        .isEqualTo(BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT));
+    }
 }

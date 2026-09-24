@@ -20,12 +20,6 @@ public class StructuralDiffUtils {
         }
     }
 
-    public static List<StructuralDiffNode> filterByType(StructuralDiffNode root, ElementType type) {
-        return flatten(root).stream()
-                .filter(n -> n.getType() == type)
-                .toList();
-    }
-
     public static boolean hasChanges(StructuralDiffNode node) {
         return node.isAdded() || node.isDeleted() || node.isModified()
                || node.children().stream().anyMatch(StructuralDiffUtils::hasChanges);

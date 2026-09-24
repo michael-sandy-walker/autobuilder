@@ -19,9 +19,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -233,13 +231,6 @@ public class DeferredMutationLedger implements CheckpointableState {
     /** Test seam — used by replay tests to align cycle counter with logs. */
     public void __resetCycleClockForTest(long value) {
         cycleClock.set(value);
-    }
-
-    /** Test seam — used to compose multiple ledger calls in deterministic order. */
-    public Collection<String> __openIdsForTest() {
-        Set<String> ids = new HashSet<>();
-        for (DeferredMutation d : graph.findOpen()) ids.add(d.id());
-        return ids;
     }
 
     /**

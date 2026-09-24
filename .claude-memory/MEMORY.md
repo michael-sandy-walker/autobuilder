@@ -35,7 +35,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 ## Roadmap
 - `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-23)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-23)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-24)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -53,7 +53,7 @@ Direction and orientation:
 Design notes, read before touching their area:
 - `project_t4j_design_note.md`: T4-J OPEN signal-system audit (decay vs not, obsolete vs missing; calibration LAST). Read before any signal tuning or deletion. (reviewed 2026-07-09)
 - `project_signal_consumer_map.md`: T4-J emitter/clearer/reader map over 35 signal types + `scripts/signal_boundary_report.py`. The LLM is itself both consumer and emitter. (reviewed 2026-07-09)
-- `project_signal_dispositions.md`: T4-J answer sheet — the decided disposition per signal. Open: analysis/planner tie-break, evaluation-prompt signal-blindness. (reviewed 2026-09-08)
+- `project_signal_dispositions.md`: T4-J answer sheet — the decided disposition per signal. Open: analysis/planner tie-break, evaluation-prompt signal-blindness. (reviewed 2026-09-24)
 - `project_t4j_perturbation_lab.md`: frozen-state lab; the decision-sensitive decay constants are the ROLE-identity signals, not the census shortlist. Read before signal tuning. (reviewed 2026-09-08)
 - `project_t4bz_design_note.md`: T4-BZ signal re-architecture SHIPPED; family map and invariants I1-I12 are the design record. (reviewed 2026-09-08)
 - `project_t4bo_design_note.md`: T4-BO signal-decay observability — two-snapshot death attribution, causality-preserving snapshot point. Read before touching signal plumbing. (reviewed 2026-07-09)
@@ -107,7 +107,7 @@ How to work:
 - `feedback_run_without_asking.md`: run mvn/build/test with dangerouslyDisableSandbox; never prompt. (reviewed 2026-07-09)
 - `feedback_analyse_no_ask.md`: "analyse the last run" means proceed directly, no clarification. (reviewed 2026-07-09)
 - `feedback_run_analysis_log_order.md`: analyse runs from the behaviour ndjson first; the autobuilder log only for depth. (reviewed 2026-07-09)
-- `feedback_no_auto_commit.md`: commit only with authorization (checkpoint commits OK in authorized autonomous runs); NEVER push. (reviewed 2026-07-09)
+- `feedback_no_auto_commit.md`: commit only with authorization (checkpoint commits OK in authorized autonomous runs); NEVER push, except to the session's own claude/ branch in cloud-container sessions (CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud*; not Remote Control). (reviewed 2026-09-24)
 - `feedback_no_branch_ops.md`: never merge/rebase/reset/branch -d/push autonomously; describe and wait for 'do it'. (reviewed 2026-09-08)
 - `feedback_never_edit_a_running_script.md`: never edit preflight.sh (or what it reads) mid-run — bash reads scripts incrementally, so edits land half-applied and silently. (reviewed 2026-07-30)
 - `feedback_no_heavy_mvn_beside_a_live_run.md`: a full suite beside a live run starves the box and kills the run via Neo4j timeouts. (reviewed 2026-09-08)

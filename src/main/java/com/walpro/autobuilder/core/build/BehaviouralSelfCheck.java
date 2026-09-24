@@ -348,6 +348,15 @@ public class BehaviouralSelfCheck implements CheckpointableState {
         this.behaviourLogger = behaviourLogger;
     }
 
+    /**
+     * T4-DW: forget the last finding, so the same defect can be raised again. The suppression is
+     * "not re-raising while it is still open"; when something else retires the item that finding
+     * raised, it is no longer open, and a recurrence must not be swallowed as a repeat.
+     */
+    public void forgetLastFinding() {
+        lastFinding = null;
+    }
+
     /** Resets the interval counter and the suppression memory (new run / new lineage). */
     public void reset() {
         cyclesSinceCheck = 0;

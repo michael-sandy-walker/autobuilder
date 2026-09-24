@@ -15,7 +15,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -176,13 +175,13 @@ public class GoalStateEventPublisher {
     }
 
     private GoalStateSnapshotDto toSnapshot(GoalEntity g, String currentId) {
-        List<String> criteria = asStringList(g.getMetadata().get("acceptanceCriteria"));
+        List<String> criteria = GoalExplorerService.asStringList(g.getMetadata().get("acceptanceCriteria"));
         Map<Integer, Boolean> passStatus = goalPlannerService.getCriteriaPassStatus(g);
         int met = 0;
         for (int i = 1; i <= criteria.size(); i++) {
             if (Boolean.TRUE.equals(passStatus.get(i))) met++;
         }
-        Integer planningRunId = readInt(g.getMetadata().get("planningRunId"));
+        Integer planningRunId = GoalExplorerService.readInt(g.getMetadata().get("planningRunId"));
         return new GoalStateSnapshotDto(
                 g.getId(),
                 g.getParentId(),
@@ -202,20 +201,5 @@ public class GoalStateEventPublisher {
     private Map<String, Double> extractSignalStrengths(CycleContextData context) {
         // T4-BZ-1: the SSE signal map renders through the readout surface.
         return SignalReadout.of(context).strengthsInOrder();
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<String> asStringList(Object raw) {
-        if (!(raw instanceof List<?> l) || l.isEmpty()) return List.of();
-        List<String> out = new ArrayList<>(l.size());
-        for (Object o : l) {
-            if (o == null) continue;
-            out.add(o.toString());
-        }
-        return out;
-    }
-
-    private static Integer readInt(Object raw) {
-        return raw instanceof Number n ? n.intValue() : null;
     }
 }

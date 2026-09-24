@@ -1,7 +1,6 @@
 package com.walpro.autobuilder.analysis.diff;
 
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 public record DiffReport(List<DiffEntry> entries) {
@@ -27,19 +26,6 @@ public record DiffReport(List<DiffEntry> entries) {
                 .collect(Collectors.toList());
     }
 
-    public Set<String> getUniqueFilesTouched() {
-        return entries.stream()
-                .map(DiffEntry::path)
-                .collect(Collectors.toSet());
-    }
-
-    public List<String> getAllAffectedFiles() {
-        return entries.stream()
-                .map(DiffEntry::path)
-                .distinct()
-                .collect(Collectors.toList());
-    }
-    
     public int getLinesAdded(String path) {
         return entries.stream()
             .filter(e -> e.path().equals(path))

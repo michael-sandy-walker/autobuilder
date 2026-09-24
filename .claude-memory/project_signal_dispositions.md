@@ -145,3 +145,12 @@ this audit earned; the audit's instruments are its migration equivalence harness
 - **LLM emission sites** (interpretation parser emits REPLAN_REQUESTED/LOW_CONFIDENCE/
   DIVERGENCE_REQUEST): prose emission criteria are signal-system configuration; Phase-4 probe
   target when touched.
+
+## Update 2026-09-24 (T5-BL static pass) — two of the three "rebranded markers" deleted
+`IRREDUCIBLE_GAP` and `RECURRING_DEFECT_DOMINANT` were kept above "because deleting them would
+blind snapshots". That premise ended with T4-BZ-5: nothing constructs either type any more (no
+`Signal.of`, no renderer), so no snapshot could show them; the 09-06 corpus pass already found the
+signal name "renders never". Both constants and their `SignalReadout.DERIVED` entries are gone.
+`BUILD_FIX_LOCUS_STUCK` stays (still produced by `SignalReadout.derivedEntries`). The
+`recurring_defect_dominant` BEHAVIOUR EVENT is a separate mechanism and stays.
+

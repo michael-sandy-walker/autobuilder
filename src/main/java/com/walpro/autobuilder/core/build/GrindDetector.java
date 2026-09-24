@@ -85,8 +85,18 @@ public class GrindDetector {
         }
     }
 
-    /** Records every signature of one failed build outcome. */
+    /**
+     * Records every signature of one failed build outcome. A build that succeeds ends whatever was
+     * grinding: without that, the prompt kept naming a grind for as long as no later build failed
+     * (structdiff run 2 still warned about a getter error forty minutes after the last one).
+     */
     public void observeBuild(String cycleId, BuildOutcome outcome) {
+        if (outcome != null && outcome.result() == BuildResult.COMPILE_OK) {
+            synchronized (this) {
+                lastCycleWithFailure = null;
+            }
+            return;
+        }
         for (String s : signaturesOf(outcome)) observe(cycleId, s);
     }
 

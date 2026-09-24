@@ -15,7 +15,8 @@ chk(){ n=$((n+1)); if [ "$1" = "$2" ]; then pass=$((pass+1)); echo "PASS [$n] $3
        else echo "FAIL [$n] $3 (want $2 got $1)"; fi; }
 
 # An entry point counts as covered when ONE test method calls it AND asserts a value -- an equality,
-# exact contents or a size. assertNotNull, assertTrue and "not empty" alone do not count: the seed
+# exact contents or a size, or for a boolean entry point assertTrue/assertFalse around the call itself.
+# assertNotNull, "not empty" and assertTrue on something else do not count: the seed
 # asks for what the entry point actually returns, and the second adopted project's first run passed
 # the older reference-only check with tests that asserted little beyond non-null.
 # Methods are split at @Test; a helper method's assertions count only inside the test that holds them.
@@ -33,8 +34,10 @@ for d, _, fs in os.walk(root):
         src = open(os.path.join(d, f), encoding='utf-8', errors='replace').read()
         if not re.search(r'\b' + re.escape(cls) + r'\b', src):
             continue
+        # A boolean entry point's exact value IS asserted by assertTrue/assertFalse around the call.
+        truth = re.compile(r'assert(True|False)\(\s*(\w+\.)?' + re.escape(m) + r'\(')
         for chunk in src.split('@Test')[1:]:
-            if call.search(chunk) and value.search(chunk):
+            if (call.search(chunk) and value.search(chunk)) or truth.search(chunk):
                 print('covered'); sys.exit()
 print('uncovered')
 PY

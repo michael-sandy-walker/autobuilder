@@ -66,4 +66,15 @@ class GrindDetectorTest {
         d.observe("cycle-4", "the build fails: Ink.java: something else");
         assertThat(d.promptBlock()).as("the grind did not recur in the latest failing cycle").isNull();
     }
+
+    @Test
+    void aSuccessfulBuildEndsTheGrindTheNextPromptNames() {
+        GrindDetector d = new GrindDetector();
+        for (int c = 1; c <= 3; c++) d.observeBuild("cycle-" + c, failed());
+        assertThat(d.promptBlock()).isNotNull();
+
+        d.observeBuild("cycle-4", new BuildOutcome(BuildResult.COMPILE_OK, "", 1L, "mvn", "probe"));
+
+        assertThat(d.promptBlock()).as("the grind ended with a green build").isNull();
+    }
 }

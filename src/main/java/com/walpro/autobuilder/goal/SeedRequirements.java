@@ -366,10 +366,25 @@ public final class SeedRequirements {
         if (stated.isEmpty() || bankedCriteria == null || bankedCriteria.isEmpty()) return stated;
         List<String> uncovered = new ArrayList<>();
         for (String requirement : stated) {
-            if (bankedCriteria.stream().noneMatch(c -> overlaps(requirement, c))) uncovered.add(requirement);
+            if (isUniversal(requirement)
+                    || bankedCriteria.stream().noneMatch(c -> overlaps(requirement, c))) uncovered.add(requirement);
         }
         return uncovered;
     }
+
+    /**
+     * T4-CQ: a requirement over EVERY member of a set is never covered by a criterion about one of
+     * them. Word overlap cannot see the quantifier: "Every route the application serves is covered
+     * by a test" shared enough words with "a test for GET /basic/add ..." to count as covered, and
+     * the first adopted project's eighth run closed GOAL_FULFILLED with three of seven routes
+     * untested. So a universal requirement always goes to the verifier. The direction is safe: it
+     * can only add a question at closure, never skip one.
+     */
+    static boolean isUniversal(String requirement) {
+        return requirement != null && UNIVERSAL.matcher(requirement).find();
+    }
+
+    private static final Pattern UNIVERSAL = Pattern.compile("(?i)\\b(every|each|all)\\b");
 
     /** {@link #notAlreadyCovered} over the verifiable subset — the closure edge's entry point. */
     public static List<String> notAlreadyCoveredVerifiable(String specText, List<String> bankedCriteria) {

@@ -38,4 +38,14 @@ class SeedObligationRuleMarkerTest {
                 .contains("A test must assert what the route actually does.")
                 .noneMatch(l -> l.startsWith("rule:"));
     }
+
+    /** T4-CQ: a universal requirement is never covered by a criterion about one of its members. */
+    @Test
+    void aRequirementOverEveryMemberIsAlwaysAskedAtClosure() {
+        String file = fileWith(List.of("Every widget route must be covered by a test in the widget test suite."));
+        List<String> banked = List.of("A widget test suite test covers the GET /widgets/sum route");
+
+        assertThat(SeedRequirements.notAlreadyCoveredVerifiable(SEED, banked, file))
+                .containsExactly("Every widget route must be covered by a test in the widget test suite.");
+    }
 }

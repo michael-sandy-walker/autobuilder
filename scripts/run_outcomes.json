@@ -3971,6 +3971,33 @@
    "start_tree": "FOREIGN",
    "terminal": "honest-halt:root-convergence-stall",
    "total_cycles": "40"
+  },
+  "2026-09-24_16-28-11": {
+   "clauses_closed_vs_control": "0",
+   "cost_readout": "build=61934ms/10 boot-gate=7905ms/1 package-gate=7723ms/1 sms-batch-build=286ms/1",
+   "criteria_authored": "13",
+   "criteria_elaboration": "0",
+   "criteria_executable_count": "0",
+   "criteria_executable_pct": "0",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "59",
+   "merges": "4",
+   "peaked_at_cycle": "cycle-1790260321222 (4/4)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-09-24",
+   "run_duration_min": "3.2",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 8/8",
+   "smoke_pass": 8,
+   "smoke_preserved": "SMOKE: 8/8",
+   "smoke_strict": "8/8 discounted=none",
+   "smoke_total": 8,
+   "start_cleared_tree": "no",
+   "start_mode": "ADOPT_PROJECT",
+   "start_tree": "FOREIGN",
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "4"
   }
  },
  "updated": "2026-09-24"

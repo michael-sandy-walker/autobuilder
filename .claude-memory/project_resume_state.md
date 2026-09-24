@@ -26,7 +26,7 @@ metadata:
 - **After midnight:** `T5-BN` closed (vocabulary guard test), `T5-BL` progressed (four never-voting heuristics deleted, about -850 lines, each read for why), T5-BO's flowing path and HUD criteria row, terminal colour escapes stripped from build output (600-3000 per run were reaching the evaluation prompt), the engine's second pass now tagged (model-call "unknown" 40% -> 0). **Filed `T2-FM`:** 49% of compile-probe failures (56/111 runs) are one inference error the model is shown in full and repeats.
 - **Field run `2026-09-23_23-41-31`: GOAL_FULFILLED, 23/23, preserved 23/23**, on the build with the heuristics deleted and T2-ET live; T2-ET checked 3 closures, all correctly allowed.
 - **2026-09-24 morning:** `T2-FM` BUILT after a correction (the steering block dropped the bounds and gave a wrong hint; my first "relay is fine" read the wrong prompt). Run `2026-09-24_09-18-02` on it: GOAL_FULFILLED 23/23 / preserved 23/23, no inference error occurred (no opportunity). Three consecutive runs tonight: deadline 22/23 (saturated box), then two GOAL_FULFILLED 23/23.
-- **NEXT:** queue from `next_work.py`; `T2-FM` is the new measured lever (half of all rejections). T5-BO: only "voice often inactive" remains. T2-ET's refusal still unobserved in the field.
+- **NEXT:** queue from `next_work.py`; `T2-FF` (T2-FM was a duplicate of it, now subsumed) is the measured cost lever, still deferred on its outcome gate (half of all rejections). T5-BO: only "voice often inactive" remains. T2-ET's refusal still unobserved in the field.
 
 ## 2026-09-23 NIGHT (Opus 5.5) — T1-GE, T5-BQ, T1-GF CLOSED; TWO DEFECTS UPSTREAM OF T2-FL FIXED; ONE FIELD RUN
 

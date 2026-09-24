@@ -289,7 +289,7 @@ class CompileDiagnosticPromptBlockTest {
         assertThat(r.suppressionReason()).isEqualTo("meta-agent");
     }
 
-    /** T2-FM: the inference case gets its own advice, and the bounds travel with the message. */
+    /** T2-FF: the inference case gets its own advice, and the bounds travel with the message. */
     @Test
     void anInferenceClashGetsBranchAdviceNotReturnTypeAdvice() {
         CycleContextData ctx = ctxWith("sg-A", List.of(
@@ -302,7 +302,8 @@ class CompileDiagnosticPromptBlockTest {
 
         assertThat(block)
                 .contains("equality constraints: org.acme.kit.Widget; lower bounds: java.util.Map<K,V>")
-                .contains("Hint: one expression yields two different types")
+                .contains("Hint: the branches of one method or expression produce different types")
+                .contains("widen the declared type").contains("throw")
                 .doesNotContain("declared return type and `return` expression");
     }
 }

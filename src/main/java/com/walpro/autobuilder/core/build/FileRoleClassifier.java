@@ -13,7 +13,7 @@ import java.util.Set;
  * a test source?", "is this generated output?"). All answers derive from the build-tool registry
  * ({@link BuildToolProbeProperties} — yaml data), never from literals here; adding a build system
  * is a yaml-only change. Subsumes the per-caller {@code BUILD_CONFIG_FILES} lists previously in
- * {@code BuildFixAcceptanceHeuristic}, {@code FileVariantCollector} and {@code MergeAgent}, and
+ * the build-fix acceptance heuristic (since deleted), {@code FileVariantCollector} and {@code MergeAgent}, and
  * promotes {@code BuildFixTargets} (deleted) into the role-aware API it documented as its own
  * successor.
  *

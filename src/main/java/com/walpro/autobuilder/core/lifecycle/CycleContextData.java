@@ -231,8 +231,8 @@ public record CycleContextData(
         // T4-AN-1: outcome of the post-merge compile gate. Set by MergeAgent when the build
         // executor is enabled (autobuilder.build.enabled=true). Carried forward across cycles
         // by ContextLineageTracker — represents the latest known compilation state of the
-        // target codebase, not a cycle-scoped fact. Consumed by BuildFixAcceptanceHeuristic and
-        // surfaced in the evaluation prompt as a --- BUILD RESULT --- block.
+        // target codebase, not a cycle-scoped fact. Surfaced in the evaluation prompt as a
+        // --- BUILD RESULT --- block.
         BuildOutcome buildOutcome,
 
         // T4-BD: outcome of the most recent compile probe (set by EvaluationAgent / MergeAgent
@@ -245,8 +245,9 @@ public record CycleContextData(
 
         // T1-DQ: number of consecutive cycles in which a build-config mutation was accepted under
         // COMPILE_ERROR context. Incremented by MergeAgent after each such merge; reset to 0 when
-        // COMPILE_OK is observed or when the subgoal changes. When >= MAX_BUILD_FIX_ATTEMPTS (3),
-        // BuildFixAcceptanceHeuristic abstains so the normal LLM/heuristic path can decide.
+        // COMPILE_OK is observed or when the subgoal changes. T5-BL 2026-09-24: its readers (the
+        // build-fix escalator and acceptance heuristic) are deleted, unreachable since the
+        // pre-merge probe; the field stays only because checkpoints serialise this record.
         int consecutiveBuildFixAttempts,
 
         // T1-DW: pre-merge snapshot for the current cycle. Set by MergeAgent immediately before

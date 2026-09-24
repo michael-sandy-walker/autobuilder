@@ -372,7 +372,7 @@ class BlockerExtractorTest {
     }
 
     /**
-     * T2-FM: the explanation javac indents under an error belongs to that error. Shape verbatim from
+     * T2-FF (filed first as T2-FM): the explanation javac indents under an error belongs to that error. Shape verbatim from
      * run 2026-09-23_20-20-50's build output; the type names are invented.
      */
     @Test

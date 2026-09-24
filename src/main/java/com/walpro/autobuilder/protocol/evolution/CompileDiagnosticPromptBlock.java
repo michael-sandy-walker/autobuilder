@@ -45,13 +45,15 @@ public final class CompileDiagnosticPromptBlock {
     static {
         HINTS.put("cannot be referenced from a static context",
                 "class is instance-scoped — inject it via constructor and call on the instance.");
-        // T2-FM: checked before the general "incompatible types" entry, whose advice (about a
+        // T2-FF (filed first as T2-FM): checked before the general "incompatible types" entry, whose advice (about a
         // declared return type) sent the model back to the wrong place for this one. It is the
         // most frequent rejected-candidate error in the archive (605 of 1233 probe failures).
+        // T2-FF names the two admissible repairs and deliberately chooses neither: which one is
+        // right is a design call about the artifact, not something a hint can know.
         HINTS.put("inference variable",
-                "one expression yields two different types (the bounds in parentheses name them) - "
-                        + "typically two branches of a conditional or of an optional's fallback. Give both "
-                        + "branches one common declared type, or return each branch separately.");
+                "the branches of one method or expression produce different types (the bounds in "
+                        + "parentheses name them). Either widen the declared type so both branches fit, "
+                        + "or make the failing branch throw instead of returning a different body.");
         HINTS.put("incompatible types",
                 "declared return type and `return` expression generic parameters must match.");
         HINTS.put("cannot be applied to",

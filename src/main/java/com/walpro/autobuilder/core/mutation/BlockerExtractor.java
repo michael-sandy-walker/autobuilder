@@ -280,7 +280,7 @@ public final class BlockerExtractor {
     private static final int MAX_CONTINUATION_LINES = 4;
 
     /**
-     * T2-FM: keeps the compiler's own explanation with the error it explains.
+     * T2-FF (filed first as T2-FM): keeps the compiler's own explanation with the error it explains.
      *
      * <p>A diagnostic's first line often names only the KIND of error, and the lines indented under
      * it name the particulars: which two types an inference could not reconcile, what a call

@@ -92,6 +92,10 @@ public class CriteriaVerificationService {
             produces the behaviour. Example: "ServiceX.findItemsByOwner() correctly retrieves items"
             is satisfied by ANY code path that retrieves items for an owner, regardless of method name.
             Grade ✗ only when the behaviour itself is absent from the shown files.
+
+            TEST RUN RULE: when a PROJECT TEST RUN section is present, it is an OBSERVATION of the
+            project's own tests executing on exactly these files, not a claim. Judge any requirement
+            about tests running or passing from it, never by predicting outcomes from the source.
             """;
 
     private final LLMClient llmClient;
@@ -287,7 +291,10 @@ public class CriteriaVerificationService {
             // long-standing behaviour for criteria-less / output-less closures).
             return CompletionVerification.allClear();
         }
-        String codeDigest = digestOf(outputFiles);
+        // T4-CQ: the project's own test run, when it describes exactly this tree. Part of the cache
+        // key: a verdict formed without it must not answer for a prompt that has it.
+        String testRun = testRunEvidence(outputFiles);
+        String codeDigest = digestOf(outputFiles) + (testRun == null ? "" : ":tests=" + Integer.toHexString(testRun.hashCode()));
 
         // T4-BR: consult the graph for results already recorded at this exact code state.
         Map<String, Boolean> cachedByKey;
@@ -316,6 +323,10 @@ public class CriteriaVerificationService {
             // T4-BS: give the verifier concrete wiring facts for THIS code state alongside the files.
             String structuralNotes = wiringFactsAnalyzer != null
                     ? wiringFactsAnalyzer.asPromptBlock(outputFiles) : null;
+            if (testRun != null) {
+                structuralNotes = structuralNotes == null || structuralNotes.isBlank()
+                        ? testRun : structuralNotes.strip() + "\n\n" + testRun;
+            }
             Assessment assessment = verifyFeatures(rootDescription, uncached, outputFiles, structuralNotes);
             Map<Integer, Boolean> passMap = assessment.passMap();
             evidenceComplete = assessment.evidenceComplete();
@@ -378,6 +389,24 @@ public class CriteriaVerificationService {
         return CompletionVerification.blocked(
                 unconfirmed.size() + " acceptance criterion(s) not confirmed in the current code: " + head + tail,
                 unconfirmed);
+    }
+
+    /** T4-CQ: optional -- absent, the verifier reads source only, as before. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
+
+    /**
+     * The test-run block for the files this prompt will show, or null when there is no report of
+     * this exact tree. Its budget is a tenth of the prompt's file budget, so the block scales with
+     * the prompt rather than with the suite.
+     */
+    private String testRunEvidence(Map<String, String> outputFiles) {
+        if (testRunGate == null) return null;
+        var report = testRunGate.freshReport();
+        if (report.isEmpty()) return null;
+        List<String> shown = outputFiles.keySet().stream().limit(MAX_FILES).toList();
+        int budget = fileBudgetChars > 0 ? fileBudgetChars / 10 : 8_000;
+        return com.walpro.autobuilder.core.build.TestRunPromptBlock.render(report.get(), shown, budget);
     }
 
     /** T4-BR: persist the freshly-verified results as the graph-backed cache (keyed criterionKey+digest). */

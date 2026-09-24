@@ -46,6 +46,9 @@ import java.util.stream.Stream;
  */
 @Slf4j
 @Component
+@com.walpro.autobuilder.core.checkpoint.StateHolder(
+        value = com.walpro.autobuilder.core.checkpoint.StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "when the last test run started, to tell its reports from earlier ones")
 public class TestRunGate {
 
     /**
@@ -90,12 +93,43 @@ public class TestRunGate {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
-    @Autowired
+    /** T4-CQ: when the last test run started; its reports are the ones written after this. */
+    private volatile long lastRunStartedAt = -1L;
+
+    /**
+     * T4-CQ: the last run's per-test report, while it still describes the tree -- empty once any
+     * source under {@code src} has changed since that run started, or when no run has left a
+     * report. A reader given a stale report would be told the outcome of code that no longer exists.
+     */
+    public Optional<TestRunReport> freshReport() {
+        long since = lastRunStartedAt;
+        if (since < 0) return Optional.empty();
+        Path out = Path.of(fileBasePath, "output");
+        try (Stream<Path> tree = Files.walk(out.resolve("src"))) {
+            boolean changed = tree.filter(Files::isRegularFile).anyMatch(p -> {
+                try {
+                    return Files.getLastModifiedTime(p).toMillis() > since;
+                } catch (Exception e) {
+                    return true;
+                }
+            });
+            if (changed) return Optional.empty();
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+        for (String dir : TEST_REPORT_DIRS) {
+            Optional<TestRunReport> r = SurefireReports.read(out.resolve(dir), since);
+            if (r.isPresent()) return r;
+        }
+        return Optional.empty();
+    }
+
     /** T4-CQ: whether a closure check can take this gate's verdict -- it abstains when off. */
     public boolean isLive() {
         return enabled && buildExecutor.isEnabled();
     }
 
+    @Autowired
     public TestRunGate(
             @Value("${autobuilder.build.test-gate.enabled:true}") boolean enabled,
             @Value("${autobuilder.build.test-gate.command:mvn test}") String testCommand,
@@ -129,7 +163,9 @@ public class TestRunGate {
             return Optional.of("the goal requires automated tests but none were authored "
                     + "(no test sources found under src/test) — write the tests the goal calls for");
         }
+        long startedAt = System.currentTimeMillis();
         BuildOutcome outcome = buildExecutor.execute(fileBasePath, cycleId, testCommand);
+        lastRunStartedAt = startedAt;
         log.info("T4-AN-2: test gate result={} (durationMs={})", outcome.result(), outcome.durationMs());
         if (behaviourLogger != null) {
             behaviourLogger.buildFixAttempt(cycleId, "test-gate", 0, null, null,

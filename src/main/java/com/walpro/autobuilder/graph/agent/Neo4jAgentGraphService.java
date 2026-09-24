@@ -6,14 +6,12 @@ import java.util.List;
 import java.util.Map;
 
 import com.walpro.autobuilder.graph.evaluation.CriterionResultEntity;
-import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
 import com.walpro.autobuilder.graph.scope.ScopeActionSnapshot;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.walpro.autobuilder.graph.core.ActionEntity;
-import com.walpro.autobuilder.graph.core.AgentEntity;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
 
 import lombok.RequiredArgsConstructor;
@@ -28,26 +26,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     private final Neo4jClient neo4jClient;
     private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
-    @Override
-    public List<AgentEntity> getAllAgents() {
-        return neo4jClient.query("""
-                MATCH (a:Agent)
-                RETURN a.id AS id, a.name AS name, a.lineagePath AS lineagePath, a.roleType AS roleType, a.spawnedInCycle AS cycle, a.status AS status
-           \s""")
-            .fetch()
-            .all()
-            .stream()
-            .map(row -> new AgentEntity(
-                (String) row.get("id"),
-                (String) row.get("name"),
-                (String) row.get("lineagePath"),
-                (String) row.get("roleType"),
-                (String) row.get("cycle"),
-                (String) row.get("status")
-            ))
-            .toList();
-    }
-    
     @Override
     public void updateAgentStatus(String agentId, String status) {
         neo4jClient.query("""
@@ -142,34 +120,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     }
     
     @Override
-    public long countAllAgents() {
-        return neo4jClient.query("""
-            MATCH (a:Agent)
-            RETURN count(a) AS c
-        """).fetchAs(Long.class).one().orElse(0L);
-    }
-
-    @Override
-    public long countActiveAgents() {
-        return neo4jClient.query("""
-            MATCH (a:Agent)
-            WHERE a.status = 'active'
-            RETURN count(a) AS c
-        """).fetchAs(Long.class).one().orElse(0L);
-    }
-
-    @Override
-    public long countActiveUnassignedAgents() {
-        // NOTE: this query is the one that produced the warning earlier when ASSIGNED_TO never existed.
-        // If we add the bootstrap initializer, we can keep it typed like this.
-        return neo4jClient.query("""
-            MATCH (a:Agent)
-            WHERE a.status = 'active' AND NOT (a)-[:ASSIGNED_TO]->(:Goal)
-            RETURN count(a) AS c
-        """).fetchAs(Long.class).one().orElse(0L);
-    }
-
-    @Override
     public List<ArtifactEntity> findRecentArtifactsForGoal(String goalId, List<String> artifactTypes, int limit) {
         if (goalId == null || goalId.isBlank()) {
             return List.of();
@@ -226,49 +176,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                         "newGoalsCount", newGoalsCount
                 ))
                 .run();
-    }
-
-    @Override
-    public List<PlannerActionSnapshot> findRecentPlannerActions(String scopeGoalId, int limit) {
-        // T4-CJ slice 2: RUN-SCOPED. Its consumer (PlannerRepetitionHeuristic) measures
-        // repetition "recently" — a counter that silently spans a resumed lineage's earlier
-        // runs is counting someone else's work.
-        return neo4jClient.query("""
-            MATCH (a:Action)
-            WHERE a.type = 'planner'
-              AND a.targetsGoalId = $scopeGoalId
-              AND a.runId = $runId
-              AND a.fingerprint IS NOT NULL
-            RETURN a.id            AS actionId,
-                   a.targetsGoalId AS scopeGoalId,
-                   a.fingerprint   AS fingerprint,
-                   a.plannerUpdated AS updated,
-                   a.plannerNewGoalsCount AS newGoalsCount,
-                   a.occurredInCycle AS cycleId,
-                   a.attemptId     AS attemptId,
-                   a.timestamp     AS ts
-            ORDER BY a.timestamp DESC
-            LIMIT $limit
-        """)
-                .bindAll(Map.of(
-                        "scopeGoalId", scopeGoalId,
-                        "runId", runIdentity.runId(),
-                        "limit", limit
-                ))
-                .fetch()
-                .all()
-                .stream()
-                .map(row -> new PlannerActionSnapshot(
-                        (String) row.get("actionId"),
-                        (String) row.get("scopeGoalId"),
-                        (String) row.get("fingerprint"),
-                        (Boolean) row.get("updated"),
-                        row.get("newGoalsCount") == null ? null : ((Number) row.get("newGoalsCount")).intValue(),
-                        (String) row.get("cycleId"),
-                        (String) row.get("attemptId"),
-                        row.get("ts") == null ? null : Instant.parse(row.get("ts").toString().replace("Z", "Z"))
-                ))
-                .toList();
     }
 
     @Override

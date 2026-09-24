@@ -3,15 +3,11 @@ package com.walpro.autobuilder.graph.agent;
 import java.util.List;
 
 import com.walpro.autobuilder.graph.core.ActionEntity;
-import com.walpro.autobuilder.graph.core.AgentEntity;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
 import com.walpro.autobuilder.graph.evaluation.CriterionResultEntity;
-import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
 import com.walpro.autobuilder.graph.scope.ScopeActionSnapshot;
 
 public interface AgentGraphService {
-
-    List<AgentEntity> getAllAgents();
 
     void updateAgentStatus(String agentId, String status);
 
@@ -19,20 +15,12 @@ public interface AgentGraphService {
 
     void linkActionOutput(String actionId, ArtifactEntity artifact);
 
-    long countAllAgents();
-
-    long countActiveAgents();
-
-    long countActiveUnassignedAgents();
-
     /**
      * Used by InterpretationAgent to read the last N relevant summaries for the active goal.
      */
     List<ArtifactEntity> findRecentArtifactsForGoal(String goalId, List<String> artifactTypes, int limit);
 
     void attachPlannerMetadata(String actionId, String fingerprint, boolean updated, int newGoalsCount);
-
-    List<PlannerActionSnapshot> findRecentPlannerActions(String scopeGoalId, int limit);
 
     List<ScopeActionSnapshot> findRecentScopeActions(String subGoalId, int limit);
 

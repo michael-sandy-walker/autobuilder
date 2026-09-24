@@ -201,4 +201,28 @@ public class EvolutionResponseParserTest {
 
         assertThat(outcome.addedOrChangedFiles()).isEmpty();
     }
+
+    /** T4-CQ: the file header on the line after the fence is the same file, laid out differently. */
+    @org.junit.jupiter.api.Test
+    void aHeaderOnTheLineAfterTheFenceIsAccepted() {
+        String response = String.join("\n",
+                "```java",
+                "[src/test/java/org/acme/kit/WidgetControllerTest.java]",
+                "package org.acme.kit;",
+                "class WidgetControllerTest {}",
+                "```");
+
+        org.assertj.core.api.Assertions.assertThat(EvolutionProtocolContract.isValidResponse(response)).isTrue();
+        var outcome = new EvolutionResponseParser().parse(response);
+        org.assertj.core.api.Assertions.assertThat(outcome.addedOrChangedFiles()).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(outcome.addedOrChangedFiles().get(0).path())
+                .isEqualTo("src/test/java/org/acme/kit/WidgetControllerTest.java");
+    }
+
+    @org.junit.jupiter.api.Test
+    void aResponseAlreadyInProtocolFormIsUnchanged() {
+        String response = "```java [src/main/java/Foo.java]\nclass Foo {}\n```";
+        org.assertj.core.api.Assertions.assertThat(EvolutionResponseParser.normalizeFileHeaders(response))
+                .isEqualTo(response);
+    }
 }

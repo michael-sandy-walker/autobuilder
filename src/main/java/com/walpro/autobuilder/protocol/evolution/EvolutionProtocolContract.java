@@ -636,8 +636,9 @@ public class EvolutionProtocolContract {
         return sb.toString();
     }
 
-    public static boolean isValidResponse(String content) {
-        if (content == null || content.isBlank()) return false;
+    public static boolean isValidResponse(String rawContent) {
+        if (rawContent == null || rawContent.isBlank()) return false;
+        String content = EvolutionResponseParser.normalizeFileHeaders(rawContent);
 
         boolean containsCodeBlock = FILE_CODE_BLOCK.matcher(content).find();
         boolean containsDeletion = content.contains("#Delete [");

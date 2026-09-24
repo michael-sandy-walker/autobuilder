@@ -610,6 +610,22 @@ public sealed interface BehaviourEvent {
     }
 
     /** TTL or LRU cap evicted the deferred mutation. */
+    /**
+     * T5-BO: an agent's answer was thrown away because it did not match its protocol, even after
+     * the one format retry. Emitted so the operator and the watches can see it: the ninth adopted
+     * run discarded fifteen answers in a row and nothing outside the application log knew.
+     */
+    record LlmResponseDiscarded(
+            Instant timestamp,
+            String cycleId,
+            String role,
+            String reason,
+            String firstLine,
+            int consecutive
+    ) implements BehaviourEvent {
+        public String event() { return "llm_response_discarded"; }
+    }
+
     record DeferredMutationEvicted(
             Instant timestamp,
             String cycleId,

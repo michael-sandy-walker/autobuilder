@@ -2571,7 +2571,7 @@ window.MissionControl = (function () {
     mutation_proposed: 'propose', mutation_scored: 'propose',
     mutation_merged: 'merge', goal_consolidation: 'merge',
     mutation_negotiated: 'heur', heuristic_result: 'heur',
-    mutation_rejected: 'reject', merge_rolled_back: 'reject',
+    mutation_rejected: 'reject', merge_rolled_back: 'reject', llm_response_discarded: 'reject',
     system_paused: 'halt', recurring_defect_dominant: 'halt', guard_violated: 'halt',
     deliberation_outcome: 'delib',
     artifact_preserved: 'preserve',
@@ -2592,6 +2592,7 @@ window.MissionControl = (function () {
     agent_selected: 'agent', mutation_proposed: 'propose', mutation_scored: 'scored',
     mutation_merged: 'MERGE', goal_consolidation: 'consolidate', mutation_negotiated: 'negotiate',
     heuristic_result: 'heuristic', mutation_rejected: 'REJECT', merge_rolled_back: 'rollback',
+    llm_response_discarded: 'DISCARDED',
     system_paused: 'PAUSE', recurring_defect_dominant: 'defect', guard_violated: 'guard',
     deliberation_outcome: 'deliberate', artifact_preserved: 'preserve', mutation_injected: 'inject',
     system_resumed: 'RESUME', run_resumed: 'RESUME-RUN', rewind_performed: 'REWIND',
@@ -2909,6 +2910,10 @@ window.MissionControl = (function () {
           html: esc(fileList(p.files, 4)) };
       case 'mutation_rejected':
         return { title: 'Rejected', dot: '#fca5a5', html: esc(crop(p.reason, 160)) };
+      // T5-BO: an answer thrown away for its FORM, which used to be visible only in the app log.
+      case 'llm_response_discarded':
+        return { title: 'Answer discarded (' + esc(p.role || '?') + ')' + (p.consecutive > 1 ? ' x' + p.consecutive : ''),
+          dot: '#fcd34d', html: esc(crop((p.reason || '') + ': ' + (p.firstLine || ''), 160)) };
       case 'merge_rolled_back':
         return { title: 'Rolled back', dot: '#fca5a5',
           html: '<b>' + ((p.restoredPaths && p.restoredPaths.length) || 0) + '</b> file(s)<span class="arrow">·</span>' + esc(p.errorKind || '') };
@@ -3005,6 +3010,9 @@ window.MissionControl = (function () {
           (chatty && n ? ': ' + fileList(p.files, 3) : '') + '.';
       }
       case 'mutation_rejected': return 'Rejected: ' + crop(p.reason, 110);
+      case 'llm_response_discarded':
+        return (p.consecutive > 2 ? p.consecutive + ' answers in a row were' : 'An answer was')
+          + ' discarded because it did not match the expected format.';
       case 'merge_rolled_back': {
         const n = (p.restoredPaths && p.restoredPaths.length) || 0;
         return 'Rolled back ' + n + (n === 1 ? ' file.' : ' files.');

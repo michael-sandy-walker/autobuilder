@@ -30,7 +30,27 @@ public class EvolutionResponseParser {
             "import\\s+(?:static\\s+)?(?:org\\.junit|org\\.mockito|org\\.testng"
                     + "|org\\.springframework\\.test|org\\.springframework\\.boot\\.test)\\.");
 
-    public EvolutionOutcome parse(String content) {
+    /**
+     * T4-CQ: the file header on the line AFTER the fence, as well as on the fence line.
+     *
+     * <p>The protocol asks for {@code ```java [path]}; the model sometimes writes {@code ```java},
+     * a newline, then {@code [path]} -- the same file, laid out differently. Both the validator and
+     * this parser rejected it, so correct answers were thrown away: 15 in a row at the end of the
+     * ninth adopted run, after the loop had already fixed the test it was working on. Folding the
+     * header back onto the fence line changes nothing for a response already in protocol form.
+     */
+    private static final Pattern HEADER_ON_NEXT_LINE =
+            Pattern.compile("(?m)^```(\\w*)[ \\t]*\\r?\\n[ \\t]*\\[([^\\]\\n]+)\\][ \\t]*\\r?\\n");
+
+    public static String normalizeFileHeaders(String content) {
+        if (content == null) return null;
+        return HEADER_ON_NEXT_LINE.matcher(content).replaceAll(m ->
+                java.util.regex.Matcher.quoteReplacement(
+                        "```" + (m.group(1).isEmpty() ? "text" : m.group(1)) + " [" + m.group(2) + "]\n"));
+    }
+
+    public EvolutionOutcome parse(String rawContent) {
+        String content = normalizeFileHeaders(rawContent);
         // T2-CC: LLM declared the implementation is already complete
         if (content != null && content.lines().anyMatch(line -> line.trim().equals("#NoDiff"))) {
             log.info("Evolution response contains #NoDiff — treating as no-op (implementation already present).");

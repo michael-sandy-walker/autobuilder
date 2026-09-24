@@ -1022,6 +1022,30 @@ function restyleSprite(n) {
   }
 }
 
+/**
+ * A new run began on the server: forget the previous run's tree, path and selection, so the view
+ * rebuilds from the new run's first snapshot. Settings (voice, verbosity, filters) are kept, and
+ * nothing reloads -- a reload leaves the browser's audio suspended until the next click.
+ */
+function resetGraphForNewRun() {
+  state.nodesById.clear();
+  state.links = [];
+  state.visited.clear();
+  state.visitOrder.length = 0;
+  state.currentSubGoalId = null;
+  state.currentGoalId = null;
+  state.selectedId = null;
+  state.nodeDetail = null;
+  state.sawFirstSnapshot = false;
+  state.treeVersion = (state.treeVersion || 0) + 1;
+  Graph.graphData({ nodes: [], links: [] });
+  if (typeof refreshPanels === 'function') refreshPanels();
+  // Re-open the goal stream: its hello carries the new run's whole tree at once, whichever of the
+  // two streams noticed the new run first.
+  connect();
+}
+window.resetGraphForNewRun = resetGraphForNewRun;
+
 function refreshLinkColors() {
   // Triggers a re-evaluation without resetting positions.
   Graph.linkColor(Graph.linkColor());
@@ -3221,6 +3245,18 @@ window.MissionControl = (function () {
 
   // T5-BF: seed session state from the hello envelope so a page opened mid-run starts true.
   // Re-sent on every (re)connect; the server's tally is authoritative, so SET, don't add.
+  /** Clears everything the previous run left in the HUD, the event strip and the graph. */
+  function resetForNewRun() {
+    const st = strip(); if (st) st.querySelectorAll('.mc-chip').forEach(c => c.remove());
+    const gh = $('mc-ghosts'); if (gh) gh.innerHTML = '';
+    lastMode = null; cycleOrdinal = 0; lastLlmChip = null; lastEventMs = null; loopHalted = false;
+    lastSubGoal = null; fixFailStreak = 0; subgoalSwitched = false; repairedAfter = 0;
+    counters.merge = 0; counters.reject = 0; counters.llm = 0;
+    ['mc-cycle', 'mc-mode', 'mc-subgoal', 'mc-criteria', 'mc-agent', 'mc-goals', 'mc-runtime',
+     'mc-builds', 'mc-buildms', 'mc-tokens'].forEach(id => hudSet(id, '—'));
+    if (window.resetGraphForNewRun) window.resetGraphForNewRun();
+  }
+
   function seedFromHello(env) {
     const p = (env && env.payload) || {};
     const counts = p.counts || {};
@@ -3238,6 +3274,9 @@ window.MissionControl = (function () {
     // The server's own start time is authoritative: a page that stays open while a NEW instance
     // starts reconnects and receives a new hello, and must count that run, not the first one it saw.
     const helloStart = p.sessionStartTimestamp ? Date.parse(p.sessionStartTimestamp) : NaN;
+    if (!Number.isNaN(helloStart) && sessionStartMs != null && helloStart !== sessionStartMs) {
+      resetForNewRun();   // a different instance: the previous run's view must not carry over
+    }
     if (!Number.isNaN(helloStart)) { sessionStartMs = helloStart; refreshRuntime(); }
     else noteSessionStart(p.sessionStartTimestamp);
     if (p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));

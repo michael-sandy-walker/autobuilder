@@ -1012,6 +1012,10 @@ public class BootGate {
 
     private record Invocation(int exitStatus, String output) {}
 
+    /** Environment variables every JVM reads and echoes to stderr when set; see {@link #invoke}. */
+    static final java.util.Set<String> INHERITED_JVM_OPTION_VARS =
+            java.util.Set.of("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS");
+
     /**
      * T4-CU: one probe verdict, with the criterion it belongs to kept BESIDE the message rather
      * than only inside it. The message has always embedded the criterion text for a human reader;
@@ -1037,10 +1041,15 @@ public class BootGate {
         command.addAll(args);
         Process process = null;
         try {
-            process = new ProcessBuilder(command)
+            ProcessBuilder pb = new ProcessBuilder(command)
                     .directory(artifact.getParent().getParent().toFile())
-                    .redirectErrorStream(true)
-                    .start();
+                    .redirectErrorStream(true);
+            // The artifact must not inherit the harness JVM's launcher options: the JVM announces
+            // them on stderr ("Picked up JAVA_TOOL_OPTIONS: ..."), which the merged stream above
+            // then reads as the tool's own output. On 2026-09-24 a cloud container's proxy settings
+            // arrived this way and refuted a correct parser for printing the banner before "b,c".
+            pb.environment().keySet().removeAll(INHERITED_JVM_OPTION_VARS);
+            process = pb.start();
             Deque<String> tail = new ArrayDeque<>();
             Thread drainer = drainerThread(process.getInputStream(), tail);
             drainer.start();

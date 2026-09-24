@@ -568,4 +568,28 @@ class CompileProbeServiceTest {
         assertThat(result.rollbackPoint().originalContents()).containsKey(repo);
     }
 
+
+    /**
+     * T4-CQ: an injector fix that would write a path the operator protected is not made. Found on
+     * the first adopted project, where the injector created an empty class under a source tree the
+     * specification said not to touch, to satisfy a test's wrong reference.
+     */
+    @Test
+    void injectorFix_isNotMade_whenItWouldWriteAProtectedPath() throws IOException {
+        String stub = "src/main/java/com/example/demo/Stub.java";
+        fileService.writeFile(ProtectedPaths.PATH, stub + "\n");
+        ReflectionTestUtils.setField(probe, "protectedPaths", new ProtectedPaths(fileService));
+        FixProposal creatingStub = new FixProposal(
+                List.of(new FileMutation(stub, "package com.example.demo; class Stub {}")),
+                new InjectorFixRecord("symbol-skeleton", Kind.CANNOT_FIND_SYMBOL, "Stub",
+                        List.of(stub), "Created Stub"));
+        when(injector.inject(any(), any())).thenReturn(Optional.of(creatingStub));
+        fileService.writeFile("mutations/cycle-current/" + MEMBER_CONTROLLER, LLM_CONTENT);
+
+        CompileProbeService.ProbeResult result = probe.probe(baseContext().evolutionRanThisCycle(true).build(), true);
+
+        assertThat(result.appliedFixes()).isEmpty();
+        assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_ERROR);
+        assertThat(fileService.exists("output/" + stub)).isFalse();
+    }
 }

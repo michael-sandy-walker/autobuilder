@@ -34,6 +34,10 @@ import java.util.Optional;
 @Component
 public class PackageGate {
 
+    /** T4-CQ: operator-declared paths no writer may touch; optional in narrow tests. */
+    @Autowired(required = false)
+    private ProtectedPaths protectedPaths;
+
     private final boolean enabled;
     private final String packageCommand;
     private final BuildExecutor buildExecutor;
@@ -126,6 +130,8 @@ public class PackageGate {
         if (!enabled || !buildExecutor.isEnabled()) return false;
         String projectRoot = buildExecutor.resolveWorkingDir(fileBasePath);
         if (projectRoot == null) return false;
+        // T4-CQ: the build file of a project the operator has protected is not the loop's to edit.
+        if (protectedPaths != null && protectedPaths.isProtected("pom.xml")) return false;
         if (!RunnableJarGuarantee.repairOnDisk(java.nio.file.Path.of(projectRoot))) return false;
         log.info("T4-DO: the packaged artifact could not run — declared its entry point "
                 + "deterministically from the project's own sources");

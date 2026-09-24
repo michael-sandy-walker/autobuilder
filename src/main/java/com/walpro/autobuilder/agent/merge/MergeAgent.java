@@ -56,6 +56,10 @@ public class MergeAgent implements ExecutionAgent {
     private final FileService fileService;
     private final FileVariantCollector fileVariantCollector;
     private final MergeProcessor mergeProcessor;
+
+    /** T4-CQ: operator-declared paths no writer may touch; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.ProtectedPaths protectedPaths;
     private final CycleMergeTracker cycleMergeTracker;
     private final MergeActionRegistrar mergeActionRegistrar;
     private final GoalPlannerService goalPlannerService;
@@ -174,6 +178,9 @@ public class MergeAgent implements ExecutionAgent {
         List<PackageFragmentationReport.Conflict> fragmentationConflicts = new java.util.ArrayList<>();
 
         for (String path : allPaths) {
+            if (protectedPaths != null && protectedPaths.refuse("the merge", path)) {
+                continue;
+            }
             if (isUnrequestedTestSource(path, context)) {
                 log.info("T2-EW: not merging unrequested test source {} — the goal specification asks"
                         + " for no tests, so this file can satisfy no gate and can break packaging", path);

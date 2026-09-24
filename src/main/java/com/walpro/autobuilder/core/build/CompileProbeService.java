@@ -43,6 +43,10 @@ public class CompileProbeService {
 
     private final FileService fileService;
     private final MergeRollbackService mergeRollbackService;
+
+    /** T4-CQ: operator-declared paths no writer may touch; optional in narrow tests. */
+    @Autowired(required = false)
+    private ProtectedPaths protectedPaths;
     private final BuildExecutor buildExecutor;
     private final CompileFixInjector compileFixInjector;
     private final PackageFragmentationCheck packageFragmentationCheck;
@@ -221,6 +225,10 @@ public class CompileProbeService {
                 // wedge: poisoned BookController referenced a deleted BookService, every later
                 // probe failed on the baseline, zero merges for 45 min). Same guard as the
                 // injector inner loop below.
+                // T4-CQ: a protected path is never staged -- the candidate is judged without it.
+                if (protectedPaths != null && protectedPaths.refuse("the compile probe", mutation.path())) {
+                    continue;
+                }
                 if (!originalContents.containsKey(mutation.path())) {
                     boolean existed = fileService.exists(relPath);
                     originalContents.put(mutation.path(), existed ? fileService.readString(relPath) : "");
@@ -411,6 +419,13 @@ public class CompileProbeService {
             Optional<FixProposal> proposalOpt = compileFixInjector.inject(currentOutcome.stderrTail(), context);
             if (proposalOpt.isEmpty()) break;
             FixProposal proposal = proposalOpt.get();
+            // T4-CQ: an injector fix that would write a protected path is not the loop's to make;
+            // on an adopted project a missing symbol is far likelier a wrong reference than a
+            // missing class, and the operator has said which paths are off-limits.
+            if (protectedPaths != null && proposal.mutations().stream().anyMatch(m -> m != null
+                    && protectedPaths.refuse("the compile-fix injector", m.path()))) {
+                break;
+            }
 
             try {
                 for (FileMutation m : proposal.mutations()) {

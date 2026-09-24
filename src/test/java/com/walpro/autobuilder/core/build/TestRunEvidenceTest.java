@@ -94,4 +94,34 @@ class TestRunEvidenceTest {
         assertThat(block).contains("the suite PASSES").contains("QuillTest: writes passed, erases passed")
                 .doesNotContain("InkTest");
     }
+
+    /** The other common JVM build writes the same per-class format elsewhere; the gate finds it there. */
+    @Test
+    void theGateReadsTheOtherBuildsReportLocationToo() throws Exception {
+        Path out = tmp.resolve("output");
+        Files.createDirectories(out.resolve("src/test/java"));
+        Path reports = Files.createDirectories(out.resolve("build/test-results/test"));
+        TestRunGate gate = new TestRunGate(true, "gradle test", org.mockito.Mockito.mock(BuildExecutor.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(gate, "fileBasePath", tmp.toString());
+        org.springframework.test.util.ReflectionTestUtils.setField(gate, "lastRunStartedAt", System.currentTimeMillis() - 5_000);
+        Files.writeString(reports.resolve("TEST-org.sample.QuillTest.xml"), report("org.sample.QuillTest",
+                "<testcase classname=\"org.sample.QuillTest\" name=\"writes\"/>"));
+
+        assertThat(gate.freshReport()).get().extracting(TestRunReport::run).isEqualTo(1);
+    }
+
+    @Test
+    void aSourceChangedSinceTheRunMakesItsReportStale() throws Exception {
+        Path out = tmp.resolve("output");
+        Path src = Files.createDirectories(out.resolve("src/test/java"));
+        Path reports = Files.createDirectories(out.resolve("target/surefire-reports"));
+        TestRunGate gate = new TestRunGate(true, "mvn test", org.mockito.Mockito.mock(BuildExecutor.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(gate, "fileBasePath", tmp.toString());
+        org.springframework.test.util.ReflectionTestUtils.setField(gate, "lastRunStartedAt", System.currentTimeMillis() - 5_000);
+        Files.writeString(reports.resolve("TEST-org.sample.QuillTest.xml"), report("org.sample.QuillTest",
+                "<testcase classname=\"org.sample.QuillTest\" name=\"writes\"/>"));
+        Files.writeString(src.resolve("QuillTest.java"), "class QuillTest {}");
+
+        assertThat(gate.freshReport()).as("the report describes code that has since changed").isEmpty();
+    }
 }

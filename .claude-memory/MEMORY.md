@@ -62,7 +62,7 @@ Design notes, read before touching their area:
 - `project_t2ei_rule_interaction_map.md`: planner-rule map — FULL_COVERAGE and the coverage gate are one invariant. Read before touching any planner rule. (reviewed 2026-07-09)
 - `project_t4ap_prompt_audit.md`: prompt bloat is raw-payload passthroughs; `scripts/prompt_block_report.py`. Read before ANY prompt-surface change. (reviewed 2026-07-24)
 - `project_pattern_recognition_design_note.md`: 6-slice gated plan for pattern recognition. Read before touching `analysis/pattern/` or filing a self-model ticket. (reviewed 2026-09-08)
-- `project_target_domain_plugin_design.md`: T4-DC field proof (CLI target 12/12) cut the design from five seams to two. Read before adding any ecosystem-aware rule. (reviewed 2026-09-08)
+- `project_target_domain_plugin_design.md`: T4-DC field proof (CLI target 12/12) cut the design from five seams to two; the design ticket is T4-DD. Read before adding any ecosystem-aware rule. (reviewed 2026-09-08)
 - `project_state_time_travel_design_note.md`: T4-DQ rewind reproduces a STATE, not a TRAJECTORY; restore the carried cycle context. Read before rewind/branching work. (reviewed 2026-09-19)
 - `project_project_portability_vision.md`: import/continue/store/restore/merge a project's code layer (T4-CQ/CR/CS open). Read before import/export work. (reviewed 2026-09-08)
 - `project_cross_run_knowledge_base.md`: T4-CJ slice 2 -> T4-CN -> T4-CM is ONE chain: reconciling graphs from DIFFERENT runs. (reviewed 2026-07-23)

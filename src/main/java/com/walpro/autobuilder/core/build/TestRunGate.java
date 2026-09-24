@@ -73,9 +73,12 @@ public class TestRunGate {
     /**
      * Per-test report locations of the configured test command, relative to the project root —
      * report-location data tied to {@code test-gate.command}'s default, not framework vocabulary
-     * (rows belong to the T4-BM discovery inventory alongside the command itself).
+     * (rows belong to the T4-BM discovery inventory alongside the command itself). The second
+     * row is the other common JVM build's location for the same per-class XML format, so a project
+     * built that way still gives the completion verifier its test run (T4-CQ); the first that holds
+     * a report of this run wins.
      */
-    private static final List<String> TEST_REPORT_DIRS = List.of("target/surefire-reports");
+    private static final List<String> TEST_REPORT_DIRS = List.of("target/surefire-reports", "build/test-results/test");
 
     private static final int MAX_ROOT_CAUSES = 3;
     private static final int MAX_CAUSE_LENGTH = 300;

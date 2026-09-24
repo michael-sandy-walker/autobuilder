@@ -371,6 +371,21 @@
         "file": "applog",
         "pattern": "Hint: the branches of one method or expression produce different types"
       }
+    },
+    {
+      "id": "t4dw-archive-entry-point-retired",
+      "ticket": "T4-DW",
+      "type": "watch",
+      "description": "The boot gate's 'the packaged artifact declares no entry point' item now carries its own claim (archive-entry-point) and is retired every cycle by the build config and the jar, beside T4-DO's repair. Stamped 'serves' before, it waited for a clean serving launch: on flightsim run 2026-09-24_17-47-47 the repair declared the entry point 21 s after the item was raised, the tree then stopped compiling, and the item stayed ACTIVE for the rest of the run while the planner was refused three prunes.",
+      "fired": {
+        "file": "applog",
+        "pattern": "T4-DW: the archive's entry point is now declared"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "observed behavioural defect injected as work: the packaged artifact declares no entry point"
+      },
+      "check": "FIRED should follow a 'T4-DO: the packaged artifact could not run' line within about one cycle, and the retired item should not come back unless the defect does (a retirement clears the self-check's repeat suppression, so a genuine recurrence is raised again). OPPORTUNITY-NO-FIRE is NOT by itself a regression: the repair abstains when the sources name no single entry point, and then nothing is declared and nothing may be retired. Check with grep -rl 'static void main' over the artifact before calling it one."
     }
   ]
 }

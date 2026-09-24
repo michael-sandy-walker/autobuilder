@@ -3765,6 +3765,33 @@
    "start_tree": "FOREIGN",
    "terminal": "GOAL_EXHAUSTED",
    "total_cycles": "28"
+  },
+  "2026-09-24_11-44-06": {
+   "clauses_closed_vs_control": "0",
+   "cost_readout": "build=56814ms/15 boot-gate=13006ms/3 package-gate=10964ms/3 sms-batch-build=110ms/1",
+   "criteria_authored": "13",
+   "criteria_elaboration": "1",
+   "criteria_executable_count": "0",
+   "criteria_executable_pct": "0",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "49",
+   "merges": "5",
+   "peaked_at_cycle": "cycle-1790243442526 (8/8)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-09-24",
+   "run_duration_min": "5.7",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 8/8",
+   "smoke_pass": 8,
+   "smoke_preserved": "SMOKE: 8/8",
+   "smoke_strict": "8/8 discounted=none",
+   "smoke_total": 8,
+   "start_cleared_tree": "no",
+   "start_mode": "ADOPT_PROJECT",
+   "start_tree": "FOREIGN",
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "8"
   }
  },
  "updated": "2026-09-24"

@@ -23,7 +23,9 @@ metadata:
 - **`reference_undone_ideas.md`** written from the Documents folder (TODO_20260921 request).
 - **Mistake to know about:** `d3e8c4de` (docs) accidentally carries the four Agent-file deletions, so that commit alone does not compile; `d7439316` completes it. Not rewritten (no history edits without the user).
 - **Field run `2026-09-23_22-38-19`:** deadline at 45 min, smoke 22/23, preserved 5/23, 5 score closures. The box was saturated (IntelliJ ~90% CPU, swap full, load ~110; one boot gate took 108 s), so its pace says nothing about the build.
-- **NEXT:** queue from `next_work.py`. Open from tonight: T5-BO's criteria-on-graph and flowing lines; T2-ET's first refusal still unobserved.
+- **After midnight:** `T5-BN` closed (vocabulary guard test), `T5-BL` progressed (four never-voting heuristics deleted, about -850 lines, each read for why), T5-BO's flowing path and HUD criteria row, terminal colour escapes stripped from build output (600-3000 per run were reaching the evaluation prompt), the engine's second pass now tagged (model-call "unknown" 40% -> 0). **Filed `T2-FM`:** 49% of compile-probe failures (56/111 runs) are one inference error the model is shown in full and repeats.
+- **Field run `2026-09-23_23-41-31`: GOAL_FULFILLED, 23/23, preserved 23/23**, on the build with the heuristics deleted and T2-ET live; T2-ET checked 3 closures, all correctly allowed.
+- **NEXT:** queue from `next_work.py`; `T2-FM` is the new measured lever (half of all rejections). T5-BO: only "voice often inactive" remains. T2-ET's refusal still unobserved in the field.
 
 ## 2026-09-23 NIGHT (Opus 5.5) — T1-GE, T5-BQ, T1-GF CLOSED; TWO DEFECTS UPSTREAM OF T2-FL FIXED; ONE FIELD RUN
 

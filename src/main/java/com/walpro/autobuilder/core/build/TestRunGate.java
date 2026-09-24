@@ -209,19 +209,21 @@ public class TestRunGate {
             try (Stream<Path> files = Files.list(reportDir)) {
                 files.filter(p -> p.toString().endsWith(".txt")).sorted().forEach(report -> {
                     try {
+                        List<String> lines = Files.readAllLines(report);
                         String deepest = null;
-                        for (String line : Files.readAllLines(report)) {
+                        for (String line : lines) {
                             String t = line.strip();
                             if (t.startsWith("Caused by:")) {
                                 deepest = t.substring("Caused by:".length()).strip();
                             }
                         }
-                        if (deepest != null) {
-                            if (deepest.length() > MAX_CAUSE_LENGTH) {
-                                deepest = deepest.substring(0, MAX_CAUSE_LENGTH) + "…";
+                        List<String> found = deepest != null ? List.of(deepest) : failureLines(lines);
+                        for (String cause : found) {
+                            if (cause.length() > MAX_CAUSE_LENGTH) {
+                                cause = cause.substring(0, MAX_CAUSE_LENGTH) + "…";
                             }
-                            if (!causes.contains(deepest)) {
-                                causes.add(deepest);
+                            if (!causes.contains(cause)) {
+                                causes.add(cause);
                             }
                         }
                     } catch (IOException e) {
@@ -233,6 +235,29 @@ public class TestRunGate {
             }
         }
         return causes.size() > MAX_ROOT_CAUSES ? causes.subList(0, MAX_ROOT_CAUSES) : causes;
+    }
+
+    /**
+     * T4-CQ: a failed assertion has no {@code Caused by:} chain -- its message IS the failure, on
+     * the line after the test's {@code <<< FAILURE!} header, and it carries the value the code
+     * actually returned. Structdiff run 2026-09-24_23-33-41 spent 24 minutes repairing six tests
+     * that each said {@code expected: <Foo> but was: <com/example/Foo.java>}, and no prompt ever
+     * showed that line: the repair item named the tests and nothing else. One line per failing
+     * test, led by its method name.
+     */
+    private static List<String> failureLines(List<String> lines) {
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i + 1 < lines.size(); i++) {
+            String header = lines.get(i);
+            if (header.startsWith("Tests run:")
+                    || !(header.contains("<<< FAILURE!") || header.contains("<<< ERROR!"))) continue;
+            String message = lines.get(i + 1).strip();
+            if (message.isEmpty() || message.startsWith("at ")) continue;
+            String test = header.split("\\s+--\\s+|\\s+Time elapsed", 2)[0].strip();
+            test = test.substring(test.lastIndexOf('.') + 1);
+            out.add(test.isEmpty() ? message : test + ": " + message);
+        }
+        return out;
     }
 
     /**

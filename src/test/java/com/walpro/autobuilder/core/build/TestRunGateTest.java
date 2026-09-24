@@ -111,6 +111,42 @@ class TestRunGateTest {
     }
 
     @Test
+    void failingSuite_assertionMessage_carriesTheObservedValue(@org.junit.jupiter.api.io.TempDir java.nio.file.Path base)
+            throws java.io.IOException {
+        // T4-CQ structdiff run 3: an assertion failure has no 'Caused by:', so the observed value
+        // ('but was: <...>') never reached the repair item and six tests were repaired blind.
+        java.nio.file.Path reports = base.resolve("output/target/surefire-reports");
+        java.nio.file.Files.createDirectories(reports);
+        java.nio.file.Files.writeString(reports.resolve("com.example.widget.WidgetParserTest.txt"), """
+                -------------------------------------------------------------------------------
+                Test set: com.example.widget.WidgetParserTest
+                -------------------------------------------------------------------------------
+                Tests run: 2, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 0.1 s <<< FAILURE! -- in com.example.widget.WidgetParserTest
+                com.example.widget.WidgetParserTest.parseNamesTheRoot -- Time elapsed: 0.02 s <<< FAILURE!
+                org.opentest4j.AssertionFailedError: expected: <Gadget> but was: <shop/Gadget.src>
+                \tat org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+                com.example.widget.WidgetParserTest.parseCountsParts -- Time elapsed: 0.01 s <<< FAILURE!
+                org.opentest4j.AssertionFailedError: expected: <3> but was: <4>
+                \tat org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+                """);
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(eq(base.toString()), any(), eq("mvn test")))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0", 2000L, "mvn test", "c"));
+        TestRunGate g = new TestRunGate(true, "mvn test", buildExecutor);
+        g.setFileBasePath(base.toString());
+
+        Optional<String> blocker = g.verifyTestsPass("c");
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get())
+                .contains("parseNamesTheRoot: org.opentest4j.AssertionFailedError: expected: <Gadget> but was: <shop/Gadget.src>")
+                .contains("parseCountsParts: org.opentest4j.AssertionFailedError: expected: <3> but was: <4>")
+                .doesNotContain("Tests run: 2, Failures: 2, Errors: 0, Skipped: 0, Time elapsed")
+                .doesNotContain("AssertionFailureBuilder");
+    }
+
+    @Test
     void passingSuite_returnsEmpty() {
         stubOutcome(BuildResult.COMPILE_OK, "Tests run: 7, Failures: 0, Errors: 0, Skipped: 0");
         assertThat(gate(true).verifyTestsPass("c")).isEmpty();

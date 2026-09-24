@@ -32,10 +32,6 @@
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-neo4j</artifactId>
         </dependency>
         
@@ -66,16 +62,6 @@
             <scope>runtime</scope>
         </dependency>
         
-        <dependency>
-		    <groupId>com.google.code.gson</groupId>
-		    <artifactId>gson</artifactId>
-		</dependency>
-		
-		<dependency>
-		    <groupId>org.apache.commons</groupId>
-		    <artifactId>commons-text</artifactId>
-		    <version>1.11.0</version>
-		</dependency>
 
 		<!-- Tar extraction for the bundled Piper runtime (tar.gz) in TtsService. -->
 		<dependency>

@@ -578,7 +578,8 @@ public class BlockerSubgoalInjector {
             return !quoted.isEmpty() && quoted.stream().allMatch(observation::observedPassing);
         }
         // CLAIM_ENTRY_POINT is answered by a source scan, not by a launch — see
-        // clearEntryPointBuildFixSubgoals. An unstamped item is nobody's to retire.
+        // clearEntryPointBuildFixSubgoals; CLAIM_ARCHIVE_ENTRY_POINT by the build config and the
+        // jar — see clearArchiveEntryPointSubgoals. An unstamped item is nobody's to retire.
         return false;
     }
 
@@ -611,13 +612,39 @@ public class BlockerSubgoalInjector {
     }
 
     /**
+     * T4-DW: retire the archive-entry-point item once the entry point is declared.
+     *
+     * <p>Its own mirror because its evidence is neither a launch nor the source scan: the claim is
+     * about the ARCHIVE, and the answer is the build config and the jar ({@code PackageGate
+     * .archiveEntryPointDeclared()}). Available every cycle, including the ones where the tree
+     * does not compile — measured on flightsim run {@code 2026-09-24_17-47-47}, where the
+     * deterministic repair declared the entry point 21 s after this item was raised, and the item,
+     * stamped {@code serves}, then outlived it for the rest of the run.
+     *
+     * <p>{@code declared} is asked only when such an item exists, and at most once: the evidence
+     * reads the source tree, and an ordinary cycle should not pay for it.
+     *
+     * @return how many items were retired, so the caller can let a recurrence be raised again
+     */
+    public int clearArchiveEntryPointSubgoals(java.util.function.BooleanSupplier declared) {
+        if (declared == null) return 0;
+        Boolean[] answer = {null};
+        return retireGateStampedSubgoals(BlockerTypes.GATE_BOOT,
+                "the archive's entry point is now declared",
+                g -> BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT.equals(
+                        g.getMetadata() == null ? null : g.getMetadata().get(BlockerTypes.BOOT_CLAIM_KEY))
+                        && (answer[0] != null ? answer[0] : (answer[0] = declared.getAsBoolean())));
+    }
+
+    /**
      * T4-DW: the retirement loop for gate-stamped items, which are not necessarily BUILD_FIX-tagged
      * — T4-CZ's entry-point requirement and T4-CY's observed-defect item are ordinary coverage
      * items carrying a gate stamp. {@link #retireActiveBuildFixSubgoals} filters on the tag and so
      * cannot see them.
      */
-    private void retireGateStampedSubgoals(String gate, String reason,
-                                           java.util.function.Predicate<GoalEntity> retire) {
+    private int retireGateStampedSubgoals(String gate, String reason,
+                                          java.util.function.Predicate<GoalEntity> retire) {
+        int retired = 0;
         List<GoalEntity> candidates = new ArrayList<>();
         GoalEntity current = goalPlannerService.getCurrentSubGoal();
         if (current != null) candidates.add(current);
@@ -633,7 +660,9 @@ public class BlockerSubgoalInjector {
             goalPlannerService.transitionGoal(g.getId(), GoalStatus.SUBSUMED,
                     "The " + gate + " observed the claim this item makes — no longer needed",
                     com.walpro.autobuilder.goal.SubsumptionReason.COVERED);
+            retired++;
         }
+        return retired;
     }
 
     private void retireActiveBuildFixSubgoals(String reason, java.util.function.Predicate<GoalEntity> retire) {

@@ -1226,4 +1226,23 @@ class BootGateTest {
         org.springframework.test.util.ReflectionTestUtils.setField(g, "servedPrefix", "");
         assertThat(g.served("/gadgets/add")).isEqualTo("/gadgets/add");
     }
+
+    /**
+     * T4-DW: the unlaunchable-archive refusal names its own claim, so the item it raises is stamped
+     * for the evidence that can retire it (the build config and the jar), not for a serving launch
+     * a tree that no longer compiles, or a target that serves nothing, never produces.
+     */
+    @Test
+    void anUnlaunchableArchive_isRefusedWithTheArchiveEntryPointClaim() throws Exception {
+        unlaunchableArtifactOfALaunchableProject();
+
+        BootGate.BootObservation observation = gate(true, "java -jar {artifact}", "", 2000)
+                .observeBootsAndServes("c", "Produce a delimited-text checking tool.",
+                        List.of("Running `java -jar app.jar unknown` prints an error and exits with code 1"),
+                        false);
+
+        assertThat(observation.refutation()).isPresent();
+        assertThat(observation.refutation().get().claim()).isEqualTo(BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT);
+        assertThat(observation.refutation().get().description()).contains("declares no entry point");
+    }
 }

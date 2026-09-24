@@ -195,6 +195,47 @@ public final class RunnableJarGuarantee {
     }
 
     /**
+     * T4-DW: positive evidence that the archive's entry point is declared, for retiring the work
+     * item raised when it was not ({@code BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT}).
+     *
+     * <p>True when the built archive already declares a {@code Main-Class}, or when the build
+     * config declares exactly the one entry point the sources name — the instruction the item
+     * itself carries, satisfied even while the tree does not compile and no rebuild can confirm
+     * it. The second half is a file fact, which is why it can answer on the cycles a launch never
+     * reaches.
+     *
+     * <p>Never true by abstention: no pom, no sole entry point in the sources, a declaration of a
+     * DIFFERENT class, or anything unreadable all answer false. An unreadable jar counts as no
+     * evidence here even though {@link #declaresEntryPoint} treats it as "nothing wrong" — that
+     * method guards against raising a defect, this one against retiring one.
+     */
+    public static boolean entryPointDeclared(Path artifactRoot) {
+        if (artifactRoot == null) return false;
+        Optional<Path> jar = builtJar(artifactRoot);
+        if (jar.isPresent() && manifestNamesMainClass(jar.get())) return true;
+        Path pomPath = artifactRoot.resolve("pom.xml");
+        if (!Files.isRegularFile(pomPath)) return false;
+        try {
+            String mainClass = BootstrapPomResolver.soleMainClassOf(readSources(artifactRoot));
+            return mainClass != null && declaresEntryPointInPom(Files.readString(pomPath), mainClass);
+        } catch (IOException | RuntimeException e) {
+            log.debug("T4-DW: could not read {} — no evidence the entry point is declared", pomPath);
+            return false;
+        }
+    }
+
+    /** The manifest names a Main-Class; unreadable or absent answers false. */
+    private static boolean manifestNamesMainClass(Path jar) {
+        try (JarFile jf = new JarFile(jar.toFile())) {
+            Manifest manifest = jf.getManifest();
+            String main = manifest == null ? null : manifest.getMainAttributes().getValue("Main-Class");
+            return main != null && !main.isBlank();
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /**
      * The half of the question answerable WITHOUT reading a single source file: is there exactly
      * one built archive, and does it already declare an entry point?
      *

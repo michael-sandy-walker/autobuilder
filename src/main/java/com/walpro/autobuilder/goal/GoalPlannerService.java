@@ -2854,7 +2854,8 @@ public class GoalPlannerService {
      *
      * <p>Read through the claim the injector stamped (T4-DW's {@code BOOT_CLAIM_KEY}), never
      * through the item's prose: a whole-artifact item is re-observed for the same defect; an item
-     * quoting contradicted criteria has those criteria probed again. An entry-point item carries
+     * quoting contradicted criteria has those criteria probed again; an archive-entry-point item
+     * is checked against the build config and the jar (T4-DW). An entry-point item carries
      * its own criterion and is answered below by the ordinary path. An unstamped item is left to
      * that path too.
      */
@@ -2875,6 +2876,16 @@ public class GoalPlannerService {
                     && !quoted.isEmpty()) {
                 return closureClaimVerifier.refute(g.getId(),
                         quoted.stream().map(String::valueOf).toList(), specText);
+            }
+            // T4-DW: the archive's missing entry point is answered by the build config and the jar,
+            // not by a launch. Closing on a score while that evidence is absent is the hole T2-ET
+            // closed for the other claims; an absent answer (no gate, nothing readable) refuses too,
+            // because an abstention is not a pass.
+            if (BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT.equals(claim)
+                    && (packageGate == null || !packageGate.archiveEntryPointDeclared())) {
+                return Optional.of(ClaimRefutation.archiveEntryPoint(
+                        "the packaged archive still declares no entry point, and the build config does not"
+                        + " declare the one the sources name"));
             }
         } catch (RuntimeException e) {
             log.warn("T2-ET: originating-observation check for {} failed ({}) — treating as unchecked",
@@ -4685,6 +4696,17 @@ public class GoalPlannerService {
      * and the serving observation answers it.
      */
     public boolean injectObservedBehaviouralDefect(String description, List<String> refutedCriteria) {
+        return injectObservedBehaviouralDefect(description, refutedCriteria, null);
+    }
+
+    /**
+     * T4-DW: as above, with the claim the gate named for this defect. {@code null} keeps the
+     * default, where attribution alone chooses between {@code CLAIM_CRITERION} and
+     * {@code CLAIM_SERVES}; a named claim (the archive's missing entry point) is stamped as given
+     * so the evidence that retires the item is the evidence about that claim.
+     */
+    public boolean injectObservedBehaviouralDefect(String description, List<String> refutedCriteria,
+                                                   String claim) {
         GoalEntity root = getRootGoal();
         if (root == null || description == null || description.isBlank()) return false;
         CoverageReviewResult injected = injectCoverageGaps(root, List.of(description), true);
@@ -4694,7 +4716,8 @@ public class GoalPlannerService {
             setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
                     com.walpro.autobuilder.core.build.BlockerTypes.GATE_BOOT);
             setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.BOOT_CLAIM_KEY,
-                    attributed ? com.walpro.autobuilder.core.build.BlockerTypes.CLAIM_CRITERION
+                    claim != null ? claim
+                    : attributed ? com.walpro.autobuilder.core.build.BlockerTypes.CLAIM_CRITERION
                                : com.walpro.autobuilder.core.build.BlockerTypes.CLAIM_SERVES);
             if (attributed) {
                 setGoalMetadataStrings(id,

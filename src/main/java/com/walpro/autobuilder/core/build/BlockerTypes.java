@@ -81,6 +81,17 @@ public final class BlockerTypes {
      */
     public static final String CLAIM_CRITERION = "criterion";
 
+    /**
+     * The packaged archive declares no {@code Main-Class} although the sources name one. A claim
+     * about the ARCHIVE and the build config that produces it, not about what the artifact serves,
+     * so {@link #CLAIM_SERVES} is the wrong stamp for it: a launch that serves cleanly never
+     * happens on a tree that stopped compiling, nor on a target with nothing to serve (flightsim,
+     * run {@code 2026-09-24_17-47-47}, kept this item ACTIVE for the rest of the run 21 s after
+     * the deterministic repair had fixed it). Retired when the archive declares an entry point, or
+     * when the build config declares exactly the one the sources name — the item's own instruction.
+     */
+    public static final String CLAIM_ARCHIVE_ENTRY_POINT = "archive-entry-point";
+
     /** Metadata key holding the criteria a {@link #CLAIM_CRITERION} item was raised from. */
     public static final String BOOT_CLAIM_CRITERIA_KEY = "bootClaimCriteria";
 

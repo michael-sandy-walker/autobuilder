@@ -314,6 +314,19 @@ public class CycleExecutor implements CheckpointableState {
         if (packagingRepairEnabled && packageGate != null) {
             packageGate.declareEntryPointIfArchiveCannotRun();
         }
+        // T4-DW: the retiring direction of the repair just above, on the same cycle. An item saying
+        // the archive declares no entry point is answered by the build config and the jar, which
+        // are file facts; waiting for a launch to serve cleanly (its old CLAIM_SERVES stamp) meant
+        // waiting for something a tree that no longer compiles, or a target that serves nothing,
+        // never produces. When one is retired, the self-check may raise the defect again if it
+        // comes back — its suppression assumes the item is still open.
+        if (bootItemRetirementEnabled && blockerSubgoalInjector != null && packageGate != null) {
+            int retired = blockerSubgoalInjector.clearArchiveEntryPointSubgoals(
+                    packageGate::archiveEntryPointDeclared);
+            if (retired > 0 && behaviouralSelfCheck != null) {
+                behaviouralSelfCheck.forgetLastFinding();
+            }
+        }
 
         if (behaviouralSelfCheck != null) {
             GoalEntity selfCheckRoot = goalPlannerService.getRootGoal();
@@ -325,7 +338,10 @@ public class CycleExecutor implements CheckpointableState {
                     defect,
                     selfCheck.observation().refutation()
                             .map(com.walpro.autobuilder.goal.ClaimRefutation::refutedCriteria)
-                            .orElse(java.util.List.of())));
+                            .orElse(java.util.List.of()),
+                    selfCheck.observation().refutation()
+                            .map(com.walpro.autobuilder.goal.ClaimRefutation::claim)
+                            .orElse(null)));
             // T4-DW: the same observation, read for what it ESTABLISHED. This is the only place a
             // boot-gate item can be retired, because it is the only per-cycle caller that runs the
             // gate against the tree on disk — the evaluation agent's re-run judges a STAGED

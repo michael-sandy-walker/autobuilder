@@ -39,11 +39,28 @@ import java.util.List;
  * @param refutedCriteria  the verbatim criterion texts the artifact contradicted, as they were
  *                         passed in. Empty when the refutation could not be attributed to
  *                         particular criteria.
+ * @param claim            which claim the refutation makes, when the gate knows it better than
+ *                         "criteria or not" — a {@code BlockerTypes} claim constant. Null for the
+ *                         default, where attribution alone decides the stamp.
  */
-public record ClaimRefutation(String description, List<String> refutedCriteria) {
+public record ClaimRefutation(String description, List<String> refutedCriteria, String claim) {
 
     public ClaimRefutation {
         refutedCriteria = refutedCriteria == null ? List.of() : List.copyOf(refutedCriteria);
+    }
+
+    public ClaimRefutation(String description, List<String> refutedCriteria) {
+        this(description, refutedCriteria, null);
+    }
+
+    /**
+     * T4-DW: the packaged archive cannot be launched because it declares no entry point. Its own
+     * claim, so the item it raises is retired by evidence about the archive rather than by a
+     * serving launch that may never come.
+     */
+    public static ClaimRefutation archiveEntryPoint(String description) {
+        return new ClaimRefutation(description, List.of(),
+                com.walpro.autobuilder.core.build.BlockerTypes.CLAIM_ARCHIVE_ENTRY_POINT);
     }
 
     /**

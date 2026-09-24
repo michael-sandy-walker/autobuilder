@@ -1202,6 +1202,48 @@ class CycleExecutorTest {
     }
 
     /**
+     * T4-DW: the archive-entry-point retirement is asked on an ordinary cycle, beside the repair
+     * that answers it. Its old stamp waited for a clean serving launch; on flightsim run
+     * 2026-09-24_17-47-47 none came after the repair, because the tree stopped compiling, and the
+     * item outlived its defect for the rest of the run. So the assertion is reachability, with
+     * nothing else having to go right first (BlockerSubgoalInjectorTest owns correctness).
+     */
+    @Test
+    void theArchiveEntryPointRetirementIsAskedOnAnOrdinaryCycle() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+        cycleExecutor.setPackageGate(packageGate);
+        cycleExecutor.setBlockerSubgoalInjector(blockerSubgoalInjector);
+
+        cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(blockerSubgoalInjector).clearArchiveEntryPointSubgoals(any());
+    }
+
+    /**
+     * T4-DW: a retirement re-opens the self-check's suppression. It declines to re-raise a finding
+     * equal to its last one "while it is still open"; once this item is retired it is not, and a
+     * recurrence of the same defect must be raised again rather than swallowed.
+     */
+    @Test
+    void retiringTheArchiveEntryPointItemLetsTheSelfCheckRaiseItAgain() {
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+        cycleExecutor.setPackageGate(packageGate);
+        cycleExecutor.setBlockerSubgoalInjector(blockerSubgoalInjector);
+        cycleExecutor.setBehaviouralSelfCheck(behaviouralSelfCheck);
+        when(blockerSubgoalInjector.clearArchiveEntryPointSubgoals(any())).thenReturn(1);
+        org.mockito.Mockito.lenient().when(behaviouralSelfCheck.observeWithEvidence(any(), any(), any()))
+                .thenReturn(new com.walpro.autobuilder.core.build.BehaviouralSelfCheck.SelfCheckResult(
+                        java.util.Optional.empty(),
+                        com.walpro.autobuilder.core.build.BootGate.BootObservation.abstained()));
+
+        cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(behaviouralSelfCheck).forgetLastFinding();
+    }
+
+    /**
      * T4-DW: the boot observation reaches the retirement, and it is the SELF-CHECK's observation —
      * the one taken against the tree on disk. The evaluation agent re-runs the same gate against a
      * STAGED candidate, and an OK there says nothing about the merged tree.

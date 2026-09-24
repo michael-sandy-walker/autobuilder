@@ -489,7 +489,7 @@ public class BootGate {
                         // immediately before the build that consumes it, where the package gate's
                         // own verifyDeclaredEntryPointExists() then checks the declaration against
                         // the build output rather than the repair certifying itself.
-                        return Optional.of(ClaimRefutation.unattributed(
+                        return Optional.of(ClaimRefutation.archiveEntryPoint(
                                 "the packaged artifact declares no entry point, so it cannot be"
                                 + " launched and nothing the specification asks of it has been"
                                 + " observed — declare the entry point the sources provide"));

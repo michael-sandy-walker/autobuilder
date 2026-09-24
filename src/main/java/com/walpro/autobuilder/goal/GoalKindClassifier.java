@@ -97,7 +97,10 @@ public final class GoalKindClassifier {
                 new Message("user", "Classify this task: " + description)
         );
         try {
-            ResponseEntity<ChatResponse> resp = llmClient.ask(messages);
+            ResponseEntity<ChatResponse> resp;
+            try (var llmPurpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("goal-kind-classifier")) {
+                resp = llmClient.ask(messages);
+            }
             if (resp.getBody() == null) return GoalKind.EXECUTABLE;
             String content = resp.getBody().getFirstContent();
             if (content == null) return GoalKind.EXECUTABLE;

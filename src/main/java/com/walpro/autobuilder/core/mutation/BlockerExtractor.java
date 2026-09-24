@@ -202,7 +202,7 @@ public final class BlockerExtractor {
             switch (cls) {
                 case DEFERRABLE -> shapes.add(normaliseShape(line));
                 case AUTHOR_ERROR -> {
-                    authorErrors.add(parseDiagnostic(line));
+                    authorErrors.add(withContinuation(parseDiagnostic(line), plain, diag.end()));
                     shapes.add(normaliseShape(line));
                 }
                 case UNKNOWN -> {
@@ -270,6 +270,43 @@ public final class BlockerExtractor {
                         + ":" + (g.version() == null ? "" : g.version()))
                 .orElse("");
         return MutationBlocker.packageRewrite(rep.oldPrefix(), rep.newPrefix(), coords);
+    }
+
+    /**
+     * An indented line directly under a diagnostic, optionally behind the tool's level marker:
+     * the compiler's explanation of the error above it.
+     */
+    private static final Pattern CONTINUATION_LINE = Pattern.compile("^(?:\\[ERROR]\\s*)?\\s{2,}(\\S.*)$");
+    private static final int MAX_CONTINUATION_LINES = 4;
+
+    /**
+     * T2-FF (filed first as T2-FM): keeps the compiler's own explanation with the error it explains.
+     *
+     * <p>A diagnostic's first line often names only the KIND of error, and the lines indented under
+     * it name the particulars: which two types an inference could not reconcile, what a call
+     * required and what it found. Those lines were read one at a time, skipped as framing or left
+     * unclassified, and never attached, so the steering block told the model "inference variable T
+     * has incompatible bounds" without either bound. Over 111 runs that one error was in 605 of
+     * 1233 probe failures, and the model repeated it. The rule is layout only (indented lines under
+     * the error), so it holds no opinion on any message's wording.
+     */
+    private static ClassifiedDiagnostic withContinuation(ClassifiedDiagnostic d, String plain, int from) {
+        if (d == null || plain == null || from >= plain.length()) return d;
+        List<String> details = new ArrayList<>();
+        int pos = plain.indexOf('\n', from);
+        while (pos >= 0 && pos + 1 < plain.length() && details.size() < MAX_CONTINUATION_LINES) {
+            int next = plain.indexOf('\n', pos + 1);
+            String candidate = plain.substring(pos + 1, next < 0 ? plain.length() : next).stripTrailing();
+            if (LOCATION_HEADER.matcher(candidate).find()) break;
+            Matcher c = CONTINUATION_LINE.matcher(candidate);
+            if (!c.matches()) break;
+            // The caret under a quoted source line points, it does not explain; step over it.
+            if (!c.group(1).trim().equals("^")) details.add(c.group(1).trim());
+            pos = next;
+        }
+        if (details.isEmpty()) return d;
+        return new ClassifiedDiagnostic(d.file(), d.line(), d.column(),
+                d.message() + " (" + String.join("; ", details) + ")");
     }
 
     private static ClassifiedDiagnostic parseDiagnostic(String line) {

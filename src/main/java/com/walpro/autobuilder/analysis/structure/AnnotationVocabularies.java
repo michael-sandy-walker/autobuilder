@@ -40,9 +40,24 @@ public final class AnnotationVocabularies {
     public static final Set<String> FRAMEWORK_ASSIGNED_FIELD = Set.of(
             "Autowired", "Inject", "Resource", "Value", "MockBean", "Mock");
 
+    /** Marks a method that handles a thrown exception type. */
+    public static final String EXCEPTION_HANDLER = "ExceptionHandler";
+
+    /** Declares the response status of a handler, or of an exception type itself. */
+    public static final String STATUS_DECLARATION = "ResponseStatus";
+
     /** Maps a thrown exception (or handler) to a response status. */
     public static final Set<String> STATUS_MAPPING = Set.of(
-            "ControllerAdvice", "RestControllerAdvice", "ExceptionHandler", "ResponseStatus");
+            "ControllerAdvice", "RestControllerAdvice", EXCEPTION_HANDLER, STATUS_DECLARATION);
+
+    /** Marks a type whose instances the persistence layer stores. */
+    public static final Set<String> PERSISTENT_TYPE = Set.of("Entity");
+
+    /**
+     * Changes how a method runs without changing its code: transaction demarcation, scheduling.
+     * A diff that adds or removes one changes behaviour even when no statement changed.
+     */
+    public static final Set<String> EXECUTION_MODIFIER = Set.of("Transactional", "Scheduled");
 
     /** Binds a request body to a parameter. */
     public static final String REQUEST_BODY = "RequestBody";

@@ -105,7 +105,7 @@ public class TtsService {
 
         try {
             try (var stdin = p.getOutputStream()) {
-                stdin.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                stdin.write(SpeakableText.of(text).getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 stdin.write('\n');
             } catch (IOException brokenPipe) {
                 // Piper already exited — fall through so we can report its stderr instead.

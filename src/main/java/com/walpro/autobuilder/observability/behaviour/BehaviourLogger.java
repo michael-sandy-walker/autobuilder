@@ -385,6 +385,10 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.DeferredMutationDropped(Instant.now(), cycleId, deferredId, reason));
     }
 
+    public void llmResponseDiscarded(String cycleId, String role, String reason, String firstLine, int consecutive) {
+        emit(new BehaviourEvent.LlmResponseDiscarded(Instant.now(), cycleId, role, reason, firstLine, consecutive));
+    }
+
     public void deferredMutationEvicted(String cycleId, String deferredId, String reason) {
         emit(new BehaviourEvent.DeferredMutationEvicted(Instant.now(), cycleId, deferredId, reason));
     }

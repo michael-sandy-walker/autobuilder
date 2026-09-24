@@ -34,6 +34,19 @@ public class EvolutionLLMAdapter {
 
     private final EvolutionResponseParser parser = new EvolutionResponseParser(); // not injected
 
+    /** T4-CQ: optional — reads the served prefix from the tree; absent in narrow unit tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.coldread.ColdReadService coldReadService;
+
+    private String servedPrefixOf(CycleContextData ctx) {
+        if (coldReadService == null || ctx == null || ctx.outputPath() == null) return null;
+        try {
+            return coldReadService.servedPrefix(java.nio.file.Path.of(ctx.outputPath())).orElse(null);
+        } catch (RuntimeException e) {
+            return null; // a prompt is never withheld over a fact that could not be read
+        }
+    }
+
     public CycleContextData evolve(CycleContextData context) throws IOException {
         return evolve(context, false);
     }
@@ -48,13 +61,17 @@ public class EvolutionLLMAdapter {
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
         String userPrompt = EvolutionProtocolContract.getUserPrompt(refreshed, result, recombined,
                 promptTokenBudget.promptHeadroomTokens());
+        // T4-CQ: where the routes are really answered, when the tree's own configuration says.
+        userPrompt = com.walpro.autobuilder.protocol.evolution.ServedPrefixPromptBlock.appendTo(
+                userPrompt, servedPrefixOf(refreshed));
 
         LLMResponseResult<EvolutionOutcome> response = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,
                 systemPrompt,
                 userPrompt,
                 EvolutionProtocolContract::isValidResponse,
-                parser::parse
+                parser::parse,
+                EvolutionProtocolContract::describeMismatch
         );
 
         EvolutionOutcome outcome;

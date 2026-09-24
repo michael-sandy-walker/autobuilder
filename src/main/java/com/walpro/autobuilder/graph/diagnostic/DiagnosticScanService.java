@@ -146,6 +146,9 @@
 
 package com.walpro.autobuilder.graph.diagnostic;
 
+import com.walpro.autobuilder.graph.HistoryRead;
+import com.walpro.autobuilder.graph.HistorySpan;
+import com.walpro.autobuilder.graph.HistoryUse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
@@ -166,6 +169,8 @@ public class DiagnosticScanService {
 
     private final Neo4jClient neo4j;
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.ADVISORY,
+            note = "Diagnostic patterns over one attempt's actions, returned by the graph query endpoint.")
     public DiagnosticScanResult scan(String goalId, String subGoalId, String attemptId, int limit) {
         if (attemptId == null || attemptId.isBlank()) return DiagnosticScanResult.empty();
 

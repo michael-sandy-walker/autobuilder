@@ -220,8 +220,8 @@ autobuilder:
     enabled: false
   # T4-AN-1: post-merge compile gate. When enabled, MergeAgent runs the configured build
   # command after every successful merge and stores the outcome on CycleContextData.
-  # BuildResultHeuristic turns COMPILE_ERROR into a CRITICAL REJECTED opinion that overrides
-  # every other heuristic. Off by default — target projects without a Maven setup should
+  # The pre-merge compile probe rejects a candidate that does not compile, and a post-merge
+  # COMPILE_ERROR rolls the merge back. Off by default — target projects without a Maven setup should
   # leave this disabled.
   build:
     enabled: true

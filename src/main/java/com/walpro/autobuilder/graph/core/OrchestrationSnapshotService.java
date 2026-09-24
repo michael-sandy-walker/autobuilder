@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.graph.core;
 
+import com.walpro.autobuilder.graph.HistoryRead;
+import com.walpro.autobuilder.graph.HistorySpan;
+import com.walpro.autobuilder.graph.HistoryUse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.core.mutation.DeferredMutationLedger;
@@ -48,6 +51,8 @@ public class OrchestrationSnapshotService {
     @Autowired(required = false)
     private GoalPlannerService goalPlannerService;
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.BINDING,
+            note = "Anchors on the goal's newest attempt, which on a resumed run can be a previous run's. The one deciding caller (AutobuilderService's fingerprint-repeat promotion) checks attemptRunId and acts only on this run's evidence.")
     public OrchestrationSnapshot fetchLatestSnapshot(String goalId, String subGoalId, int recentLimit) {
         String scopeGoalId = (subGoalId != null && !subGoalId.isBlank()) ? subGoalId : goalId;
         if (scopeGoalId == null || scopeGoalId.isBlank()) {
@@ -82,6 +87,8 @@ public class OrchestrationSnapshotService {
         return fetchSnapshot(goalId, subGoalId, latestAttemptId, recentLimit);
     }
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.ADVISORY,
+            note = "One attempt's snapshot, labelled with the run that produced it (AttemptProvenance); its recent-actions part is filtered to this run.")
     public OrchestrationSnapshot fetchSnapshot(String goalId, String subGoalId, String attemptId, int recentLimit) {
         if (attemptId == null) {
             return null;
@@ -298,6 +305,8 @@ public class OrchestrationSnapshotService {
      * and returns heuristics that fired at CRITICAL confidence on ≥ {@value #HEURISTIC_STREAK_THRESHOLD}
      * of those payloads. This extends T2-AT's in-memory streak counter across restarts.
      */
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.ADVISORY,
+            note = "Critical heuristics that recur across the goal's recent evaluations, relayed into the evolution prompt as warnings; spans the goal's lineage so the warning survives a restart (T2-AW).")
     List<OrchestrationSnapshot.HeuristicWarning> fetchRecurringCriticalHeuristics(
             String scopeGoalId, int evalLimit) {
         List<String> payloads = neo4j.query("""
@@ -351,6 +360,8 @@ public class OrchestrationSnapshotService {
      * </ul>
      * Uses up to {@value #CRITERIA_STREAK_LOOKBACK} recent evaluations per criterion.
      */
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.ADVISORY,
+            note = "Per-criterion pass history for one subgoal, rendered in the goal explorer and the snapshot.")
     @SuppressWarnings("unchecked")
     public List<OrchestrationSnapshot.CriterionProgress> fetchCriteriaProgress(String subgoalId) {
         if (subgoalId == null || subgoalId.isBlank()) return List.of();

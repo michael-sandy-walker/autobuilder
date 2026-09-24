@@ -226,7 +226,11 @@ public class AdaptiveExecutionEngine {
             log.info("Second-pass: role={} now eligible after earlier agents updated context", role);
             if (behaviourLogger != null) behaviourLogger.agentSelected(context.cycleName(), role, 0.0);
             CycleContextData before = context;
-            context = agent.execute(context);
+            // Same attribution as the first pass: without it every call this pass made was logged
+            // as "unknown" (the last 2 of 78 in run 2026-09-23_23-41-31, both evaluations).
+            try (var ignored = com.walpro.autobuilder.client.LlmCallContext.scope(role, context.cycleName())) {
+                context = agent.execute(context);
+            }
             context = hasProgressed(before, context)
                     ? regrantWindow(context, role)
                     : context.shrinkWindow(role);

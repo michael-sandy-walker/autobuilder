@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.graph.mutation;
 
+import com.walpro.autobuilder.graph.HistoryRead;
+import com.walpro.autobuilder.graph.HistorySpan;
+import com.walpro.autobuilder.graph.HistoryUse;
 import com.walpro.autobuilder.core.mutation.DeferredMutation;
 import com.walpro.autobuilder.core.mutation.DeferredMutationState;
 import com.walpro.autobuilder.core.mutation.MutationBlocker;
@@ -241,19 +244,26 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
                 .run();
     }
 
+    @HistoryRead(span = HistorySpan.LINEAGE, use = HistoryUse.BINDING,
+            note = "Clears a parked mutation's blockers and returns the ones now ready to restage. Scoped 2026-09-23 (T2-ER): unscoped, it could mark another lineage's parked mutation ready.")
     @Override
     public Set<String> dropBlockersAndFindCleared(Set<String> clearedFingerprints) {
         if (clearedFingerprints == null || clearedFingerprints.isEmpty()) return Set.of();
 
         // 1. Drop the BLOCKED_BY edges from any DeferredMutation to any blocker whose
         //    fingerprint is in clearedFingerprints.
+        //    T2-ER: this lineage's mutations only. A Blocker node is shared by fingerprint across
+        //    every lineage that ever parked on it, so an unscoped match reached into other
+        //    lineages' parked work.
         neo4jClient.query("""
                 MATCH (m:DeferredMutation)-[r:BLOCKED_BY]->(b:Blocker)
                 WHERE b.fingerprint IN $fps
                   AND m.state IN ['DEFERRED','READY_TO_RESTAGE']
+                  AND m.lineageId = $lineageId
                 DELETE r
                 """)
-                .bindAll(Map.of("fps", new ArrayList<>(clearedFingerprints)))
+                .bindAll(Map.of("fps", new ArrayList<>(clearedFingerprints),
+                        "lineageId", runIdentity.lineageId()))
                 .run();
 
         // 2. Find any DeferredMutation that now has zero open BLOCKED_BY edges AND is still
@@ -261,9 +271,11 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
         Collection<Map<String, Object>> rows = neo4jClient.query("""
                 MATCH (m:DeferredMutation)
                 WHERE m.state = 'DEFERRED'
+                  AND m.lineageId = $lineageId
                   AND NOT (m)-[:BLOCKED_BY]->(:Blocker)
                 RETURN m.id AS id
                 """)
+                .bind(runIdentity.lineageId()).to("lineageId")
                 .fetch()
                 .all();
 
@@ -296,10 +308,17 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
         return list.isEmpty() ? null : list.get(0);
     }
 
+    @HistoryRead(span = HistorySpan.LINEAGE, use = HistoryUse.BINDING,
+            note = "The open and ready deferred mutations the restage scheduler acts on. Scoped 2026-09-23 (T2-ER): unscoped, a fresh lineage's first sweep found another lineage's parked mutations, judged their intent goal missing, and rewrote them DROPPED_INTENT_CLOSED.")
     private List<DeferredMutation> loadByState(Set<String> states, String intentGoalIdFilter) {
-        StringBuilder cypher = new StringBuilder("MATCH (m:DeferredMutation) WHERE m.state IN $states");
+        // T2-ER: this lineage's parked work only. Unscoped, a fresh lineage's first sweep found
+        // another lineage's parked mutations, judged their intent goal missing, and rewrote that
+        // lineage's records as DROPPED_INTENT_CLOSED.
+        StringBuilder cypher = new StringBuilder(
+                "MATCH (m:DeferredMutation) WHERE m.state IN $states AND m.lineageId = $lineageId");
         Map<String, Object> params = new HashMap<>();
         params.put("states", new ArrayList<>(states));
+        params.put("lineageId", runIdentity.lineageId());
         if (intentGoalIdFilter != null) {
             cypher.append(" AND m.intentGoalId = $intentGoalId");
             params.put("intentGoalId", intentGoalIdFilter);
@@ -315,6 +334,8 @@ public class Neo4jDeferredMutationGraphService implements DeferredMutationGraphS
         return out;
     }
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.BINDING,
+            note = "One deferred mutation by id, with its blockers and files; the id comes from the lineage-scoped loadByState.")
     private List<DeferredMutation> loadById(String deferredId) {
         Map<String, Object> params = Map.of("id", deferredId);
         Optional<Map<String, Object>> node = neo4jClient.query("""

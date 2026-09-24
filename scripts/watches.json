@@ -345,6 +345,32 @@
         "pattern": "\"event\" : \"observed_leaf_promotion\",[^}]*\"candidates\" : [1-9]"
       },
       "check": "A FIRED count is sweeps that promoted at least one leaf, NOT leaves promoted -- one sweep can promote several, so read the promoted field before quoting a number. Then confirm BY EYE that the promoted leaf's criteria were actually observed rather than merely unrefuted: the claim is that the artifact was seen to satisfy them, and an abstained observation still lets structural criteria through by design. OPPORTUNITY-NO-FIRE IS THE INTERESTING READING HERE, not a regression -- it means candidate leaves existed and the sweep declined every one, and the reasons field on the event names what it objected to. NO-OPPORTUNITY means no ACTIVE leaf stated a criterion, which on a run that closed its root cleanly is the ordinary case and says nothing about the mechanism. Control: the same registry entry over run 2026-09-23_17-47-43 reports NO-OPPORTUNITY (verified), because that run predates the event -- so on any run built before this change the watch is BLIND and its NO-OPPORTUNITY is not evidence of anything. Check the jar carries observed_leaf_promotion before reading it."
+    },
+    {
+      "id": "t2et-gate-item-closure-refused",
+      "ticket": "T2-ET",
+      "type": "watch",
+      "description": "T2-ET gives the boot gate a vote on closing the work items it raised. Those items usually declare no acceptance criteria, so the T4-CU closure check abstained and a model score closed them: September archive, 45 boot-gate items closed by score and 0 by the gate; of the 37 whose next observation could be classified, 9 were followed by the very defect they named, and the self-check does not re-raise a finding identical to its last one, so each was lost for the rest of the run.",
+      "fired": {
+        "file": "applog",
+        "pattern": "T2-ET: \\S+ was about to be closed while the defect it was raised for is still observed"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "T2-ET: \\S+ (was about to be closed|— the defect it was raised for is no longer observed)|T2-ET: cannot re-observe"
+      },
+      "check": "FIRED means a closure was refused because the gate reproduced the item's own defect verbatim. Confirm by eye that the item was later closed or retired only AFTER the defect stopped being reported, and that the refusal did not repeat every cycle for long (each costs a package and a boot). OPPORTUNITY-NO-FIRE is the ordinary reading on a healthy run: every checked closure found its defect gone, which is what 27 of 37 archive closures showed. Also read the 'a different one is' lines: those are closures allowed because the NEXT defect replaced this one, and they should be followed by that defect being raised as its own item."
+    },
+    {
+      "id": "t2ff-inference-advice-shown",
+      "ticket": "T2-FF",
+      "type": "tally",
+      "description": "How often the evolution prompt carried the inference-clash advice (and, with it, the bounds naming both types). Before 2026-09-24 the block showed only the error's first line and a return-type hint.",
+      "check": "A count of renders, not of distinct errors: one failure re-rendered on the next attempt counts again. To judge the DoD, count probe failures whose own build output carries 'inference variable' per file:line (the method in T2-FF's measurement), and compare with the 49 percent baseline on the same target.",
+      "fired": {
+        "file": "applog",
+        "pattern": "Hint: the branches of one method or expression produce different types"
+      }
     }
   ]
 }

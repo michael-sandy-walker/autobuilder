@@ -521,6 +521,7 @@
   <div class="mc-row"><span class="k">cycle</span><span class="v" id="mc-cycle">—</span></div>
   <div class="mc-row"><span class="k">mode</span><span class="v mode" id="mc-mode">—</span></div>
   <div class="mc-row"><span class="k">subgoal</span><span class="v sub" id="mc-subgoal">—</span></div>
+  <div class="mc-row"><span class="k">criteria</span><span class="v" id="mc-criteria" title="">—</span></div>
   <div class="mc-row"><span class="k">last agent</span><span class="v" id="mc-agent">—</span></div>
   <div class="mc-row"><span class="k">goals</span><span class="v" id="mc-goals">—</span></div>
   <div class="mc-row"><span class="k">runtime</span><span class="v" id="mc-runtime">—</span></div>
@@ -830,9 +831,38 @@ function freshness(n) {
  */
 function wasApproached(n) {
   if (!n) return false;
+  return ownApproachEvidence(n) || approachedBeneath().has(n.id);
+}
+
+function ownApproachEvidence(n) {
   return state.visited.has(n.id)
+      || n.id === state.currentSubGoalId
       || (n.mergeCount || 0) > 0
       || n.status === 'COMPLETED' || n.status === 'GIVEN_UP' || n.status === 'SUBSUMED';
+}
+
+/**
+ * Ancestors of every approached goal. Working a leaf is working its parent, so the path down to
+ * the loop's position stays lit; before this the ROOT was drawn as never approached for the whole
+ * run, because it is never itself the current subgoal and never merges or closes until the end.
+ * Recomputed only when the tree, the visits or the position change: nodeColor runs every frame.
+ */
+let approachedBeneathCache = { key: null, ids: new Set() };
+function approachedBeneath() {
+  const key = state.nodesById.size + '|' + state.visited.size + '|' + state.currentSubGoalId
+      + '|' + state.treeVersion;
+  if (approachedBeneathCache.key === key) return approachedBeneathCache.ids;
+  const ids = new Set();
+  for (const m of state.nodesById.values()) {
+    if (!ownApproachEvidence(m)) continue;
+    let p = m.parentId ? state.nodesById.get(m.parentId) : null;
+    while (p && !ids.has(p.id)) {
+      ids.add(p.id);
+      p = p.parentId ? state.nodesById.get(p.parentId) : null;
+    }
+  }
+  approachedBeneathCache = { key, ids };
+  return ids;
 }
 
 function noteVisit(id) {
@@ -918,6 +948,7 @@ function labelFor(n) {
 
 // ------ build graph data from flat snapshots ------
 function mergeSnapshot(goals) {
+  state.treeVersion = (state.treeVersion || 0) + 1;
   // Preserve existing node objects (so positions / velocities survive).
   const incoming = new Set();
   for (const g of goals) {
@@ -949,13 +980,20 @@ function mergeSnapshot(goals) {
     if (!incoming.has(id)) state.nodesById.delete(id);
   }
   // Rebuild links from parentId.
+  // T5-BO: the whole path from the root down to the current subgoal flows, not only the current
+  // subgoal's own edges, so the eye can follow where in the tree the work is happening.
+  const onPath = new Set();
+  for (let c = state.nodesById.get(state.currentSubGoalId); c && !onPath.has(c.id);
+       c = c.parentId ? state.nodesById.get(c.parentId) : null) {
+    onPath.add(c.id);
+  }
   state.links = [];
   for (const n of state.nodesById.values()) {
     if (n.parentId && state.nodesById.has(n.parentId)) {
       state.links.push({
         source: n.parentId,
         target: n.id,
-        current: n.id === state.currentSubGoalId || n.parentId === state.currentSubGoalId
+        current: onPath.has(n.id) || n.parentId === state.currentSubGoalId
       });
     }
   }
@@ -983,6 +1021,30 @@ function restyleSprite(n) {
     child.position.set(0, r + 3, 0);
   }
 }
+
+/**
+ * A new run began on the server: forget the previous run's tree, path and selection, so the view
+ * rebuilds from the new run's first snapshot. Settings (voice, verbosity, filters) are kept, and
+ * nothing reloads -- a reload leaves the browser's audio suspended until the next click.
+ */
+function resetGraphForNewRun() {
+  state.nodesById.clear();
+  state.links = [];
+  state.visited.clear();
+  state.visitOrder.length = 0;
+  state.currentSubGoalId = null;
+  state.currentGoalId = null;
+  state.selectedId = null;
+  state.nodeDetail = null;
+  state.sawFirstSnapshot = false;
+  state.treeVersion = (state.treeVersion || 0) + 1;
+  Graph.graphData({ nodes: [], links: [] });
+  if (typeof refreshPanels === 'function') refreshPanels();
+  // Re-open the goal stream: its hello carries the new run's whole tree at once, whichever of the
+  // two streams noticed the new run first.
+  connect();
+}
+window.resetGraphForNewRun = resetGraphForNewRun;
 
 function refreshLinkColors() {
   // Triggers a re-evaluation without resetting positions.
@@ -1123,12 +1185,18 @@ const TTS = (function () {
     if (layer === layers.ambient && layer.playing) return;
 
     ensureCtx();
+    // A suspended context (the browser's autoplay rule after every load) does not play, and a source
+    // started on it never ends -- so its layer stayed "playing" and every later utterance was dropped
+    // as "mid-utterance". That is the voice going mute after a reload until a tab switch resumed the
+    // context. Never start while suspended; ask for the gesture that unlocks it instead.
+    if (ctx.state !== 'running') { needGesture(); return; }
 
     const ac = new AbortController();
     pending.set(clean, ac);
 
     fetchAndDecode(clean, ac.signal).then(buffer => {
       if (!enabled) return;                   // toggled off while fetching
+      if (ctx.state !== 'running') return;    // suspended while fetching: never leave a layer jammed
       if (layer === layers.front) {
         stopLayer(layers.front);              // a newer front utterance may have started meanwhile
       } else if (layer.playing) {
@@ -1173,16 +1241,32 @@ const TTS = (function () {
     const lastBreak = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf(', '), cut.lastIndexOf('; '));
     return (lastBreak > 120 ? cut.substring(0, lastBreak + 1) : cut) + '…';
   }
+  // The autoplay rule is lifted only by a user gesture on the page, so every gesture tries to
+  // resume, and a visible tab does too. One hint per suspension, not per utterance.
+  let gestureHinted = false;
+  function needGesture() {
+    if (gestureHinted || !enabled) return;
+    gestureHinted = true;
+    if (typeof toast === 'function') toast('Voice is paused by the browser. Click anywhere on the page to enable it.');
+  }
+  function unlock() {
+    if (!ctx || ctx.state === 'running') return;
+    ctx.resume().then(() => { if (ctx.state === 'running') gestureHinted = false; }).catch(() => {});
+  }
+  ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
+      document.addEventListener(ev, () => { if (enabled) { ensureCtx(); unlock(); } }, { capture: true }));
   return {
     supported, setEnabled, restore, cancel, speak,
-    announceCycle, announceNode,
+    announceCycle, announceNode, unlock,
     isEnabled: () => enabled,
   };
 })();
 
-// Stop narration when the tab loses focus — avoids voice leaking past a tab switch.
+// Stop narration when the tab loses focus — avoids voice leaking past a tab switch — and try to
+// resume the audio when it comes back.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) TTS.cancel();
+  else TTS.unlock();
 });
 
 // ------ connection ------
@@ -1192,7 +1276,13 @@ function connect() {
   setConn('connecting');
   es = new EventSource(API + '/stream');
   es.onopen = () => setConn('live');
-  es.onerror = () => { setConn('disconnected'); /* EventSource auto-reconnects */ };
+  // EventSource retries a dropped connection by itself, but NOT an error RESPONSE: a request
+  // answered with a failure status while a new instance is still starting leaves it CLOSED for
+  // good, and the view then sits frozen (no refresh, nothing to narrate) until a manual reload.
+  es.onerror = () => {
+    setConn('disconnected');
+    if (es.readyState === EventSource.CLOSED) setTimeout(connect, 3000);
+  };
   es.addEventListener('hello', e => handleEvent(JSON.parse(e.data)));
   es.addEventListener('cycle-end', e => handleEvent(JSON.parse(e.data)));
   es.addEventListener('tree-changed', e => handleEvent(JSON.parse(e.data)));
@@ -2481,7 +2571,7 @@ window.MissionControl = (function () {
     mutation_proposed: 'propose', mutation_scored: 'propose',
     mutation_merged: 'merge', goal_consolidation: 'merge',
     mutation_negotiated: 'heur', heuristic_result: 'heur',
-    mutation_rejected: 'reject', merge_rolled_back: 'reject',
+    mutation_rejected: 'reject', merge_rolled_back: 'reject', llm_response_discarded: 'reject',
     system_paused: 'halt', recurring_defect_dominant: 'halt', guard_violated: 'halt',
     deliberation_outcome: 'delib',
     artifact_preserved: 'preserve',
@@ -2502,6 +2592,7 @@ window.MissionControl = (function () {
     agent_selected: 'agent', mutation_proposed: 'propose', mutation_scored: 'scored',
     mutation_merged: 'MERGE', goal_consolidation: 'consolidate', mutation_negotiated: 'negotiate',
     heuristic_result: 'heuristic', mutation_rejected: 'REJECT', merge_rolled_back: 'rollback',
+    llm_response_discarded: 'DISCARDED',
     system_paused: 'PAUSE', recurring_defect_dominant: 'defect', guard_violated: 'guard',
     deliberation_outcome: 'deliberate', artifact_preserved: 'preserve', mutation_injected: 'inject',
     system_resumed: 'RESUME', run_resumed: 'RESUME-RUN', rewind_performed: 'REWIND',
@@ -2578,10 +2669,23 @@ window.MissionControl = (function () {
     el.className = 'mc-conn ' + (live ? 'live' : 'disconnected');
     el.textContent = live ? 'live' : 'offline';
   }
+  // What the per-cycle deliberation decided. UNDIRECTED is the ordinary case (about nine cycles in
+  // ten across the last 40 runs): nothing called for steering, so the agents run in the order
+  // their signals rank them.
+  const MODE_MEANING = {
+    UNDIRECTED: 'No steering this cycle: agents run in the order their signals rank them.',
+    REPLAN: 'Steering toward the planner and analysis: the plan needs changing.',
+    EVALUATE: 'Steering toward evaluation of a pending change.',
+    EVOLVE: 'Steering toward proposing a change.',
+    MERGE: 'Steering toward merging an accepted change.',
+    PAUSE: 'The loop is paused.',
+    BOOTSTRAP: 'First cycle of the run.'
+  };
   function hudSet(id, txt, cls) {
     const el = $(id); if (!el) return;
     el.textContent = txt;
     if (cls != null) el.className = 'v ' + cls;
+    if (id === 'mc-mode') el.title = MODE_MEANING[txt] || '';
   }
   async function pollUsage() {
     try {
@@ -2794,11 +2898,22 @@ window.MissionControl = (function () {
             (p.trigger === 'operator' ? 'by operator' : esc(p.trigger || '')) +
             (fails ? '<span class="arrow">·</span><span style="color:#fcd34d">' + fails + ' problem(s)</span>' : '') };
       }
+      // T5-BO: what the loop is editing right now, shown briefly and then gone.
+      case 'mutation_proposed': {
+        const n = (p.files && p.files.length) || 0;
+        if (!n) return null;
+        return { title: 'Editing ' + n + ' file' + (n === 1 ? '' : 's'), dot: '#c4b5fd',
+          html: esc(fileList(p.files, 4)) };
+      }
       case 'mutation_merged':
         return { title: 'Merged ' + ((p.files && p.files.length) || 0) + ' file(s)', dot: '#6ee7b7',
           html: esc(fileList(p.files, 4)) };
       case 'mutation_rejected':
         return { title: 'Rejected', dot: '#fca5a5', html: esc(crop(p.reason, 160)) };
+      // T5-BO: an answer thrown away for its FORM, which used to be visible only in the app log.
+      case 'llm_response_discarded':
+        return { title: 'Answer discarded (' + esc(p.role || '?') + ')' + (p.consecutive > 1 ? ' x' + p.consecutive : ''),
+          dot: '#fcd34d', html: esc(crop((p.reason || '') + ': ' + (p.firstLine || ''), 160)) };
       case 'merge_rolled_back':
         return { title: 'Rolled back', dot: '#fca5a5',
           html: '<b>' + ((p.restoredPaths && p.restoredPaths.length) || 0) + '</b> file(s)<span class="arrow">·</span>' + esc(p.errorKind || '') };
@@ -2895,6 +3010,9 @@ window.MissionControl = (function () {
           (chatty && n ? ': ' + fileList(p.files, 3) : '') + '.';
       }
       case 'mutation_rejected': return 'Rejected: ' + crop(p.reason, 110);
+      case 'llm_response_discarded':
+        return (p.consecutive > 2 ? p.consecutive + ' answers in a row were' : 'An answer was')
+          + ' discarded because it did not match the expected format.';
       case 'merge_rolled_back': {
         const n = (p.restoredPaths && p.restoredPaths.length) || 0;
         return 'Rolled back ' + n + (n === 1 ? ' file.' : ' files.');
@@ -2994,6 +3112,25 @@ window.MissionControl = (function () {
     const el = $('mc-subgoal'); if (!el) return;
     el.textContent = crop(desc, 72);
     el.title = desc;
+    refreshCriteriaHud();
+  }
+
+  // T5-BO: which criteria the current subgoal is judged against, without opening its panel —
+  // met/total in the row, each criterion on hover, read from the same detail the panel uses.
+  async function refreshCriteriaHud() {
+    const el = $('mc-criteria'); if (!el) return;
+    const id = state.currentSubGoalId;
+    if (!id) { el.textContent = '—'; el.title = ''; return; }
+    try {
+      const r = await fetch(API + '/' + encodeURIComponent(id));
+      if (!r.ok || state.currentSubGoalId !== id) return;
+      const d = await r.json();
+      const list = Array.isArray(d.criteria) ? d.criteria : [];
+      if (!list.length) { el.textContent = 'none stated'; el.title = ''; return; }
+      const met = list.filter(c => c.cumulativePassed).length;
+      el.textContent = met + '/' + list.length + ' met';
+      el.title = list.map(c => (c.cumulativePassed ? '[met] ' : '[open] ') + (c.text || '')).join('\n');
+    } catch (e) { /* the row keeps its last value; the panel remains the full view */ }
   }
 
   // T5-BF: HUD runtime — total wall-clock since the loop's first behaviour event, ticking.
@@ -3072,6 +3209,7 @@ window.MissionControl = (function () {
       showPosition({ cycleId: p.toCycleId, rewound: true });
       refreshFromStatus();
     }
+    if (env.event === 'cycle_end') refreshCriteriaHud();
     if (env.event === 'agent_selected' && p.role) hudSet('mc-agent', p.role);
     if (env.event === 'cycle_end') {
       if (p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));
@@ -3137,6 +3275,18 @@ window.MissionControl = (function () {
 
   // T5-BF: seed session state from the hello envelope so a page opened mid-run starts true.
   // Re-sent on every (re)connect; the server's tally is authoritative, so SET, don't add.
+  /** Clears everything the previous run left in the HUD, the event strip and the graph. */
+  function resetForNewRun() {
+    const st = strip(); if (st) st.querySelectorAll('.mc-chip').forEach(c => c.remove());
+    const gh = $('mc-ghosts'); if (gh) gh.innerHTML = '';
+    lastMode = null; cycleOrdinal = 0; lastLlmChip = null; lastEventMs = null; loopHalted = false;
+    lastSubGoal = null; fixFailStreak = 0; subgoalSwitched = false; repairedAfter = 0;
+    counters.merge = 0; counters.reject = 0; counters.llm = 0;
+    ['mc-cycle', 'mc-mode', 'mc-subgoal', 'mc-criteria', 'mc-agent', 'mc-goals', 'mc-runtime',
+     'mc-builds', 'mc-buildms', 'mc-tokens'].forEach(id => hudSet(id, '—'));
+    if (window.resetGraphForNewRun) window.resetGraphForNewRun();
+  }
+
   function seedFromHello(env) {
     const p = (env && env.payload) || {};
     const counts = p.counts || {};
@@ -3151,7 +3301,14 @@ window.MissionControl = (function () {
     if (p.lastMode) { lastMode = p.lastMode; hudSet('mc-mode', p.lastMode, 'mode'); }
     // seeding lastSubGoal also keeps a reconnect from re-announcing the current subgoal
     if (p.lastSubGoalDescription) { lastSubGoal = p.lastSubGoalDescription; setSubgoalHud(lastSubGoal); }
-    noteSessionStart(p.sessionStartTimestamp);
+    // The server's own start time is authoritative: a page that stays open while a NEW instance
+    // starts reconnects and receives a new hello, and must count that run, not the first one it saw.
+    const helloStart = p.sessionStartTimestamp ? Date.parse(p.sessionStartTimestamp) : NaN;
+    if (!Number.isNaN(helloStart) && sessionStartMs != null && helloStart !== sessionStartMs) {
+      resetForNewRun();   // a different instance: the previous run's view must not carry over
+    }
+    if (!Number.isNaN(helloStart)) { sessionStartMs = helloStart; refreshRuntime(); }
+    else noteSessionStart(p.sessionStartTimestamp);
     if (p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));
     if (p.sessionBuildCount != null) hudSet('mc-builds', String(p.sessionBuildCount));
     refreshPosition();
@@ -3163,7 +3320,11 @@ window.MissionControl = (function () {
     if (bes) { try { bes.close(); } catch (e) {} }
     bes = new EventSource('/events/behaviour');
     bes.onopen = () => setConn(true);
-    bes.onerror = () => setConn(false); // EventSource auto-reconnects
+    bes.onerror = () => {
+      setConn(false);
+      // Same reason as the goal stream above: an error response closes the stream for good.
+      if (bes.readyState === EventSource.CLOSED) setTimeout(connect, 3000);
+    };
     bes.addEventListener('hello', e => { try { seedFromHello(JSON.parse(e.data)); } catch (err) {} });
     Object.keys(FAMILY).forEach(name => {
       bes.addEventListener(name, e => { try { onEvent(JSON.parse(e.data)); } catch (err) {} });

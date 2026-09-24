@@ -370,4 +370,42 @@ class BlockerExtractorTest {
         assertThat(outcome.unknownCount()).isZero();
         assertThat(outcome.blockers()).anySatisfy(b -> assertThat(b.symbol()).isEqualTo("BookService"));
     }
+
+    /**
+     * T2-FF (filed first as T2-FM): the explanation javac indents under an error belongs to that error. Shape verbatim from
+     * run 2026-09-23_20-20-50's build output; the type names are invented.
+     */
+    @Test
+    void anErrorKeepsTheLinesThatNameItsParticulars() {
+        String stderr = String.join("\n",
+                "[ERROR] /src/main/java/org/acme/kit/WidgetController.java:[44,17] incompatible types: inference variable T has incompatible bounds",
+                "[ERROR]     equality constraints: org.acme.kit.Widget",
+                "[ERROR]     lower bounds: java.util.Map<K,V>",
+                "[ERROR] /src/main/java/org/acme/kit/GadgetController.java:[38,17] incompatible types: inference variable T has incompatible bounds",
+                "[ERROR]     equality constraints: org.acme.kit.Gadget",
+                "[ERROR]     lower bounds: java.util.Map<K,V>",
+                "[INFO] 2 errors");
+
+        BlockerExtractor.Outcome out = BlockerExtractor.extract(stderr);
+
+        assertThat(out.authorErrors()).hasSize(2);
+        assertThat(out.authorErrors().get(0).message())
+                .contains("equality constraints: org.acme.kit.Widget")
+                .contains("lower bounds: java.util.Map<K,V>")
+                .doesNotContain("Gadget");
+        assertThat(out.authorErrors().get(1).message()).contains("org.acme.kit.Gadget");
+    }
+
+    @Test
+    void aQuotedSourceLineIsKeptAndItsCaretIsNot() {
+        String stderr = String.join("\n",
+                "[ERROR] /src/main/java/org/acme/kit/WidgetController.java:[12,9] incompatible types: possible lossy conversion from long to int",
+                "[ERROR]         int n = widgets.count();",
+                "[ERROR]                              ^",
+                "[ERROR] -> [Help 1]");
+
+        String message = BlockerExtractor.extract(stderr).authorErrors().get(0).message();
+
+        assertThat(message).contains("int n = widgets.count();").doesNotContain("^").doesNotContain("Help");
+    }
 }

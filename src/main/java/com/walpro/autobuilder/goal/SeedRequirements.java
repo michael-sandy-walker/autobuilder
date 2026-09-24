@@ -291,7 +291,71 @@ public final class SeedRequirements {
      * edge's precision requirement does not soften because a human approved the wording.
      */
     public static List<String> obligationsOrSplit(String specText, String obligationsFileText) {
-        return written(specText, obligationsFileText, () -> statedIn(specText));
+        return withoutRuleMarkers(written(specText, obligationsFileText, () -> statedIn(specText)));
+    }
+
+    /**
+     * T4-CQ: marks a written obligation as a RULE about how the work is done rather than a property
+     * the result can be checked for ("A test must assert what the route actually does", "Work inside
+     * the project as it is"). A rule still guides the work -- it reaches every consumer that reads
+     * obligations, without the marker -- but it never blocks completion: nothing can execute it, and
+     * the first adopted project's seventh run halted with a finished artifact because a model would
+     * not confirm one. The file is already the operator's to correct; this is one more correction
+     * it can carry.
+     */
+    public static final String RULE_MARKER = "rule:";
+
+    static boolean isRule(String line) {
+        return line != null && line.strip().toLowerCase(java.util.Locale.ROOT).startsWith(RULE_MARKER);
+    }
+
+    /**
+     * T4-CQ: marks a written obligation as ANSWERED BY A GATE -- {@code gate: tests} -- so closure
+     * takes that gate's verdict instead of a model's reading of the source. Run 2026-09-24_18-27
+     * refused closure because a model reading the code would not confirm "The whole test suite
+     * passes" while the test gate had just run that suite green: a runtime fact put to the one
+     * reader that cannot observe it. Which gate answers which line is the operator's declaration,
+     * like {@link #RULE_MARKER}, never inferred from the wording.
+     */
+    public static final String GATE_MARKER = "gate:";
+
+    /** The one gate a line may name today: the project's own test suite. */
+    public static final String GATE_TESTS = "tests";
+
+    /** The gate a line names, or null when it names none. */
+    static String gateOf(String line) {
+        if (line == null) return null;
+        String l = line.strip();
+        if (!l.toLowerCase(java.util.Locale.ROOT).startsWith(GATE_MARKER)) return null;
+        String rest = l.substring(GATE_MARKER.length()).strip();
+        int sp = rest.indexOf(' ');
+        return (sp < 0 ? rest : rest.substring(0, sp)).toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static String withoutRuleMarker(String line) {
+        if (isRule(line)) return line.strip().substring(RULE_MARKER.length()).strip();
+        String gate = gateOf(line);
+        if (gate != null) {
+            String rest = line.strip().substring(GATE_MARKER.length()).strip();
+            return rest.substring(Math.min(rest.length(), gate.length())).strip();
+        }
+        return line;
+    }
+
+    /** The written obligations a named gate answers, markers removed. Empty without a file. */
+    public static List<String> answeredByGate(String specText, String obligationsFileText, String gate) {
+        if (obligationsFileText == null || obligationsFileText.isBlank()) return List.of();
+        List<String> out = new ArrayList<>();
+        for (String r : written(specText, obligationsFileText, List::of)) {
+            if (gate.equals(gateOf(r))) out.add(withoutRuleMarker(r));
+        }
+        return out;
+    }
+
+    private static List<String> withoutRuleMarkers(List<String> lines) {
+        List<String> out = new ArrayList<>(lines.size());
+        for (String l : lines) out.add(withoutRuleMarker(l));
+        return out;
     }
 
     private static List<String> written(String specText, String obligationsFileText,
@@ -321,14 +385,34 @@ public final class SeedRequirements {
      * reported as unclaimed.
      */
     public static List<String> obligationsOrClauses(String specText, String obligationsFileText) {
-        return written(specText, obligationsFileText, () -> clausesOf(specText));
+        return withoutRuleMarkers(written(specText, obligationsFileText, () -> clausesOf(specText)));
     }
 
-    /** {@link #obligationsOrSplit} narrowed to the clauses carrying an obligation verb. */
+    /**
+     * {@link #obligationsOrSplit} narrowed to the clauses carrying an obligation verb -- unless the
+     * written obligations already mark their rules.
+     *
+     * <p>T4-CQ: the verb list is a proxy for "this clause states something checkable", fitted to
+     * prose. A file whose author used the {@code rule:} marker has made that split by hand, and the
+     * proxy then overrules them: on the first adopted project all three unmarked lines ("Every route
+     * ... is covered by a test", "The whole test suite passes", "Add tests under src/test/java")
+     * carry none of its verbs, so closure had nothing to verify and run 2026-09-24_18-13-42 closed
+     * GOAL_FULFILLED with three of seven routes untested. A file without the marker keeps the proxy,
+     * so model-written files on the other targets are judged exactly as before.
+     */
     public static List<String> verifiableObligationsOrSplit(String specText, String obligationsFileText) {
+        List<String> obligations = written(specText, obligationsFileText, () -> statedIn(specText));
+        boolean authorMarkedRules = obligations.stream().anyMatch(l -> isRule(l) || gateOf(l) != null);
         List<String> strict = new ArrayList<>();
-        for (String r : obligationsOrSplit(specText, obligationsFileText)) {
-            if (OBLIGATION.matcher(r).find()) strict.add(r);
+        for (String r : obligations) {
+            if (isRule(r)) continue;   // guides the work, never blocks completion
+            if (GATE_TESTS.equals(gateOf(r))) continue;   // the test gate's verdict, not a reading
+            if (gateOf(r) != null) {
+                // An unknown gate cannot answer anything: kept as an ordinary obligation, so a typo
+                // can only add a question at closure, never remove one.
+                r = withoutRuleMarker(r);
+            }
+            if (authorMarkedRules || OBLIGATION.matcher(r).find()) strict.add(r);
         }
         return strict;
     }
@@ -336,20 +420,39 @@ public final class SeedRequirements {
     /** {@link #notAlreadyCoveredVerifiable} over the written obligations when they exist. */
     public static List<String> notAlreadyCoveredVerifiable(String specText, List<String> bankedCriteria,
                                                            String obligationsFileText) {
-        return uncovered(verifiableObligationsOrSplit(specText, obligationsFileText), bankedCriteria);
+        return uncovered(verifiableObligationsOrSplit(specText, obligationsFileText), bankedCriteria, true);
     }
+
+    /**
+     * T4-CQ: a requirement over EVERY member of a set is never covered by a criterion about one of
+     * them. Word overlap cannot see the quantifier: "Every route the application serves is covered
+     * by a test" shared enough words with "a test for GET /basic/add ..." to count as covered, and
+     * the first adopted project's eighth run closed GOAL_FULFILLED with three of seven routes
+     * untested. So a universal requirement always goes to the verifier. The direction is safe: it
+     * can only add a question at closure, never skip one.
+     */
+    static boolean isUniversal(String requirement) {
+        return requirement != null && UNIVERSAL.matcher(requirement).find();
+    }
+
+    private static final Pattern UNIVERSAL = Pattern.compile("(?i)\\b(every|each|all)\\b");
 
     /** The verifiable requirements the spec states — the closure edge's entry point. */
     public static List<String> notAlreadyCoveredVerifiable(String specText, List<String> bankedCriteria) {
-        return uncovered(statedVerifiableIn(specText), bankedCriteria);
+        return uncovered(statedVerifiableIn(specText), bankedCriteria, false);
     }
 
-    /** The stated requirements no banked criterion overlaps; all of them when nothing is banked. */
-    static List<String> uncovered(List<String> stated, List<String> bankedCriteria) {
+    /**
+     * The stated requirements no banked criterion overlaps; all of them when nothing is banked.
+     * With {@code universalNeverCovered}, a requirement over every member ({@link #isUniversal})
+     * stays uncovered whatever overlaps it.
+     */
+    static List<String> uncovered(List<String> stated, List<String> bankedCriteria, boolean universalNeverCovered) {
         if (stated.isEmpty() || bankedCriteria == null || bankedCriteria.isEmpty()) return stated;
         List<String> uncovered = new ArrayList<>();
         for (String requirement : stated) {
-            if (bankedCriteria.stream().noneMatch(c -> overlaps(requirement, c))) uncovered.add(requirement);
+            if ((universalNeverCovered && isUniversal(requirement))
+                    || bankedCriteria.stream().noneMatch(c -> overlaps(requirement, c))) uncovered.add(requirement);
         }
         return uncovered;
     }

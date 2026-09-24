@@ -288,4 +288,22 @@ class CompileDiagnosticPromptBlockTest {
         assertThat(r.suppressed()).isTrue();
         assertThat(r.suppressionReason()).isEqualTo("meta-agent");
     }
+
+    /** T2-FF: the inference case gets its own advice, and the bounds travel with the message. */
+    @Test
+    void anInferenceClashGetsBranchAdviceNotReturnTypeAdvice() {
+        CycleContextData ctx = ctxWith("sg-A", List.of(
+                new ClassifiedDiagnostic("WidgetController.java", 44, 17,
+                        "incompatible types: inference variable T has incompatible bounds "
+                                + "(equality constraints: org.acme.kit.Widget; lower bounds: java.util.Map<K,V>)")));
+
+        String block = CompileDiagnosticPromptBlock.render(ctx,
+                com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS);
+
+        assertThat(block)
+                .contains("equality constraints: org.acme.kit.Widget; lower bounds: java.util.Map<K,V>")
+                .contains("Hint: the branches of one method or expression produce different types")
+                .contains("widen the declared type").contains("throw")
+                .doesNotContain("declared return type and `return` expression");
+    }
 }

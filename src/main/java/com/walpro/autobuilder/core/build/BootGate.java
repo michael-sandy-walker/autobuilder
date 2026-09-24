@@ -74,6 +74,9 @@ import java.util.stream.Stream;
  */
 @Slf4j
 @Component
+@com.walpro.autobuilder.core.checkpoint.StateHolder(
+        value = com.walpro.autobuilder.core.checkpoint.StateBucket.DERIVED_DO_NOT_RESTORE,
+        note = "servedPrefix is re-read from the tree's own configuration at every launch")
 public class BootGate {
 
     private final boolean enabled;
@@ -348,6 +351,12 @@ public class BootGate {
         }
         Set<EndpointSurfaceQuery.Endpoint> declared = specText == null
                 ? Set.of() : endpointSurfaceQuery.declaredInSpec(specText);
+        // T4-CQ: routes are asked where the artifact serves them, not only where the code says.
+        servedPrefix = coldReadService == null ? "" : coldReadService.servedPrefix(workingDir).orElse("");
+        if (!servedPrefix.isEmpty()) {
+            log.info("T4-CQ: the artifact serves its routes under {} (its own configuration) — "
+                    + "requests are sent there", servedPrefix);
+        }
 
         long start = System.currentTimeMillis();
         Optional<ClaimRefutation> failure = launchAndObserve(artifact.get(), declared, workingDir,
@@ -1510,9 +1519,26 @@ public class BootGate {
         }
     }
 
+    /** T4-CQ: the configured prefix of the tree being observed; empty when it declares none. */
+    private volatile String servedPrefix = "";
+
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.coldread.ColdReadService coldReadService;
+
+    /** Test seam — production wires the bean. */
+    void setColdReadService(com.walpro.autobuilder.core.coldread.ColdReadService s) { this.coldReadService = s; }
+
+    /** A declared path as the artifact serves it: under its configured prefix, never twice. */
+    String served(String path) {
+        String prefix = servedPrefix;
+        if (prefix == null || prefix.isEmpty() || path == null) return path;
+        if (path.equals(prefix) || path.startsWith(prefix + "/") || path.startsWith(prefix + "?")) return path;
+        return prefix + (path.startsWith("/") ? path : "/" + path);
+    }
+
     private HttpRequest probeRequest(int port, CriterionProbeSynthesizer.ProbeRequest r) {
         HttpRequest.Builder builder = HttpRequest
-                .newBuilder(URI.create("http://127.0.0.1:" + port + r.path()))
+                .newBuilder(URI.create("http://127.0.0.1:" + port + served(r.path())))
                 .timeout(Duration.ofMillis(requestTimeoutMs));
         if (r.body() == null || r.body().isBlank()) {
             builder.method(r.method(), HttpRequest.BodyPublishers.noBody());
@@ -1524,14 +1550,14 @@ public class BootGate {
     }
 
     private HttpRequest request(int port, String path) {
-        return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
+        return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + served(path)))
                 .timeout(Duration.ofMillis(requestTimeoutMs))
                 .GET()
                 .build();
     }
 
     private HttpRequest postRequest(int port, String path, String body) {
-        return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
+        return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + served(path)))
                 .timeout(Duration.ofMillis(requestTimeoutMs))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))

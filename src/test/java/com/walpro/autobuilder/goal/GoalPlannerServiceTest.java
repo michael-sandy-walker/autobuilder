@@ -179,6 +179,75 @@ class GoalPlannerServiceTest {
         assertThat(result.injectedIds()).isEmpty();
     }
 
+    /** A GIVEN_UP item a closure gate raised, as the test gate leaves one. */
+    private GoalSimilarityService givenUpGateItem(String id, String description) {
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal(id, description, false, "root");
+        GoalEntity g = service.getGoalById(id);
+        g.getMetadata().put(com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.GATE_TEST);
+        g.setStatus(GoalStatus.GIVEN_UP);
+        GoalSimilarityService similarity = mock(GoalSimilarityService.class);
+        when(similarity.countGivenUpMatches(anyString())).thenReturn(1L);
+        when(similarity.similarity(anyString(), anyString())).thenReturn(0.95f);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "goalSimilarityService", similarity);
+        return similarity;
+    }
+
+    @Test
+    void injectCoverageGaps_gateObservation_reopensItsGivenUpItemUnderTheCurrentObservation() {
+        // T4-CQ: two adopted runs dropped the test gate's re-observation 145 and 148 times as a
+        // "paraphrase" of its own given-up item, then sat to the deadline with no work.
+        givenUpGateItem("suite", "[BUILD_FIX] Make the project's own test suite pass — Tests run: 9, Failures: 4");
+        String now = "[BUILD_FIX] Make the project's own test suite pass — Tests run: 14, Errors: 4";
+        long before = service.getAllGoals().size();
+        long brake = service.countClosureEdgeInjections();
+
+        CoverageReviewResult first = service.injectCoverageGaps(service.getGoalById("root"), List.of(now), true);
+
+        assertThat(service.getAllGoals()).as("reopened, not copied").hasSize((int) before);
+        GoalEntity g = service.getGoalById("suite");
+        assertThat(g.getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(g.getDescription()).as("the model sees what the gate sees NOW").isEqualTo(now);
+        assertThat(first.injectedIds()).containsExactly("suite");
+        assertThat(service.countClosureEdgeInjections()).isEqualTo(brake + 1);
+
+        g.setStatus(GoalStatus.GIVEN_UP);
+        service.injectCoverageGaps(service.getGoalById("root"), List.of(now), true);
+        assertThat(g.getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.countClosureEdgeInjections())
+                .as("a repeat reopen does not reset the convergence brake, which still ends a run that cannot fix it")
+                .isEqualTo(brake + 1);
+    }
+
+    @Test
+    void injectCoverageGaps_aProposalThatIsNotAGateObservationIsStillDroppedAsAParaphrase() {
+        givenUpGateItem("suite", "[BUILD_FIX] Make the project's own test suite pass — Tests run: 9, Failures: 4");
+
+        CoverageReviewResult result = service.injectCoverageGaps(service.getGoalById("root"),
+                List.of("[BUILD_FIX] Make the project's own test suite pass — Tests run: 14, Errors: 4"));
+
+        assertThat(result.injected()).isEmpty();
+        assertThat(service.getGoalById("suite").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void countUnmetCriteria_aClosureGatesItemEarnsBudgetThoughItsCriterionIsStampedAuthored() {
+        // Run 2026-09-24_13-28-12: "exhausted its retry budget (1/0)" -- the test gate's item got
+        // one attempt, because its gate-owned criterion is AUTHORED for the closure ledger.
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("suite", "[BUILD_FIX] Make the project's own test suite pass", false, "root");
+        GoalEntity g = service.getGoalById("suite");
+        g.getMetadata().put("acceptanceCriteria", List.of("The project's own automated test suite passes"));
+        g.getMetadata().put("criteriaBinding", java.util.Map.of("1", "AUTHORED"));
+        assertThat(service.countUnmetCriteria("suite")).as("an ordinary authored criterion earns nothing").isZero();
+
+        g.getMetadata().put(com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.GATE_TEST);
+
+        assertThat(service.countUnmetCriteria("suite")).isEqualTo(1);
+    }
+
     @Test
     void injectCoverageGaps_freshGap_createsSubgoal() {
         service.resetInitialGoal("root", "Main Goal");

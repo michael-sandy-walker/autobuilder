@@ -81,7 +81,7 @@ class EvolutionLLMAdapterTest {
                 anyString(),
                 anyString(),
                 any(),
-                any()
+                any(), any()
         )).thenReturn(LLMResponseResult.success(parsedOutcome, "#Evolution raw"));
 
         // when
@@ -110,7 +110,7 @@ class EvolutionLLMAdapterTest {
                 anyString(),
                 anyString(),
                 any(),
-                any()
+                any(), any()
         )).thenReturn(LLMResponseResult.failure("RAW_CONTENT", "protocol-violation"));
 
         // when
@@ -158,6 +158,7 @@ class EvolutionLLMAdapterTest {
                 anyString(),
                 userPromptCaptor.capture(),
                 any(),
+                any(),
                 any()
         )).thenReturn(LLMResponseResult.success(outcome, "#divergent"));
 
@@ -187,7 +188,7 @@ class EvolutionLLMAdapterTest {
                 anyString(),
                 anyString(),
                 any(),
-                any()
+                any(), any()
         )).thenReturn(LLMResponseResult.success(outcome, "#evolution raw"));
 
         agent.evolve(context);
@@ -234,6 +235,7 @@ class EvolutionLLMAdapterTest {
                 anyString(),
                 userPromptCaptor.capture(),
                 any(),
+                any(),
                 any()
         )).thenReturn(LLMResponseResult.success(outcome, "#evolution raw"));
 
@@ -260,7 +262,7 @@ class EvolutionLLMAdapterTest {
                         "package com.example.demo;\nclass Loan {}")),
                 List.of(), "ok", "#raw");
 
-        when(protocolInvoker.callWithValidation(any(), anyString(), anyString(), any(), any()))
+        when(protocolInvoker.callWithValidation(any(), anyString(), anyString(), any(), any(), any()))
                 .thenReturn(LLMResponseResult.success(parsed, "#raw"));
         when(packageConsolidationService.consolidate(any(), any(), any())).thenReturn(consolidated);
 

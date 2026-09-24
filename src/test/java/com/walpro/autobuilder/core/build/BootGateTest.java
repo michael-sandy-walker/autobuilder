@@ -1212,4 +1212,18 @@ class BootGateTest {
         assertThat(BootGate.minimalBodyFor(null, "{\"bookId\":1}")).isEmpty();
     }
 
+
+    /** T4-CQ: a declared route is asked where the artifact serves it, and never prefixed twice. */
+    @Test
+    void aDeclaredPathIsAskedUnderTheServedPrefix() {
+        BootGate g = gate(true, "true", "", 1000);
+        org.springframework.test.util.ReflectionTestUtils.setField(g, "servedPrefix", "/widgets");
+
+        assertThat(g.served("/gadgets/add")).isEqualTo("/widgets/gadgets/add");
+        assertThat(g.served("/widgets/gadgets/add")).isEqualTo("/widgets/gadgets/add");
+        assertThat(g.served("/widgets")).isEqualTo("/widgets");
+
+        org.springframework.test.util.ReflectionTestUtils.setField(g, "servedPrefix", "");
+        assertThat(g.served("/gadgets/add")).isEqualTo("/gadgets/add");
+    }
 }

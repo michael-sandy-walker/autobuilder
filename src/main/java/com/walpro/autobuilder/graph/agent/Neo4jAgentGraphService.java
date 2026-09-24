@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.graph.agent;
 
+import com.walpro.autobuilder.graph.HistoryRead;
+import com.walpro.autobuilder.graph.HistorySpan;
+import com.walpro.autobuilder.graph.HistoryUse;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -13,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.walpro.autobuilder.graph.core.ActionEntity;
 import com.walpro.autobuilder.graph.core.ArtifactEntity;
+import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,19 +30,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     private final Neo4jClient neo4jClient;
     private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
-    @Override
-    public void updateAgentStatus(String agentId, String status) {
-        neo4jClient.query("""
-            MATCH (a:Agent { id: $agentId })
-            SET a.status = $status
-        """)
-        .bind(agentId).to("agentId")
-        .bind(status).to("status")
-        .run();
-
-        log.info("Updated agent status: {} → {}", agentId, status);
-    }
-    
     @Override
     public void registerAction(ActionEntity action) {
         neo4jClient.query("""
@@ -119,6 +110,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         .run();
     }
     
+    @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.ADVISORY,
+            note = "The interpretation agent's recent summaries for the active goal, rendered into its prompt.")
     @Override
     public List<ArtifactEntity> findRecentArtifactsForGoal(String goalId, List<String> artifactTypes, int limit) {
         if (goalId == null || goalId.isBlank()) {
@@ -157,6 +150,52 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .toList();
     }
 
+    @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.BINDING,
+            note = "PlannerRepetitionHeuristic counts consecutive planner outputs; a streak reaching into a previous run is not a streak.")
+    @Override
+    public List<PlannerActionSnapshot> findRecentPlannerActions(String scopeGoalId, int limit) {
+        // T4-CJ slice 2: RUN-SCOPED. Its consumer (PlannerRepetitionHeuristic) measures
+        // repetition "recently" — a counter that silently spans a resumed lineage's earlier
+        // runs is counting someone else's work.
+        return neo4jClient.query("""
+            MATCH (a:Action)
+            WHERE a.type = 'planner'
+              AND a.targetsGoalId = $scopeGoalId
+              AND a.runId = $runId
+              AND a.fingerprint IS NOT NULL
+            RETURN a.id            AS actionId,
+                   a.targetsGoalId AS scopeGoalId,
+                   a.fingerprint   AS fingerprint,
+                   a.plannerUpdated AS updated,
+                   a.plannerNewGoalsCount AS newGoalsCount,
+                   a.occurredInCycle AS cycleId,
+                   a.attemptId     AS attemptId,
+                   a.timestamp     AS ts
+            ORDER BY a.timestamp DESC
+            LIMIT $limit
+        """)
+                .bindAll(Map.of(
+                        "scopeGoalId", scopeGoalId,
+                        "runId", runIdentity.runId(),
+                        "limit", limit
+                ))
+                .fetch()
+                .all()
+                .stream()
+                .map(row -> new PlannerActionSnapshot(
+                        (String) row.get("actionId"),
+                        (String) row.get("scopeGoalId"),
+                        (String) row.get("fingerprint"),
+                        (Boolean) row.get("updated"),
+                        row.get("newGoalsCount") == null ? null : ((Number) row.get("newGoalsCount")).intValue(),
+                        (String) row.get("cycleId"),
+                        (String) row.get("attemptId"),
+                        row.get("ts") == null ? null : Instant.parse(row.get("ts").toString().replace("Z", "Z"))
+                ))
+                .toList();
+    }
+
+    @Override
     public void attachPlannerMetadata(
             String actionId,
             String fingerprint,
@@ -178,6 +217,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .run();
     }
 
+    @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.BINDING,
+            note = "PlannerRepetitionHeuristic counts consecutive planner outputs; a streak reaching into a previous run is not a streak.")
     @Override
     public void linkCriterionResults(List<CriterionResultEntity> results) {
         if (results == null || results.isEmpty()) return;
@@ -213,6 +254,9 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         }
     }
 
+    @HistoryRead(span = HistorySpan.ALL_LINEAGES, use = HistoryUse.BINDING,
+            note = "T4-BR's completion-verification cache: a recorded verdict is reused instead of asking the model again, and a hit banks the criterion.",
+            crossLineageBecause = "Keyed by the criterion AND the digest of the code it was judged against, so a hit from any lineage is the same question asked of byte-identical code. The span adds reuse, never a different answer.")
     @Override
     public Map<String, Boolean> findCriterionResults(java.util.Collection<String> criterionKeys, String codeDigest) {
         if (criterionKeys == null || criterionKeys.isEmpty() || codeDigest == null || codeDigest.isBlank()) {
@@ -260,6 +304,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         }
     }
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.BINDING,
+            note = "EvolutionAgent reads the subgoal's last verdict. Deliberately spans the runs of the goal's lineage (2026-07-26): a resumed run must see that its subgoal's last attempt was rejected, and scoping it to the run would remove that safeguard.")
     @Override
     public String findLatestEvaluationStatusForSubgoal(String subGoalId) {
         return neo4jClient.query("""
@@ -277,6 +323,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .orElse(null);
     }
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.BINDING,
+            note = "The within-subgoal regression baseline (ScoreRegressionHeuristic, ProblemReductionHeuristic via CycleContextCoordinator). Spans the runs of the goal's lineage by design.")
     @Override
     public java.util.Optional<Double> findLatestAcceptedScoreForSubgoal(String subGoalId) {
         if (subGoalId == null || subGoalId.isBlank()) return java.util.Optional.empty();
@@ -296,6 +344,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .map(row -> row.get("score") == null ? null : ((Number) row.get("score")).doubleValue());
     }
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.ADVISORY,
+            note = "The subgoal's accepted-score trend, carried on the cycle context for rendering and trend reads.")
     @Override
     public java.util.List<Double> findScoreHistoryForSubgoal(String subGoalId, int limit) {
         if (subGoalId == null || subGoalId.isBlank()) return List.of();
@@ -319,6 +369,8 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                 .toList();
     }
 
+    @HistoryRead(span = HistorySpan.RUN, use = HistoryUse.BINDING,
+            note = "ScopeThrashSignalAnalyzer counts CONSECUTIVE out-of-scope assessments; a streak reaching into a previous run is not a streak.")
     public List<ScopeActionSnapshot> findRecentScopeActions(String subGoalId, int limit) {
         // T4-CJ slice 2: RUN-SCOPED. ScopeThrashSignalAnalyzer counts CONSECUTIVE out-of-scope
         // assessments; a streak that reaches back into a previous run is not a streak.

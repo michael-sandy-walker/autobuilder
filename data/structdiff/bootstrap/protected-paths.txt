@@ -1,0 +1,3 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# The operator owns the library code of this adopted project; the loop adds tests only.
+src/main/**

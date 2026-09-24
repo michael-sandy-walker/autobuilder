@@ -47,8 +47,18 @@ public final class BuildOutputWindow {
         this.tailLines = tailLines;
     }
 
+    /*
+     * Terminal colour escapes are stripped on the way in, with the classifier's pattern (one home).
+     * A build tool that decides it is talking to a terminal wraps every level marker in them, and
+     * they then travelled verbatim into the evaluation prompt's build block: 600 to 3000 escape
+     * sequences per run across the archive, tokens the model paid for that carried nothing.
+     */
+
     /** Appends one line. Thread-confined: the drainer thread writes, the caller reads after join. */
     public synchronized void add(String line) {
+        if (line != null && line.indexOf('\u001B') >= 0) {
+            line = BuildErrorClassifier.ANSI_ESCAPE.matcher(line).replaceAll("");
+        }
         if (head.size() < headLines) {
             head.add(line);
             return;

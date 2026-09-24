@@ -19,6 +19,10 @@ public class MutationApplier {
     private final FileService fileService;
     private final MutationSnapshotService mutationSnapshotService;
 
+    /** T4-CQ: operator-declared paths no writer may touch; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.ProtectedPaths protectedPaths;
+
     public void applyRegularMutations(CycleContextData context) throws IOException {
         applyMutations(context, false);
         mutationSnapshotService.writeMutationMeta(context);
@@ -50,6 +54,9 @@ public class MutationApplier {
                                 + " specification asks for no tests", file.path());
                         continue;
                     }
+                    if (protectedPaths != null && protectedPaths.refuse("evolution", file.path())) {
+                        continue;
+                    }
                     writeFile(outputPrefix + file.path(), file.content(), "output");
                 } else {
                     writeFile(mutationPrefix + file.path(), file.content(), "mutations");
@@ -64,6 +71,7 @@ public class MutationApplier {
         for (String deleted : mutations.deletedFiles()) {
             try {
                 if (includeOutput) {
+                    if (protectedPaths != null && protectedPaths.refuse("evolution", deleted)) continue;
                     deleteFile(outputPrefix + deleted, "output");
                 } else {
                     deleteFile(mutationPrefix + deleted, "mutations");

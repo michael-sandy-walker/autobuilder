@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.analysis.semantic;
 
+import com.walpro.autobuilder.analysis.structure.AnnotationVocabularies;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -43,11 +44,12 @@ public class DefaultSemanticDiffAnalyzer implements SemanticDiffAnalyzer {
     }
 
     private boolean hasApiAnnotationDifference(String oldJava, String newJava) {
-        Set<String> highImpactAnnotations = Set.of(
-            "RestController", "Controller", "Service", "Component",
-            "Repository", "Configuration", "Transactional", "Scheduled",
-            "RequestMapping", "GetMapping", "PostMapping", "PutMapping", "DeleteMapping"
-        );
+        // T5-BN: composed from the one vocabulary home rather than a private copy of it.
+        Set<String> highImpactAnnotations = new java.util.HashSet<>();
+        highImpactAnnotations.addAll(AnnotationVocabularies.CONTAINER_MANAGED);
+        highImpactAnnotations.addAll(AnnotationVocabularies.EXECUTION_MODIFIER);
+        highImpactAnnotations.addAll(AnnotationVocabularies.VERB_MAPPING.keySet());
+        highImpactAnnotations.add(AnnotationVocabularies.GENERIC_MAPPING);
 
         Set<String> oldAnnotations = extractAnnotations(oldJava, highImpactAnnotations);
         Set<String> newAnnotations = extractAnnotations(newJava, highImpactAnnotations);

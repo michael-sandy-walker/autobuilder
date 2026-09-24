@@ -160,4 +160,52 @@ class CompletionEdgeExecutionRefutationTest {
         verify(verifier).verifyCompletion(any(), any(), any());
         assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
     }
+
+    /**
+     * T4-CQ: no banked criterion is not a reason to skip the specification. The first adopted
+     * project's subgoal criteria were all loop-authored, the gate was skipped whole, and the root
+     * closed with one of seven required tests written (run 2026-09-24_12-09-57).
+     */
+    @Test
+    void withNoBankedCriterionTheSpecificationsOwnObligationsAreStillChecked() throws IOException {
+        CriteriaVerificationService verifier = mock(CriteriaVerificationService.class);
+        when(verifier.verifyCompletion(any(), any(), any()))
+                .thenReturn(CriteriaVerificationService.CompletionVerification.blocked(
+                        "1 acceptance criterion(s) not confirmed in the current code: count <file>",
+                        List.of("count <file> prints the number of data rows")));
+        ClosureClaimVerifier abstaining = (goalId, criteria, specText) -> Optional.empty();
+
+        GoalPlannerService service = serviceWith(verifier, abstaining);
+        service.getGoalById("D").getMetadata().remove("acceptanceCriteria");
+        service.autoCompleteRootIfSatisfied();
+
+        verify(verifier).verifyCompletion(any(), any(), any());
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    /**
+     * T4-CQ: an attempt whose inputs have not changed cannot reach a different verdict, so it is
+     * not re-run. The sixth adopted run re-ran every closure gate about twelve times per cycle
+     * against an unchanged tree. A change to any goal re-opens the question.
+     */
+    @Test
+    void anUnchangedTreeIsNotJudgedTwiceAndAChangeReopensTheQuestion() throws IOException {
+        CriteriaVerificationService verifier = mock(CriteriaVerificationService.class);
+        when(verifier.verifyCompletion(any(), any(), any()))
+                .thenReturn(CriteriaVerificationService.CompletionVerification.abstained());
+        ClosureClaimVerifier abstaining = (goalId, criteria, specText) -> Optional.empty();
+
+        GoalPlannerService service = serviceWith(verifier, abstaining);
+        service.autoCompleteRootIfSatisfied();
+        service.autoCompleteRootIfSatisfied();
+        service.autoCompleteRootIfSatisfied();
+
+        verify(verifier, org.mockito.Mockito.times(1)).verifyCompletion(any(), any(), any());
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+
+        service.getGoalById("D").getMetadata().put("acceptanceCriteria", List.of("The reader class exists", "It reads"));
+        service.autoCompleteRootIfSatisfied();
+
+        verify(verifier, org.mockito.Mockito.times(2)).verifyCompletion(any(), any(), any());
+    }
 }

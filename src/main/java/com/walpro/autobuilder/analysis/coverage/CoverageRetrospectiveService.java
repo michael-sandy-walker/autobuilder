@@ -88,7 +88,13 @@ public class CoverageRetrospectiveService {
                     new Message("user", userPrompt)
             );
 
-            ResponseEntity<ChatResponse> response = llmClient.ask(messages);
+            ResponseEntity<ChatResponse> response;
+
+            try (var llmPurpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("coverage-review")) {
+
+                response = llmClient.ask(messages);
+
+            }
             if (response.getBody() == null || response.getBody().getFirstContent() == null) {
                 log.warn("LLM returned empty response — NO coverage result (caller decides: completion defers, give-up proceeds)");
                 return Optional.empty();

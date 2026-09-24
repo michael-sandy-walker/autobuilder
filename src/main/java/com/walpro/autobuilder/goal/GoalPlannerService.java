@@ -685,9 +685,20 @@ public class GoalPlannerService {
             // an all-authored goal gets the floor of 1 attempt instead of churning cycles
             // on requirements the loop invented (run 19's "strings" goal burned its whole
             // endgame this way before killing the root).
-            if ((passing == null || !passing) && !isAuthoredCriterion(goal, i)) unmet++;
+            // T4-CQ: an item a closure gate raised is the exception. Its criteria are stamped
+            // AUTHORED so the closure ledger does not count what the gate re-checks itself, and
+            // that stamp left it a budget of ZERO: the test gate's item on the first adopted
+            // project was given up after one attempt ("1/0"), and the gate then refused closure
+            // for the rest of the run with nothing left to work on. The gate's requirement is
+            // not one the loop invented -- the root cannot close without it.
+            if ((passing == null || !passing) && (raisedByClosureGate(goal) || !isAuthoredCriterion(goal, i))) unmet++;
         }
         return unmet;
+    }
+
+    private static boolean raisedByClosureGate(GoalEntity g) {
+        return g.getMetadata() != null
+                && g.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY) != null;
     }
 
     /**
@@ -2717,9 +2728,11 @@ public class GoalPlannerService {
         // the item should keep being worked, not spawn a twin. Measured in run
         // 2026-09-20_09-43-23: three identical items in 100 seconds, one per refusal, until the
         // run was stopped; half the goal tree was duplicates.
+        // T2-ET widened this from the criteria gate to every gate: a boot-gate item refused on the
+        // criteria it quotes is in the same position — its done-when IS those criteria.
         GoalEntity refused = goalMap.get(goalId);
-        if (refused != null && BlockerTypes.isFromCriteriaGate(refused.getMetadata())) {
-            log.info("T4-CU: {} is itself a criteria-gate repair item — not injecting a twin;"
+        if (refused != null && BlockerTypes.isFromGate(refused.getMetadata())) {
+            log.info("T4-CU: {} is itself a gate-raised repair item — not injecting a twin;"
                     + " the existing item stays the work", goalId);
             return;
         }
@@ -2734,7 +2747,7 @@ public class GoalPlannerService {
         CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                 "[BUILD_FIX] The running artifact contradicts acceptance criteria this work item"
                         + " closed on — repair the code so they hold: "
-                        + String.join("; ", refutation.refutedCriteria())));
+                        + String.join("; ", refutation.refutedCriteria())), true);
         if (injected.injected().isEmpty()) {
             log.info("T4-CU: no repair item injected for {} — the gap was deduped or limited", goalId);
             return;
@@ -2763,6 +2776,12 @@ public class GoalPlannerService {
         if (closureClaimVerifier == null) return Optional.empty();
         GoalEntity g = goalMap.get(goalId);
         if (g == null || g.getMetadata() == null) return Optional.empty();
+        // T2-ET: a work item the boot gate raised is a claim about an OBSERVATION, and it
+        // usually declares no criteria — so the check below abstained and a model score was the
+        // only thing that closed it. Ask the observation first; the criteria, if any, still
+        // follow.
+        Optional<ClaimRefutation> observed = refuteOriginatingObservation(g);
+        if (observed.isPresent()) return observed;
         Object raw = g.getMetadata().get("acceptanceCriteria");
         if (!(raw instanceof List<?> l) || l.isEmpty()) {
             // INFO, not DEBUG: this is the THIRD way this check can be silent, and until
@@ -2821,6 +2840,47 @@ public class GoalPlannerService {
                     goalId, e.toString());
             return Optional.empty();
         }
+    }
+
+    /**
+     * T2-ET: the originating gate's vote on the closure of an item it raised.
+     *
+     * <p>T4-CC gave the gate precedence over the model for accepting a MUTATION on such an item;
+     * nothing gave it a say in closing the item itself. Measured over the September archive: 45
+     * boot-gate items closed by score, none by the gate, and of the 37 whose next observation
+     * could be classified, 9 were followed by the very defect they named. The self-check does not
+     * re-raise a finding identical to its last one, so each of those nine was lost for the rest of
+     * the run rather than re-queued.
+     *
+     * <p>Read through the claim the injector stamped (T4-DW's {@code BOOT_CLAIM_KEY}), never
+     * through the item's prose: a whole-artifact item is re-observed for the same defect; an item
+     * quoting contradicted criteria has those criteria probed again. An entry-point item carries
+     * its own criterion and is answered below by the ordinary path. An unstamped item is left to
+     * that path too.
+     */
+    private Optional<ClaimRefutation> refuteOriginatingObservation(GoalEntity g) {
+        Map<String, Object> md = g.getMetadata();
+        if (!BlockerTypes.GATE_BOOT.equals(md.get(BlockerTypes.ORIGINATING_GATE_KEY))) {
+            return Optional.empty();
+        }
+        Object claim = md.get(BlockerTypes.BOOT_CLAIM_KEY);
+        GoalEntity specRoot = getRootGoal();
+        String specText = specRoot == null ? null : specRoot.getDescription();
+        try {
+            if (BlockerTypes.CLAIM_SERVES.equals(claim)) {
+                return closureClaimVerifier.refuteObservedDefect(g.getId(), g.getDescription(), specText);
+            }
+            if (BlockerTypes.CLAIM_CRITERION.equals(claim)
+                    && md.get(BlockerTypes.BOOT_CLAIM_CRITERIA_KEY) instanceof List<?> quoted
+                    && !quoted.isEmpty()) {
+                return closureClaimVerifier.refute(g.getId(),
+                        quoted.stream().map(String::valueOf).toList(), specText);
+            }
+        } catch (RuntimeException e) {
+            log.warn("T2-ET: originating-observation check for {} failed ({}) — treating as unchecked",
+                    g.getId(), e.toString());
+        }
+        return Optional.empty();
     }
 
     /**
@@ -3792,7 +3852,7 @@ public class GoalPlannerService {
         List<String> doneWhen = exercisableCriterionQuery == null ? List.of()
                 : exercisableCriterionQuery.exercisable(uncoveredSeed, root.getDescription());
         CoverageReviewResult injected = injectCoverageGaps(root, List.of(
-                "[BUILD_FIX] The running artifact contradicts the specification — " + refutation));
+                "[BUILD_FIX] The running artifact contradicts the specification — " + refutation), true);
         if (injected.injected().isEmpty() || doneWhen.isEmpty()) return;
         for (String id : injected.injectedIds()) {
             // ⚠ MARKER FIRST, CRITERIA SECOND, for the reason recorded at the sibling site: the
@@ -3821,6 +3881,28 @@ public class GoalPlannerService {
         }
     }
 
+    /**
+     * The seed obligations closure still has to ask about. A line the operator marked
+     * {@code gate: tests} is the test gate's -- which ran above and passed, or closure would not be
+     * here -- so it is not put to a model reading the source. When that gate is off it answered
+     * nothing, and the line goes back to the model like any other.
+     */
+    private List<String> uncoveredSeedAtClosure(GoalEntity root, List<String> banked) {
+        String written = writtenObligations();
+        List<String> uncovered = new ArrayList<>(
+                SeedRequirements.notAlreadyCoveredVerifiable(root.getDescription(), banked, written));
+        List<String> testGateLines = SeedRequirements.answeredByGate(
+                root.getDescription(), written, SeedRequirements.GATE_TESTS);
+        if (testGateLines.isEmpty()) return uncovered;
+        if (testRunGate != null && testRunGate.isLive()) {
+            log.info("T4-CQ: {} seed obligation(s) answered by the test gate, not by a reading: {}",
+                    testGateLines.size(), testGateLines);
+        } else {
+            uncovered.addAll(testGateLines);
+        }
+        return uncovered;
+    }
+
     private void refuseClosureUnrepairable(String gate, String detail) {
         log.warn("T4-DK: root closure REFUSED by {} — {}; the repair work item deduplicates against "
                 + "an already GIVEN_UP item, so the requirement is unmet and unfixable this cycle. "
@@ -3847,6 +3929,36 @@ public class GoalPlannerService {
                 .repairOnDisk(Path.of(currentCycleContext.outputPath()));
     }
 
+    /** T4-CQ: inputs of the last closure attempt that left the root ACTIVE; derived, not restored. */
+    private String lastIncompleteClosureInputs;
+    private boolean closureRepeatReported;
+
+    /** The tree the closure gates judge, plus every goal's state and criteria. */
+    private String closureInputsFingerprint() {
+        StringBuilder sb = new StringBuilder();
+        Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+        if (output != null) {
+            new java.util.TreeMap<>(output).forEach((path, content) ->
+                    sb.append(path).append('=').append(content == null ? 0 : content.hashCode()).append(';'));
+        }
+        sb.append('|');
+        new java.util.TreeMap<>(goalMap).forEach((id, g) -> {
+            sb.append(id).append(':').append(g.getStatus());
+            if (g.getMetadata() != null) {
+                // All of it: origin, criteria, banks, reopen counts -- any of them can change a verdict.
+                sb.append(':').append(new java.util.TreeMap<>(g.getMetadata()));
+            }
+            sb.append(';');
+        });
+        try {
+            byte[] d = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(d);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return sb.toString(); // every JVM ships SHA-256; the raw text is a correct fallback
+        }
+    }
+
     public void autoCompleteRootIfSatisfied() {
         // Replan atomicity: while the planner is mid-execution (prune already applied, injection
         // not yet), the active set is transiently empty — completing the root here is the
@@ -3869,6 +3981,33 @@ public class GoalPlannerService {
         boolean anyActive = allSubgoals.stream().anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE);
         if (anyActive) return;
 
+        // T4-CQ: an attempt whose inputs have not changed cannot reach a different verdict. The
+        // gates below package, boot and test the artifact and may ask a model; the first adopted
+        // project's sixth run re-ran all of them about twelve times per cycle against an unchanged
+        // tree (146 boot-gate runs), each time dropping the same blocked repair as a paraphrase.
+        // Asking a model again on identical inputs is not new evidence either. The fingerprint is
+        // the tree the gates judge plus every goal's state, so a merge, a retirement or an edited
+        // criterion re-opens the question at once.
+        if (closureInputsFingerprint().equals(lastIncompleteClosureInputs)) {
+            if (!closureRepeatReported) {
+                closureRepeatReported = true;
+                log.info("T4-CQ: closure not re-attempted — nothing it judges has changed since the "
+                        + "last attempt, which did not complete the root");
+            }
+            return;
+        }
+        closureRepeatReported = false;
+        try {
+            attemptRootClosure(root, allSubgoals);
+        } finally {
+            // Recorded AFTER the attempt: an attempt that itself changes state (reopening a
+            // blocker, injecting a repair) must not leave the pre-attempt state marked as judged.
+            lastIncompleteClosureInputs = getRootGoal() != null
+                    && getRootGoal().getStatus() == GoalStatus.ACTIVE ? closureInputsFingerprint() : null;
+        }
+    }
+
+    private void attemptRootClosure(GoalEntity root, List<GoalEntity> allSubgoals) {
         List<String> blockers = new ArrayList<>();
         int passing = 0;
         int subsumed = 0;
@@ -4056,7 +4195,7 @@ public class GoalPlannerService {
                 if (packagingFailure.isPresent()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                             "[BUILD_FIX] Make the application packageable and startable — packaging failed: "
-                                    + packagingFailure.get()));
+                                    + packagingFailure.get()), true);
                     if (!injected.injected().isEmpty()) {
                         // Same blob-becomes-criterion guard as the T4-BP-3 injection below: the
                         // done-when is the requirement, not the captured build output. The package
@@ -4140,7 +4279,7 @@ public class GoalPlannerService {
                             // "start and serve the specified endpoints" was an instruction to
                             // build a network surface the specification never asked for.
                             "[BUILD_FIX] Make the packaged application behave as the specification states when run — "
-                                    + bootFailure.get()));
+                                    + bootFailure.get()), true);
                     if (!injected.injected().isEmpty()) {
                         for (String id : injected.injectedIds()) {
                             setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
@@ -4184,7 +4323,7 @@ public class GoalPlannerService {
                 java.util.Optional<String> wiringFailure = packageGate.predictedStartupWiringFailure();
                 if (wiringFailure.isPresent()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
-                            "[BUILD_FIX] Make the application startable — " + wiringFailure.get()));
+                            "[BUILD_FIX] Make the application startable — " + wiringFailure.get()), true);
                     if (!injected.injected().isEmpty()) {
                         for (String id : injected.injectedIds()) {
                             setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
@@ -4225,7 +4364,7 @@ public class GoalPlannerService {
                                     + " pass is also an acceptable resolution)";
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                             "[BUILD_FIX] Make the project's own test suite pass — " + testFailure.get()
-                                    + resolutionHint));
+                                    + resolutionHint), true);
                     if (!injected.injected().isEmpty()) {
                         // Same blob-becomes-criterion guard as the T4-BP-3 injection below; the
                         // test gate re-checks the requirement deterministically at closure.
@@ -4251,7 +4390,15 @@ public class GoalPlannerService {
             // LLM's pattern recognition (criterion-by-criterion, not the coverage gate's leading
             // "is this gap implemented?"). Digest-cached + call-counted (cost measured, not guessed);
             // conservative — abstains on no observation, blocks only on a confirmed-unconfirmed criterion.
-            if (criteriaVerificationService != null && !passingCriteria.isEmpty()) {
+            // T4-CQ: the SEED's obligations are checked even when no banked criterion survives.
+            // This gate used to run only with passing criteria in hand, so a run whose subgoal
+            // criteria were all stamped AUTHORED -- the first adopted project, whose objective is
+            // written entirely as obligations -- closed GOAL_FULFILLED with one of seven routes
+            // tested and the seed never consulted (run 2026-09-24_12-09-57). Having no evidence
+            // must not be the one case that skips the check.
+            boolean seedObligationsToCheck = criteriaVerificationService != null && passingCriteria.isEmpty()
+                    && !uncoveredSeedAtClosure(root, List.of()).isEmpty();
+            if (criteriaVerificationService != null && (!passingCriteria.isEmpty() || seedObligationsToCheck)) {
                 Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
                 // T4-DK (open half): hand the SEED's own obligations to the same verifier. Closure
                 // used to check only the banked criteria of surviving subgoals, so a requirement
@@ -4260,8 +4407,7 @@ public class GoalPlannerService {
                 // and no HUD. Requirements already covered by a banked criterion are skipped, so
                 // the verifier is not asked the same question twice.
                 List<String> toVerify = new ArrayList<>(passingCriteria);
-                List<String> uncoveredSeed = SeedRequirements.notAlreadyCoveredVerifiable(
-                        root.getDescription(), toVerify, writtenObligations());
+                List<String> uncoveredSeed = uncoveredSeedAtClosure(root, toVerify);
                 if (!uncoveredSeed.isEmpty()) {
                     log.info("T4-DK: {} seed requirement(s) are covered by no banked criterion — "
                             + "verifying them against the artifact too", uncoveredSeed.size());
@@ -4541,7 +4687,7 @@ public class GoalPlannerService {
     public boolean injectObservedBehaviouralDefect(String description, List<String> refutedCriteria) {
         GoalEntity root = getRootGoal();
         if (root == null || description == null || description.isBlank()) return false;
-        CoverageReviewResult injected = injectCoverageGaps(root, List.of(description));
+        CoverageReviewResult injected = injectCoverageGaps(root, List.of(description), true);
         if (injected.injected().isEmpty()) return false;
         boolean attributed = refutedCriteria != null && !refutedCriteria.isEmpty();
         for (String id : injected.injectedIds()) {
@@ -4592,7 +4738,7 @@ public class GoalPlannerService {
             return false;
         }
         CoverageReviewResult injected = injectCoverageGaps(root, List.of(
-                com.walpro.autobuilder.core.persistence.EntryPointScan.MISSING_ENTRY_POINT_WORK_ITEM));
+                com.walpro.autobuilder.core.persistence.EntryPointScan.MISSING_ENTRY_POINT_WORK_ITEM), true);
         if (injected.injected().isEmpty()) return false;
         for (String id : injected.injectedIds()) {
             setAcceptanceCriteria(id, List.of(
@@ -4611,12 +4757,34 @@ public class GoalPlannerService {
     }
 
     CoverageReviewResult injectCoverageGaps(GoalEntity root, List<String> missing) {
+        return injectCoverageGaps(root, missing, false);
+    }
+
+    /**
+     * @param gateObservation true when {@code missing} is a deterministic closure gate's own
+     *        observation of the artifact. T4-CQ: such an item, once GIVEN_UP, used to be dropped
+     *        here as a "paraphrase" of itself every time the gate saw the defect again -- 145 and
+     *        148 times in two adopted runs, which then sat to the deadline with the one piece of
+     *        work that could satisfy the gate unreachable. A gate's re-observation is a fact about
+     *        the artifact, not a re-proposal: the given-up item is REOPENED carrying the current
+     *        observation. Bounded by the convergence brake, which counts only a goal's first reopen
+     *        as progress, and by the closure memo, which does not re-judge an unchanged tree.
+     */
+    CoverageReviewResult injectCoverageGaps(GoalEntity root, List<String> missing, boolean gateObservation) {
         // T1-DE: dedup filter — drop proposals that paraphrase already-GIVEN_UP goals
         List<String> toInject;
         int dropped = 0;
+        List<String> revivedIds = new ArrayList<>();
+        int revivedFirstTime = 0;
         if (goalSimilarityService != null) {
             List<String> filtered = new ArrayList<>();
             for (String desc : missing) {
+                GoalEntity givenUpTwin = gateObservation ? findGivenUpGateTwin(desc) : null;
+                if (givenUpTwin != null) {
+                    if (reopenForGateObservation(givenUpTwin, desc) == 1) revivedFirstTime++;
+                    revivedIds.add(givenUpTwin.getId());
+                    continue;
+                }
                 long givenUpMatches = goalSimilarityService.countGivenUpMatches(desc);
                 if (givenUpMatches >= GoalSimilarityService.GIVEN_UP_RETRY_LIMIT) {
                     log.warn("T1-DE: dropping coverage-review proposal '{}' — already GIVEN_UP {} time(s) (limit={})",
@@ -4631,6 +4799,12 @@ public class GoalPlannerService {
             toInject = missing;
         }
 
+        if (toInject.isEmpty() && !revivedIds.isEmpty()) {
+            persist();
+            closureEdgeInjections += revivedFirstTime;
+            requestReplanForCoverage();
+            return new CoverageReviewResult(List.copyOf(revivedIds), dropped, List.copyOf(revivedIds));
+        }
         if (toInject.isEmpty()) {
             log.info("coverage-review: all {} LLM proposals dropped as GIVEN_UP paraphrases — no injection", missing.size());
             return new CoverageReviewResult(List.of(), dropped);
@@ -4645,11 +4819,11 @@ public class GoalPlannerService {
         // the items are template-generated, and fuzzy matching would merge genuinely distinct
         // endpoints one token apart (POST /loans vs POST /loans/{}/return).
         List<String> toCreate = new ArrayList<>();
-        List<String> blocking = new ArrayList<>();
-        List<String> liveIds = new ArrayList<>();
-        int reopened = 0;
+        List<String> blocking = new ArrayList<>(revivedIds);
+        List<String> liveIds = new ArrayList<>(revivedIds);
+        int reopened = revivedIds.size();
         int alreadyQueued = 0;
-        int reopenBrakeObservations = 0;
+        int reopenBrakeObservations = revivedFirstTime;
         for (String desc : toInject) {
             GoalEntity twin = findExactSubgoalTwin(desc);
             if (twin == null) {
@@ -4719,17 +4893,58 @@ public class GoalPlannerService {
             persist();
         }
 
+        requestReplanForCoverage();
+
+        // Brake observations: creations and first reopens change the tree; an already-queued twin or
+        // a repeat reopen does not (counting them would reset the convergence brake forever).
+        closureEdgeInjections += toCreate.size() + reopenBrakeObservations;
+        return new CoverageReviewResult(blocking, dropped, liveIds);
+    }
+
+    private void requestReplanForCoverage() {
         if (currentCycleContext != null) {
             currentCycleContext = currentCycleContext.issueRequest(
                     com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
                             BasicSignals.REPLAN_REQUESTED, 1.0, "coverage-retro",
                             com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.2)));
         }
+    }
 
-        // Brake observations: creations and first reopens change the tree; an already-queued twin or
-        // a repeat reopen does not (counting them would reset the convergence brake forever).
-        closureEdgeInjections += toCreate.size() + reopenBrakeObservations;
-        return new CoverageReviewResult(blocking, dropped, liveIds);
+    /** A GIVEN_UP item a closure gate raised whose description the new observation matches. */
+    private GoalEntity findGivenUpGateTwin(String description) {
+        GoalEntity best = null;
+        float bestScore = 0f;
+        for (GoalEntity g : goalMap.values()) {
+            if (g.getType() != GoalType.SUBGOAL || g.getStatus() != GoalStatus.GIVEN_UP
+                    || !raisedByClosureGate(g)) continue;
+            float score = goalSimilarityService.similarity(description, g.getDescription());
+            if (score >= GoalSimilarityService.GIVEN_UP_REVIVAL_SIMILARITY && score > bestScore) {
+                best = g;
+                bestScore = score;
+            }
+        }
+        return best;
+    }
+
+    /** Reopens a given-up gate item under the gate's current observation; returns its reopen count. */
+    private int reopenForGateObservation(GoalEntity g, String observation) {
+        g.setStatus(GoalStatus.ACTIVE);
+        g.setGivenUp(null);
+        g.setCompleted(null);
+        g.setDescription(observation);
+        g.getMetadata().remove("criteriaPassStatus");
+        g.getMetadata().remove("cumulativeStagnatingCycles");
+        Object prior = g.getMetadata().get("closureEdgeReopens");
+        int reopens = prior instanceof Number n ? n.intValue() + 1 : 1;
+        g.getMetadata().put("closureEdgeReopens", reopens);
+        log.warn("T4-CQ: the gate still observes the defect a given-up item was raised for — reopening [{}]"
+                + " (reopen #{}) under the current observation: {}", g.getId(), reopens, observation);
+        try {
+            goalGraphService.save(g);
+        } catch (Exception e) {
+            log.debug("Neo4j reopen update failed for goal {} (ignoring): {}", g.getId(), e.getMessage());
+        }
+        return reopens;
     }
 
     /**

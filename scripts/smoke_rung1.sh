@@ -1,10 +1,10 @@
 #!/bin/bash
 # smoke_rung1.sh — the yardstick for the rung-1 target (an adopted REST calculator).
 # Usage: scripts/smoke_rung1.sh http://localhost:8085
-# Last line: SMOKE: <pass>/8
+# Last line: SMOKE: <pass>/15 (was /8 until 2026-09-24: routes tested were not checked)
 #
-# Asserts ONLY what bootstrap/seed.txt states: every route the application serves answers, and the
-# project's own suite passes. It does NOT assert what any route should return — the seed says the
+# Asserts ONLY what bootstrap/seed.txt states: every route the application serves answers, every
+# route is exercised by a test in the project's own suite, and that suite passes. It does NOT assert what any route should return — the seed says the
 # opposite, that behaviour is to be characterised rather than corrected, so grading the answers
 # would grade the loop on a requirement nobody wrote.
 B="${1:?usage: smoke_rung1.sh <base-url>}/calculator"
@@ -24,9 +24,19 @@ chk "$(reachable 'scientific/square/4')"                    present "GET /scient
 chk "$(reachable 'scientific/factorial/5')"                 present "GET /scientific/factorial is served"
 chk "$(reachable 'scientific/prime/7')"                     present "GET /scientific/prime is served"
 
+# Every route is covered by a test: the seed's central obligation, and until 2026-09-24 this
+# yardstick did not look at it -- run 2026-09-24_18-13-42 scored 8/8 with the three scientific
+# routes untested. A route counts as covered when a test source names its path. That is a
+# reference check, not proof the test exercises it; it only ever misses coverage written with a
+# path assembled from pieces, which reads as not covered (the conservative direction).
+TREE="${PREFLIGHT_TARGET_TREE:-data/rung1/output}"
+tested(){ grep -rqsF "$1" "$TREE/src/test" && echo tested || echo untested; }
+for r in basic/add basic/subtract basic/multiply basic/divide scientific/square scientific/factorial scientific/prime; do
+    chk "$(tested "/$r")" tested "GET /$r is covered by a test"
+done
+
 # The project's own suite, which is the half of the objective that measures the tests themselves.
 # Run in a copy: grading must not write into the artifact it is grading.
-TREE="${PREFLIGHT_TARGET_TREE:-data/rung1/output}"
 if [ -d "$TREE" ]; then
     SCRATCH=$(mktemp -d)
     cp -a "$TREE" "$SCRATCH/p" 2>/dev/null

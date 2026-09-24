@@ -176,4 +176,36 @@ class BehaviouralClosureVerifierTest {
         assertThat(verifier.refute("goal-1", List.of(EXECUTABLE), null)).isEmpty();
         verify(packageGate, never()).verifyPackageable(anyString());
     }
+
+    // --- T2-ET: an item raised from an observation is answered by re-taking the observation ---
+
+    /** Invented wording; the gate's summaries are deterministic, which is what identity relies on. */
+    private static final String DEFECT = "the widget exits at startup (exit 1) - no launcher declared in widget.jar";
+
+    @Test
+    void theSameDefectObservedAgainRefutesTheClosure() {
+        when(bootGate.verifyBootsAndServesWithAttribution(anyString(), isNull(), eq(List.of()), eq(false)))
+                .thenReturn(Optional.of(ClaimRefutation.unattributed(DEFECT)));
+
+        assertThat(verifier.refuteObservedDefect("goal-1", DEFECT, null)).isPresent();
+    }
+
+    @Test
+    void aDifferentDefectMeansThisItemsRepairLanded() {
+        // 13 of the 37 classified archive closures looked like this: the item's defect was gone and
+        // the launch failed on the NEXT one. Refusing would keep a stale description as the work.
+        when(bootGate.verifyBootsAndServesWithAttribution(anyString(), isNull(), eq(List.of()), eq(false)))
+                .thenReturn(Optional.of(ClaimRefutation.unattributed(
+                        "the widget exits at startup (exit 1) - collaborator Frobnicator could not be found")));
+
+        assertThat(verifier.refuteObservedDefect("goal-1", DEFECT, null)).isEmpty();
+    }
+
+    @Test
+    void anUnpackageableTreeIsNoOpinionAndNeverLaunches() {
+        when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.of("does not package"));
+
+        assertThat(verifier.refuteObservedDefect("goal-1", DEFECT, null)).isEmpty();
+        verify(bootGate, never()).verifyBootsAndServesWithAttribution(anyString(), any(), any(), anyBoolean());
+    }
 }

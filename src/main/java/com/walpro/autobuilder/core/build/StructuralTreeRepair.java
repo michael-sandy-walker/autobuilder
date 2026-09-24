@@ -52,6 +52,15 @@ public class StructuralTreeRepair {
     @Autowired(required = false)
     private WiringFactsAnalyzer wiringFactsAnalyzer;
 
+    /** T4-CQ: operator-declared paths no writer may touch; optional in narrow tests. */
+    @Autowired(required = false)
+    private ProtectedPaths protectedPaths;
+
+    /** Test seam for the protected-paths list, which is optional at injection. */
+    public void setProtectedPaths(ProtectedPaths protectedPaths) {
+        this.protectedPaths = protectedPaths;
+    }
+
     public StructuralTreeRepair(FileService fileService, GoalPlannerService goalPlannerService) {
         this.fileService = fileService;
         this.goalPlannerService = goalPlannerService;
@@ -92,6 +101,7 @@ public class StructuralTreeRepair {
             var findings = wiringFactsAnalyzer.unregisteredInjectedTypes(sources);
             if (findings.isEmpty()) return;
             for (var repair : InjectedTypeRegistrationRepair.plan(sources, findings)) {
+                if (protectedPaths != null && protectedPaths.refuse("the registration repair", repair.path())) continue;
                 Path file = root.resolve(repair.path());
                 if (!Files.isRegularFile(file)) continue;
                 String current = Files.readString(file);
@@ -135,6 +145,10 @@ public class StructuralTreeRepair {
             for (var relocation : plan) {
                 var applied = PeerPlacementRelocation.apply(sources, relocation);
                 if (applied.isEmpty()) continue;
+                // T4-CQ: a move is all-or-nothing -- half a move leaves two declarations or none.
+                if (protectedPaths != null && (protectedPaths.refuse("the relocation", applied.get().vacatedPath())
+                        || applied.get().writes().keySet().stream()
+                                .anyMatch(w -> protectedPaths.refuse("the relocation", w)))) continue;
                 for (var write : applied.get().writes().entrySet()) {
                     Path file = root.resolve(write.getKey());
                     Files.createDirectories(file.getParent());

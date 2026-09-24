@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.graph.goal;
 
+import com.walpro.autobuilder.graph.HistoryRead;
+import com.walpro.autobuilder.graph.HistorySpan;
+import com.walpro.autobuilder.graph.HistoryUse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -134,6 +137,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 .run();
     }
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.BINDING,
+            note = "Loads one goal by id; the id comes from the live, lineage-scoped tree.")
     @Override
     public Optional<GoalEntity> findById(String id) {
         return neo4jClient.query("""
@@ -150,6 +155,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
     }
 
 
+    @HistoryRead(span = HistorySpan.LINEAGE, use = HistoryUse.BINDING,
+            note = "The live goal tree loaded at boot (syncFromGraph). A previous lineage's goals loaded here crashed GoalPlannerService.init(), which is why it is scoped.")
     @Override
     public List<GoalEntity> findAll() {
         return neo4jClient.query("""
@@ -176,6 +183,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
 
 
 
+    @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.ADVISORY,
+            note = "Children of one goal; no production caller today.")
     @Override
     public List<GoalEntity> findSubgoals(String parentId) {
         return neo4jClient.query("""
@@ -261,6 +270,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 .run();
     }
 
+    @HistoryRead(span = HistorySpan.LINEAGE, use = HistoryUse.BINDING,
+            note = "Rebuilds the goal-transition log from the graph when the file is gone, and folds the transitions of the lineage a rewind was directed at. Filtered to the lineage the caller names.")
     @Override
     public java.util.List<com.walpro.autobuilder.goal.GoalTransition> transitionsForLineage(
             String lineageId, int limit) {
@@ -278,6 +289,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 .toList();
     }
 
+    @HistoryRead(span = HistorySpan.LINEAGE, use = HistoryUse.BINDING,
+            note = "Which of this lineage's goals existed at a point, used by a rewind to reconstruct the tree.")
     @Override
     public List<GoalEntity> goalsCreatedAtOrBefore(String lineageId, String at) {
         if (lineageId == null || lineageId.isBlank() || at == null || at.isBlank()) {
@@ -422,6 +435,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
         return entity;
     }
 
+    @HistoryRead(span = HistorySpan.LINEAGE, use = HistoryUse.BINDING,
+            note = "The lineage a root goal belongs to, read on resume to decide whether a run continues it.")
     @Override
     public Optional<String> findLineageId(String goalId) {
         if (goalId == null || goalId.isBlank()) return Optional.empty();
@@ -436,6 +451,9 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 .filter(s -> s != null && !s.isBlank());
     }
 
+    @HistoryRead(span = HistorySpan.ALL_LINEAGES, use = HistoryUse.BINDING,
+            note = "The one SystemState node: the root and current-subgoal pointers written by whichever run saved last.",
+            crossLineageBecause = "Both consumers honour a pointer only when it names a goal in the lineage-scoped goal map (findAll), so another lineage's pointer falls through to the tree's own inferred root.")
     @Override
     public Optional<GoalGraphState> getState() {
         return neo4jClient.query("""
@@ -495,6 +513,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
         log.warn("Purged Neo4j graph: deleted all nodes.");
     }
 
+    @HistoryRead(span = HistorySpan.LINEAGE, use = HistoryUse.BINDING,
+            note = "Goal dedup's reference list. Scoped 2026-07-26: a previous lineage's goals were rejecting a live subgoal as a duplicate.")
     @Override
     public List<String> findAllDescriptions(int limit) {
         int capped = Math.max(1, limit);
@@ -519,6 +539,8 @@ public class Neo4jGoalGraphService implements GoalGraphService {
                 .toList();
     }
 
+    @HistoryRead(span = HistorySpan.LINEAGE, use = HistoryUse.BINDING,
+            note = "The GIVEN_UP list behind the unachievable guard. Scoped 2026-07-26: a previous lineage's abandoned work was blocking a fresh attempt.")
     @Override
     public List<String> findDescriptionsByStatus(String status, int limit) {
         int capped = Math.max(1, limit);

@@ -45,8 +45,6 @@ class CycleExecutorTest {
     @Mock private SubgoalScopeGuard subgoalScopeGuard;
     @Mock private MutationSnapshotService mutationSnapshotService;
     @Mock private com.walpro.autobuilder.core.build.PackageGate packageGate;
-    @org.mockito.Spy private com.walpro.autobuilder.core.build.BuildFixEscalator buildFixEscalator
-            = new com.walpro.autobuilder.core.build.BuildFixEscalator();
 
     @Mock private com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector blockerSubgoalInjector;
     @Mock private com.walpro.autobuilder.core.build.BehaviouralSelfCheck behaviouralSelfCheck;

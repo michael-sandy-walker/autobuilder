@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.graph.checkpoint;
 
+import com.walpro.autobuilder.graph.HistoryRead;
+import com.walpro.autobuilder.graph.HistorySpan;
+import com.walpro.autobuilder.graph.HistoryUse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.core.checkpoint.CheckpointRecord;
@@ -90,6 +93,8 @@ public class Neo4jCheckpointGraphService implements CheckpointGraphService {
         }
     }
 
+    @HistoryRead(span = HistorySpan.LINEAGE, use = HistoryUse.ADVISORY,
+            note = "The points this lineage can be returned to, listed for the operator and the rewind picker.")
     @Override
     public List<StoredCheckpoint> forLineage(String lineageId, int limit) {
         try {
@@ -109,6 +114,9 @@ public class Neo4jCheckpointGraphService implements CheckpointGraphService {
         }
     }
 
+    @HistoryRead(span = HistorySpan.ALL_LINEAGES, use = HistoryUse.BINDING,
+            note = "Resolves the point a rewind returns to, and its archived tree. The cycle id is not filtered to the lineage, so it can name any retained point.",
+            crossLineageBecause = "The key is an operator's explicit choice of a point to return to. Restoring another lineage's point is a branch the operator asked for, not a measurement deciding on their behalf.")
     @Override
     public Optional<StoredCheckpoint> byCycleId(String cycleId) {
         if (cycleId == null || cycleId.isBlank()) return Optional.empty();

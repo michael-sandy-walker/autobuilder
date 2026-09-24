@@ -225,6 +225,16 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
+                    <!-- T5-BK: surefire's defaults omit *IT, which hid six classes. mvn test
+                         already needs Docker (Neo4jGraphDbBehaviorTest), so *IT adds no new
+                         requirement; one command runs every test file in src/test. -->
+                    <includes>
+                        <include>**/Test*.java</include>
+                        <include>**/*Test.java</include>
+                        <include>**/*Tests.java</include>
+                        <include>**/*TestCase.java</include>
+                        <include>**/*IT.java</include>
+                    </includes>
                     <systemPropertyVariables>
                         <docker.host>unix:///home/anugeshtu/.docker/desktop/docker.sock</docker.host>
                         <testcontainers.docker.socket.override>/var/run/docker.sock</testcontainers.docker.socket.override>

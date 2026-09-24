@@ -636,8 +636,9 @@ public class EvolutionProtocolContract {
         return sb.toString();
     }
 
-    public static boolean isValidResponse(String content) {
-        if (content == null || content.isBlank()) return false;
+    public static boolean isValidResponse(String rawContent) {
+        if (rawContent == null || rawContent.isBlank()) return false;
+        String content = EvolutionResponseParser.normalizeFileHeaders(rawContent);
 
         boolean containsCodeBlock = FILE_CODE_BLOCK.matcher(content).find();
         boolean containsDeletion = content.contains("#Delete [");
@@ -645,6 +646,29 @@ public class EvolutionProtocolContract {
         boolean containsNoDiff = content.lines().anyMatch(line -> line.trim().equals("#NoDiff"));
 
         return containsCodeBlock || containsDeletion || containsNoDiff;
+    }
+
+    private static final Pattern ANY_FENCE_OPENING = Pattern.compile("(?m)^[ \\t]*```([^\\n]*)$");
+
+    /**
+     * T4-CQ: what a rejected answer got wrong, said so the model can correct it. Null for an
+     * answer {@link #isValidResponse} accepts.
+     */
+    public static String describeMismatch(String rawContent) {
+        if (isValidResponse(rawContent)) return null;
+        if (rawContent == null || rawContent.isBlank()) return "the answer was empty";
+        var fence = ANY_FENCE_OPENING.matcher(EvolutionResponseParser.normalizeFileHeaders(rawContent));
+        if (fence.find()) {
+            String opening = fence.group(1).strip();
+            if (opening.contains("[")) {
+                return "a code block opens with `" + "```" + opening + "` but is never closed with ```";
+            }
+            return "a code block opens with `" + "```" + opening + "`, which names no file -- every block"
+                    + " must open with the language and the file's path in brackets on the SAME line,"
+                    + " for example ```java [src/test/java/org/sample/WidgetTest.java]";
+        }
+        return "it contains no file block (```java [path/to/File.java]), no #Delete [path] line"
+                + " and no #NoDiff line";
     }
 
     private static String formatGoalList(List<? extends GoalEntity> goals) {

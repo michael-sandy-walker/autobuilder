@@ -194,6 +194,39 @@ public class ColdReadService {
         return new ColdRead.Build("maven", artifact, first.get("java.version"), framework, dependencies);
     }
 
+    /**
+     * T4-CQ: the path prefix every route of the tree at {@code root} is served under, when its own
+     * configuration declares one; empty when it declares none.
+     *
+     * <p>Found by the first adopted project: its routes were declared as {@code /basic/add} and
+     * answered at {@code /calculator/basic/add}, and the boot gate, asking the declared path,
+     * reported a working route as a 404 and raised a work item to "fix" it. The prefix is
+     * configuration, not code, so it is read where this class already reads configuration, and
+     * the gate asks here rather than holding a second copy of the rule.
+     */
+    public java.util.Optional<String> servedPrefix(Path root) {
+        if (root == null) return java.util.Optional.empty();
+        Path resources = root.resolve("src").resolve("main").resolve("resources");
+        if (!java.nio.file.Files.isDirectory(resources)) return java.util.Optional.empty();
+        Map<String, String> config = new java.util.LinkedHashMap<>();
+        try (var files = java.nio.file.Files.list(resources)) {
+            for (Path f : files.toList()) {
+                String name = f.getFileName().toString();
+                if (java.nio.file.Files.isRegularFile(f)) {
+                    config.put(name, java.nio.file.Files.readString(f));
+                }
+            }
+        } catch (java.io.IOException | java.io.UncheckedIOException e) {
+            return java.util.Optional.empty();
+        }
+        String path = readRuntime(config).contextPath();
+        if (path == null) return java.util.Optional.empty();
+        path = path.strip();
+        if (path.endsWith("/")) path = path.substring(0, path.length() - 1);
+        if (path.isEmpty()) return java.util.Optional.empty();
+        return java.util.Optional.of(path.startsWith("/") ? path : "/" + path);
+    }
+
     private ColdRead.Runtime readRuntime(Map<String, String> text) {
         String contextPath = null, port = null;
         List<String> settings = new ArrayList<>();

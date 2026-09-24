@@ -148,6 +148,12 @@ public class ColdReadService {
         return false;
     }
 
+    private static final Pattern PARENT = Pattern.compile("(?s)<parent>(.*?)</parent>");
+    private static final Pattern NESTED_BLOCKS = Pattern.compile(
+            "(?s)<(parent|dependencies|dependencyManagement|build|profiles|reporting|properties|modules|repositories|pluginRepositories|distributionManagement|developers|licenses|scm)>.*?</\\1>");
+    private static final Pattern JAVA_VERSION = Pattern.compile(
+            "<(java\\.version|maven\\.compiler\\.release|maven\\.compiler\\.source)>([^<]+)</\\1>");
+
     private ColdRead.Build readBuild(Map<String, String> text, List<String> uncertainties) {
         String pom = text.get("pom.xml");
         if (pom == null) {
@@ -161,16 +167,28 @@ public class ColdReadService {
             uncertainties.add("no build file was found, so how this project is built is unknown");
             return new ColdRead.Build(null, null, null, null, List.of());
         }
-        // The first occurrence wins: in a POM the parent block precedes the project's own
-        // coordinates, so both are read by position rather than by guessing at nesting.
+        // The project's own coordinates are the ones at the top level. They used to be read by
+        // position -- "the first artifactId is the parent's, the next is ours" -- which holds only
+        // when a parent block exists: the second adopted project has none, and its cold read named
+        // a DEPENDENCY as the project. So the nested blocks are removed first, and the parent's
+        // coordinates are read from the parent block itself.
+        Matcher parentBlock = PARENT.matcher(pom);
+        Map<String, String> parent = new LinkedHashMap<>();
+        if (parentBlock.find()) {
+            Matcher pm = TAG.matcher(parentBlock.group(1));
+            while (pm.find()) parent.putIfAbsent(pm.group(1), pm.group(2).trim());
+        }
+        String topLevel = NESTED_BLOCKS.matcher(pom).replaceAll("");
         Map<String, String> first = new LinkedHashMap<>();
-        Matcher m = TAG.matcher(pom);
+        Matcher m = TAG.matcher(topLevel);
         while (m.find()) first.putIfAbsent(m.group(1), m.group(2).trim());
+        // Properties are nested but are the project's own; java.version lives there.
+        Matcher javaVersion = JAVA_VERSION.matcher(pom);
+        String java = javaVersion.find() ? javaVersion.group(2).trim() : null;
 
-        String parentArtifact = first.get("artifactId");
         String framework = null;
-        if (pom.contains("spring-boot-starter-parent")) {
-            framework = "Spring Boot " + first.getOrDefault("version", "(version not stated)");
+        if ("spring-boot-starter-parent".equals(parent.get("artifactId"))) {
+            framework = "Spring Boot " + parent.getOrDefault("version", "(version not stated)");
         }
         List<String> dependencies = new ArrayList<>();
         Matcher d = DEPENDENCY.matcher(pom);
@@ -183,15 +201,8 @@ public class ColdReadService {
             }
             if (a != null) dependencies.add((g == null ? "" : g + ":") + a);
         }
-        // The project's own artifactId is the one that is not the parent's.
-        String artifact = null;
-        Matcher a2 = Pattern.compile("<artifactId>([^<]+)</artifactId>").matcher(pom);
-        List<String> artifactIds = new ArrayList<>();
-        while (a2.find()) artifactIds.add(a2.group(1).trim());
-        for (String id : artifactIds) {
-            if (!id.equals(parentArtifact)) { artifact = id; break; }
-        }
-        return new ColdRead.Build("maven", artifact, first.get("java.version"), framework, dependencies);
+        String artifact = first.get("artifactId");
+        return new ColdRead.Build("maven", artifact, java, framework, dependencies);
     }
 
     /**

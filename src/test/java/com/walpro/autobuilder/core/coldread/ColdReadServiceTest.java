@@ -189,4 +189,28 @@ class ColdReadServiceTest {
         java.nio.file.Files.writeString(res.resolve("application.properties"), "server.servlet.context-path=/\n");
         assertThat(service.servedPrefix(tmp)).isEmpty();
     }
+
+    /** T4-CQ: a POM with no parent block names itself first; a dependency is never the project. */
+    @Test
+    void aProjectWithoutAParentIsNamedByItsOwnArtifactNotItsFirstDependency() throws Exception {
+        Files.writeString(tmp.resolve("pom.xml"), """
+                <project>
+                  <groupId>org.sample</groupId>
+                  <artifactId>quilldiff</artifactId>
+                  <version>0.1.0</version>
+                  <properties><maven.compiler.release>21</maven.compiler.release></properties>
+                  <dependencies>
+                    <dependency><groupId>org.sample</groupId><artifactId>inkparser</artifactId><version>1</version></dependency>
+                  </dependencies>
+                  <build><plugins><plugin><artifactId>some-plugin</artifactId></plugin></plugins></build>
+                </project>
+                """);
+
+        ColdRead r = service.read(tmp);
+
+        assertThat(r.build().artifact()).isEqualTo("quilldiff");
+        assertThat(r.build().javaVersion()).isEqualTo("21");
+        assertThat(r.build().framework()).isNull();
+        assertThat(r.build().dependencies()).containsExactly("org.sample:inkparser");
+    }
 }

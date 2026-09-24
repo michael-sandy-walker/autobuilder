@@ -169,4 +169,24 @@ class ColdReadServiceTest {
                 }
                 """);
     }
+
+    /** T4-CQ: the prefix an application is served under is its own configuration's to state. */
+    @Test
+    void theServedPrefixIsReadFromTheProjectsOwnConfiguration() throws Exception {
+        Path res = tmp.resolve("src/main/resources");
+        java.nio.file.Files.createDirectories(res);
+        java.nio.file.Files.writeString(res.resolve("application.properties"),
+                "server.servlet.context-path=/widgets/\nspring.jackson.default-property-inclusion=non_null\n");
+
+        assertThat(service.servedPrefix(tmp)).contains("/widgets");
+    }
+
+    @Test
+    void noDeclaredPrefixAndARootPrefixBothMeanNone() throws Exception {
+        assertThat(service.servedPrefix(tmp)).isEmpty();
+        Path res = tmp.resolve("src/main/resources");
+        java.nio.file.Files.createDirectories(res);
+        java.nio.file.Files.writeString(res.resolve("application.properties"), "server.servlet.context-path=/\n");
+        assertThat(service.servedPrefix(tmp)).isEmpty();
+    }
 }

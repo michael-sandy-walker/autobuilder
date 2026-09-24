@@ -217,7 +217,10 @@ public class AutobuilderController {
         String goalId = "goal-" + java.util.UUID.randomUUID();
         try {
             fileServiceForGoal.ensureFolderExists("bootstrap");
-            fileServiceForGoal.writeFile("bootstrap/seed.txt", text);
+            // Written as given, not stripped: bootstrap/seed.obligations.txt is keyed to the seed's
+            // hash, so re-posting a target's own seed with its indentation trimmed moved the seed
+            // and silently dropped the operator's obligations (first adopted run, 2026-09-24).
+            fileServiceForGoal.writeFile("bootstrap/seed.txt", goalText);
         } catch (java.io.IOException e) {
             // The live goal still gets set: losing the durable copy costs a restart, not the run.
             log.warn("T4-CQ: could not persist the goal to bootstrap/seed.txt: {}", e.getMessage());

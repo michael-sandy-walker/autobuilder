@@ -970,7 +970,9 @@ public class GoalPlannerService {
             // every sweep on "Create MemberService.java"-shaped criteria while the artifact ran.
             Optional<String> demandedFile = sourceFileWhoseExistenceIsDemanded(criterion);
             if (demandedFile.isPresent()) {
-                if (output == null || output.isEmpty()) {
+                // Null is unreadable; an EMPTY map is a tree with nothing written yet, where the
+                // file is simply absent (flightsim 2026-09-24 was told "could not be read" twice).
+                if (output == null) {
                     return Optional.of("the output file map could not be read, so \"" + criterion + "\" is undecided");
                 }
                 if (!outputHoldsFile(output, demandedFile.get())) {

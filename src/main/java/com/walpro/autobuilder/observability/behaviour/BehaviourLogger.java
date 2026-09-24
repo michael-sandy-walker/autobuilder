@@ -385,6 +385,10 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.DeferredMutationDropped(Instant.now(), cycleId, deferredId, reason));
     }
 
+    public void grindDetected(String cycleId, String signature, int occurrences, String firstCycleId) {
+        emit(new BehaviourEvent.GrindDetected(Instant.now(), cycleId, signature, occurrences, firstCycleId));
+    }
+
     public void llmResponseDiscarded(String cycleId, String role, String reason, String firstLine, int consecutive) {
         emit(new BehaviourEvent.LlmResponseDiscarded(Instant.now(), cycleId, role, reason, firstLine, consecutive));
     }

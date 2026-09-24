@@ -224,6 +224,12 @@ public class EvolutionProtocolContract {
 
     public static String getUserPrompt(CycleContextData input, InterpretationResult result, boolean divergent,
             int promptHeadroomTokens) {
+        return getUserPrompt(input, result, divergent, promptHeadroomTokens, path -> false);
+    }
+
+    /** @param isProtected T4-CQ: operator-protected paths, so no block advises editing one. */
+    public static String getUserPrompt(CycleContextData input, InterpretationResult result, boolean divergent,
+            int promptHeadroomTokens, java.util.function.Predicate<String> isProtected) {
         // T4-BN-3: while TEST_REPAIR_FOCUS is active, replace the full ~15-section prompt with a
         // trimmed one so a test-only compile break gets high salience instead of competing as one
         // diagnostic among many (low-salience diagnostics measured at ~0.08 adherence). Sits ON
@@ -409,7 +415,7 @@ public class EvolutionProtocolContract {
         // member belongs) instead of the caller (where it tried to use the member). Sister to
         // missingSymbolsBlock — that block targets whole missing classes; this one targets
         // missing members on existing classes.
-        String missingMembers = MissingMemberPromptBlock.render(input);
+        String missingMembers = MissingMemberPromptBlock.render(input, isProtected);
         if (missingMembers != null) {
             prompt.append(missingMembers).append("\n\n");
         }

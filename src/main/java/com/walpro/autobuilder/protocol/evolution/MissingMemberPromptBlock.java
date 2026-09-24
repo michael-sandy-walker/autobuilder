@@ -27,6 +27,17 @@ public final class MissingMemberPromptBlock {
     private MissingMemberPromptBlock() {}
 
     public static String render(CycleContextData ctx) {
+        return render(ctx, path -> false);
+    }
+
+    /**
+     * @param isProtected T4-CQ: whether a path under {@code output/} is one the operator declared
+     *        off-limits. The block's standing advice -- "edit the callee, not the caller" -- is the
+     *        wrong advice for a protected callee: on the second adopted project it told the model to
+     *        rewrite a protected record nineteen times, and every write was refused. There the
+     *        advice reverses, and the block shows what the type actually declares.
+     */
+    public static String render(CycleContextData ctx, java.util.function.Predicate<String> isProtected) {
         if (ctx == null) return null;
 
         // T4-BD: read the typed probe outcome instead of string-matching feedbackMessage.
@@ -60,6 +71,10 @@ public final class MissingMemberPromptBlock {
             String path = grp.getKey();
             List<MissingMemberExtractor.Entry> es = grp.getValue();
             String simpleType = es.get(0).targetType();
+            if (isProtected != null && isProtected.test(path)) {
+                renderProtected(sb, path, simpleType, es, previousOutput.get(path));
+                continue;
+            }
             sb.append("--- MISSING MEMBER — ADD TO ").append(simpleType).append(".java ---\n");
             sb.append("Previous compile probe failed because the following ")
               .append(es.size() == 1 ? "member" : "members")
@@ -78,6 +93,30 @@ public final class MissingMemberPromptBlock {
             sb.append("\n");
         }
         return sb.toString().stripTrailing();
+    }
+
+    private static void renderProtected(StringBuilder sb, String path, String simpleType,
+                                        List<MissingMemberExtractor.Entry> es, String source) {
+        sb.append("--- MISSING MEMBER ON A PROTECTED TYPE: ").append(simpleType).append(" ---\n");
+        sb.append("Previous compile probe failed because ").append(simpleType).append(" has no ");
+        for (int i = 0; i < es.size(); i++) {
+            MissingMemberExtractor.Entry e = es.get(i);
+            if (i > 0) sb.append(", ");
+            sb.append(e.kind() == MissingMemberExtractor.Kind.CONSTRUCTOR
+                    ? "constructor " + simpleType + "(" + e.argTypes() + ")"
+                    : e.memberName() + "(" + e.argTypes() + ")");
+        }
+        sb.append(". ").append(path).append(" is PROTECTED by the operator: it will not change, and any ")
+          .append("edit to it is refused. Change the CALLER to use what ").append(simpleType)
+          .append(" actually declares");
+        List<String> declared = com.walpro.autobuilder.core.build.DeclaredMembers.of(source, simpleType);
+        if (declared.isEmpty()) {
+            sb.append(" (read ").append(path).append(").\n\n");
+            return;
+        }
+        sb.append(":\n");
+        for (String m : declared) sb.append("  - ").append(m).append("\n");
+        sb.append("\n");
     }
 
     private static String resolveTargetFile(String simpleType, Map<String, String> previousOutput) {

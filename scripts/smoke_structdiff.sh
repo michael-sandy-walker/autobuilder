@@ -14,20 +14,35 @@ n=0; pass=0
 chk(){ n=$((n+1)); if [ "$1" = "$2" ]; then pass=$((pass+1)); echo "PASS [$n] $3"; \
        else echo "FAIL [$n] $3 (want $2 got $1)"; fi; }
 
-# An entry point counts as covered when one test source names its class AND calls the method.
-# A reference check, not proof the call is asserted on; it misses only a call made through a
-# method reference or reflection, which reads as not covered (the conservative direction).
+# An entry point counts as covered when ONE test method calls it AND asserts a value -- an equality,
+# exact contents or a size. assertNotNull, assertTrue and "not empty" alone do not count: the seed
+# asks for what the entry point actually returns, and the second adopted project's first run passed
+# the older reference-only check with tests that asserted little beyond non-null.
+# Methods are split at @Test; a helper method's assertions count only inside the test that holds them.
 covered(){
-    local cls="$1" m="$2" f
-    for f in $(grep -rlsw "$cls" "$TREE/src/test" 2>/dev/null); do
-        grep -qE "(^|[^A-Za-z0-9_])$m\(" "$f" && { echo covered; return; }
-    done
-    echo uncovered
+    python3 - "$TREE/src/test" "$1" "$2" <<'PY'
+import os, re, sys
+root, cls, m = sys.argv[1], sys.argv[2], sys.argv[3]
+call = re.compile(r'(^|[^A-Za-z0-9_])' + re.escape(m) + r'\(')
+value = re.compile(r'assertEquals\(|assertIterableEquals\(|assertArrayEquals\(|assertLinesMatch\(|assertSame\('
+                   r'|\.isEqualTo\(|\.containsExactly(InAnyOrder)?\(|\.hasSize\(|\.containsOnly\(|\.isSameAs\(')
+for d, _, fs in os.walk(root):
+    for f in fs:
+        if not f.endswith('.java'):
+            continue
+        src = open(os.path.join(d, f), encoding='utf-8', errors='replace').read()
+        if not re.search(r'\b' + re.escape(cls) + r'\b', src):
+            continue
+        for chunk in src.split('@Test')[1:]:
+            if call.search(chunk) and value.search(chunk):
+                print('covered'); sys.exit()
+print('uncovered')
+PY
 }
 for e in JavaStructureParser.parse StructuralDiffBuilder.diff StructuralJavaDiffBuilder.diffJavaFile \
          DiffSummarizer.summarize DiffSummarizer.summarizePlainText DiffSummarizer.summarizeForPrompt \
          StructuralDiffUtils.flatten StructuralDiffUtils.filterByType StructuralDiffUtils.hasChanges; do
-    chk "$(covered "${e%%.*}" "${e#*.}")" covered "$e is covered by a test"
+    chk "$(covered "${e%%.*}" "${e#*.}")" covered "$e is covered by a test that asserts a value"
 done
 
 # The library code is the operator's: compared against a fresh extraction of the original.

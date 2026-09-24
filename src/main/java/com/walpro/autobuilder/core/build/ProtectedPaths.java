@@ -55,11 +55,66 @@ public class ProtectedPaths {
         return false;
     }
 
-    /** Logs the refusal in one wording, so a run can be searched for it. */
+    /** Refused writes not yet told to the model, oldest first; drained by {@link #promptBlock()}. */
+    private final java.util.Set<String> unreportedRefusals = new java.util.LinkedHashSet<>();
+
+    /** Logs the refusal in one wording, so a run can be searched for it, and keeps it for the model. */
     public boolean refuse(String writer, String pathUnderOutput) {
         if (!isProtected(pathUnderOutput)) return false;
         log.warn("T4-CQ: {} did not write {} — it is protected by {}", writer, pathUnderOutput, PATH);
+        if (grindDetector != null) grindDetector.observe(null, "write to " + normalise(pathUnderOutput) + " refused: protected");
+        synchronized (unreportedRefusals) {
+            unreportedRefusals.add(normalise(pathUnderOutput));
+        }
         return true;
+    }
+
+    /** T4-CQ: optional, so narrow tests need not wire it. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private GrindDetector grindDetector;
+
+    /**
+     * The block the evolution prompt carries while any path is protected: which paths, and which of
+     * the model's writes were refused since the last prompt. Null when nothing is protected.
+     *
+     * <p>Found on the second adopted project: nineteen refused rewrites of a protected record, none
+     * of which the model was ever told about, so it made the same move every cycle.
+     */
+    public String promptBlock() {
+        List<String> globs = globs();
+        if (globs.isEmpty()) return null;
+        List<String> refused;
+        synchronized (unreportedRefusals) {
+            refused = List.copyOf(unreportedRefusals);
+            unreportedRefusals.clear();
+        }
+        StringBuilder sb = new StringBuilder("--- PROTECTED PATHS (declared by the operator) ---\n");
+        sb.append("These paths are not yours to change; every write to them is refused:\n");
+        for (String g : globs) sb.append("  - ").append(g).append("\n");
+        if (!refused.isEmpty()) {
+            sb.append("Your previous changes to these files were NOT applied, because they are protected:\n");
+            for (String r : refused) sb.append("  - ").append(r).append("\n");
+            sb.append("Work with them as they are: change the files that use them instead.\n");
+        }
+        return sb.toString().stripTrailing();
+    }
+
+    private static String normalise(String path) {
+        String rel = path.replace('\\', '/');
+        if (rel.startsWith("output/")) rel = rel.substring("output/".length());
+        while (rel.startsWith("/")) rel = rel.substring(1);
+        return rel;
+    }
+
+    private synchronized List<String> globs() {
+        matchers();
+        List<String> out = new ArrayList<>();
+        if (cachedText == null) return out;
+        for (String line : cachedText.split("\\R")) {
+            String g = line.strip();
+            if (!g.isEmpty() && !g.startsWith("#")) out.add(g);
+        }
+        return out;
     }
 
     private synchronized List<PathMatcher> matchers() {

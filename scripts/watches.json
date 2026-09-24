@@ -373,6 +373,17 @@
       }
     },
     {
+      "id": "t4cq-grind-noted",
+      "ticket": "T4-CQ",
+      "type": "tally",
+      "description": "How often the loop noted a GRIND: the same failure signature recurring across cycles, noted at its third occurrence and at every doubling after (GrindDetector). The user asked that a grind which seems to repeat itself forever always be noted; this puts it in every run's report.",
+      "check": "Any count above zero: read the grind_detected events' signatures in the behaviour log, and whether the prompt block that names them changed the next attempt.",
+      "fired": {
+        "file": "behaviour",
+        "pattern": "\"grind_detected\""
+      }
+    },
+    {
       "id": "t4dw-archive-entry-point-retired",
       "ticket": "T4-DW",
       "type": "watch",

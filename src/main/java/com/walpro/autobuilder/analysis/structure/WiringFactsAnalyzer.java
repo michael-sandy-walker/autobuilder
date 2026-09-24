@@ -579,6 +579,18 @@ public class WiringFactsAnalyzer {
         return sb.toString();
     }
 
+    /**
+     * T4-CQ: a method whose parameter list someone else decided -- an override, or a method of an
+     * anonymous class, which exists only to implement a supertype's -- may leave a parameter unread
+     * without ignoring any input. A visitor that does not need its context argument is the ordinary
+     * case, and reporting it told the completion verifier that the second adopted project's parser
+     * "ignores its input" (and named the anonymous visitor's method as the outer type's).
+     */
+    private static boolean signatureIsImposed(MethodDeclaration md) {
+        return md.isAnnotationPresent("Override")
+                || md.findAncestor(com.github.javaparser.ast.expr.ObjectCreationExpr.class).isPresent();
+    }
+
     private void collectTypeObservations(TypeDeclaration<?> type, List<String> out) {
         String typeName = type.getNameAsString();
         // Records auto-assign their components; skip field/param analysis that would misfire on them.
@@ -590,7 +602,7 @@ public class WiringFactsAnalyzer {
             md.getBody().ifPresent(body -> {
                 if (isStubBody(md, body)) {
                     out.add(label + " is a stub (returns null / empty body / only throws) — no real implementation.");
-                } else {
+                } else if (!signatureIsImposed(md)) {
                     for (Parameter p : md.getParameters()) {
                         if (out.size() >= MAX_OBSERVATIONS) return;
                         if (!parameterIsRead(body, p.getNameAsString())) {

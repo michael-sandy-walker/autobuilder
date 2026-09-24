@@ -47,6 +47,14 @@ public class EvolutionLLMAdapter {
         }
     }
 
+    /** T4-CQ: operator-declared paths no writer may touch; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.ProtectedPaths protectedPaths;
+
+    /** T4-CQ: repeated failures, named in the prompt; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.GrindDetector grindDetector;
+
     public CycleContextData evolve(CycleContextData context) throws IOException {
         return evolve(context, false);
     }
@@ -59,8 +67,21 @@ public class EvolutionLLMAdapter {
         CycleContextData refreshed = groundingService.refreshGoalAnnotations(context);
         var result = refreshed.evaluationInterpretation();
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
+        java.util.function.Predicate<String> isProtected = protectedPaths == null ? path -> false
+                : protectedPaths::isProtected;
         String userPrompt = EvolutionProtocolContract.getUserPrompt(refreshed, result, recombined,
-                promptTokenBudget.promptHeadroomTokens());
+                promptTokenBudget.promptHeadroomTokens(), isProtected);
+        // T4-CQ: the paths the operator protected, and every write refused since the last prompt --
+        // a refusal the model never hears about is a move it will make again.
+        if (protectedPaths != null) {
+            String block = protectedPaths.promptBlock();
+            if (block != null) userPrompt = userPrompt + "\n\n" + block;
+        }
+        // T4-CQ: a move that has failed again and again is named, so it is not made once more.
+        if (grindDetector != null) {
+            String grind = grindDetector.promptBlock();
+            if (grind != null) userPrompt = userPrompt + "\n\n" + grind;
+        }
         // T4-CQ: where the routes are really answered, when the tree's own configuration says.
         userPrompt = com.walpro.autobuilder.protocol.evolution.ServedPrefixPromptBlock.appendTo(
                 userPrompt, servedPrefixOf(refreshed));

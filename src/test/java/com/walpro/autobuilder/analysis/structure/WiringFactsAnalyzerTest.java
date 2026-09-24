@@ -878,4 +878,26 @@ class WiringFactsAnalyzerTest {
         assertThat(analyzer.peerPlacementAnomalies(Map.of())).isEmpty();
         assertThat(analyzer.peerPlacementAnomalies(null)).isEmpty();
     }
+
+    /** T4-CQ: an override's and an anonymous class's parameter lists are imposed; an unread one ignores nothing. */
+    @Test
+    void anImposedSignatureMayLeaveAParameterUnread() {
+        List<String> obs = analyzer.analyze(Map.of("src/main/java/org/sample/Quill.java", """
+                package org.sample;
+                import java.util.function.BiFunction;
+                public class Quill implements Comparable<Quill> {
+                    @Override
+                    public int compareTo(Quill other) { return 0; }
+                    public BiFunction<String, Integer, String> nib() {
+                        return new BiFunction<>() {
+                            public String apply(String ink, Integer unused) { return ink; }
+                        };
+                    }
+                    public int scale(int factor) { return 2; }
+                }
+                """));
+
+        assertThat(obs).noneMatch(o -> o.contains("'other'")).noneMatch(o -> o.contains("'unused'"));
+        assertThat(obs).as("an ordinary method still reports it").anyMatch(o -> o.contains("'factor'"));
+    }
 }

@@ -609,7 +609,6 @@ public sealed interface BehaviourEvent {
         public String event() { return "deferred_mutation_dropped"; }
     }
 
-    /** TTL or LRU cap evicted the deferred mutation. */
     /**
      * T5-BO: an agent's answer was thrown away because it did not match its protocol, even after
      * the one format retry. Emitted so the operator and the watches can see it: the ninth adopted
@@ -626,6 +625,21 @@ public sealed interface BehaviourEvent {
         public String event() { return "llm_response_discarded"; }
     }
 
+    /**
+     * T4-CQ: the same failure has recurred across cycles -- noted at its third occurrence and at
+     * every doubling after, so a grind that goes on forever keeps being reported.
+     */
+    record GrindDetected(
+            Instant timestamp,
+            String cycleId,
+            String signature,
+            int occurrences,
+            String firstCycleId
+    ) implements BehaviourEvent {
+        public String event() { return "grind_detected"; }
+    }
+
+    /** TTL or LRU cap evicted the deferred mutation. */
     record DeferredMutationEvicted(
             Instant timestamp,
             String cycleId,

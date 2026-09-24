@@ -2571,7 +2571,7 @@ window.MissionControl = (function () {
     mutation_proposed: 'propose', mutation_scored: 'propose',
     mutation_merged: 'merge', goal_consolidation: 'merge',
     mutation_negotiated: 'heur', heuristic_result: 'heur',
-    mutation_rejected: 'reject', merge_rolled_back: 'reject', llm_response_discarded: 'reject',
+    mutation_rejected: 'reject', merge_rolled_back: 'reject', llm_response_discarded: 'reject', grind_detected: 'halt',
     system_paused: 'halt', recurring_defect_dominant: 'halt', guard_violated: 'halt',
     deliberation_outcome: 'delib',
     artifact_preserved: 'preserve',
@@ -2592,7 +2592,7 @@ window.MissionControl = (function () {
     agent_selected: 'agent', mutation_proposed: 'propose', mutation_scored: 'scored',
     mutation_merged: 'MERGE', goal_consolidation: 'consolidate', mutation_negotiated: 'negotiate',
     heuristic_result: 'heuristic', mutation_rejected: 'REJECT', merge_rolled_back: 'rollback',
-    llm_response_discarded: 'DISCARDED',
+    llm_response_discarded: 'DISCARDED', grind_detected: 'GRIND',
     system_paused: 'PAUSE', recurring_defect_dominant: 'defect', guard_violated: 'guard',
     deliberation_outcome: 'deliberate', artifact_preserved: 'preserve', mutation_injected: 'inject',
     system_resumed: 'RESUME', run_resumed: 'RESUME-RUN', rewind_performed: 'REWIND',
@@ -2733,6 +2733,7 @@ window.MissionControl = (function () {
       case 'package_discovery_hit': return 'discover ' + crop(p.symbol || '', 18);
       case 'symbol_resolver_registry_hit': return 'resolve ' + crop(p.symbol || '', 18);
       case 'build_fix_attempt':
+        if (isTreeCheck(p)) return treeCheckName(p) + ' ' + treeCheckVerdict(p);
         return 'fix ' + (p.source || '') + ' ' + String(p.outcome || '').toLowerCase();
       case 'blocker_extraction_outcome':
         return 'blockers ' + crop(String(p.result || '').toLowerCase().replace(/_/g, ' '), 20);
@@ -2823,6 +2824,10 @@ window.MissionControl = (function () {
       case 'deliberation_outcome':
         return 'Mode ' + (p.mode || '?') + (p.rationale ? ' — ' + crop(p.rationale, 220) : '') + '.';
       case 'build_fix_attempt':
+        if (isTreeCheck(p)) {
+          return treeCheckName(p) + ' of the tree as it is on disk (nothing new applied) → '
+            + treeCheckVerdict(p) + '.';
+        }
         return 'Build fix attempt #' + (p.attemptNumber != null ? p.attemptNumber : '?') +
           ' (' + (p.source || '?') + (p.rule ? ', ' + p.rule : '') + ') → ' + (p.outcome || '?') + '.';
       case 'blocker_extraction_outcome':
@@ -2911,6 +2916,10 @@ window.MissionControl = (function () {
       case 'mutation_rejected':
         return { title: 'Rejected', dot: '#fca5a5', html: esc(crop(p.reason, 160)) };
       // T5-BO: an answer thrown away for its FORM, which used to be visible only in the app log.
+      // T4-CQ: the same failure again and again -- the loop saying it is going round in circles.
+      case 'grind_detected':
+        return { title: 'Repeating itself: ' + (p.occurrences || '?') + ' times', dot: '#f97316',
+          html: esc(crop(String(p.signature || ''), 180)) };
       case 'llm_response_discarded':
         return { title: 'Answer discarded (' + esc(p.role || '?') + ')' + (p.consecutive > 1 ? ' x' + p.consecutive : ''),
           dot: '#fcd34d', html: esc(crop((p.reason || '') + ': ' + (p.firstLine || ''), 160)) };
@@ -2947,7 +2956,17 @@ window.MissionControl = (function () {
       default: return null;
     }
   }
-  function crop(s, n) {
+  // The gates emit build_fix_attempt too, but they apply nothing: they build what is on disk.
+// "package-gate" and "test-gate" are those sources; probe, inner-loop and post-merge carry files.
+const TREE_CHECK_SOURCES = { 'package-gate': 'Package check', 'test-gate': 'Test run' };
+function isTreeCheck(p) { return !!(p && TREE_CHECK_SOURCES[p.source]); }
+function treeCheckName(p) { return TREE_CHECK_SOURCES[p.source]; }
+function treeCheckVerdict(p) {
+  const ok = !/ERROR|FAILED|TIMEOUT/.test(String(p.outcome || ''));
+  if (p.source === 'test-gate') return ok ? 'suite passes' : 'suite fails';
+  return ok ? 'builds' : 'does not build';
+}
+function crop(s, n) {
     if (s == null) return '';
     s = String(s).replace(/\s+/g, ' ').trim();
     return s.length > n ? s.slice(0, n) + '…' : s;
@@ -3010,6 +3029,9 @@ window.MissionControl = (function () {
           (chatty && n ? ': ' + fileList(p.files, 3) : '') + '.';
       }
       case 'mutation_rejected': return 'Rejected: ' + crop(p.reason, 110);
+      case 'grind_detected':
+        return 'The loop is repeating itself. The same failure has now happened ' + (p.occurrences || 'several')
+          + ' times: ' + crop(String(p.signature || '').replace(/^the build fails: /, ''), 140) + '.';
       case 'llm_response_discarded':
         return (p.consecutive > 2 ? p.consecutive + ' answers in a row were' : 'An answer was')
           + ' discarded because it did not match the expected format.';
@@ -3061,6 +3083,7 @@ window.MissionControl = (function () {
         return chatty ? ('Scored ' + fmtScore(p.llmScore) + ', ' +
           String(p.llmState || '').toLowerCase().replace(/_/g, ' ') + '.') : null;
       case 'build_fix_attempt': {
+        if (isTreeCheck(p)) return null;   // a check of the current tree, not a fix: nothing to narrate
         // the recovery moment speaks at every verbosity; per-attempt detail is chatty-only
         if (repairedAfter > 0) {
           return 'Build repaired after ' + repairedAfter +
@@ -3190,8 +3213,10 @@ window.MissionControl = (function () {
         setSubgoalHud(desc);
       }
     }
-    // consecutive failed fix attempts → the green build is a "repaired" moment
-    if (env.event === 'build_fix_attempt') {
+    // consecutive failed fix attempts → the green build is a "repaired" moment. A GATE build is
+    // not a fix: it builds whatever is on disk, which after a rolled-back attempt is the tree
+    // WITHOUT that attempt, so its green said "repaired" about a change that was thrown away.
+    if (env.event === 'build_fix_attempt' && !isTreeCheck(p)) {
       if (/ERROR|FAILED/.test(String(p.outcome || ''))) {
         fixFailStreak += 1;
       } else if (fixFailStreak > 0) {

@@ -13,6 +13,32 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** T4-BB: tests for {@link MissingMemberPromptBlock}. */
 class MissingMemberPromptBlockTest {
 
+    /**
+     * T4-CQ: for a PROTECTED type the standing advice -- edit the callee -- would send the model
+     * to rewrite a file whose every write is refused. The advice reverses and shows the members.
+     */
+    @Test
+    void render_protectedType_tellsTheCallerToUseWhatTheTypeDeclares() {
+        BuildOutcome eo = probeFailure(String.join("\n",
+                "[ERROR] /src/test/java/org/sample/QuillTest.java:[12,20] cannot find symbol",
+                "[ERROR]   symbol:   method getInk()",
+                "[ERROR]   location: variable quill of type org.sample.Quill"));
+        Map<String, String> prev = new LinkedHashMap<>();
+        prev.put("src/main/java/org/sample/Quill.java",
+                "package org.sample;\npublic record Quill(String ink, int nib) {}\n");
+        prev.put("src/test/java/org/sample/QuillTest.java", "class QuillTest {}");
+        CycleContextData ctx = CycleContextData.builder().cycleName("c")
+                .lastProbeOutcome(eo).previousOutput(prev).build();
+
+        String block = MissingMemberPromptBlock.render(ctx, p -> p.startsWith("src/main/"));
+
+        assertThat(block).contains("PROTECTED").contains("Change the CALLER")
+                .contains("  - ink()").contains("  - nib()")
+                .doesNotContain("ADD TO Quill.java").doesNotContain("do NOT change the caller");
+        assertThat(MissingMemberPromptBlock.render(ctx)).as("unprotected: the standing advice")
+                .contains("ADD TO Quill.java");
+    }
+
     @Test
     void render_nullCtx_returnsNull() {
         assertThat(MissingMemberPromptBlock.render(null)).isNull();

@@ -47,6 +47,10 @@ public class CompileProbeService {
     /** T4-CQ: operator-declared paths no writer may touch; optional in narrow tests. */
     @Autowired(required = false)
     private ProtectedPaths protectedPaths;
+
+    /** T4-CQ: notes a failure that keeps recurring; optional in narrow tests. */
+    @Autowired(required = false)
+    private GrindDetector grindDetector;
     private final BuildExecutor buildExecutor;
     private final CompileFixInjector compileFixInjector;
     private final PackageFragmentationCheck packageFragmentationCheck;
@@ -345,6 +349,14 @@ public class CompileProbeService {
 
     /** T2-EF: hand the residual outcome to the recurring-defect tracker when one is wired. */
     private void observeResidual(CycleContextData context, BuildOutcome outcome, List<FixProposal> appliedFixes) {
+        // T4-CQ: every failure signature of the residual build, for the grind detector.
+        if (grindDetector != null) {
+            try {
+                grindDetector.observeBuild(context.cycleName(), outcome);
+            } catch (RuntimeException e) {
+                log.debug("T4-CQ: grind observe failed: {}", e.getMessage());
+            }
+        }
         if (recurringDefectTracker == null) return;
         try {
             recurringDefectTracker.observe(outcome, appliedFixes, context.currentSubGoalId(), context.cycleName());

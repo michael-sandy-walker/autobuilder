@@ -164,11 +164,17 @@ public class CycleExecutor implements CheckpointableState {
         livelockConsecutiveCount = snapshot.livelockConsecutiveCount();
     }
 
+    /** T4-CQ: counts a failure at most once per cycle, so it is told when one begins. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.GrindDetector grindDetector;
+
     public CycleContextData runCycle(CycleContextData context) {
 
         goalPlannerService.setCurrentCycleContext(context);
 
         context = syncContextFromGoals(context);
+
+        if (grindDetector != null) grindDetector.beginCycle(context.cycleName());
 
         if (behaviourLogger != null) {
             behaviourLogger.cycleStart(context.cycleName(), context.currentGoalId(), context.currentSubGoalId(),

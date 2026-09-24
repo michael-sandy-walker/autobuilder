@@ -7,7 +7,6 @@ import java.util.Map;
 
 import com.walpro.autobuilder.graph.evaluation.CriterionResultEntity;
 import com.walpro.autobuilder.graph.planner.PlannerActionSnapshot;
-import com.walpro.autobuilder.graph.planner.PlannerInflowStats;
 import com.walpro.autobuilder.graph.scope.ScopeActionSnapshot;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
@@ -29,61 +28,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     private final Neo4jClient neo4jClient;
     private final com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
 
-    @Override
-    public void registerAgent(AgentEntity agent) {
-        neo4jClient.query("""
-            MERGE (a:Agent { id: $id })
-            SET a.name = $name,
-                a.lineagePath = $lineagePath,
-                a.roleType = $roleType,
-                a.spawnedInCycle = $cycle,
-                a.status = $status,
-                a.lineageId = $lineageId,
-                a.runId = $runId
-        """)
-        .bindAll(Map.of(
-            "id", agent.id(),
-            "name", agent.name(),
-            "lineagePath", agent.lineagePath(),
-            "roleType", agent.roleType(),
-            "cycle", agent.spawnedInCycle(),
-            "status", agent.status(),
-            "lineageId", runIdentity.lineageId(),
-            "runId", runIdentity.runId()
-        ))
-        .run();
-
-        log.info("Registered agent: {} ({})", agent.name(), agent.id());
-    }
-
-    @Override
-    public void linkToSubgoal(String agentId, String goalId) {
-        neo4jClient.query("""
-            MATCH (a:Agent { id: $agentId })
-            MERGE (g:Goal { id: $goalId })
-            MERGE (a)-[:ASSIGNED_TO]->(g)
-        """)
-        .bind(agentId).to("agentId")
-        .bind(goalId).to("goalId")
-        .run();
-
-        log.info("🔗 Linked agent {} → goal {}", agentId, goalId);
-    }
-
-    @Override
-    public void linkSpawn(String parentAgentId, String spawnedAgentId) {
-        neo4jClient.query("""
-            MATCH (parent:Agent { id: $parentId })
-            MATCH (child:Agent { id: $childId })
-            MERGE (parent)-[:SPAWNED]->(child)
-        """)
-        .bind(parentAgentId).to("parentId")
-        .bind(spawnedAgentId).to("childId")
-        .run();
-
-        log.info("Linked spawn: {} → {}", parentAgentId, spawnedAgentId);
-    }
-    
     @Override
     public List<AgentEntity> getAllAgents() {
         return neo4jClient.query("""
@@ -117,27 +61,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
         log.info("Updated agent status: {} → {}", agentId, status);
     }
     
-    @Override
-    public List<AgentEntity> getActiveUnassignedAgents() {
-        return neo4jClient.query("""
-            MATCH (a:Agent)
-            WHERE a.status = 'active' AND NOT (a)-[:ASSIGNED_TO]->(:Goal)
-            RETURN a.id AS id, a.name AS name, a.lineagePath AS lineagePath, a.roleType AS roleType, a.spawnedInCycle AS cycle, a.status AS status
-        """)
-        .fetch()
-        .all()
-        .stream()
-        .map(row -> new AgentEntity(
-            (String) row.get("id"),
-            (String) row.get("name"),
-            (String) row.get("lineagePath"),
-            (String) row.get("roleType"),
-            (String) row.get("cycle"),
-            (String) row.get("status")
-        ))
-        .toList();
-    }
-
     @Override
     public void registerAction(ActionEntity action) {
         neo4jClient.query("""
@@ -219,35 +142,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
     }
     
     @Override
-    public List<AgentEntity> getAgentsByRoleAndGoal(String roleType, String goalId) {
-        String query = """
-            MATCH (a:Agent)-[:ASSIGNED_TO]->(g:Goal {id: $goalId})
-            WHERE a.roleType = $roleType
-            RETURN a.id AS id, a.name AS name, a.lineagePath AS lineagePath,
-                   a.roleType AS roleType, a.spawnedInCycle AS spawnedInCycle, a.status AS status
-            """;
-
-        Map<String, Object> params = Map.of(
-            "roleType", roleType,
-            "goalId", goalId
-        );
-
-        return neo4jClient.query(query)
-                .bindAll(params)
-                .fetch()
-                .all()
-                .stream()
-                .map(row -> new AgentEntity(
-                    (String) row.get("id"),
-                    (String) row.get("name"),
-                    (String) row.get("lineagePath"),
-                    (String) row.get("roleType"),
-                    (String) row.get("cycle"),
-                    (String) row.get("status")
-                )).toList();
-    }
-
-    @Override
     public long countAllAgents() {
         return neo4jClient.query("""
             MATCH (a:Agent)
@@ -273,32 +167,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
             WHERE a.status = 'active' AND NOT (a)-[:ASSIGNED_TO]->(:Goal)
             RETURN count(a) AS c
         """).fetchAs(Long.class).one().orElse(0L);
-    }
-
-    @Override
-    public long countActiveAgentsByRoleAndGoal(String roleType, String goalId) {
-        return neo4jClient.query("""
-            MATCH (a:Agent)-[:ASSIGNED_TO]->(g:Goal { id: $goalId })
-            WHERE a.status = 'active' AND a.roleType = $roleType
-            RETURN count(a) AS c
-        """)
-                .bindAll(Map.of("roleType", roleType, "goalId", goalId))
-                .fetchAs(Long.class).one().orElse(0L);
-    }
-
-    @Override
-    public long pruneInactiveUnassignedAgents(int limit) {
-        // Deletes up to {limit} agents that are inactive AND have no goal assignment.
-        // This is intentionally conservative and avoids needing a "lastSeen" field.
-        return neo4jClient.query("""
-            MATCH (a:Agent)
-            WHERE a.status = 'inactive' AND NOT (a)-[:ASSIGNED_TO]->(:Goal)
-            WITH a LIMIT $limit
-            DETACH DELETE a
-            RETURN count(*) AS c
-        """)
-                .bind(limit).to("limit")
-                .fetchAs(Long.class).one().orElse(0L);
     }
 
     @Override
@@ -401,31 +269,6 @@ public class Neo4jAgentGraphService implements AgentGraphService {
                         row.get("ts") == null ? null : Instant.parse(row.get("ts").toString().replace("Z", "Z"))
                 ))
                 .toList();
-    }
-
-    @Override
-    public PlannerInflowStats getPlannerInflowSince(String scopeGoalId, Instant since) {
-        Map<String, Object> row = neo4jClient.query("""
-            MATCH (a:Action)
-            WHERE a.type = 'planner'
-              AND a.targetsGoalId = $scopeGoalId
-              AND a.timestamp >= datetime($since)
-            RETURN
-              sum(CASE WHEN coalesce(a.plannerUpdated,false) = true THEN 1 ELSE 0 END) AS updatedActions,
-              sum(CASE WHEN coalesce(a.plannerUpdated,false) = true THEN coalesce(a.plannerNewGoalsCount,0) ELSE 0 END) AS totalNewGoals
-        """)
-                .bindAll(Map.of(
-                        "scopeGoalId", scopeGoalId,
-                        "since", since.toString()
-                ))
-                .fetch()
-                .one()
-                .orElse(Map.of());
-
-        int updatedActions = row.get("updatedActions") == null ? 0 : ((Number) row.get("updatedActions")).intValue();
-        int totalNewGoals = row.get("totalNewGoals") == null ? 0 : ((Number) row.get("totalNewGoals")).intValue();
-
-        return new PlannerInflowStats(updatedActions, totalNewGoals);
     }
 
     @Override

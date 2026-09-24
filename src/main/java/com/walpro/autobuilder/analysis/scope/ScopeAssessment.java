@@ -6,7 +6,4 @@ public record ScopeAssessment(
         String message,
         String bestMatchingSubGoalId
 ) {
-    public static ScopeAssessment inScope(double confidence, String message) {
-        return new ScopeAssessment(ScopeFit.IN_SCOPE, confidence, message, null);
-    }
 }

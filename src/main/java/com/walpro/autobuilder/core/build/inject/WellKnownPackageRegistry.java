@@ -282,11 +282,6 @@ public class WellKnownPackageRegistry {
         log.info("T4-BG: WellKnownPackageRegistry marked {} as resolution-failed; future lookups bypass registry", symbol);
     }
 
-    /** Hot-test reset for unit tests; never call from production code. */
-    void __clearFailureMarkersForTest() {
-        failedResolutions.clear();
-    }
-
     // -------------------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------------------

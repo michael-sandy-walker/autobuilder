@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -121,34 +120,6 @@ public class Neo4jCheckpointGraphService implements CheckpointGraphService {
         } catch (Exception e) {
             log.warn("T4-DQ: could not read checkpoint {} from the graph: {}", cycleId, e.getMessage());
             return Optional.empty();
-        }
-    }
-
-    @Override
-    public List<StoredRun> runsWithCheckpoints(String lineageId, int limit) {
-        try {
-            List<StoredRun> runs = new ArrayList<>();
-            neo4jClient.query("""
-                    MATCH (c:Checkpoint)
-                    WHERE $lineageId IS NULL OR c.lineageId = $lineageId
-                    RETURN c.runId AS runId, c.lineageId AS lineageId, count(*) AS n,
-                           min(c.cycleId) AS firstCycleId, max(c.cycleId) AS lastCycleId,
-                           max(c.at) AS lastAt
-                    ORDER BY lastCycleId DESC LIMIT $limit
-                    """)
-                    .bindAll(everyLineageWhenNull(lineageId, limit))
-                    .fetch().all()
-                    .forEach(row -> runs.add(new StoredRun(
-                            (String) row.get("runId"),
-                            (String) row.get("lineageId"),
-                            ((Number) row.getOrDefault("n", 0)).intValue(),
-                            (String) row.get("firstCycleId"),
-                            (String) row.get("lastCycleId"),
-                            parseInstant((String) row.get("lastAt")))));
-            return runs;
-        } catch (Exception e) {
-            log.warn("T4-DQ: could not read checkpoint runs from the graph: {}", e.getMessage());
-            return List.of();
         }
     }
 

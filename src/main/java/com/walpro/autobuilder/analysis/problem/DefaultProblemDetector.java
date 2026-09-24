@@ -5,7 +5,6 @@ import com.walpro.autobuilder.analysis.heuristic.HeuristicFinding;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
-import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
@@ -14,7 +13,6 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -169,22 +167,6 @@ public class DefaultProblemDetector implements ProblemDetector {
                 p -> p != null && p.keywords().contains(kw),
                 "Auto-resolved: signal weakened/absent (" + kw + ")."
         );
-    }
-
-    private static double strength(Map<SignalType, Signal> signals, SignalType type) {
-        if (signals == null || signals.isEmpty() || type == null) return 0.0;
-
-        Signal s = signals.get(type);
-        if (s != null) return s.strength();
-
-        // fallback: compare by string to survive type mismatches
-        for (Map.Entry<SignalType, Signal> e : signals.entrySet()) {
-            if (e.getKey() != null && type.name().equalsIgnoreCase(e.getKey().name()) && e.getValue() != null) {
-                return e.getValue().strength();
-            }
-        }
-
-        return 0.0;
     }
 
     private ProblemContext addSignalProblems(ProblemContext base,

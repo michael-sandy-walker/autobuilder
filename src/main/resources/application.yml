@@ -73,9 +73,10 @@ autobuilder:
     # data/<target>/test — a SIBLING of output/, so the diff never saw it and the entry never
     # matched anything. Under segment matching it would have started matching src/test/java, i.e.
     # a project's own tests, making a change to them invisible to the loop that wrote it.
+    # `logs` / `responses` REMOVED 2026-09-24 (T5-BL). The loop writes both beside output/, never
+    # inside a diffed tree (output/, mutations/<cycle>/, snapshots/), so they matched nothing in any
+    # tree measured; under segment matching they would only hide a target's own `logs` package.
     exclude-folders:
-      - logs
-      - responses
       - target
       - .mvn
       - .git

@@ -4,7 +4,6 @@ import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
 import com.walpro.autobuilder.core.checkpoint.StateBucket;
 import com.walpro.autobuilder.core.checkpoint.StateHolder;
 
-import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -234,8 +233,6 @@ public class DeferredRestageScheduler implements CheckpointableState {
         lastScopePromotionCycleIndex = state == null || state.isNull()
                 ? -1L : mapper.convertValue(state, Snapshot.class).lastScopePromotionCycleIndex();
     }
-
-    public void __resetCooldownForTest() { lastScopePromotionCycleIndex = -1; }
 
     /**
      * Long-stop hygiene that runs every cycle: drop records whose intent goal closed, evict

@@ -46,19 +46,4 @@ public record DeliberationResult(
         );
     }
 
-    public DeliberationResult withRequest(ChannelRequest r) {
-        if (r == null) return this;
-        var next = new java.util.ArrayList<ChannelRequest>(proposedRequests != null ? proposedRequests : List.of());
-        next.add(r);
-        return new DeliberationResult(mode, confidence, rationale, considerations, observations, meta,
-                java.util.List.copyOf(next), proposedWindows);
-    }
-
-    public DeliberationResult withWindow(ParticipationWindow w) {
-        if (w == null) return this;
-        var next = new java.util.ArrayList<ParticipationWindow>(proposedWindows != null ? proposedWindows : List.of());
-        next.add(w);
-        return new DeliberationResult(mode, confidence, rationale, considerations, observations, meta,
-                proposedRequests, java.util.List.copyOf(next));
-    }
 }

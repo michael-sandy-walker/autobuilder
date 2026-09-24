@@ -52,10 +52,6 @@ public record ChannelRequest(
         return (int) Math.ceil((strength - SURVIVAL_THRESHOLD) / decayPerCycle - 1e-9);
     }
 
-    public ChannelRequest withSubGoalId(String id) {
-        return new ChannelRequest(kind, urgency, source, id, age, validForCycles, meta);
-    }
-
     public ChannelRequest withMeta(String key, Object value) {
         Map<String, Object> updated = new HashMap<>(meta != null ? meta : Map.of());
         updated.put(key, value);

@@ -26,22 +26,6 @@ public record ProblemContext(
         return false;
     }
 
-    public ProblemEntry findOpenById(String id) {
-        if (id == null || id.isBlank() || open == null) return null;
-        for (ProblemEntry p : open) {
-            if (p != null && id.equals(p.id())) return p;
-        }
-        return null;
-    }
-
-    public ProblemEntry findResolvedById(String id) {
-        if (id == null || id.isBlank() || resolved == null) return null;
-        for (ProblemEntry p : resolved) {
-            if (p != null && id.equals(p.id())) return p;
-        }
-        return null;
-    }
-
     /**
      * Upsert into OPEN:
      * - If exists in open: merge (preserve createdAt/firstSeenCycleId, update updatedAt/lastSeenCycleId, union keywords/observations)

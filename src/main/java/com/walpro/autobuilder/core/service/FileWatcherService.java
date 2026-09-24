@@ -142,7 +142,4 @@ public class FileWatcherService {
         eventQueue.add(new FileChangeEvent(kind, path));
     }
     
-    public FileChangeEvent pollEvent() {
-        return eventQueue.poll();
-    }
 }

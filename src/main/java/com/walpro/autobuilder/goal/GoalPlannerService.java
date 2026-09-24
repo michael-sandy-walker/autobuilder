@@ -11,7 +11,6 @@ import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.core.build.BlockerTypes;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 import com.walpro.autobuilder.core.service.FileService;
@@ -4828,16 +4827,6 @@ public class GoalPlannerService {
             if (best == null || best.getStatus() == GoalStatus.GIVEN_UP) best = g;
         }
         return best;
-    }
-
-    /**
-     * T2-CH: returns true when any ACTIVE goal in the map is a descendant of parentId.
-     * Used to detect T1-CP replacement subgoals injected under GIVEN_UP parents so that
-     * autoCompleteRootIfSatisfied can defer firing until those replacements are worked on.
-     */
-    private boolean hasActiveDescendantsOf(String parentId) {
-        return goalMap.values().stream()
-                .anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE && isDescendantOf(g, parentId));
     }
 
     private boolean isDescendantOf(GoalEntity g, String ancestorId) {

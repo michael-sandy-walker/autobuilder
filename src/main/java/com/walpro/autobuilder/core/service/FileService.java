@@ -165,11 +165,6 @@ public class FileService {
         return Files.readAllBytes(path);
     }
     
-    public Optional<String> detectMimeType(String relativePath) throws IOException {
-        Path path = resolveSecurePath(relativePath);
-        return detectMimeTypeResolved(path);
-    }
-    
     public Optional<String> detectMimeTypeResolved(Path path) throws IOException {
         try {
             return Optional.ofNullable(Files.probeContentType(path));
@@ -216,11 +211,6 @@ public class FileService {
                 throw new RuntimeException("Failed to copy " + source + " to " + target, e);
             }
         });
-    }
-    
-    public Map<String, String> readFolderContents(String relativePath) throws IOException {
-        Path path = resolveSecurePath(relativePath);
-        return readFolderContentsResolved(path);
     }
     
     public Map<String, String> readFolderContentsResolved(Path path) throws IOException {

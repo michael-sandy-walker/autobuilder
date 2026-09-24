@@ -114,11 +114,6 @@ public class CheckpointArchive {
         }
     }
 
-    /** Where an archived cycle's cache copy lives, when it kept one. */
-    public String cachePathOf(String cycleId) {
-        return ARCHIVE_DIR + "/" + cycleId + "/" + CACHE_SUBDIR;
-    }
-
     /** Name of the cache copy inside an archived cycle. */
     /**
      * Everything the archive keeps beside the tree starts with this. The restore strips every

@@ -3880,6 +3880,28 @@ public class GoalPlannerService {
         }
     }
 
+    /**
+     * The seed obligations closure still has to ask about. A line the operator marked
+     * {@code gate: tests} is the test gate's -- which ran above and passed, or closure would not be
+     * here -- so it is not put to a model reading the source. When that gate is off it answered
+     * nothing, and the line goes back to the model like any other.
+     */
+    private List<String> uncoveredSeedAtClosure(GoalEntity root, List<String> banked) {
+        String written = writtenObligations();
+        List<String> uncovered = new ArrayList<>(
+                SeedRequirements.notAlreadyCoveredVerifiable(root.getDescription(), banked, written));
+        List<String> testGateLines = SeedRequirements.answeredByGate(
+                root.getDescription(), written, SeedRequirements.GATE_TESTS);
+        if (testGateLines.isEmpty()) return uncovered;
+        if (testRunGate != null && testRunGate.isLive()) {
+            log.info("T4-CQ: {} seed obligation(s) answered by the test gate, not by a reading: {}",
+                    testGateLines.size(), testGateLines);
+        } else {
+            uncovered.addAll(testGateLines);
+        }
+        return uncovered;
+    }
+
     private void refuseClosureUnrepairable(String gate, String detail) {
         log.warn("T4-DK: root closure REFUSED by {} — {}; the repair work item deduplicates against "
                 + "an already GIVEN_UP item, so the requirement is unmet and unfixable this cycle. "
@@ -4417,8 +4439,7 @@ public class GoalPlannerService {
             // tested and the seed never consulted (run 2026-09-24_12-09-57). Having no evidence
             // must not be the one case that skips the check.
             boolean seedObligationsToCheck = criteriaVerificationService != null && passingCriteria.isEmpty()
-                    && !SeedRequirements.notAlreadyCoveredVerifiable(
-                            root.getDescription(), List.of(), writtenObligations()).isEmpty();
+                    && !uncoveredSeedAtClosure(root, List.of()).isEmpty();
             if (criteriaVerificationService != null && (!passingCriteria.isEmpty() || seedObligationsToCheck)) {
                 Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
                 // T4-DK (open half): hand the SEED's own obligations to the same verifier. Closure
@@ -4428,8 +4449,7 @@ public class GoalPlannerService {
                 // and no HUD. Requirements already covered by a banked criterion are skipped, so
                 // the verifier is not asked the same question twice.
                 List<String> toVerify = new ArrayList<>(passingCriteria);
-                List<String> uncoveredSeed = SeedRequirements.notAlreadyCoveredVerifiable(
-                        root.getDescription(), toVerify, writtenObligations());
+                List<String> uncoveredSeed = uncoveredSeedAtClosure(root, toVerify);
                 if (!uncoveredSeed.isEmpty()) {
                     log.info("T4-DK: {} seed requirement(s) are covered by no banked criterion — "
                             + "verifying them against the artifact too", uncoveredSeed.size());

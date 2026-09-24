@@ -4,7 +4,7 @@
 # body-sha256: ad1f0504c05e4a61ca0380f766f443ede3e32cd8cf44d869941ff9b5686425a2
 rule: Establish which path form (with or without the /calculator servlet context prefix) the test needs rather than assuming it.
 Every route the application serves is covered by a test in the project's own test suite.
-The whole test suite passes.
+gate: tests The whole test suite passes.
 rule: Work inside the project as it is.
 rule: Keep the project's packages, classes, naming, and test framework.
 Add tests under src/test/java.

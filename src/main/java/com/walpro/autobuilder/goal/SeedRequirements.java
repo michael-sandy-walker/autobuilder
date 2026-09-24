@@ -309,8 +309,47 @@ public final class SeedRequirements {
         return line != null && line.strip().toLowerCase(java.util.Locale.ROOT).startsWith(RULE_MARKER);
     }
 
+    /**
+     * T4-CQ: marks a written obligation as ANSWERED BY A GATE -- {@code gate: tests} -- so closure
+     * takes that gate's verdict instead of a model's reading of the source. Run 2026-09-24_18-27
+     * refused closure because a model reading the code would not confirm "The whole test suite
+     * passes" while the test gate had just run that suite green: a runtime fact put to the one
+     * reader that cannot observe it. Which gate answers which line is the operator's declaration,
+     * like {@link #RULE_MARKER}, never inferred from the wording.
+     */
+    public static final String GATE_MARKER = "gate:";
+
+    /** The one gate a line may name today: the project's own test suite. */
+    public static final String GATE_TESTS = "tests";
+
+    /** The gate a line names, or null when it names none. */
+    static String gateOf(String line) {
+        if (line == null) return null;
+        String l = line.strip();
+        if (!l.toLowerCase(java.util.Locale.ROOT).startsWith(GATE_MARKER)) return null;
+        String rest = l.substring(GATE_MARKER.length()).strip();
+        int sp = rest.indexOf(' ');
+        return (sp < 0 ? rest : rest.substring(0, sp)).toLowerCase(java.util.Locale.ROOT);
+    }
+
     private static String withoutRuleMarker(String line) {
-        return isRule(line) ? line.strip().substring(RULE_MARKER.length()).strip() : line;
+        if (isRule(line)) return line.strip().substring(RULE_MARKER.length()).strip();
+        String gate = gateOf(line);
+        if (gate != null) {
+            String rest = line.strip().substring(GATE_MARKER.length()).strip();
+            return rest.substring(Math.min(rest.length(), gate.length())).strip();
+        }
+        return line;
+    }
+
+    /** The written obligations a named gate answers, markers removed. Empty without a file. */
+    public static List<String> answeredByGate(String specText, String obligationsFileText, String gate) {
+        if (obligationsFileText == null || obligationsFileText.isBlank()) return List.of();
+        List<String> out = new ArrayList<>();
+        for (String r : written(specText, obligationsFileText, List::of)) {
+            if (gate.equals(gateOf(r))) out.add(withoutRuleMarker(r));
+        }
+        return out;
     }
 
     private static List<String> withoutRuleMarkers(List<String> lines) {
@@ -363,10 +402,16 @@ public final class SeedRequirements {
      */
     public static List<String> verifiableObligationsOrSplit(String specText, String obligationsFileText) {
         List<String> obligations = written(specText, obligationsFileText, () -> statedIn(specText));
-        boolean authorMarkedRules = obligations.stream().anyMatch(SeedRequirements::isRule);
+        boolean authorMarkedRules = obligations.stream().anyMatch(l -> isRule(l) || gateOf(l) != null);
         List<String> strict = new ArrayList<>();
         for (String r : obligations) {
             if (isRule(r)) continue;   // guides the work, never blocks completion
+            if (GATE_TESTS.equals(gateOf(r))) continue;   // the test gate's verdict, not a reading
+            if (gateOf(r) != null) {
+                // An unknown gate cannot answer anything: kept as an ordinary obligation, so a typo
+                // can only add a question at closure, never remove one.
+                r = withoutRuleMarker(r);
+            }
             if (authorMarkedRules || OBLIGATION.matcher(r).find()) strict.add(r);
         }
         return strict;

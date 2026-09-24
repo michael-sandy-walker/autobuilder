@@ -87,6 +87,8 @@ public final class SeedObligationsFile {
         sb.append("# Edit freely: a hand-edited file is kept, and reported as yours.\n");
         sb.append("# Prefix a line with 'rule:' when it says HOW the work is done rather than something the\n");
         sb.append("# result can be checked for: it still guides the work, but never blocks completion.\n");
+        sb.append("# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then\n");
+        sb.append("# takes the test run's verdict instead of asking a model to read the source.\n");
         sb.append(SEED_HASH).append(sha256(seedText == null ? "" : seedText)).append('\n');
         StringBuilder body = new StringBuilder();
         for (String o : obligations) {

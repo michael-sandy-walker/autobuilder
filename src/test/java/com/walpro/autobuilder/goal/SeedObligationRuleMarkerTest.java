@@ -70,4 +70,30 @@ class SeedObligationRuleMarkerTest {
         assertThat(SeedRequirements.verifiableObligationsOrSplit(SEED, file))
                 .containsExactly("Every widget route must be covered by a test.");
     }
+
+    /** T4-CQ: a line the test gate answers is not put to a model reading the source. */
+    @Test
+    void aLineTheTestGateAnswersIsLeftToTheTestGate() {
+        String file = fileWith(List.of(
+                "Every widget route is covered by a test.",
+                "gate: tests The whole widget suite passes.",
+                "rule: Keep the widget packages as they are."));
+
+        assertThat(SeedRequirements.verifiableObligationsOrSplit(SEED, file))
+                .containsExactly("Every widget route is covered by a test.");
+        assertThat(SeedRequirements.answeredByGate(SEED, file, SeedRequirements.GATE_TESTS))
+                .containsExactly("The whole widget suite passes.");
+        assertThat(SeedRequirements.obligationsOrSplit(SEED, file))
+                .as("every other reader still sees the line, without its marker")
+                .contains("The whole widget suite passes.");
+    }
+
+    @Test
+    void anUnknownGateAnswersNothingSoTheLineStaysAnObligation() {
+        String file = fileWith(List.of("gate: lint The widget code is tidy."));
+
+        assertThat(SeedRequirements.verifiableObligationsOrSplit(SEED, file))
+                .containsExactly("The widget code is tidy.");
+        assertThat(SeedRequirements.answeredByGate(SEED, file, SeedRequirements.GATE_TESTS)).isEmpty();
+    }
 }

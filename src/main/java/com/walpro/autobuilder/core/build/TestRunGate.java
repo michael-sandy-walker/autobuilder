@@ -91,6 +91,11 @@ public class TestRunGate {
     private BehaviourLogger behaviourLogger;
 
     @Autowired
+    /** T4-CQ: whether a closure check can take this gate's verdict -- it abstains when off. */
+    public boolean isLive() {
+        return enabled && buildExecutor.isEnabled();
+    }
+
     public TestRunGate(
             @Value("${autobuilder.build.test-gate.enabled:true}") boolean enabled,
             @Value("${autobuilder.build.test-gate.command:mvn test}") String testCommand,

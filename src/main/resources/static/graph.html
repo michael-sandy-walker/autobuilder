@@ -3235,7 +3235,11 @@ window.MissionControl = (function () {
     if (p.lastMode) { lastMode = p.lastMode; hudSet('mc-mode', p.lastMode, 'mode'); }
     // seeding lastSubGoal also keeps a reconnect from re-announcing the current subgoal
     if (p.lastSubGoalDescription) { lastSubGoal = p.lastSubGoalDescription; setSubgoalHud(lastSubGoal); }
-    noteSessionStart(p.sessionStartTimestamp);
+    // The server's own start time is authoritative: a page that stays open while a NEW instance
+    // starts reconnects and receives a new hello, and must count that run, not the first one it saw.
+    const helloStart = p.sessionStartTimestamp ? Date.parse(p.sessionStartTimestamp) : NaN;
+    if (!Number.isNaN(helloStart)) { sessionStartMs = helloStart; refreshRuntime(); }
+    else noteSessionStart(p.sessionStartTimestamp);
     if (p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));
     if (p.sessionBuildCount != null) hudSet('mc-builds', String(p.sessionBuildCount));
     refreshPosition();

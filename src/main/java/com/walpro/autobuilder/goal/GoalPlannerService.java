@@ -4342,7 +4342,16 @@ public class GoalPlannerService {
             // LLM's pattern recognition (criterion-by-criterion, not the coverage gate's leading
             // "is this gap implemented?"). Digest-cached + call-counted (cost measured, not guessed);
             // conservative — abstains on no observation, blocks only on a confirmed-unconfirmed criterion.
-            if (criteriaVerificationService != null && !passingCriteria.isEmpty()) {
+            // T4-CQ: the SEED's obligations are checked even when no banked criterion survives.
+            // This gate used to run only with passing criteria in hand, so a run whose subgoal
+            // criteria were all stamped AUTHORED -- the first adopted project, whose objective is
+            // written entirely as obligations -- closed GOAL_FULFILLED with one of seven routes
+            // tested and the seed never consulted (run 2026-09-24_12-09-57). Having no evidence
+            // must not be the one case that skips the check.
+            boolean seedObligationsToCheck = criteriaVerificationService != null && passingCriteria.isEmpty()
+                    && !SeedRequirements.notAlreadyCoveredVerifiable(
+                            root.getDescription(), List.of(), writtenObligations()).isEmpty();
+            if (criteriaVerificationService != null && (!passingCriteria.isEmpty() || seedObligationsToCheck)) {
                 Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
                 // T4-DK (open half): hand the SEED's own obligations to the same verifier. Closure
                 // used to check only the banked criteria of surviving subgoals, so a requirement

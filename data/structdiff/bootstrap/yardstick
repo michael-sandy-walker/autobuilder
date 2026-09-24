@@ -1,0 +1,4 @@
+# T4-DG: the yardstick this target is scored by. One line: <script> [mode]
+# A library: the script is handed the built jar and checks the tree beside it -- entry points covered
+# by tests, src/main unmodified, the suite passes. It says nothing about what an entry point returns.
+scripts/smoke_structdiff.sh terminating

@@ -1,0 +1,28 @@
+  An existing project, adopted. It was written by someone else and it already builds. In its own
+  words, from its README:
+
+    "structdiff -- Structural diff of Java sources. It parses Java source into a tree of declared
+    elements (types, fields, methods, constructors) and compares two versions of a file, reporting
+    which elements were added, removed or changed."
+
+  It is a library: it has no main method, serves nothing and prints nothing. It is used by calling
+  its public methods. These are its entry points:
+
+    JavaStructureParser.parse(path, code)              StructuralDiffUtils.flatten(root)
+    StructuralDiffBuilder.diff(oldElement, newElement) StructuralDiffUtils.filterByType(root, type)
+    StructuralJavaDiffBuilder.diffJavaFile(...)        StructuralDiffUtils.hasChanges(node)
+    DiffSummarizer.summarize(root)                     DiffSummarizer.summarizePlainText(root)
+    DiffSummarizer.summarizeForPrompt(root)
+
+  OBJECTIVE: every entry point above is covered by a test in the project's own test suite, and the
+  whole suite passes.
+
+  Work inside the project as it is. Keep its packages, its classes, its naming and its test
+  framework choice. Add tests under src/test/java. DO NOT modify anything under src/main/java: not
+  the formatting, not the signatures, not the logic. If a test you wrote does not pass, the test is
+  what is wrong.
+
+  A test must assert what the entry point actually returns. Do not assume a result: call it with
+  Java source written inside the test itself, observe the answer, and assert that. If the behaviour
+  looks wrong to you, still assert the behaviour it has, and say what looked wrong in the test name
+  or a comment. Deciding whether that behaviour should change is not part of this objective.

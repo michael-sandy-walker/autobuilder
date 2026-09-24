@@ -1,0 +1,19 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: f85c06a9b68f301535e5e58000b7eae9e49eb2882fed16495202615f5e149d58
+# body-sha256: a85f391fad7421deba07da150fa682c09de8f71cc9a7f8d83b78bfae86961429
+Every entry point the library declares is covered by a test that calls it through its public API and asserts what it returns.
+gate: tests The whole test suite passes.
+Add tests under src/test/java.
+rule: Work inside the project as it is.
+rule: Keep the project's packages, classes, naming, and test framework choice.
+rule: Do not modify anything under src/main/java: not the formatting, not the signatures, not the logic.
+rule: If a test does not pass, the test is what is wrong.
+rule: A test must assert what the entry point actually returns.
+rule: Do not assume a result: call the entry point with Java source written inside the test, observe the answer, and assert that.
+rule: If the behaviour looks wrong, still assert the behaviour it has, and say what looked wrong in the test name or a comment.
+rule: Deciding whether a behaviour should change is not part of this objective.

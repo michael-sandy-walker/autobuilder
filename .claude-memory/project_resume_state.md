@@ -1,6 +1,6 @@
 ---
 name: project-resume-state
-description: "2026-09-24 session 3 (Opus 5.5): T4-CQ on two adopted projects -- rung1 reached two true completions; the second, structdiff (a module of Autobuilder itself), produced a grind detector. No run is live. Read the newest block first."
+description: "2026-09-25 session 4 (Opus 5.5): T4-CQ -- obligations file markers now generated; structdiff run 3 (3/11) exposed assertion values missing from the test-gate repair item, fixed. No run is live. Read the newest block first."
 metadata:
   node_type: memory
   type: project
@@ -11,7 +11,15 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-24 (Opus 5.5, session 3) — T4-CQ: TWO ADOPTED PROJECTS, TWO TRUE COMPLETIONS ON THE FIRST, A GRIND DETECTOR FROM THE SECOND — START HERE
+## 2026-09-25 (Opus 5.5, session 4) — T4-CQ: MARKERS GENERATED; STRUCTDIFF RUN 3 FOUND THE REPAIR ITEM BLIND TO ASSERTION VALUES — START HERE
+
+**Head `fc16cb39` plus uncommitted work (not committed; the user's call). Suite 3281/0/5 with the generator; `TestRunGateTest` green with the gate fix.**
+
+- **structdiff run 3 `2026-09-24_23-33-41`: deadline, 3/11** (run 2: 8/11). A merge added six `JavaStructureParserTest` assertions expecting the class name where the parser returns the path; merges do not run the suite, and 24 minutes of repair never fixed it because the failure line (`expected: <Foo> but was: <com/example/Foo.java>`) reached no prompt. `TestRunGate` now relays each failing test's own failure line when a report has no `Caused by:` chain. Details on the T4-CQ roadmap append.
+- **`SeedObligationsGenerator` built:** writes `bootstrap/seed.obligations.txt` with `rule:`/`gate: tests` markers when the file is absent, malformed or its seed moved; never over a PRISTINE/EDITED file; on in dev-local/dev-auto only. Prompt measured on all five seeds (matches both hand-marked files on rules and the gate line).
+- **Next for T4-CQ:** structdiff run 4 on this build, with the hand-written obligations file MOVED ASIDE so the generator writes it (field proof of both changes at once: the generated markers and the relayed assertion values). Open, noted not filed: a merge turning a green suite red on a tests-only objective is accepted without running the suite.
+
+## 2026-09-24 (Opus 5.5, session 3) — T4-CQ: TWO ADOPTED PROJECTS, TWO TRUE COMPLETIONS ON THE FIRST, A GRIND DETECTOR FROM THE SECOND
 
 **Head `38328f08` (my two commits rebased by the user onto PR #1's merge `1827c816`). Local main is 2 ahead of origin; pushing is the user's. Suite 3275/0/5 on the merged tree.**
 

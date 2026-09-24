@@ -182,4 +182,30 @@ class CompletionEdgeExecutionRefutationTest {
         verify(verifier).verifyCompletion(any(), any(), any());
         assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
     }
+
+    /**
+     * T4-CQ: an attempt whose inputs have not changed cannot reach a different verdict, so it is
+     * not re-run. The sixth adopted run re-ran every closure gate about twelve times per cycle
+     * against an unchanged tree. A change to any goal re-opens the question.
+     */
+    @Test
+    void anUnchangedTreeIsNotJudgedTwiceAndAChangeReopensTheQuestion() throws IOException {
+        CriteriaVerificationService verifier = mock(CriteriaVerificationService.class);
+        when(verifier.verifyCompletion(any(), any(), any()))
+                .thenReturn(CriteriaVerificationService.CompletionVerification.abstained());
+        ClosureClaimVerifier abstaining = (goalId, criteria, specText) -> Optional.empty();
+
+        GoalPlannerService service = serviceWith(verifier, abstaining);
+        service.autoCompleteRootIfSatisfied();
+        service.autoCompleteRootIfSatisfied();
+        service.autoCompleteRootIfSatisfied();
+
+        verify(verifier, org.mockito.Mockito.times(1)).verifyCompletion(any(), any(), any());
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+
+        service.getGoalById("D").getMetadata().put("acceptanceCriteria", List.of("The reader class exists", "It reads"));
+        service.autoCompleteRootIfSatisfied();
+
+        verify(verifier, org.mockito.Mockito.times(2)).verifyCompletion(any(), any(), any());
+    }
 }

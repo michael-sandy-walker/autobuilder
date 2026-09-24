@@ -3895,6 +3895,36 @@ public class GoalPlannerService {
                 .repairOnDisk(Path.of(currentCycleContext.outputPath()));
     }
 
+    /** T4-CQ: inputs of the last closure attempt that left the root ACTIVE; derived, not restored. */
+    private String lastIncompleteClosureInputs;
+    private boolean closureRepeatReported;
+
+    /** The tree the closure gates judge, plus every goal's state and criteria. */
+    private String closureInputsFingerprint() {
+        StringBuilder sb = new StringBuilder();
+        Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+        if (output != null) {
+            new java.util.TreeMap<>(output).forEach((path, content) ->
+                    sb.append(path).append('=').append(content == null ? 0 : content.hashCode()).append(';'));
+        }
+        sb.append('|');
+        new java.util.TreeMap<>(goalMap).forEach((id, g) -> {
+            sb.append(id).append(':').append(g.getStatus());
+            if (g.getMetadata() != null) {
+                // All of it: origin, criteria, banks, reopen counts -- any of them can change a verdict.
+                sb.append(':').append(new java.util.TreeMap<>(g.getMetadata()));
+            }
+            sb.append(';');
+        });
+        try {
+            byte[] d = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(d);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return sb.toString(); // every JVM ships SHA-256; the raw text is a correct fallback
+        }
+    }
+
     public void autoCompleteRootIfSatisfied() {
         // Replan atomicity: while the planner is mid-execution (prune already applied, injection
         // not yet), the active set is transiently empty — completing the root here is the
@@ -3917,6 +3947,33 @@ public class GoalPlannerService {
         boolean anyActive = allSubgoals.stream().anyMatch(g -> g.getStatus() == GoalStatus.ACTIVE);
         if (anyActive) return;
 
+        // T4-CQ: an attempt whose inputs have not changed cannot reach a different verdict. The
+        // gates below package, boot and test the artifact and may ask a model; the first adopted
+        // project's sixth run re-ran all of them about twelve times per cycle against an unchanged
+        // tree (146 boot-gate runs), each time dropping the same blocked repair as a paraphrase.
+        // Asking a model again on identical inputs is not new evidence either. The fingerprint is
+        // the tree the gates judge plus every goal's state, so a merge, a retirement or an edited
+        // criterion re-opens the question at once.
+        if (closureInputsFingerprint().equals(lastIncompleteClosureInputs)) {
+            if (!closureRepeatReported) {
+                closureRepeatReported = true;
+                log.info("T4-CQ: closure not re-attempted — nothing it judges has changed since the "
+                        + "last attempt, which did not complete the root");
+            }
+            return;
+        }
+        closureRepeatReported = false;
+        try {
+            attemptRootClosure(root, allSubgoals);
+        } finally {
+            // Recorded AFTER the attempt: an attempt that itself changes state (reopening a
+            // blocker, injecting a repair) must not leave the pre-attempt state marked as judged.
+            lastIncompleteClosureInputs = getRootGoal() != null
+                    && getRootGoal().getStatus() == GoalStatus.ACTIVE ? closureInputsFingerprint() : null;
+        }
+    }
+
+    private void attemptRootClosure(GoalEntity root, List<GoalEntity> allSubgoals) {
         List<String> blockers = new ArrayList<>();
         int passing = 0;
         int subsumed = 0;

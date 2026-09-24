@@ -138,32 +138,7 @@ public class BomManagedVersionsService {
                 }
             }
 
-            Element depMgmt = firstChild(project, "dependencyManagement");
-            if (depMgmt != null) {
-                Element deps = firstChild(depMgmt, "dependencies");
-                if (deps != null) {
-                    for (Element dep : childElements(deps)) {
-                        if (!"dependency".equals(dep.getTagName())) continue;
-                        String g = firstChildText(dep, "groupId");
-                        String a = firstChildText(dep, "artifactId");
-                        String v = firstChildText(dep, "version");
-                        if (g == null || a == null || v == null) continue;
-                        String scope = firstChildText(dep, "scope");
-                        String type = firstChildText(dep, "type");
-                        if ("import".equals(scope) && "pom".equals(type)) {
-                            // An imported BOM: fold its managed entries in at this level.
-                            String resolvedV = interpolate(v, properties);
-                            if (resolvedV != null) {
-                                foldImportedBom(repoRoot, interpolate(g, properties),
-                                        interpolate(a, properties), resolvedV,
-                                        managedRaw, properties, visited, depth + 1);
-                            }
-                            continue;
-                        }
-                        managedRaw.putIfAbsent(g + ":" + a, v);
-                    }
-                }
-            }
+            foldManagedDependencies(project, repoRoot, managedRaw, properties, visited, depth);
 
             current = parentPomPath(project, repoRoot, properties);
         }
@@ -197,6 +172,15 @@ public class BomManagedVersionsService {
         }
         properties.putIfAbsent("project.version", version);
 
+        foldManagedDependencies(project, repoRoot, managedRaw, properties, visited, depth);
+    }
+
+    /**
+     * The {@code <dependencyManagement>} entries of one POM into {@code managedRaw} (nearest wins),
+     * folding each imported BOM ({@code scope=import}, {@code type=pom}) in at the next depth.
+     */
+    private void foldManagedDependencies(Element project, Path repoRoot, Map<String, String> managedRaw,
+                                         Map<String, String> properties, Set<String> visited, int depth) {
         Element depMgmt = firstChild(project, "dependencyManagement");
         if (depMgmt == null) return;
         Element deps = firstChild(depMgmt, "dependencies");

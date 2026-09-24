@@ -3,7 +3,6 @@ package com.walpro.autobuilder.controller.goal;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.core.service.AutobuilderService;
 import com.walpro.autobuilder.core.service.FileService;
@@ -720,8 +719,8 @@ public class GoalExplorerService {
         return curr != null ? curr.getId() : null;
     }
 
-    @SuppressWarnings("unchecked")
-    private static List<String> asStringList(Object raw) {
+    /** Shared with {@link GoalStateEventPublisher}: a metadata list as strings, nulls dropped. */
+    static List<String> asStringList(Object raw) {
         if (!(raw instanceof List<?> l) || l.isEmpty()) return List.of();
         List<String> out = new ArrayList<>(l.size());
         for (Object o : l) {
@@ -731,7 +730,7 @@ public class GoalExplorerService {
         return out;
     }
 
-    private static Integer readInt(Object raw) {
+    static Integer readInt(Object raw) {
         return raw instanceof Number n ? n.intValue() : null;
     }
 }

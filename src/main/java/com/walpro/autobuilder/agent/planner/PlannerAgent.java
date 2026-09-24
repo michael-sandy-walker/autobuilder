@@ -509,42 +509,12 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
         Set<String> undefinedAll = new LinkedHashSet<>();
         Map<String, Set<String>> undefinedPerDesc = new LinkedHashMap<>();
 
-        List<String> rewrittenGoals = new ArrayList<>(in.newGoals() != null ? in.newGoals().size() : 0);
-        Map<String, List<String>> rewrittenCriteria = new LinkedHashMap<>();
-        if (in.newGoals() != null) {
-            for (String desc : in.newGoals()) {
-                Set<String> perDescUndefined = new LinkedHashSet<>();
-                // Ground only to DETECT undefined symbols (populates perDescUndefined); persist the
-                // marker-free text. The [UNDEFINED] marker is a render-time prompt hint, re-applied to
-                // descriptions by refreshGoalAnnotations on the prompt copy — it must never be baked
-                // into the stored description/criteria. Baking it in made criteria verify literally
-                // ("…ProductRepository [UNDEFINED] interface") so they could never pass, manufacturing
-                // permanent root-closure blockers. The clean "Create X.java" criterion below carries
-                // the creation-framing intent; the marker is redundant for it and harmful for verification.
-                groundingService.groundSymbolReferences(desc, perDescUndefined);
-                rewrittenGoals.add(desc);
-
-                List<String> origCriteria = in.goalCriteria() != null ? in.goalCriteria().get(desc) : null;
-                List<String> newCriteria = new ArrayList<>();
-                for (String sym : perDescUndefined) {
-                    newCriteria.add("Create " + sym + ".java");
-                }
-                if (origCriteria != null) {
-                    for (String c : origCriteria) {
-                        // Symbols cited only in criteria text also count as undefined for this desc.
-                        groundingService.groundSymbolReferences(c, perDescUndefined);
-                        newCriteria.add(c);
-                    }
-                }
-                if (!newCriteria.isEmpty()) {
-                    rewrittenCriteria.put(desc, newCriteria);
-                }
-                undefinedAll.addAll(perDescUndefined);
-                if (!perDescUndefined.isEmpty()) {
-                    undefinedPerDesc.put(desc, perDescUndefined);
-                }
-            }
-        }
+        var grounded = SymbolGroundingService.groundProposedGoals(
+                groundingService, in.newGoals(), in.goalCriteria());
+        List<String> rewrittenGoals = grounded.goals();
+        Map<String, List<String>> rewrittenCriteria = grounded.criteria();
+        undefinedAll.addAll(grounded.undefined());
+        undefinedPerDesc.putAll(grounded.undefinedPerDescription());
 
         // No grounding needed — pass the original outcome through unchanged. Preserves object
         // identity for healthy LLM output (no hallucinated symbols, no rewriting) so downstream

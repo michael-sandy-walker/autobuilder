@@ -155,19 +155,9 @@ public class StoreCoherenceHeuristic implements EvaluationHeuristic {
         Map<String, List<StoreLocation>> stores = new HashMap<>();
         Set<String> entityTypes = entityTypes(files);
 
-        for (Map.Entry<String, String> entry : files.entrySet()) {
+        for (Map.Entry<String, ParsedElement> entry : JavaStructureParser.parseJavaFiles(files).entrySet()) {
             String path = entry.getKey();
-            String code = entry.getValue();
-            if (!path.endsWith(".java") || code == null || code.isBlank()) continue;
-
-            ParsedElement parsed;
-            try {
-                parsed = JavaStructureParser.parse(path, code);
-            } catch (Exception ignored) {
-                continue;
-            }
-
-            for (ParsedElement type : parsed.children()) {
+            for (ParsedElement type : entry.getValue().children()) {
                 if (type.type() != ElementType.CLASS) continue;
                 String enclosingSimpleName = simpleName(type.id());
                 if (enclosingSimpleName == null) continue;
@@ -196,17 +186,7 @@ public class StoreCoherenceHeuristic implements EvaluationHeuristic {
      */
     Set<String> entityTypes(Map<String, String> files) {
         Set<String> entities = new HashSet<>();
-        for (Map.Entry<String, String> entry : files.entrySet()) {
-            String path = entry.getKey();
-            String code = entry.getValue();
-            if (!path.endsWith(".java") || code == null || code.isBlank()) continue;
-
-            ParsedElement parsed;
-            try {
-                parsed = JavaStructureParser.parse(path, code);
-            } catch (Exception ignored) {
-                continue;
-            }
+        for (ParsedElement parsed : JavaStructureParser.parseJavaFiles(files).values()) {
             for (ParsedElement type : parsed.children()) {
                 if (type.type() != ElementType.CLASS) continue;
                 String simple = simpleName(type.id());

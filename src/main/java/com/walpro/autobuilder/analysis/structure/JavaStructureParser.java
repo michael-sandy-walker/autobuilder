@@ -14,6 +14,22 @@ public class JavaStructureParser {
 
     private static final JavaParser parser = new JavaParser();
 
+    /** Every non-blank {@code .java} file in {@code files} that parses, by path, in iteration order. */
+    public static Map<String, ParsedElement> parseJavaFiles(Map<String, String> files) {
+        Map<String, ParsedElement> parsed = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : files.entrySet()) {
+            String path = entry.getKey();
+            String code = entry.getValue();
+            if (!path.endsWith(".java") || code == null || code.isBlank()) continue;
+            try {
+                parsed.put(path, parse(path, code));
+            } catch (Exception ignored) {
+                // unparseable (partial or broken code): not a structure to read
+            }
+        }
+        return parsed;
+    }
+
     public static ParsedElement parse(String path, String code) {
         CompilationUnit cu = parser.parse(code).getResult().orElseThrow(() ->
                 new IllegalArgumentException("Invalid Java source: " + path));

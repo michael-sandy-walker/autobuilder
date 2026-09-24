@@ -23,13 +23,11 @@ import com.walpro.autobuilder.core.merge.MergeRollbackService;
 import com.walpro.autobuilder.core.merge.PackageFragmentationReport;
 import com.walpro.autobuilder.core.mutation.BlockerExtractor;
 import com.walpro.autobuilder.core.mutation.DeferredMutationLedger;
-import com.walpro.autobuilder.core.mutation.MutationBlocker;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.lifecycle.DerivedFacts;
-import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -884,6 +882,21 @@ public class EvaluationAgent implements ExecutionAgent {
         );
     }
 
+    private static final java.util.regex.Pattern ASSESSMENT_LINE =
+            java.util.regex.Pattern.compile("^\\[(\\d+)]\\s*(\u2713|\u2717)");
+
+    private record CriterionVerdict(int index, boolean passed) {}
+
+    /** The "[N] ✓ ..." / "[N] ✗ ..." lines of an assessment, in order; other lines are skipped. */
+    private static List<CriterionVerdict> criterionVerdicts(List<String> assessments) {
+        List<CriterionVerdict> verdicts = new ArrayList<>();
+        for (String line : assessments) {
+            java.util.regex.Matcher m = ASSESSMENT_LINE.matcher(line.trim());
+            if (m.find()) verdicts.add(new CriterionVerdict(Integer.parseInt(m.group(1)), "\u2713".equals(m.group(2))));
+        }
+        return verdicts;
+    }
+
     /**
      * T1-BG: Merges this cycle's criterion assessments into the cumulative pass/fail map.
      * A criterion that has ever passed (true) is never overwritten by a ✗ result.
@@ -896,17 +909,12 @@ public class EvaluationAgent implements ExecutionAgent {
                 ? new HashMap<>(context.cumulativeCriteriaStatus())
                 : new HashMap<>();
 
-        java.util.regex.Pattern linePattern = java.util.regex.Pattern.compile("^\\[(\\d+)]\\s*(\u2713|\u2717)");
-        for (String line : assessments) {
-            java.util.regex.Matcher m = linePattern.matcher(line.trim());
-            if (!m.find()) continue;
-            int index = Integer.parseInt(m.group(1));
-            boolean passed = "\u2713".equals(m.group(2));
-            if (passed) {
-                cumulative.put(index, true);
+        for (CriterionVerdict v : criterionVerdicts(assessments)) {
+            if (v.passed()) {
+                cumulative.put(v.index(), true);
             } else {
                 // Only record false if not already passed
-                cumulative.putIfAbsent(index, false);
+                cumulative.putIfAbsent(v.index(), false);
             }
         }
 
@@ -923,16 +931,11 @@ public class EvaluationAgent implements ExecutionAgent {
                 ? new HashMap<>(context.criteriaConsecutiveFailCount())
                 : new HashMap<>();
 
-        java.util.regex.Pattern linePattern = java.util.regex.Pattern.compile("^\\[(\\d+)]\\s*(\u2713|\u2717)");
-        for (String line : assessments) {
-            java.util.regex.Matcher m = linePattern.matcher(line.trim());
-            if (!m.find()) continue;
-            int index = Integer.parseInt(m.group(1));
-            boolean passed = "\u2713".equals(m.group(2));
-            if (passed) {
-                failStreak.put(index, 0);
+        for (CriterionVerdict v : criterionVerdicts(assessments)) {
+            if (v.passed()) {
+                failStreak.put(v.index(), 0);
             } else {
-                failStreak.merge(index, 1, Integer::sum);
+                failStreak.merge(v.index(), 1, Integer::sum);
             }
         }
 

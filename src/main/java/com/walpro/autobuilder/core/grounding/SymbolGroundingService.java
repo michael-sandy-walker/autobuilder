@@ -14,8 +14,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -395,5 +397,56 @@ public class SymbolGroundingService {
                 sink.add(m.group(1));
             }
         }
+    }
+
+    /**
+     * Proposed goals after grounding: the descriptions unchanged, each one's criteria with a
+     * {@code "Create X.java"} criterion prepended per undefined symbol it cites, and which symbols
+     * those were. Criteria appear only for descriptions that end up with any.
+     */
+    public record GroundedGoals(List<String> goals, Map<String, List<String>> criteria,
+                                Set<String> undefined, Map<String, Set<String>> undefinedPerDescription) {}
+
+    /**
+     * T2-DC, shared by the planner and analysis agents: ground each proposed description and its
+     * criteria. Static, and calling {@code grounding}'s own methods, so an agent test's mocked
+     * service still decides what counts as undefined.
+     *
+     * <p>Grounding only DETECTS undefined symbols; the stored text stays marker-free. The
+     * {@code [UNDEFINED]} marker is a render-time prompt hint re-applied by refreshGoalAnnotations
+     * on the prompt copy. Baked into stored criteria it made them verify literally
+     * ("…ProductRepository [UNDEFINED] interface"), so they could never pass and became permanent
+     * root-closure blockers. The "Create X.java" criterion carries the creation framing instead.
+     */
+    public static GroundedGoals groundProposedGoals(SymbolGroundingService grounding, List<String> descriptions,
+                                                    Map<String, List<String>> criteria) {
+        List<String> goals = new ArrayList<>(descriptions == null ? 0 : descriptions.size());
+        Map<String, List<String>> rewritten = new LinkedHashMap<>();
+        Set<String> undefined = new LinkedHashSet<>();
+        Map<String, Set<String>> perDescription = new LinkedHashMap<>();
+        if (descriptions == null) return new GroundedGoals(goals, rewritten, undefined, perDescription);
+        for (String desc : descriptions) {
+            Set<String> perDescUndefined = new LinkedHashSet<>();
+            grounding.groundSymbolReferences(desc, perDescUndefined);
+            goals.add(desc);
+
+            List<String> origCriteria = criteria != null ? criteria.get(desc) : null;
+            List<String> newCriteria = new ArrayList<>();
+            // Framed as "Create X.java", not "Add import for X".
+            for (String sym : perDescUndefined) {
+                newCriteria.add("Create " + sym + ".java");
+            }
+            if (origCriteria != null) {
+                for (String c : origCriteria) {
+                    // Symbols cited only in criteria text also count as undefined for this desc.
+                    grounding.groundSymbolReferences(c, perDescUndefined);
+                    newCriteria.add(c);
+                }
+            }
+            if (!newCriteria.isEmpty()) rewritten.put(desc, newCriteria);
+            undefined.addAll(perDescUndefined);
+            if (!perDescUndefined.isEmpty()) perDescription.put(desc, perDescUndefined);
+        }
+        return new GroundedGoals(goals, rewritten, undefined, perDescription);
     }
 }

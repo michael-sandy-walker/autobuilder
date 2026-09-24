@@ -62,14 +62,14 @@ class SeedRequirementsTest {
                 "A cockpit HUD displaying altitude and heading",
                 "A randomly generated polygonic environment");
 
-        assertThat(SeedRequirements.notAlreadyCovered(FLIGHTSIM_SEED, banked)).isEmpty();
+        assertThat(SeedRequirements.uncovered(SeedRequirements.statedIn(FLIGHTSIM_SEED), banked)).isEmpty();
     }
 
     @Test
     void anUncoveredRequirementSurvivesTheCoverageCheck() {
         List<String> unrelated = List.of("mvn compile exits 0 with no errors");
 
-        assertThat(SeedRequirements.notAlreadyCovered(FLIGHTSIM_SEED, unrelated)).isNotEmpty();
+        assertThat(SeedRequirements.uncovered(SeedRequirements.statedIn(FLIGHTSIM_SEED), unrelated)).isNotEmpty();
     }
 
     @Test
@@ -102,7 +102,7 @@ class SeedRequirementsTest {
                 "Implement keyboard input for the flight controls",
                 "Generate a randomly generated polygonic environment");
 
-        assertThat(SeedRequirements.notAlreadyCovered(FLIGHTSIM_SEED, planTheRunEndedWith))
+        assertThat(SeedRequirements.uncovered(SeedRequirements.statedIn(FLIGHTSIM_SEED), planTheRunEndedWith))
                 .anySatisfy(r -> assertThat(r).contains("cockpit").contains("HUD"));
     }
 

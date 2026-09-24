@@ -117,27 +117,19 @@ public class CrossFileConsistencyHeuristic implements EvaluationHeuristic {
 
     private Map<String, Set<String>> buildMethodRegistry(Map<String, String> files) {
         Map<String, Set<String>> registry = new HashMap<>();
-        for (Map.Entry<String, String> entry : files.entrySet()) {
-            String path = entry.getKey();
-            String code = entry.getValue();
-            if (!path.endsWith(".java") || code == null || code.isBlank()) continue;
-            try {
-                ParsedElement file = JavaStructureParser.parse(path, code);
-                for (ParsedElement type : file.children()) {
-                    String simpleName = simpleName(type.id());
-                    if (simpleName == null || simpleName.isBlank()) continue;
-                    Set<String> methods = new HashSet<>();
-                    for (ParsedElement member : type.children()) {
-                        ElementType t = member.type();
-                        if (t == ElementType.METHOD || t == ElementType.CONSTRUCTOR) {
-                            String memberName = simpleName(member.id());
-                            if (memberName != null) methods.add(memberName);
-                        }
+        for (ParsedElement file : JavaStructureParser.parseJavaFiles(files).values()) {
+            for (ParsedElement type : file.children()) {
+                String simpleName = simpleName(type.id());
+                if (simpleName == null || simpleName.isBlank()) continue;
+                Set<String> methods = new HashSet<>();
+                for (ParsedElement member : type.children()) {
+                    ElementType t = member.type();
+                    if (t == ElementType.METHOD || t == ElementType.CONSTRUCTOR) {
+                        String memberName = simpleName(member.id());
+                        if (memberName != null) methods.add(memberName);
                     }
-                    registry.merge(simpleName, methods, (a, b) -> { a.addAll(b); return a; });
                 }
-            } catch (Exception ignored) {
-                // Unparseable file (e.g. partial/broken code) — skip silently.
+                registry.merge(simpleName, methods, (a, b) -> { a.addAll(b); return a; });
             }
         }
         return registry;

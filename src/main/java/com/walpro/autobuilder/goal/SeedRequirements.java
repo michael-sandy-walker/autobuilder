@@ -336,28 +336,16 @@ public final class SeedRequirements {
     /** {@link #notAlreadyCoveredVerifiable} over the written obligations when they exist. */
     public static List<String> notAlreadyCoveredVerifiable(String specText, List<String> bankedCriteria,
                                                            String obligationsFileText) {
-        List<String> stated = verifiableObligationsOrSplit(specText, obligationsFileText);
-        if (stated.isEmpty() || bankedCriteria == null || bankedCriteria.isEmpty()) return stated;
-        List<String> uncovered = new ArrayList<>();
-        for (String requirement : stated) {
-            if (bankedCriteria.stream().noneMatch(c -> overlaps(requirement, c))) uncovered.add(requirement);
-        }
-        return uncovered;
+        return uncovered(verifiableObligationsOrSplit(specText, obligationsFileText), bankedCriteria);
     }
 
-    /** {@link #notAlreadyCovered} over the verifiable subset — the closure edge's entry point. */
+    /** The verifiable requirements the spec states — the closure edge's entry point. */
     public static List<String> notAlreadyCoveredVerifiable(String specText, List<String> bankedCriteria) {
-        List<String> stated = statedVerifiableIn(specText);
-        if (stated.isEmpty() || bankedCriteria == null || bankedCriteria.isEmpty()) return stated;
-        List<String> uncovered = new ArrayList<>();
-        for (String requirement : stated) {
-            if (bankedCriteria.stream().noneMatch(c -> overlaps(requirement, c))) uncovered.add(requirement);
-        }
-        return uncovered;
+        return uncovered(statedVerifiableIn(specText), bankedCriteria);
     }
 
-    public static List<String> notAlreadyCovered(String specText, List<String> bankedCriteria) {
-        List<String> stated = statedIn(specText);
+    /** The stated requirements no banked criterion overlaps; all of them when nothing is banked. */
+    static List<String> uncovered(List<String> stated, List<String> bankedCriteria) {
         if (stated.isEmpty() || bankedCriteria == null || bankedCriteria.isEmpty()) return stated;
         List<String> uncovered = new ArrayList<>();
         for (String requirement : stated) {

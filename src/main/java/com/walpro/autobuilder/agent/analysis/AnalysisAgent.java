@@ -6,7 +6,6 @@ import com.walpro.autobuilder.core.grounding.SymbolGroundingService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.lifecycle.Signal;
 import com.walpro.autobuilder.core.lifecycle.SignalType;
 import com.walpro.autobuilder.goal.GoalEntity;
 import com.walpro.autobuilder.goal.GoalKindClassifier;
@@ -106,42 +105,12 @@ public class AnalysisAgent implements ExecutionAgent {
             groundedFindings.add(new AnalysisOutcome.Finding(f.severity(), f.type(), observation, path));
         }
 
-        List<String> proposed = new ArrayList<>(in.proposedExecutableSubGoals().size());
-        Map<String, List<String>> rewrittenCriteria = new LinkedHashMap<>();
-        for (String desc : in.proposedExecutableSubGoals()) {
-            Set<String> perDescUndefined = new LinkedHashSet<>();
-            // Ground only to DETECT undefined symbols (populates perDescUndefined); persist the
-            // marker-free text. The [UNDEFINED] marker is a render-time prompt hint, re-applied to
-            // descriptions by refreshGoalAnnotations on the prompt copy — it must never be baked
-            // into the stored description/criteria. Baking it in made criteria verify literally
-            // ("…ProductRepository [UNDEFINED] interface") so they could never pass, manufacturing
-            // permanent root-closure blockers. The clean "Create X.java" criterion below carries
-            // the creation-framing intent; the marker is redundant for it and harmful for verification.
-            groundingService.groundSymbolReferences(desc, perDescUndefined);
-            proposed.add(desc);
-
-            List<String> origCriteria = in.goalCriteria() != null ? in.goalCriteria().get(desc) : null;
-            List<String> newCriteria = new ArrayList<>();
-            // Prepend a creation criterion per undefined symbol so the next subgoal is framed
-            // as "Create X.java", not "Add import for X".
-            for (String sym : perDescUndefined) {
-                newCriteria.add("Create " + sym + ".java");
-            }
-            if (origCriteria != null) {
-                for (String c : origCriteria) {
-                    // Symbols cited only in criteria text also count as undefined for this desc.
-                    groundingService.groundSymbolReferences(c, perDescUndefined);
-                    newCriteria.add(c);
-                }
-            }
-            if (!newCriteria.isEmpty()) {
-                rewrittenCriteria.put(desc, newCriteria);
-            }
-            undefinedAll.addAll(perDescUndefined);
-            if (!perDescUndefined.isEmpty()) {
-                undefinedPerDesc.put(desc, perDescUndefined);
-            }
-        }
+        var grounded = SymbolGroundingService.groundProposedGoals(
+                groundingService, in.proposedExecutableSubGoals(), in.goalCriteria());
+        List<String> proposed = grounded.goals();
+        Map<String, List<String>> rewrittenCriteria = grounded.criteria();
+        undefinedAll.addAll(grounded.undefined());
+        undefinedPerDesc.putAll(grounded.undefinedPerDescription());
 
         // No grounding needed — pass the original outcome through unchanged. Preserves object
         // identity for healthy LLM output (no hallucinated symbols, no rewriting).

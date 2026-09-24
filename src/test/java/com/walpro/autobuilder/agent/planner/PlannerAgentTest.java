@@ -109,6 +109,33 @@ class PlannerAgentTest {
         return known.getValue();
     }
 
+    /**
+     * T4-CQ: a subgoal is narrower than its root by construction, so resembling the root is not
+     * duplicating it. The adopted project's specification named every route and parameter, and
+     * the asymmetric metric scored each well-grounded item near 1.0 against it.
+     */
+    @Test
+    void theRootIsNotADuplicateCandidateForItsOwnSubgoals() {
+        List<String> known = dedupListFor(
+                List.of(goalWith(GoalStatus.ACTIVE, "Add a test for GET /widgets/count")),
+                List.of("root desc", "Add a test for GET /widgets/count"),
+                "Add a test for GET /widgets/sum");
+
+        assertThat(known).doesNotContain("root desc").contains("Add a test for GET /widgets/count");
+    }
+
+    @Test
+    void theMetricScoresASubgoalAgainstASpecificationThatContainsItsWords() {
+        // Why the root had to leave the reference set: invented wording, same shape as the field case.
+        String spec = "OBJECTIVE: every route this service serves is covered by a test. Its routes: "
+                + "GET /widgets/sum?left=&right= and GET /widgets/count?of= . A test must exercise the "
+                + "route, observe the answer and assert the actual status code and response body.";
+        String item = "Add a test that exercises GET /widgets/sum with left and right, asserting the "
+                + "actual observed status code and response body";
+        float score = new com.walpro.autobuilder.goal.GoalSimilarityService(null).similarity(item, spec);
+        assertThat(score).as("an item made of the specification's own words").isGreaterThanOrEqualTo(0.88f);
+    }
+
     @Test
     void retiredGoalDoesNotBlockItsOwnReplacement() {
         // Field defect, run 2026-07-27_20-33-22: the planner did exactly what its prompt

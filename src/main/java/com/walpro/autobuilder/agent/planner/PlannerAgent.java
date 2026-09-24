@@ -896,8 +896,18 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
             }
         }
 
+        // T4-CQ: the ROOT is never a sibling a subgoal could duplicate. The similarity metric is
+        // asymmetric (every word of the short candidate is matched against its best counterpart
+        // in the long text), so a subgoal whose words all occur in the specification scores near
+        // 1.0 against the root and was thrown away as a copy of it. The first adopted project's
+        // specification names every route and parameter, and its third run lost the whole first
+        // plan that way: four well-grounded items skipped, then 0 merges in 20 cycles.
+        GoalEntity rootGoal = goalPlannerService.getRootGoal();
+        String rootText = rootGoal == null || rootGoal.getDescription() == null
+                ? null : rootGoal.getDescription().strip();
         List<String> known = similarityService.snapshotKnownDescriptions().stream()
                 .filter(d -> d == null || !retired.contains(d.strip()))
+                .filter(d -> d == null || rootText == null || !d.strip().equals(rootText))
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         goalPlannerService.getAllGoals().stream()
                 .filter(g -> g.getStatus() == GoalStatus.GIVEN_UP && g.getMergeCount() > 0)

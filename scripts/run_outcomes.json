@@ -3616,7 +3616,28 @@
    "start_tree": "LOOP_AUTHORED",
    "terminal": "GOAL_FULFILLED",
    "total_cycles": "18"
+  },
+  "2026-09-24_10-35-34": {
+   "clauses_closed_vs_control": "0",
+   "cost_readout": "build=17561ms/6 package-gate=8729ms/3 boot-gate=2170ms/3",
+   "drift_tail_cycles": "0",
+   "merges": "1",
+   "peaked_at_cycle": "cycle-1790246150650 (1/1)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-09-24",
+   "run_duration_min": "0.0",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 19/19",
+   "smoke_pass": 19,
+   "smoke_preserved": "SMOKE: 19/19",
+   "smoke_strict": "19/19 discounted=none",
+   "smoke_total": 19,
+   "start_cleared_tree": "yes",
+   "start_mode": "NEW_PROJECT",
+   "start_tree": "LOOP_AUTHORED",
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "1"
   }
  },
- "updated": "2026-09-23"
+ "updated": "2026-09-24"
 }

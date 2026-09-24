@@ -106,7 +106,7 @@ How to work:
 - `feedback_run_without_asking.md`: run mvn/build/test with dangerouslyDisableSandbox; never prompt. (reviewed 2026-07-09)
 - `feedback_analyse_no_ask.md`: "analyse the last run" means proceed directly, no clarification. (reviewed 2026-07-09)
 - `feedback_run_analysis_log_order.md`: analyse runs from the behaviour ndjson first; the autobuilder log only for depth. (reviewed 2026-07-09)
-- `feedback_no_auto_commit.md`: commit only with authorization (checkpoint commits OK in authorized autonomous runs); NEVER push. (reviewed 2026-07-09)
+- `feedback_no_auto_commit.md`: commit only with authorization (checkpoint commits OK in authorized autonomous runs); NEVER push, except to the session's own claude/ branch in cloud (CLAUDE_CODE_REMOTE) sessions. (reviewed 2026-09-24)
 - `feedback_no_branch_ops.md`: never merge/rebase/reset/branch -d/push autonomously; describe and wait for 'do it'. (reviewed 2026-09-08)
 - `feedback_never_edit_a_running_script.md`: never edit preflight.sh (or what it reads) mid-run — bash reads scripts incrementally, so edits land half-applied and silently. (reviewed 2026-07-30)
 - `feedback_no_heavy_mvn_beside_a_live_run.md`: a full suite beside a live run starves the box and kills the run via Neo4j timeouts. (reviewed 2026-09-08)

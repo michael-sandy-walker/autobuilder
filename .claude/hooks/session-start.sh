@@ -10,7 +10,9 @@
 # application.yml reads it from there. Never commit a key to this file.
 set -euo pipefail
 
-if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
+# Cloud containers only. CLAUDE_CODE_REMOTE alone is not enough: a Remote Control session on the
+# user's own machine may set it too, and this script starts dockerd and runs Maven builds.
+if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] || [[ "${CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE:-}" != cloud* ]]; then
   exit 0
 fi
 

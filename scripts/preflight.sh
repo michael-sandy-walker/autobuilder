@@ -86,6 +86,12 @@ probe_model() {
     local url model effort t0 t1
     url=$(grep -A4 '^llm:' src/main/resources/application.yml | grep 'url:' | grep -v '^\s*#' | awk '{print $2}')
     model=$(grep -A8 '^llm:' src/main/resources/application.yml | grep 'model:' | grep -v '^\s*#' | awk '{print $2}')
+    # The launched JVM honours LLM_API_URL / LLM_API_MODEL (Spring relaxed binding), so the probe
+    # must too, or it gates a hosted endpoint on the health of a local one the run never calls.
+    url="${LLM_API_URL:-$url}"
+    model="${LLM_API_MODEL:-$model}"
+    local auth=()
+    [ -n "${OPENAI_API_KEY:-}" ] && auth=(-H "Authorization: Bearer $OPENAI_API_KEY")
     # Probe with the DEPLOYED reasoning budget, and count hidden reasoning as an answer.
     # 2026-08-22: the probe asked for a 5-token reply and sent no budget, so on a reasoning-capable
     # model (qwen3.8) all five tokens went to hidden reasoning, `content` came back empty, and a
@@ -104,7 +110,7 @@ probe_model() {
     local probe_body
     probe_body="{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"Say OK\"}],\"max_tokens\":16$effort_field}"
     ask() {
-        curl -s --max-time 120 "$url" -H 'Content-Type: application/json' -d "$probe_body" \
+        curl -s --max-time 120 "$url" -H 'Content-Type: application/json' "${auth[@]}" -d "$probe_body" \
             | python3 -c "import json,sys; m=json.load(sys.stdin)['choices'][0]['message']; print(((m.get('content') or '') + (m.get('reasoning') or '')).strip())" 2>/dev/null
     }
     local warm

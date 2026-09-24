@@ -349,12 +349,25 @@ public final class SeedRequirements {
         return withoutRuleMarkers(written(specText, obligationsFileText, () -> clausesOf(specText)));
     }
 
-    /** {@link #obligationsOrSplit} narrowed to the clauses carrying an obligation verb. */
+    /**
+     * {@link #obligationsOrSplit} narrowed to the clauses carrying an obligation verb -- unless the
+     * written obligations already mark their rules.
+     *
+     * <p>T4-CQ: the verb list is a proxy for "this clause states something checkable", fitted to
+     * prose. A file whose author used the {@code rule:} marker has made that split by hand, and the
+     * proxy then overrules them: on the first adopted project all three unmarked lines ("Every route
+     * ... is covered by a test", "The whole test suite passes", "Add tests under src/test/java")
+     * carry none of its verbs, so closure had nothing to verify and run 2026-09-24_18-13-42 closed
+     * GOAL_FULFILLED with three of seven routes untested. A file without the marker keeps the proxy,
+     * so model-written files on the other targets are judged exactly as before.
+     */
     public static List<String> verifiableObligationsOrSplit(String specText, String obligationsFileText) {
+        List<String> obligations = written(specText, obligationsFileText, () -> statedIn(specText));
+        boolean authorMarkedRules = obligations.stream().anyMatch(SeedRequirements::isRule);
         List<String> strict = new ArrayList<>();
-        for (String r : written(specText, obligationsFileText, () -> statedIn(specText))) {
+        for (String r : obligations) {
             if (isRule(r)) continue;   // guides the work, never blocks completion
-            if (OBLIGATION.matcher(r).find()) strict.add(r);
+            if (authorMarkedRules || OBLIGATION.matcher(r).find()) strict.add(r);
         }
         return strict;
     }

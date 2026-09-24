@@ -21,6 +21,9 @@ public class GoalSimilarityService {
     /** T1-DE: how many GIVEN_UP matches are allowed before a proposal is blocked from re-injection. */
     public static final int GIVEN_UP_RETRY_LIMIT = 1;
 
+    /** The dedup threshold, exposed for the gate-item revival that reuses its notion of "same". */
+    public static final float GIVEN_UP_REVIVAL_SIMILARITY = SIMILARITY_THRESHOLD;
+
     public boolean isDuplicate(String candidate) {
         if (candidate == null || normalize(candidate).isBlank()) return false;
         return isDuplicate(candidate, goalGraphService.findAllDescriptions(CANDIDATE_LIMIT));

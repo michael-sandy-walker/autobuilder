@@ -48,4 +48,26 @@ class SeedObligationRuleMarkerTest {
         assertThat(SeedRequirements.notAlreadyCoveredVerifiable(SEED, banked, file))
                 .containsExactly("Every widget route must be covered by a test in the widget test suite.");
     }
+
+    /** T4-CQ: once the author marks rules, an unmarked line is an obligation whatever its verb. */
+    @Test
+    void anAuthorWhoMarksRulesIsNotOverruledByTheVerbList() {
+        String file = fileWith(List.of(
+                "Every widget route is covered by a test.",
+                "The whole widget suite passes.",
+                "rule: Keep the widget packages as they are."));
+
+        assertThat(SeedRequirements.verifiableObligationsOrSplit(SEED, file))
+                .containsExactly("Every widget route is covered by a test.", "The whole widget suite passes.");
+    }
+
+    @Test
+    void aFileWithoutMarkersKeepsTheVerbList() {
+        String file = fileWith(List.of(
+                "Every widget route must be covered by a test.",
+                "Widgets are blue."));
+
+        assertThat(SeedRequirements.verifiableObligationsOrSplit(SEED, file))
+                .containsExactly("Every widget route must be covered by a test.");
+    }
 }

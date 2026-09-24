@@ -104,6 +104,14 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
 
+    /**
+     * T4-CQ: writes the seed's obligations file, markers included, when a root goal is set and the
+     * target has none -- optional, present only where {@code autobuilder.obligations.generate} is on.
+     */
+    @Setter
+    @Autowired(required = false)
+    private SeedObligationsGenerator seedObligationsGenerator;
+
     /** T4-BV: execution-observation boot gate at the completion edge — optional, wired by Spring if present. */
     @Setter
     @Autowired(required = false)
@@ -1826,6 +1834,7 @@ public class GoalPlannerService {
         persistPointersToGraph();
 
         persist();
+        ensureSeedObligations(description);
     }
 
     public void resetInitialGoal(String id, String description) {
@@ -1844,6 +1853,17 @@ public class GoalPlannerService {
         persistPointersToGraph();
 
         persist();
+        ensureSeedObligations(description);
+    }
+
+    /**
+     * T4-CQ: every way a root goal is set (seed bootstrap, reset, an operator's {@code /goal}) comes
+     * through the two methods above, so this is the one place the obligations file is generated.
+     * Keyed to the text exactly as the root holds it, which is what the file's seed hash is read
+     * against.
+     */
+    private void ensureSeedObligations(String rootDescription) {
+        if (seedObligationsGenerator != null) seedObligationsGenerator.ensureFor(rootDescription);
     }
 
     public void addSubGoal(String id, String description, boolean setAsCurrent) {

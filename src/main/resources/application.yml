@@ -556,6 +556,10 @@ autobuilder:
     enabled: true
   scheduler:
     enabled: false
+  # T4-CQ: write bootstrap/seed.obligations.txt, rule:/gate: markers included, when a root goal is
+  # set and the target has no usable one. Off by default so a test context never calls a model.
+  obligations:
+    generate: true
 
 ---
 # ============================================
@@ -572,6 +576,10 @@ autobuilder:
   scheduler:
     enabled: true
     inter-cycle-delay-ms: 5000
+  # T4-CQ: write bootstrap/seed.obligations.txt, rule:/gate: markers included, when a root goal is
+  # set and the target has no usable one. Off by default so a test context never calls a model.
+  obligations:
+    generate: true
 
 ---
 # ============================================

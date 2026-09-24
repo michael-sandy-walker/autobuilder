@@ -67,21 +67,6 @@ public final class BasicSignals {
     // prompt's signal render. Source carries "<errorKind>|<identity>|streak=<n>".
     public static final SignalType BUILD_FIX_LOCUS_STUCK = SignalType.of("BUILD_FIX_LOCUS_STUCK");
 
-    // T2-EF / T4-J: observability marker for a failure shape dominating the run's residual mix
-    // across ≥2 distinct subgoals — re-derived by ContextLineageTracker from
-    // RecurringDefectTracker each cycle. The ACTUATOR is BuildBlockGate.ensureRecurringDefect-
-    // Redirection consulting the tracker directly (the injected redirection subgoal), not this
-    // signal; its consumers are signal snapshots and the analysis prompt's signal render.
-    // Source carries errorKind|token|share|subgoals.
-    public static final SignalType RECURRING_DEFECT_DOMINANT = SignalType.of("RECURRING_DEFECT_DOMINANT");
-
-    // T1-EI / T4-J: observability marker — emitted by PlannerAgent when a GIVEN_UP goal hits
-    // the rehabilitation fail-cap (re-given-up ≥N times without an intervening merge). The
-    // ENFORCEMENT lives in the rehabilitation plumbing (goal metadata / irreducibleGoalIds),
-    // not in any reader of this signal; its consumers are signal snapshots and the analysis
-    // prompt's signal render. Source carries "rehabilitation-cap:<goalId>".
-    public static final SignalType IRREDUCIBLE_GAP = SignalType.of("IRREDUCIBLE_GAP");
-
     // T4-BE / T4-J: operator switch — no code emitter. Settable only via
     // PUT /autobuilder/signals/{name}; while present, DeferredRestageScheduler skips firing
     // ready candidates. Absence is the default green light. (Originally a meta-agent opt-out;

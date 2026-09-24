@@ -18,11 +18,10 @@ import java.util.Objects;
                 + "to make declarable")
 public class ContextLineageTracker {
 
-    // T4-BZ-2: BUILD_BROKEN / TEST_REPAIR_FOCUS / BUILD_FIX_LOCUS_STUCK /
-    // RECURRING_DEFECT_DOMINANT are no longer stored signals — DerivedFacts computes each
-    // predicate at read time from exactly the state this method carries forward
-    // (buildOutcome/lastRollback, currentGoalDescription + resolved outcome,
-    // sameFailureStreak, RecurringDefectTracker). Their emission blocks lived here.
+    // T4-BZ-2: BUILD_BROKEN / TEST_REPAIR_FOCUS / BUILD_FIX_LOCUS_STUCK are no longer stored
+    // signals — DerivedFacts computes each predicate at read time from exactly the state this
+    // method carries forward (buildOutcome/lastRollback, currentGoalDescription + resolved
+    // outcome, sameFailureStreak). Their emission blocks lived here.
     public CycleContextData enrichLineage(CycleContextData baseContext, CycleContextData previousContext) {
         return enrichLineageCore(baseContext, previousContext);
     }

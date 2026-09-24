@@ -10,7 +10,6 @@ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -79,28 +78,6 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
 
     /** A regression is not a partial success — the score has to say so, or the average absorbs it. */
     private static final double SUGGESTED_SCORE = 0.1;
-
-    /**
-     * The member-loss half, OFF by default on measured field cost (2026-07-30).
-     *
-     * <p>It is correct in principle and its reasoning is sound: nothing splices these files, so a
-     * file re-emitted without members deletes them. But over its first field run it caught <b>nothing
-     * the annotation half would have missed</b> and fired twice on rewrites that were not truncations
-     * — and the second firing <b>rejected the mutation that was repairing a real defect</b>. The
-     * run's own interpretation agent named this heuristic as the cause of a stagnation pattern. A
-     * gate that is right about the code and wrong about the run costs more than it saves; that is the
-     * same reason T4-CY's model path is off.
-     *
-     * <p>The annotation half stays ON: five field firings, every one a real registration loss, and
-     * the artifact ended up keeping every annotation they defended.
-     *
-     * <p><b>Re-enable when</b> a field case appears that the annotation half misses — a file
-     * truncated while its annotations stay intact. The scan that would find one is
-     * straightforward: compare each mutation file against the same path in that cycle's snapshot and
-     * look for lost member names with nothing gained.
-     */
-    @Value("${autobuilder.heuristic.merge-regression.member-losses-enabled:false}")
-    private boolean memberLossesEnabled = false;
 
     /**
      * T2-CI, third arm and the one that asks the right question: has a requirement lost its
@@ -192,10 +169,6 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
         this.endpointSurfaceQuery = endpointSurfaceQuery;
     }
 
-    public void setMemberLossesEnabled(boolean memberLossesEnabled) {
-        this.memberLossesEnabled = memberLossesEnabled;
-    }
-
     /** Per type declared in both versions, what the candidate drops without replacing it. */
     private void collectLosses(String path, String before, String after, List<String> losses) {
         Map<String, TypeProfile> established = profileByType(before);
@@ -219,12 +192,6 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
                     losses.add(typeName + " loses @" + annotation + " (" + path + ")");
                 }
             }
-
-            Set<String> lostMembers = memberLossesEnabled
-                    ? unexplainedMemberLosses(was, now) : Set.of();
-            if (!lostMembers.isEmpty()) {
-                losses.add(typeName + " no longer declares " + lostMembers + " (" + path + ")");
-            }
         }
     }
 
@@ -232,8 +199,7 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
      * What this heuristic needs to know about one declared type. Gathered in a single parse — the
      * earlier shape parsed each file once per aspect.
      */
-    private record TypeProfile(Set<String> annotations, Set<String> members, String kind,
-                               boolean declaresSupertype,
+    private record TypeProfile(Set<String> annotations, Set<String> members,
                                Map<String, Set<String>> memberAnnotations) {
     }
 
@@ -269,43 +235,7 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
     }
 
     /**
-     * Member names the candidate no longer declares, when their absence cannot be explained by
-     * anything other than the file having been re-emitted incompletely.
-     *
-     * <p>Three conditions, each earned from a field case measured over one run's 28 cycles (all
-     * three pure member reductions found there, and the rule separates them 3 for 3):
-     * <ul>
-     *   <li><b>nothing gained — a member, a type annotation, or an annotation on a member</b> —
-     *       otherwise it is a redesign, the same strict-loss shape the annotation half uses. A
-     *       service and then a controller each moved from constructor injection to an annotated
-     *       field: the constructor goes, no member name is gained, the type's own annotations are
-     *       untouched, and what actually changed is that the FIELD gained the annotation that
-     *       supplies it. That is a rewiring, not a truncation;</li>
-     *   <li><b>the kind is unchanged</b> — one mutation turned a class holding five methods into an
-     *       empty interface. Changing what a type IS is a redesign, whatever it costs;</li>
-     *   <li><b>the type declares no supertype</b> — another mutation deleted a re-declaration of a
-     *       method its supertype supplies, with a comment saying exactly that. A type that inherits
-     *       declarations may legitimately drop a redundant one, and this heuristic cannot read the
-     *       supertype to tell which are redundant.</li>
-     * </ul>
-     *
-     * <p>The case this leaves standing is the one that costs the run: a class re-emitted with only
-     * the current subgoal's members, deleting the rest. Measured example — a controller re-emitted
-     * with its one path-variable handler, dropping the list and create handlers, both spec
-     * requirements. Nothing splices these files together: {@code MutationApplier} and
-     * {@code MergeAgent} write whole file content, so those two endpoints simply cease to exist.
-     */
-    private static Set<String> unexplainedMemberLosses(TypeProfile before, TypeProfile after) {
-        if (!before.kind().equals(after.kind())) return Set.of();
-        if (after.declaresSupertype() || before.declaresSupertype()) return Set.of();
-        if (anythingGained(before, after)) return Set.of();
-        Set<String> lost = new LinkedHashSet<>(before.members());
-        lost.removeAll(after.members());
-        return lost;
-    }
-
-    /**
-     * Every declared type's annotations, member names, kind and whether it names a supertype. Null
+     * Every declared type's annotations and member names (with each member's annotations). Null
      * when the source does not parse — "cannot tell", never "has nothing".
      *
      * <p>Members are NAMES, not signatures: a changed return type is the same member reimplemented,
@@ -334,15 +264,8 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
                 members.add(key);
                 memberAnnotations.put(key, annotationNames(c.getAnnotations()));
             });
-            boolean declaresSupertype = false;
-            String kind = type.getClass().getSimpleName();
-            if (type instanceof com.github.javaparser.ast.body.ClassOrInterfaceDeclaration decl) {
-                kind = decl.isInterface() ? "interface" : "class";
-                declaresSupertype = !decl.getExtendedTypes().isEmpty()
-                        || !decl.getImplementedTypes().isEmpty();
-            }
             byType.put(type.getNameAsString(),
-                    new TypeProfile(annotations, members, kind, declaresSupertype, memberAnnotations));
+                    new TypeProfile(annotations, members, memberAnnotations));
         }
         return byType;
     }

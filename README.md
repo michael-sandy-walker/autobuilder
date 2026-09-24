@@ -86,9 +86,6 @@ T5AF_VERIFIER_EVAL=1 mvn test -Dtest=CompletionVerifierPrecisionEvalTest
 Endpoint override (defaults to local Ollama qwen3-coder:30b): LLM_API_URL / LLM_API_MODEL / OPENAI_API_KEY
 
 Config flags worth knowing (application.yml):
-autobuilder.goal.completion-coverage-gate-enabled  (default false) — T2-EG: re-arms the legacy
-  "is this gap already implemented?" coverage gate at the completion edge. Left off so T4-BP-3's
-  per-criterion corroboration is the single "is the work done?" check (one fewer LLM call at closure).
 autobuilder.build.executor                          (default maven) — set to javac-direct for the
   fast in-process compile probe.
 autobuilder.goal.sync-from-graph / migrate-to-graph — load goal state from Neo4j on startup / push

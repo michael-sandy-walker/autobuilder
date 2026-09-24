@@ -64,18 +64,6 @@ public class CompileProbeService {
     private boolean fixChainEnabled = false;
 
     /**
-     * T4-BN-2 follow-up (2026-06-23): when false (default), a compile failure confined to TEST
-     * sources does NOT reject + roll back the mutation — the main work is kept and the test break is
-     * surfaced as a steering diagnostic for the next cycle (the completion-edge gates remain the
-     * backstop that tests must actually compile + pass). Set true to restore the legacy behaviour
-     * where a test break gates the mutation exactly like a main break — the main-evolution freeze
-     * that drove the 06-17→06-23 test-seed cliff (0/15 fulfilled vs 3/3 on plain seeds).
-     */
-    @Setter
-    @Value("${autobuilder.build.test-compile-blocks-merge:false}")
-    private boolean testCompileBlocksMerge = false;
-
-    /**
      * T4-BN-3 (scoped probe): build command used when the staged mutation ITSELF touches test
      * sources. The blanket T4-BN-2 flip (every probe compiles tests) was the bisect-confirmed
      * regression behind the 06-17→06-23 fulfillment cliff and stays reverted — but with a
@@ -274,8 +262,7 @@ public class CompileProbeService {
         // STEER, not GATE. Keep the mutation on disk (like COMPILE_OK) so main evolution proceeds and
         // tests can iterate; the outcome still carries the test stderr, which BuildResultPromptBlock
         // surfaces next cycle. The completion-edge gates are the backstop that tests really pass.
-        if (!testCompileBlocksMerge
-                && outcome.result() == BuildResult.COMPILE_ERROR
+        if (outcome.result() == BuildResult.COMPILE_ERROR
                 && TestOnlyCompileFailure.isTestOnly(outcome)) {
             // T4-BN-3 deterministic slice: the dominant test-only break is missing test deps
             // (cannot find symbol: Test/Mock/ExtendWith). Add the project's test starter to the pom

@@ -3,15 +3,7 @@ package com.walpro.autobuilder.core.build.inject;
 import com.walpro.autobuilder.core.checkpoint.StateBucket;
 import com.walpro.autobuilder.core.checkpoint.StateHolder;
 
-import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.ConstructorDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.stmt.BlockStmt;
 import com.walpro.autobuilder.agent.evolution.model.FileMutation;
-import com.walpro.autobuilder.analysis.structure.UsageDerivedMemberSynthesizer;
-import com.walpro.autobuilder.analysis.structure.UsageDerivedMemberSynthesizer.MemberSignature;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Category;
 import com.walpro.autobuilder.core.build.BuildErrorClassifier.Classification;
 import com.walpro.autobuilder.core.build.inject.IdiomSkeletonConfigProperties.Idiom;
@@ -85,19 +77,16 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
     private final IdiomSkeletonConfigProperties config;
     private final SymbolImportLookupService symbolImportLookup;
     private final FileService fileService;
-    private final UsageDerivedMemberSynthesizer memberSynthesizer;
     private final Map<String, Pattern> compiledPatterns = new HashMap<>();
 
     public IdiomSkeletonResolver(SymbolGroundingService groundingService,
                                  IdiomSkeletonConfigProperties config,
                                  SymbolImportLookupService symbolImportLookup,
-                                 FileService fileService,
-                                 UsageDerivedMemberSynthesizer memberSynthesizer) {
+                                 FileService fileService) {
         this.groundingService = groundingService;
         this.config = config;
         this.symbolImportLookup = symbolImportLookup;
         this.fileService = fileService;
-        this.memberSynthesizer = memberSynthesizer;
     }
 
     @Override
@@ -198,28 +187,6 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
                 + "/" + missingToken + ".java";
         String body = render(template, missingToken, fqPackage);
         String description = render(descriptionTemplate, missingToken, fqPackage);
-
-        // T4-BQ: populate the skeleton with the members its call sites prove must exist, so the
-        // whole missing-type closure lands in one pass rather than one missing-member probe at a
-        // time. Gated behind a flag; a synthesis failure leaves the plain skeleton untouched.
-        int synthesized = 0;
-        if (config.isSynthesizeMembers()) {
-            try {
-                Path javaRoot = fileService.resolveSecurePath("output/src/main/java");
-                List<MemberSignature> members = memberSynthesizer.synthesize(missingToken, javaRoot);
-                if (!members.isEmpty()) {
-                    String augmented = injectMembers(body, members);
-                    if (augmented != null) {
-                        synthesized = members.size();
-                        body = augmented;
-                        description = description + " + " + synthesized + " usage-derived member(s)";
-                    }
-                }
-            } catch (Exception e) {
-                log.debug("IdiomSkeletonResolver: member synthesis skipped for {} ({})",
-                        missingToken, e.getMessage());
-            }
-        }
 
         FileMutation mutation = new FileMutation(relPath, body);
         InjectorFixRecord record = new InjectorFixRecord(
@@ -373,63 +340,4 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
                 .replace("{packageDecl}", packageDecl);
     }
 
-    /**
-     * T4-BQ: parses the freshly-rendered skeleton and adds the usage-derived members, skipping any
-     * already declared (e.g. the exception template's {@code (String message)} constructor). Adds
-     * stub bodies for classes ({@code return null;}) and bodiless abstract members for interfaces
-     * (the repository case). Returns {@code null} if the skeleton cannot be parsed or carries no
-     * type declaration, so the caller keeps the plain skeleton.
-     */
-    private String injectMembers(String skeleton, List<MemberSignature> members) {
-        CompilationUnit cu;
-        try {
-            cu = StaticJavaParser.parse(skeleton);
-        } catch (Exception e) {
-            return null;
-        }
-        Optional<ClassOrInterfaceDeclaration> primary = cu.findFirst(ClassOrInterfaceDeclaration.class);
-        if (primary.isEmpty()) return null;
-        ClassOrInterfaceDeclaration type = primary.get();
-        boolean isInterface = type.isInterface();
-
-        for (MemberSignature m : members) {
-            if (m.constructor()) {
-                if (isInterface || hasConstructor(type, m.paramTypes().size())) continue;
-                ConstructorDeclaration cd = type.addConstructor();
-                cd.setPublic(true);
-                addParams(cd::addParameter, m.paramTypes());
-                cd.setBody(new BlockStmt());
-            } else {
-                if (hasMethod(type, m.name(), m.paramTypes().size())) continue;
-                MethodDeclaration md = new MethodDeclaration();
-                md.setName(m.name());
-                md.setType(m.returnType());
-                md.setPublic(true);
-                addParams(md::addParameter, m.paramTypes());
-                if (isInterface) {
-                    md.setBody(null); // implicitly public abstract
-                } else {
-                    md.setBody(StaticJavaParser.parseBlock("{ return null; }"));
-                }
-                type.addMember(md);
-            }
-        }
-        return cu.toString();
-    }
-
-    private static void addParams(java.util.function.BiConsumer<String, String> add, List<String> paramTypes) {
-        for (int i = 0; i < paramTypes.size(); i++) {
-            add.accept(paramTypes.get(i), "p" + i);
-        }
-    }
-
-    private static boolean hasMethod(ClassOrInterfaceDeclaration type, String name, int arity) {
-        return type.getMethods().stream()
-                .anyMatch(md -> md.getNameAsString().equals(name) && md.getParameters().size() == arity);
-    }
-
-    private static boolean hasConstructor(ClassOrInterfaceDeclaration type, int arity) {
-        return type.getConstructors().stream()
-                .anyMatch(cd -> cd.getParameters().size() == arity);
-    }
 }

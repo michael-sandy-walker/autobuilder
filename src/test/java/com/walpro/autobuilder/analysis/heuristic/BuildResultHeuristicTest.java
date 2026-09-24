@@ -104,22 +104,6 @@ class BuildResultHeuristicTest {
     }
 
     @Test
-    void evaluate_testOnlyCompileError_legacyGate_stillRejects() {
-        BuildResultHeuristic gating = new BuildResultHeuristic();
-        gating.setTestCompileBlocksMerge(true);
-        BuildOutcome testOnly = new BuildOutcome(
-                BuildResult.COMPILE_ERROR,
-                "/proj/output/src/test/java/app/LoanServiceTest.java:[18,2] cannot find symbol",
-                3000L, "mvn test-compile", "c");
-        CycleContextData ctx = CycleContextData.builder().cycleName("c").buildOutcome(testOnly).build();
-
-        HeuristicOpinion op = gating.evaluate(ctx, anyOutcome());
-
-        assertThat(op.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
-        assertThat(op.confidence()).isEqualTo(1.0);
-    }
-
-    @Test
     void evaluate_timeout_rejectsAtHighConfidence() {
         BuildOutcome timed = new BuildOutcome(BuildResult.TIMEOUT, "", 120_000L, "mvn compile", "c");
         CycleContextData ctx = CycleContextData.builder()

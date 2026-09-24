@@ -42,14 +42,6 @@ public class IdiomSkeletonConfigProperties {
     /** Levenshtein cutoff for the similarity-abort guard. */
     private int similarityAbortThreshold = 2;
 
-    /**
-     * T4-BQ: when {@code true}, a freshly-created skeleton is populated with the member signatures
-     * its call sites prove must exist (usage-derived synthesis), so the whole missing-type closure
-     * lands in one pass instead of one missing-<i>member</i> probe failure at a time. Code default
-     * {@code false}; {@code application.yml} enables it (validate-in-run pattern).
-     */
-    private boolean synthesizeMembers = false;
-
     /** Fallback base package when {@code establishedBasePackage} is not known yet. */
     private String defaultBasePackage = "com.example.demo";
 

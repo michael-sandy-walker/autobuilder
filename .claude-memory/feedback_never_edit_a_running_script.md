@@ -15,3 +15,11 @@ While a live run is in flight, do not edit `scripts/preflight.sh` or any other s
 This is the same family as the process-matching traps already recorded in [[project-run-lifecycle-runbook]]: an operation that looks harmless because the failure is silent.
 
 **How to apply:** while a run is live, restrict edits to Java sources and tests (the jar is already built, so they cannot affect it), to memory and roadmap files, and to Python scripts the run does not invoke mid-flight. For anything preflight itself reads or executes — the script, and by extension `watches.json`, which it evaluates at the end — write the intended change to the scratchpad and apply it once the JVM is down and scoring has finished. When a summary field is expected and absent, suspect this before suspecting the extraction logic: an absent line means the code never ran, whereas a wrong line means the code ran and the logic is wrong.
+
+**2026-09-24: git counts as an edit.** A merge, rebase, pull or checkout rewrites every tracked
+script it touches, including `scripts/preflight.sh` under a live preflight. The user rebased main
+onto a merged PR while structdiff run 2 was live; the PR had inserted six lines near the top of
+`preflight.sh`, so the running bash would have resumed at a misaligned byte offset during scoring
+and archiving. The run was stopped and restarted. **How to apply:** before recommending or
+performing any git operation that moves the working tree, check for a live run; if the user is about
+to do one, say whether a run is live and what it would hit.

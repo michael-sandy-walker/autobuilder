@@ -174,3 +174,9 @@ success, the session reported the run stopped, and the JVM survived; a second ru
 later and both wrote the same tree and goal stack. Goal-churn numbers from that window are not
 attributable. **Report a process stopped only after re-listing and finding it gone**
 ([[project-run-lifecycle-runbook]], ninth variant).
+
+**Status 2026-09-24: T4-CQ slice 1 is fielded on two adopted projects.** `data/rung1` (a REST
+calculator someone else wrote) reached two true completions; `data/structdiff` (a module of
+Autobuilder itself, extracted by `scripts/extract_structdiff.sh`) is under way. The ticket's
+running record is in `roadmap.md` under T4-CQ; the how-to is in the newest block of
+[[project-resume-state]].

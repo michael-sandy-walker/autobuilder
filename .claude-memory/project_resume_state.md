@@ -1,17 +1,28 @@
 ---
 name: project-resume-state
-description: "2026-09-23 evening (Opus 5). T2-FL instrumented, launch reader shipped, and a CORPUS READOUT that overturned the priority I had just acted on: CriterionParseReport over 106 archived goal stacks reads 8862 authored / 3786 distinct criteria at 44% readable (firestarter 46, clitarget 38, flightsim 0 of 92), and the launch reader I had just written covers 2 of 3786. I had picked it off ONE run whose 29 declines were 13 repeats of one criterion. Largest actionable family is 420 request-shaped criteria; 1330 of 1566 clusters are singletons, which is what settles the LLM-canonicalisation question. Two runs: 17-47-43 clean 23/23 zero-residue closed by T4-DW not by observation, 18-35-30 boot-failed with OPPORTUNITY-NO-FIRE(24). A promotion DID fulfil the goal -- by SCORE, not observation."
+description: "2026-09-24 session 3 (Opus 5.5): T4-CQ on two adopted projects -- rung1 reached two true completions; the second, structdiff (a module of Autobuilder itself), produced a grind detector. A structdiff run may still be live: check before any full suite. Read the newest block first."
 metadata:
   node_type: memory
   type: project
   originSessionId: 609aab02-3d49-46ec-874f-e42f8a4aa75f
-  modified: 2026-09-23T19:50:00.000Z
+  modified: 2026-09-24T22:25:00.000Z
 ---
 
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-23 LATE NIGHT (Opus 5.5, session 2) — T5-BK, T3-BX, T2-ER CLOSED; T2-ET SCORE HALF BUILT; ONE FIELD RUN — START HERE
+## 2026-09-24 (Opus 5.5, session 3) — T4-CQ: TWO ADOPTED PROJECTS, TWO TRUE COMPLETIONS ON THE FIRST, A GRIND DETECTOR FROM THE SECOND — START HERE
+
+**Head `38328f08` (my two commits rebased by the user onto PR #1's merge `1827c816`). Local main is 2 ahead of origin; pushing is the user's. Suite 3275/0/5 on the merged tree.**
+
+- **⚠ A RUN MAY STILL BE LIVE: structdiff run 2, launched ~22:20 on `38328f08`, 60-minute cap.** Check `ps -eo pid,args | grep "preflight.sh live"` before ANY full suite or script edit ([[feedback-no-heavy-mvn-beside-a-live-run]], [[feedback-never-edit-a-running-script]]). Its launch log was in the old session's scratchpad; the loop's own log is `data/structdiff/logs/autobuilder.log`, and preflight archives to `~/.autobuilder/run-archive/` as usual. Analyse it first: it is the FIELD TEST of the grind detector, the refusal relay, the protected-type member list and the stricter yardstick (structdiff run 1: honest brake halt, 5/11 under the corrected yardstick).
+- **How to run an adopted target** (both goals are tracked `data/<t>/bootstrap/seed.txt`): reset by moving everything but `bootstrap/` aside, restore the pristine tree into `output/` (rung1: `cp -a ~/Downloads/rest-calculator-master/. data/rung1/output/` -- NOT in the repo; structdiff: `scripts/extract_structdiff.sh $(cat data/structdiff/bootstrap/origin-rev) data/structdiff/output`), then `PREFLIGHT_TARGET=<t> PREFLIGHT_EXTRA_FLAGS="--autobuilder.start.mode=ADOPT_PROJECT" setsid nohup scripts/preflight.sh live 60 > <log> 2>&1 < /dev/null & disown` and `scripts/post_adopted_goal.sh <t> data/<t>/bootstrap/seed.txt`. Arm the waiter on the LOOP's terminal line, not only preflight's ([[feedback-waiter-fires-on-loop-terminal]]).
+- **rung1 (adopted REST calculator):** runs 10-14. Four false completions and one false incompletion were each traced and fixed (protected paths as data, rule-marked files not overruled by the verb list, `gate: tests`, test-run evidence in the completion verifier, route coverage = request-level by the user's decision). Runs 12 and 14 are TRUE completions, 15/15.
+- **structdiff (second adopted project, the user's choice: a module of Autobuilder itself):** ten classes of the structural Java diff, a library, extracted from git history. Found at once: the cold read named a dependency as the project (fixed); gate builds shown as fix attempts and narrated as repairs (fixed); and a 25-minute grind the loop saw (72 repetition signals) and told nobody about, caused by the loop's OWN missing-member advice telling the model to edit a protected record. Built the `GrindDetector` (the user: "whenever there is a grind ... it should be noted"), the refusal relay, `DeclaredMembers`, the imposed-signature exemption in `WiringFactsAnalyzer`, and a value-assertion yardstick.
+- **The user merged PR #1 (a cloud session's T5-BL deletion work, ~2,700 lines removed intentionally) and rebased while a run was live.** Verified nothing was lost (line-level check of every doubly-changed file, full suite green). The rebase rewrote `scripts/preflight.sh` under the running preflight, so that run was stopped and restarted; logs in `~/.autobuilder/aborted-runs/`.
+- **Open on T4-CQ, in order:** analyse structdiff run 2; the obligations file is still hand-written -- nothing generates `rule:`/`gate:` markers; per-kind evidence of which interface a test exercised is filed under T4-DD; rung1's yardstick reads the live tree even for the preserved score.
+
+## 2026-09-23 LATE NIGHT (Opus 5.5, session 2) — T5-BK, T3-BX, T2-ER CLOSED; T2-ET SCORE HALF BUILT; ONE FIELD RUN
 
 **Commits `af483edf`..`93a171b7` plus this docs commit. Nothing pushed.** Suite 3271/0/5 (22 `*IT` tests now counted).
 

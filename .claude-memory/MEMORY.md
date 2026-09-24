@@ -34,7 +34,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-23)
+- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-24)
 - `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-24)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: live ordering is the 2026-08-23 REORDER section at the end; S1-S6 kept for reasoning only. Never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-09-23)
+- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-09-24)
 - `project_wave2_structure.md`: wave 2's five layers and gate-driven sequence; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
@@ -64,7 +64,7 @@ Design notes, read before touching their area:
 - `project_pattern_recognition_design_note.md`: 6-slice gated plan for pattern recognition. Read before touching `analysis/pattern/` or filing a self-model ticket. (reviewed 2026-09-08)
 - `project_target_domain_plugin_design.md`: T4-DC field proof (CLI target 12/12) cut the design from five seams to two; the design ticket is T4-DD. Read before adding any ecosystem-aware rule. (reviewed 2026-09-08)
 - `project_state_time_travel_design_note.md`: T4-DQ rewind reproduces a STATE, not a TRAJECTORY; restore the carried cycle context. Read before rewind/branching work. (reviewed 2026-09-19)
-- `project_project_portability_vision.md`: import/continue/store/restore/merge a project's code layer (T4-CQ/CR/CS open). Read before import/export work. (reviewed 2026-09-08)
+- `project_project_portability_vision.md`: import/continue/store/restore/merge a project's code layer; T4-CQ slice 1 fielded on two adopted projects (rung1, structdiff), CR/CS open. Read before import/export work. (reviewed 2026-09-24)
 - `project_cross_run_knowledge_base.md`: T4-CJ slice 2 -> T4-CN -> T4-CM is ONE chain: reconciling graphs from DIFFERENT runs. (reviewed 2026-07-23)
 - `project_reliability_plan.md`: rationale behind the reliability work (floor up, ceiling free). NOT a queue; everything it selected is filed or closed. (reviewed 2026-07-14)
 - `reference_undone_ideas.md`: the user's unbuilt ideas with document and line in ~/Documents/autobuilder; a reference, never a queue. (reviewed 2026-09-23)
@@ -109,12 +109,12 @@ How to work:
 - `feedback_run_analysis_log_order.md`: analyse runs from the behaviour ndjson first; the autobuilder log only for depth. (reviewed 2026-07-09)
 - `feedback_no_auto_commit.md`: commit only with authorization (checkpoint commits OK in authorized autonomous runs); NEVER push, except to the session's own claude/ branch in cloud-container sessions (CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud*; not Remote Control). (reviewed 2026-09-24)
 - `feedback_no_branch_ops.md`: never merge/rebase/reset/branch -d/push autonomously; describe and wait for 'do it'. (reviewed 2026-09-08)
-- `feedback_never_edit_a_running_script.md`: never edit preflight.sh (or what it reads) mid-run — bash reads scripts incrementally, so edits land half-applied and silently. (reviewed 2026-07-30)
+- `feedback_never_edit_a_running_script.md`: never edit preflight.sh (or what it reads) mid-run, and a git merge/rebase/checkout counts as an edit — bash reads scripts incrementally, so edits land half-applied and silently. (reviewed 2026-09-24)
 - `feedback_no_heavy_mvn_beside_a_live_run.md`: a full suite beside a live run starves the box and kills the run via Neo4j timeouts. (reviewed 2026-09-08)
 - `feedback_flag_ceremony_cost_early.md`: when process costs more than the task, say so BEFORE running it. (reviewed 2026-09-08)
 - `feedback_sonnet_for_batch_tickets.md`: batch/mechanical tickets go to a Sonnet subagent (Agent tool model override); design and validation stay on the main model. (reviewed 2026-07-14)
 - `feedback_roadmap_is_the_queue.md`: work comes from the roadmap ONLY; direction notes are rationale, never a parallel queue. (reviewed 2026-09-10)
-- `feedback_no_per_run_memory_files.md`: no new memory file per field run; fold into `project_resume_state.md`; separate files only for durable cross-run insights. (reviewed 2026-07-09)
+- `feedback_no_per_run_memory_files.md`: no new memory file per field run; fold into `project_resume_state.md`; separate files only for durable cross-run insights. (reviewed 2026-09-24)
 
 Evidence discipline:
 - `feedback_baseline_before_accuracy.md`: four ways a predictor-hunt lies (baseline, best-of-N, extremes-only, shifting denominator). (reviewed 2026-09-10)

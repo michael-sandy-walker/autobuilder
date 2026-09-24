@@ -87,8 +87,7 @@ class CycleExecutorSignalLifetimeWiringTest {
                 emptyDiffDetector,
                 scopeThrashSignalAnalyzer,
                 subgoalScopeGuard,
-                mutationSnapshotService,
-                new com.walpro.autobuilder.core.build.BuildFixEscalator()
+                mutationSnapshotService
         );
 
         behaviourLogger = mock(BehaviourLogger.class);

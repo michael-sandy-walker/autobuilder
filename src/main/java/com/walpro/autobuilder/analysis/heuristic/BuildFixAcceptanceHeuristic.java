@@ -63,9 +63,8 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
 
     /**
      * T2-CV: abstain threshold on shared {@code consecutiveBuildFixAttempts} state. Crossing
-     * either this OR {@code REPETITION_DETECTED >= 1.0} routes the cycle to the LLM/heuristic
-     * path so {@link com.walpro.autobuilder.core.build.BuildFixEscalator} can emit
-     * REPLAN_REQUESTED / ROLE_ANALYSIS escalation signals.
+     * either this OR {@code REPETITION_DETECTED >= 1.0} routes the cycle back to the LLM/heuristic
+     * path instead of forcing acceptance again.
      */
     private static final int ABSTAIN_ATTEMPT_THRESHOLD = 3;
     private static final double ABSTAIN_REPETITION_THRESHOLD = 1.0;
@@ -115,7 +114,7 @@ public class BuildFixAcceptanceHeuristic implements EvaluationHeuristic {
         double repetitionStrength = input.requestUrgency(BasicSignals.REPETITION_DETECTED);
         if (attempts >= ABSTAIN_ATTEMPT_THRESHOLD || repetitionStrength >= ABSTAIN_REPETITION_THRESHOLD) {
             log.warn("{}: stuck on build-fix retries (attempts={}, repetition={}, match={}) — abstaining; " +
-                            "BuildFixEscalator (T2-CV) will emit REPLAN_REQUESTED / ROLE_ANALYSIS",
+                            "the ordinary evaluation decides",
                     NAME, attempts, repetitionStrength, matchKind);
             return HeuristicOpinion.none(NAME);
         }

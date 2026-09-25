@@ -96,6 +96,11 @@ public class TestRunGate {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T4-CQ: the run's ledger of values the code was observed to return; optional in narrow tests. */
+    @Setter
+    @Autowired(required = false)
+    private ObservedBehaviour observedBehaviour;
+
     /** T4-CQ: when the last test run started; its reports are the ones written after this. */
     private volatile long lastRunStartedAt = -1L;
 
@@ -184,6 +189,10 @@ public class TestRunGate {
             return Optional.empty();
         }
         String summary = summarise(plain);
+        if (observedBehaviour != null) {
+            freshReport().ifPresent(r -> observedBehaviour.observe(r.failing(),
+                    ObservedBehaviour.mainDigestOnDisk(Path.of(fileBasePath, "output"))));
+        }
         // The stderr tail carries names + tally but rarely the failure's root cause (run 6,
         // 2026-07-03: 'Errors: 4' reached the work item while 'No qualifying bean of type
         // BookRepository' — the repairable fact — sat only in the per-test reports; the model

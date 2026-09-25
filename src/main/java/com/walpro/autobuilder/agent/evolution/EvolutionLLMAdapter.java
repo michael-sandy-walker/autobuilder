@@ -51,6 +51,10 @@ public class EvolutionLLMAdapter {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.ProtectedPaths protectedPaths;
 
+    /** T4-CQ: values the code was observed to return, named in the prompt; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.ObservedBehaviour observedBehaviour;
+
     /** T4-CQ: repeated failures, named in the prompt; optional in narrow tests. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.GrindDetector grindDetector;
@@ -81,6 +85,13 @@ public class EvolutionLLMAdapter {
         if (grindDetector != null) {
             String grind = grindDetector.promptBlock();
             if (grind != null) userPrompt = userPrompt + "\n\n" + grind;
+        }
+        // T4-CQ: what the code was seen to return, for as long as that code is unchanged.
+        if (observedBehaviour != null && refreshed.outputPath() != null) {
+            String observed = observedBehaviour.promptBlock(
+                    com.walpro.autobuilder.core.build.ObservedBehaviour.mainDigestOnDisk(
+                            java.nio.file.Path.of(refreshed.outputPath())));
+            if (observed != null) userPrompt = userPrompt + "\n\n" + observed;
         }
         // T4-CQ: where the routes are really answered, when the tree's own configuration says.
         userPrompt = com.walpro.autobuilder.protocol.evolution.ServedPrefixPromptBlock.appendTo(

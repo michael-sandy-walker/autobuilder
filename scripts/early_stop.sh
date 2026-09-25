@@ -1,0 +1,43 @@
+#!/bin/bash
+# early_stop.sh -- stop a live run early when its own yardstick has stopped improving.
+#
+# Usage: scripts/early_stop.sh <target> [interval_min=10] [patience_min=20] [min_run_min=25] [port=8081]
+#
+# The rule, stated before the run rather than chosen while watching it: every <interval> minutes a
+# COPY of data/<target>/output is scored with the target's declared yardstick (bootstrap/yardstick).
+# Once the run is at least <min_run> minutes old, if the best score has not improved for <patience>
+# minutes, the loop is paused (POST /autobuilder/pause) and preflight records terminal=operator-stop,
+# then scores and archives the run as usual.
+#
+# A copy, because the yardstick runs the project's build: in the live tree its test reports would
+# be read by the loop's own test gate as fresh evidence. The script never writes to the live tree.
+# Exits when the app is gone, so it can be started beside every run and forgotten.
+set -u
+TGT="${1:?usage: early_stop.sh <target> [interval_min] [patience_min] [min_run_min] [port]}"
+INTERVAL=$(( ${2:-10} * 60 )); PATIENCE=$(( ${3:-20} * 60 )); MINRUN=$(( ${4:-25} * 60 )); PORT="${5:-8081}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+TREE="$ROOT/data/$TGT/output"
+YARD="$(grep -v '^#' "$ROOT/data/$TGT/bootstrap/yardstick" 2>/dev/null | awk 'NF{print $1; exit}')"
+[ -n "$YARD" ] || { echo "early_stop: $TGT declares no yardstick" >&2; exit 1; }
+WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
+alive() { curl -s -o /dev/null -m 5 "http://localhost:$PORT/autobuilder/status"; }
+
+start=$SECONDS; best=-1; best_at=$SECONDS
+while alive; do
+    sleep "$INTERVAL"
+    alive || break
+    rm -rf "$WORK/output"; cp -a "$TREE" "$WORK/output"; rm -rf "$WORK/output/target"
+    mkdir -p "$WORK/output/target"; : > "$WORK/output/target/probe.jar"
+    line=$("$ROOT/$YARD" "$WORK/output/target/probe.jar" 2>/dev/null | grep -E '^SMOKE: [0-9]+/[0-9]+' | tail -1)
+    score=$(echo "$line" | sed -E 's/^SMOKE: ([0-9]+)\/.*/\1/'); score=${score:-0}
+    age=$(( (SECONDS - start) / 60 ))
+    if [ "$score" -gt "$best" ]; then best=$score; best_at=$SECONDS; fi
+    stale=$(( (SECONDS - best_at) / 60 ))
+    echo "early_stop: ${age}m ${line:-SMOKE: ?} best=$best unchanged ${stale}m"
+    if [ $((SECONDS - start)) -ge "$MINRUN" ] && [ $((SECONDS - best_at)) -ge "$PATIENCE" ]; then
+        echo "early_stop: STOP -- best $best unchanged for ${stale}m at ${age}m; pausing the loop"
+        curl -s -X POST "http://localhost:$PORT/autobuilder/pause"; echo
+        exit 0
+    fi
+done
+echo "early_stop: app gone -- nothing to do"

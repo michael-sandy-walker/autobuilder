@@ -330,6 +330,9 @@ run_live() {
         fi
         if grep -qE 'Root goal exhausted|root .* marked GIVEN_UP' "$applog"; then terminal="GOAL_EXHAUSTED"; break; fi
         if grep -qE 'Pausing — manual input required|stagnation-runaway' "$applog"; then terminal="PAUSED"; break; fi
+        # An operator's POST /autobuilder/pause (scripts/early_stop.sh stops a run whose yardstick
+        # stopped improving): the run is scored and archived like any other, under its own name.
+        if grep -q 'pause: reason=user-pause' "$applog"; then terminal="operator-stop"; break; fi
         # T5-BE: the loop's own brake halting is an HONEST terminal, not a deadline/silence.
         # Key on the exhaustion-halt markers only (a fulfilled run also pauses, but the
         # GOAL_FULFILLED check above breaks first). Stop promptly instead of idling to the cap.
@@ -676,7 +679,7 @@ PYSTART
 
     case "$terminal" in
         GOAL_FULFILLED) pass_out "(terminal=GOAL_FULFILLED smoke=$smoke smoke_preserved=$smoke_preserved run=$run_dir)";;
-        GOAL_EXHAUSTED|PAUSED|deadline|honest-halt*)
+        GOAL_EXHAUSTED|PAUSED|deadline|honest-halt*|operator-stop)
             # Honest terminals are DATA, not failures — the driver reports them for analysis.
             pass_out "(terminal=$terminal smoke=$smoke smoke_preserved=$smoke_preserved run=$run_dir — run completed for analysis)";;
         model-unavailable)

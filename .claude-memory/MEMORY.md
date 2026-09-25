@@ -114,7 +114,7 @@ How to work:
 - `feedback_flag_ceremony_cost_early.md`: when process costs more than the task, say so BEFORE running it. (reviewed 2026-09-08)
 - `feedback_sonnet_for_batch_tickets.md`: batch/mechanical tickets go to a Sonnet subagent (Agent tool model override); design and validation stay on the main model. (reviewed 2026-07-14)
 - `feedback_roadmap_is_the_queue.md`: work comes from the roadmap ONLY; direction notes are rationale, never a parallel queue. (reviewed 2026-09-10)
-- `feedback_no_per_run_memory_files.md`: no new memory file per field run; fold into `project_resume_state.md`; separate files only for durable cross-run insights. (reviewed 2026-09-24)
+- `feedback_no_per_run_memory_files.md`: no new memory file per field run; fold into `project_resume_state.md`; separate files only for durable cross-run insights. (reviewed 2026-09-25)
 
 Evidence discipline:
 - `feedback_baseline_before_accuracy.md`: four ways a predictor-hunt lies (baseline, best-of-N, extremes-only, shifting denominator). (reviewed 2026-09-10)

@@ -187,3 +187,14 @@ running record is in `roadmap.md` under T4-CQ; the how-to is in the newest block
 - **T4-CR CLOSED** -- `scripts/bundle.py`; verified by content hash on a clean Neo4j and by a CONTINUE_LINEAGE run resuming the restored lineage. Not built: forking a child lineage from a bundle.
 - **T4-CS still gated** by the T6-G measurement (same-seed lineages share almost nothing). The honest next step, if pursued, is a DIFFERENT-seed or different-module pair; the other open direction is a second Autobuilder module adopted as a target.
 
+## Status 2026-09-25 afternoon -- a second module
+
+- **`participation`** (the per-role participation windows and request records, 4 classes of
+  `core.lifecycle`) adopted as the third project and the second module of Autobuilder itself, chosen
+  by measurement over every self-contained closure in `src/main`. **True completion 14/14 in run 2**
+  (`2026-09-25_12-44-34`). Answer to "do the structdiff fixes generalise": the closure check did,
+  unchanged; the value-observation probe did mechanically but was unreached until routed to the
+  staged-failure rejection as well. Details under `T4-CQ` in the roadmap.
+- **T4-CS still gated.** Two modules share no code; merging their trees tests nothing. A pair worth
+  merging needs two lineages of the SAME module on DIFFERENT seeds (or goals).
+

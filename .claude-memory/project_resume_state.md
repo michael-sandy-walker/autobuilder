@@ -11,7 +11,19 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-25 NIGHT-MORNING (Opus 5.5, session 4, autonomous) — T4-CQ AND T4-CR CLOSED; STRUCTDIFF TRUE COMPLETION 11/11 (RUN 14); ONE FALSE COMPLETION FOUND AND FIXED — START HERE
+## 2026-09-25 AFTERNOON (Opus 5.5, session 5, autonomous) — SECOND AUTOBUILDER MODULE `participation` ADOPTED; TRUE COMPLETION 14/14 (RUN 2); NARRATION NO LONGER CUT — START HERE
+
+**Head: see `git log`; nothing pushed. The user asked to continue the portability chain with a SECOND Autobuilder module as a target (TODO_20260921's "modules as toy cases"), chosen by measurement, stopping on a true completion or 3 runs with no new defect.**
+
+- **Target `participation`** = `core.lifecycle.ParticipationWindows` + `ParticipationWindow`, `ChannelRequest`, `SignalType` (4 classes, JDK only, no direct tests; immutable records, colliding method names). `scripts/extract_participation.sh`, `scripts/smoke_participation.sh` (14 checks), `data/participation/bootstrap/` incl. the GENERATED obligations file (committed). Full account appended to `T4-CQ` in the roadmap.
+- **Run 1 `2026-09-25_11-45-07`: operator-stop 6/14 (7/14 rescored).** Closure check works unchanged (agrees with the yardstick exactly). The probe was unreached (closure ran once, too early). Binding constraint: the model's own failing tests, one field learned per rejection.
+- **Fixed:** `6d44dee0` -- the staged-failure rejection observes each failing test's entry-point return WHOLE and relays it; `assertNull`/`isNull` are value assertions. `50b83380` -- yardstick receiver read over the call chain with comments removed.
+- **Run 2 `2026-09-25_12-44-34`: GOAL_FULFILLED, 24 merges, preflight 13/14 -> 14/14 after the yardstick fix. TRUE COMPLETION; runs stopped by the stated rule.**
+- **HELD, not deployed (the run never showed it):** chain / `var`-local receiver attribution in `EntryPointAssertions`, proven on a fixture -- `~/.autobuilder/held-patches/entrypoint-receiver-type-plus-calledBy.patch` (the `calledBy` half of it IS deployed). Apply when a run shows a covered entry point refused as "called by no test".
+- **Also this session (user-raised):** narration spoken whole, sentence by sentence (`b594dd95`, T5-BF append). Not yet heard in a browser.
+- **Open, not queued:** the structdiff yardstick lacks the `assertNull` and receiver fixes (different instrument; its 11/11 stands); T4-CS still has no pair worth merging (two disjoint modules). State left behind: run 1's tree at `~/.autobuilder/participation-after-run1`; run 2's tree live in `data/participation/output`.
+
+## 2026-09-25 NIGHT-MORNING (Opus 5.5, session 4, autonomous) — T4-CQ AND T4-CR CLOSED; STRUCTDIFF TRUE COMPLETION 11/11 (RUN 14); ONE FALSE COMPLETION FOUND AND FIXED
 
 **Head: see `git log`; nothing pushed. The user said "just fix it continuously and autonomously", then "continue further on the chain we're trying to complete (TODO_20260921)" = the portability chain T4-CQ/CR/CS on Autobuilder's own modules.**
 

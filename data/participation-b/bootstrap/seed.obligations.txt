@@ -1,0 +1,27 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 78dd9460b43934720144b04328a049e621c772984c2c06da3dbc18e5ea409c0d
+# body-sha256: 59488ad8a49cf059c15e9f9bf58c2e40d921e30e17502fb28fbce478892ef84c
+ParticipationWindows.empty() is covered by a test in the project's own test suite
+ParticipationWindows.grant(window) is covered by a test in the project's own test suite
+ParticipationWindows.hasActive(role) is covered by a test in the project's own test suite
+ParticipationWindows.get(role) is covered by a test in the project's own test suite
+ParticipationWindows.shrink(role) is covered by a test in the project's own test suite
+ParticipationWindow.tick() is covered by a test in the project's own test suite
+ChannelRequest.of(kind, urgency, source, validForCycles) is covered by a test in the project's own test suite
+ChannelRequest.raise(other) is covered by a test in the project's own test suite
+ChannelRequest.withMeta(key, value) is covered by a test in the project's own test suite
+ChannelRequest.tick() is covered by a test in the project's own test suite
+gate: tests the whole suite passes
+rule: Work inside the project as it is
+rule: Keep its packages, its classes, its naming and its test framework choice
+rule: Add tests under src/test/java
+rule: DO NOT modify anything under src/main/java: not the formatting, not the signatures, not the logic
+rule: If a test you wrote does not pass, the test is what is wrong
+rule: A test must assert what the entry point actually returns
+rule: Do not assume a result: build the values it needs inside the test itself, call it, observe the answer, and assert that
+rule: If the behaviour looks wrong to you, still assert the behaviour it has, and say what looked wrong in the test name or a comment

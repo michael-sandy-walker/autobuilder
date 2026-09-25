@@ -172,6 +172,22 @@ class DeterministicScoreHeuristicBandEdgeTest {
         assertThat(opinion.rationale()).contains("diff shape only");
     }
 
+    /** The global scorer appends an INFO reward note on small edits; a note is not evidence. */
+    @Test
+    void belowSoftBand_withOnlyAnInfoNote_stillCapped() {
+        CycleContextData input = CycleContextData.builder()
+                .scoringResult(new ScoringResult(0.63, 0.63, null, null, Map.of(),
+                        List.of(new HeuristicFinding("Only a few files modified, no adds/deletes",
+                                HeuristicFinding.Severity.INFO, "minor-edits", null)),
+                        Map.of(), Map.of(), "g"))
+                .projectDiff(meaningfulDiff()).problemContext(noBlockers()).previousProblemContext(noBlockers())
+                .build();
+
+        HeuristicOpinion opinion = heuristic.evaluate(input, DUMMY_LLM_ACCEPTED);
+
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.HIGH);
+    }
+
     // ---- (d) At or above 0.75: ACCEPTED at CRITICAL (unchanged behaviour) ----
 
     @Test

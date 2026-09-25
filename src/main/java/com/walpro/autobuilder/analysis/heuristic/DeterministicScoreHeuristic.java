@@ -93,11 +93,17 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
         // constant 0.630, four in a row while the suite was red -- the rewrites that repair
         // failing tests are exactly the ones that change many lines. Capped at HIGH, it stays a
         // vote the other heuristics and the model can outweigh; a real finding keeps the veto.
+        //
+        // Only a WARNING or CRITICAL finding counts: the global scorer APPENDS an INFO note to the
+        // findings list on every small edit ("minor-edits", a reward), so "no finding at all" was
+        // never true and run 2026-09-25_02-01-18 kept vetoing at 1.00 with the cap in place.
         double confidence = rawConfidence;
         String basis = "";
-        if (scoring.findings() == null || scoring.findings().isEmpty()) {
+        boolean adverseFinding = scoring.findings() != null && scoring.findings().stream()
+                .anyMatch(f -> f.severity() != HeuristicFinding.Severity.INFO);
+        if (!adverseFinding) {
             confidence = Math.min(rawConfidence, SOFT_BAND_REJECTED_CONFIDENCE_CAP);
-            basis = " (diff shape only, no finding -- capped)";
+            basis = " (diff shape only, no adverse finding -- capped)";
         } else {
             // Named, so a veto can be traced to what it rested on (run 2026-09-25_02-01-18 vetoed
             // at 1.00 where an offline replay of the same files found nothing).

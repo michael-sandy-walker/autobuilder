@@ -11,7 +11,16 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-25 EVENING (Opus 5.5, session 5 continued, autonomous "until I say otherwise") — T4-CS FIRST SLICE: A CHILD FROM TWO DIFFERENT-SEED LINEAGES SCORES 20/20 WHERE THE BETTER PARENT SCORES 16 — START HERE
+## 2026-09-25 NIGHT (Opus 5.5, session 5 continued) — THE LOOP CHANGES ADOPTED CODE; T4-CS SLICE 2 VALIDATED; THE EVOLUTION PROMPT NOW SHOWS SOURCE — START HERE
+
+- **Change targets** `participation-roles` / `participation-totals` (operator spec tests + the 38-test characterization suite; `src/test/**` and `members: src/main/**` protected). roles run 1 was a FALSE COMPLETION (rewrote 8 existing members) -> `members:` guard (`a486e421`) -> roles run 2 true 9/9. totals run 1 broke ON that guard (spliced members into a rewrite with a changed header) -> `bd29ab70` builds from the adopted file.
+- **Root cause, fixed (`1732e55a`):** evolution saw an existing file only as a method-name summary, never its source. `SubgoalSourcePromptBlock` shows the source of the files the subgoal names. totals run 2: true 8/8 in 10 min, zero restorations -- the model no longer rewrites what it can read.
+- **T4-CS slice 2 (`7cf0d33d`):** three-way declaration merge; child of roles run 2 + totals run 2 at `~/.autobuilder/merged/participation-roles2+totals2` meets BOTH specs, 49/49, existing members unchanged. Not seen in the field: a real conflict.
+- **Filed:** `T4-DY` (countermeasure ladder with a ledger; user: "do we have a meta overseer?" -> "Yes, file that").
+- **Open when this was written:** firestarter regression run `2026-09-25_21-44-42` for the source block (rule stated in advance: 23/23 fulfilled = no regression sign; a deadline is inside the 3/8 base rate and decides nothing alone; compare evolution promptTokens against the 8 prior firestarter runs). Watch: the obligations generator gave no gate/rule markers on the change seeds.
+- **Environment:** a full `mvn install` beside Docker OOM-killed Docker Desktop once (19:13); run suites as `MAVEN_OPTS=-Xmx1g mvn -q install -DargLine=-Xmx3g` (lowest free memory then 12 GB).
+
+## 2026-09-25 EVENING (Opus 5.5, session 5 continued, autonomous "until I say otherwise") — T4-CS FIRST SLICE: A CHILD FROM TWO DIFFERENT-SEED LINEAGES SCORES 20/20 WHERE THE BETTER PARENT SCORES 16
 
 - **The pair:** `participation-b` (same module, second seed: 10 entry points, 2 shared with seed A). Run 1 `2026-09-25_17-43-13` stalled at 12/12 on chained calls -> `a141fea7` (the held receiver-type fix, now shown by a run; held patch deleted). Run 2 `2026-09-25_18-34-49`: GOAL_FULFILLED 12/12 in 35 min.
 - **Gate:** `scripts/code_lineage_overlap.py` -- same-seed union = better parent (negative, as T6-G); different-seed union 20/20 vs 16/20 (positive).

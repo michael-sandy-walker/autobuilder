@@ -150,3 +150,14 @@ tree itself can answer it by reading structure -- if so, that reading is the gat
 is only asked what structure cannot settle.** Same night, same shape: `DeclaredAccessorResolver`
 (the compiler plus the type's source settle `getType()` vs `type()`) and `ObservedBehaviour` (a
 `but was` line is the code's own answer, kept instead of re-learned each cycle).
+
+## 2026-09-25 -- the prompt cropped the file to its method names
+
+On an adopted project the model rewrote classes it was told to keep, and invented a record's
+components, because the evolution prompt showed an existing file only as `name(...) : ReturnType`
+per public method. The authority for "what does this file say" was the file; the prompt carried a
+summary that could not answer the question the task asked. Two guards were built before the cause
+was found (`members:` protection, then its correction) -- the guard stays as a net, but the fix was
+showing the source (`SubgoalSourcePromptBlock`): the next run needed zero restorations. Ask of any
+summary in a prompt: can the task be done from it, or only from what it summarises?
+

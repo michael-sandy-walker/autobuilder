@@ -1,25 +1,29 @@
 #!/bin/bash
-# merge_lineages.sh -- T4-CS, first slice: build a CHILD project from two lineages' trees whose
-# library code is identical (an adopted project, src/main protected in both runs), by merging their
-# TEST layers member by member (core/merge/LineageTestMerge) and then CHECKING the claim: the child's
-# own suite must pass. Deterministic, no model call.
+# merge_lineages.sh -- T4-CS: build a CHILD project from two lineages of one adopted project, and
+# CHECK the claim: the child's own suite -- both parents' tests together -- must pass. Deterministic,
+# no model call.
 #
-# Usage: scripts/merge_lineages.sh <treeA> <labelA> <treeB> <labelB> <childDir>
-#   tree = a project root (pom.xml, src/main, src/test); the child is built from treeA's non-test files.
+# Usage: scripts/merge_lineages.sh [--base <baseTree>] <treeA> <labelA> <treeB> <labelB> <childDir>
+#   tree = a project root (pom.xml, src/main, src/test); the child is built from treeA's other files.
+#   Test layers are merged member by member (core/merge/LineageTestMerge).
+#   The library (src/main): identical in both parents -> taken as is; different -> merged three-way
+#   against --base, the tree both parents started from (core/merge/LineageCodeMerge), declaration by
+#   declaration; without --base a differing library is refused.
 #   Writes <childDir>/MERGE-PROVENANCE.tsv (file, member, parent), MERGE-CONFLICTS.txt, MERGE-SUITE.txt.
 # Last line: MERGE: ok|refused|suite-failing ...
-#
-# Refuses when src/main differs: merging two versions of the LIBRARY is the hard half of T4-CS and
-# is not what this slice does -- two parents that changed the code would need a real code merge.
 set -u
-A="${1:?usage: merge_lineages.sh <treeA> <labelA> <treeB> <labelB> <childDir>}"; LA="${2:?}"
+BASE=""
+if [ "${1:-}" = "--base" ]; then BASE="${2:?--base needs a tree}"; shift 2; fi
+A="${1:?usage: merge_lineages.sh [--base <baseTree>] <treeA> <labelA> <treeB> <labelB> <childDir>}"; LA="${2:?}"
 B="${3:?}"; LB="${4:?}"; C="${5:?}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 JAR=$(ls "$ROOT"/target/autobuilder-*-SNAPSHOT.jar 2>/dev/null | head -1)
 [ -n "$JAR" ] || { echo "MERGE: refused -- no application jar under target/ (mvn package first)"; exit 1; }
 [ -e "$C" ] && [ -n "$(ls -A "$C" 2>/dev/null)" ] && { echo "MERGE: refused -- $C is not empty"; exit 1; }
-if ! diff -rq "$A/src/main" "$B/src/main" > /dev/null 2>&1; then
-    echo "MERGE: refused -- src/main differs between the parents; this slice merges test layers over identical code"
+SAME_MAIN=yes
+diff -rq "$A/src/main" "$B/src/main" > /dev/null 2>&1 || SAME_MAIN=no
+if [ "$SAME_MAIN" = no ] && [ -z "$BASE" ]; then
+    echo "MERGE: refused -- src/main differs between the parents; give --base <the tree both started from>"
     exit 1
 fi
 mkdir -p "$C"
@@ -27,6 +31,12 @@ mkdir -p "$C"
 java -cp "$JAR" -Dloader.main=com.walpro.autobuilder.core.merge.LineageTestMerge \
     org.springframework.boot.loader.launch.PropertiesLauncher "$A/src/test" "$B/src/test" "$C" "$LA" "$LB" \
     || { echo "MERGE: refused -- the merge itself failed"; exit 1; }
+if [ "$SAME_MAIN" = no ]; then
+    rm -rf "${C:?}/src/main"
+    java -cp "$JAR" -Dloader.main=com.walpro.autobuilder.core.merge.LineageCodeMerge \
+        org.springframework.boot.loader.launch.PropertiesLauncher "$BASE/src/main" "$A/src/main" "$B/src/main" "$C" "$LA" "$LB" \
+        || { echo "MERGE: refused -- the library merge itself failed"; exit 1; }
+fi
 # The claim is checked, not assumed: every test from both parents must still pass in the child.
 if (cd "$C" && timeout 900 mvn -B -q -o test > "$C/MERGE-SUITE.txt" 2>&1); then
     n=$(cat "$C"/target/surefire-reports/TEST-*.xml 2>/dev/null | grep -o '<testsuite [^>]*tests="[0-9]*"' | grep -o 'tests="[0-9]*"' | grep -o '[0-9]*' | paste -sd+ | bc)

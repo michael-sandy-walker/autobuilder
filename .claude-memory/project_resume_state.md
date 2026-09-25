@@ -11,7 +11,17 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-25 LATE NIGHT (Opus 5.5, session 5, closing) — THE NEXT SESSIONS: WHERE TO START AND WHAT TO PROMPT — START HERE
+## 2026-09-26 NIGHT (Opus 5.5, session 6, autonomous) — THE FIRST LOOP RUN WHOSE GOAL CAME FROM A REAL TICKET: TRUE COMPLETION; T3-CB's RULE PORTED AND WIRED — START HERE
+
+- **Head `27459ebc` + docs; nothing pushed.** Session 1 of the plan below, done end to end.
+- **T5-BR CLOSED** (`355c6ecb`): `Endpoint` + `EndpointPaths` out of the Spring `EndpointSurfaceQuery`, `SpecEndpointBehaviourQuery` Spring-free (bean in `AppConfig`); extractable share 17% -> 18%. The rule's home is `core/build/SeedStatusSupport` (5 classes, no Spring) -- in `core.build`, not beside `SeedRequirements`, because the seed reader it needs is `SpecEndpointBehaviourQuery`.
+- **Target `criterion-status`** (extract/prepare/smoke scripts, spec of 274 cases derived from `scripts/pattern_criteria_corpus.py`: 102 = 58/27/17 today). **Run 1 `00-16-35`: operator-stop, not a completion** -- two framework defects, both fixed: the diff hid every file under a package named `build` (`fba6e11a`), and a NOT_EVALUATED candidate stayed staged and was scored as if merged (`172983b7`). **Run 2 `00-42-19`: GOAL_FULFILLED, one merge, ~2 min, 277/277, test gate green -- TRUE COMPLETION.**
+- **Ported** the loop's body verbatim (`27459ebc`), wired before the 2xx creation-premise gate in `groundQueryReference`. Replay (`PatternCriterionProbeReplayTest -Dt3cb.replay.tree=data/firestarter/meta/preserved-artifact [-Dt3cb.replay.fresh=true]`): identical before/after; fresh boot 57/57 confirmed, 0 contradicted. T3-CB stays open only on the handler-walk unification.
+- **Waiting on the user:** (a) T3-CB's open reading -- is a missing required query parameter "invalid input" in the seed's sense (the absent-input 400 probe is outside the rule)? (b) the carried T4-DY and obligations-marker decisions from session 5.
+- **Watches, not filed (single sightings):** one boot + identical derived setup bodies -> 409 on the second setup (replay 56/57 on one boot; field 1); an HTTP-shaped advisory ("no HTTP status mapping ... 500s") shown to the model for a LIBRARY target; the change-target spec now has two copies (target bootstrap = frozen input, `src/test` = Autobuilder's regression).
+- **Environment:** Docker Desktop was OOM-killed at 00:25 during run 1 (swap; one local-model call took 4 min) -- the previous Claude session died with it. Restart: `systemctl --user start docker-desktop`.
+
+## 2026-09-25 LATE NIGHT (Opus 5.5, session 5, closing) — THE NEXT SESSIONS: WHERE TO START AND WHAT TO PROMPT
 
 - **This session proved:** the loop adopts an Autobuilder module, characterises it, and CHANGES it against operator spec tests with true completions; two lineages of one module merge into a child that meets both seeds (T4-CS slices 1 and 2). Everything is committed and pushed by the user.
 - **The ticket scan (for T4-CF's "goal from a ticket"):** no open ticket's change lands in an extractable module; `scripts/module_closures.py summary` = 145 of 478 classes with a closure > 50, 17% of lines in small Spring-free closures. Recorded on `T4-CF`.

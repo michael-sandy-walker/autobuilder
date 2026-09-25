@@ -1182,4 +1182,46 @@ class EvaluationAgentTest {
                 .as("ACCEPTED must clear lastRollbackPoint so it cannot leak into the next REJECTED cycle")
                 .isNull();
     }
+
+    @Test
+    void execute_notEvaluatedAfterCompileOkProbe_rollsTheStagedCandidateBack() {
+        // Run 2026-09-26_00-16-35: the evaluator answered NOT_EVALUATED, the rollback fired only
+        // on REJECTED, and the unjudged candidate stayed in the live tree -- where the checkpoint
+        // and the yardstick scored it as though it had been merged.
+        com.walpro.autobuilder.core.merge.MergeRollbackPoint probePoint =
+                new com.walpro.autobuilder.core.merge.MergeRollbackPoint(
+                        "cycle-3-probe", Map.of("src/Main.java", "original"), Set.of());
+        when(compileProbeService.probe(any())).thenReturn(
+                new CompileProbeService.ProbeResult(
+                        new BuildOutcome(BuildResult.COMPILE_OK, "", 100L, "mvn compile", "cycle-3-probe"),
+                        probePoint));
+
+        EvaluationOutcome notEvaluated = new EvaluationOutcome(
+                0.0, MutationAcceptanceState.NOT_EVALUATED, GoalProgressState.NOT_EVALUATED, "no diff seen", null);
+        when(evaluationAdapter.evaluate(any())).thenReturn(new ParsedEvaluation(notEvaluated, List.of()));
+        when(problemDetector.detectAndUpdate(any(), eq(notEvaluated), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), eq(notEvaluated), anyList()))
+                .thenReturn(new NegotiationResult(notEvaluated, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(false);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.NOT_EVALUATED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
+        when(evaluationInterpreter.interpret(any(), anyDouble(), anyBoolean())).thenReturn(interp);
+
+        EvaluationAgent agent = newAgent(List.of());
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-3")
+                .projectDiff(new ProjectDiffResult(null, Map.of("src/Main.java", "class Main {}"), Set.of()))
+                .previousOutput(Map.of())
+                .evolutionOutcome(new EvolutionOutcome(
+                        List.of(new FileMutation("src/Main.java", "class Main {}")),
+                        List.of(), "s", "r"))
+                .currentSubGoalId("sg-1")
+                .build();
+
+        CycleContextData result = agent.execute(ctx);
+
+        verify(mergeRollbackService).rollback(eq(probePoint), any(), any(), any());
+        assertThat(result.lastRollbackPoint()).isNull();
+    }
 }

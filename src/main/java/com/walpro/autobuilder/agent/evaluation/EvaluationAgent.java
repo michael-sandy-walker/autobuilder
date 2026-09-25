@@ -572,12 +572,18 @@ public class EvaluationAgent implements ExecutionAgent {
         // rejected them, roll back to the pre-probe state so the working tree reflects the
         // last-accepted mutation, not the rejected one.
         //
+        // Any verdict but ACCEPTED, not only REJECTED: only an accepted candidate is ever merged,
+        // so a NOT_EVALUATED one staged here is never judged again and never leaves. Run
+        // 2026-09-26_00-16-35 ended with a candidate the evaluator had marked NOT_EVALUATED still
+        // in the live tree; the per-cycle checkpoint captured it, and early_stop and the final
+        // yardstick scored it 277/277 for a run that had merged nothing.
+        //
         // Guarded on probeResult.filesOnDisk(): the probe leaves files staged (and returns a
         // non-null rollbackPoint) on COMPILE_OK and on a STEERED test-only COMPILE_ERROR (T1-FI).
         // On a gate-path COMPILE_ERROR the probe has already rolled back internally and returns
         // null. Firing this branch without the filesOnDisk gate would either be a no-op or, if
         // context.lastRollbackPoint() leaked from a prior cycle, would undo files ACCEPTED earlier.
-        if (result.mutationState() == MutationAcceptanceState.REJECTED
+        if (result.mutationState() != MutationAcceptanceState.ACCEPTED
                 && probeResult != null
                 && probeResult.filesOnDisk()
                 && context.lastRollbackPoint() != null) {
@@ -596,8 +602,8 @@ public class EvaluationAgent implements ExecutionAgent {
             // The probe's own rollback already excludes staged paths (selectPreservableInjectorFiles).
             java.util.Set<String> injectorPaths = preservableInjectorPaths(context);
             mergeRollbackService.rollback(rollbackPoint, context.outputPath(), fileService, injectorPaths);
-            log.info("EvaluationAgent T1-EC: LLM rejected after compile-OK probe — rolling back {} staged files, preserving injector-created infrastructure",
-                    rollbackPoint.originalContents().size());
+            log.info("EvaluationAgent T1-EC: {} after compile-OK probe — rolling back {} staged files, preserving injector-created infrastructure",
+                    result.mutationState(), rollbackPoint.originalContents().size());
             context = context.withLastRollbackPoint(null);
         }
 

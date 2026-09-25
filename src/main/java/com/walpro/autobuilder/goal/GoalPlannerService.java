@@ -4463,8 +4463,28 @@ public class GoalPlannerService {
                     injectExecutionRefutation(root, refutedByExecution.get(), uncoveredSeed);
                     return;
                 }
-                var completionVerification = criteriaVerificationService.verifyCompletion(
-                        root.getDescription(), toVerify, output);
+                // T4-CQ: an obligation naming an entry point is answered by the test sources before a
+                // model is asked: run 2026-09-25_04-35-01 closed GOAL_FULFILLED at 6/11 after the
+                // verifier marked all 26 requirements met, "a test must assert what the entry point
+                // returns" among them, over a test that asserted only that a string came back. Only
+                // ever a refusal; a met check still goes to the verifier. The SEED's obligations only:
+                // a planner criterion naming a controller method is met on a web target by a request,
+                // which never calls the method, and judging it here would wall a correct run.
+                java.util.Map<String, com.walpro.autobuilder.core.build.EntryPointAssertions.Finding> unasserted =
+                        com.walpro.autobuilder.core.build.EntryPointAssertions.unmet(
+                                SeedRequirements.verifiableObligationsOrSplit(root.getDescription(), writtenObligations()),
+                                output);
+                var completionVerification = unasserted.isEmpty()
+                        ? criteriaVerificationService.verifyCompletion(root.getDescription(), toVerify, output)
+                        : com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.blocked(
+                                unasserted.size() + " obligation(s) name an entry point no test calls and value-asserts: "
+                                        + unasserted.values().stream().map(
+                                                com.walpro.autobuilder.core.build.EntryPointAssertions.Finding::describe)
+                                                .distinct().limit(5).reduce((a, b) -> a + "; " + b).orElse(""),
+                                new ArrayList<>(unasserted.keySet()));
+                if (!unasserted.isEmpty()) {
+                    log.warn("T4-CQ: root closure refused by the test sources -- {}", completionVerification.unconfirmed().orElse(""));
+                }
                 if (!completionVerification.answered()) {
                     log.warn("T4-BP-3: completion verification returned no answer (LLM failure) — deferring completion; an unanswered check must not complete the root");
                     return;

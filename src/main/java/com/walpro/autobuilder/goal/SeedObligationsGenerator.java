@@ -24,7 +24,9 @@ import java.util.Locale;
  * finished run, and "the whole test suite passes" was put to a model reading source while the test
  * gate had just run it green. An operator adopting a third project would have to know all of that.
  * The local model splits the seed and marks each line in one call, prompt measured on all five
- * targets' seeds on 2026-09-24 before this was wired.
+ * targets' seeds on 2026-09-24 before this was wired; on 2026-09-25 a line about what the delivered
+ * tests must assert moved from rule to check, after structdiff run 4 finished with three entry points
+ * asserted only as non-null and closure never asked about it.
  *
  * <p><b>Still the operator's to correct.</b> The written file is a proposal: it reads back
  * {@code PRISTINE}, and a hand edit reads back {@code EDITED} and is never overwritten. This only
@@ -56,7 +58,7 @@ public class SeedObligationsGenerator {
             "rule:" -- it says HOW the work is to be done, or how to behave while doing it, and no inspection of the finished result could confirm it. Examples: "Work inside the project as it is.", "If a test fails, the test is what is wrong.", "Do not assume a result; observe it."
             "gate: tests" -- it says that the project's own test suite passes. Only a line whose whole claim is that the tests pass gets this prefix, followed by that claim in the specification's words. A line saying what the tests must cover is check:, not gate: tests.
 
-            A line forbidding changes to something that already exists is rule:, because the finished result alone does not show what was changed.
+            A line saying what the delivered code or tests must contain, assert or do is check:, even when it is phrased as an instruction ("A test must assert the value it returns", "Add tests under src/test/java"): reading the result answers it. A line forbidding changes to something that already exists is rule:, because the finished result alone does not show what was changed.
 
             When unsure between check: and rule:, write check:.
 

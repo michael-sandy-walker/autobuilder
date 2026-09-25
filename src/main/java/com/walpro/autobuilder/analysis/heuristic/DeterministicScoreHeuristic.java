@@ -98,6 +98,12 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
         if (scoring.findings() == null || scoring.findings().isEmpty()) {
             confidence = Math.min(rawConfidence, SOFT_BAND_REJECTED_CONFIDENCE_CAP);
             basis = " (diff shape only, no finding -- capped)";
+        } else {
+            // Named, so a veto can be traced to what it rested on (run 2026-09-25_02-01-18 vetoed
+            // at 1.00 where an offline replay of the same files found nothing).
+            basis = " (findings: " + scoring.findings().stream()
+                    .map(f -> f.severity() + " " + f.type() + (f.path() != null ? " " + f.path() : ""))
+                    .distinct().limit(5).collect(java.util.stream.Collectors.joining("; ")) + ")";
         }
         return rejected(s, confidence, original, "Deterministic score from ScoringService.globalScore=%.3f confidence=%.2f%s".formatted(s, confidence, basis));
     }

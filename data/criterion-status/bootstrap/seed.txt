@@ -1,0 +1,36 @@
+  An existing project, adopted, and now asked to grow. It was written by someone else and it
+  already builds. In its own words, from its README:
+
+    "criterion-status -- How an acceptance criterion about an HTTP endpoint is read, and what a
+    specification states about each endpoint it names. The criterion parser reads which endpoint
+    and which response status a criterion asserts; the specification reader reads, for every
+    endpoint a specification names, the response statuses it states for it. Both are pure: text
+    in, values out."
+
+  It is a library. Its existing behaviour is characterised by the tests already in src/test/java.
+  One new capability is wanted: SeedStatusSupport.of(criterion, specification), which says whether
+  the response status a criterion asserts is one the specification supports. The class exists with
+  its signature and its rule written in its class comment; its method is not implemented yet.
+  The one class to change is SeedStatusSupport. The rule:
+
+    NO_OPINION   when the criterion or the specification is null or blank, or
+                 BehaviouralCriterionParser.parse reads no single endpoint with a single status
+                 from the criterion
+    UNSUPPORTED  when the specification does not name the criterion's endpoint at all
+                 (EndpointPaths.declaredIn lists the endpoints it names)
+    a status outside 200-299 is SUPPORTED when it is among the statuses the specification states
+                 for that endpoint (SpecEndpointBehaviourQuery.statedBehaviours), else UNSUPPORTED
+    a status in 200-299 is SUPPORTED when the specification states no status in 200-299 for that
+                 endpoint, or states this one; else UNSUPPORTED
+
+  The specification is SeedStatusSupportSpecTest in src/test/java: its tests say exactly what the
+  method must return, using real criteria and a real specification from the test resources, and
+  they fail until the code provides it.
+
+  OBJECTIVE: every test in SeedStatusSupportSpecTest passes, and the whole suite passes.
+
+  Change only SeedStatusSupport under src/main/java, and read the specification's statuses and the
+  criterion through the classes that already read them. DO NOT modify anything under src/test: the
+  specification and the existing tests are the operator's, and if one of them fails, the code is
+  what is wrong. Keep every other class exactly as it is, and keep the project's packages, classes
+  and naming.

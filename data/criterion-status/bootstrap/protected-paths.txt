@@ -1,0 +1,7 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# The tests are the operator's: the specification and the existing behaviour. The loop changes the code.
+src/test/**
+# The module's existing classes stay exactly as they were (seed: "keep every other class exactly as it
+# is"); the one class the seed asks to change is SeedStatusSupport.
+src/main/java/com/walpro/autobuilder/analysis/**
+src/main/java/com/walpro/autobuilder/core/build/BehaviouralCriterionParser.java

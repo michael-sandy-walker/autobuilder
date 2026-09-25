@@ -1073,10 +1073,10 @@ const TTS = (function () {
   // behind the front voice at depth; while one ambient utterance plays, further ambient
   // utterances are dropped (one background voice, not a chorus).
   const layers = {
-    front:   { source: null, playing: false },
-    ambient: { source: null, playing: false },
+    front:   { source: null, playing: false, message: null, next: null },
+    ambient: { source: null, playing: false, message: null, next: null },
   };
-  const pending = new Map(); // text -> AbortController, so cancel() aborts inflight fetches
+  const pending = new Map(); // AbortController per sentence in flight, so cancel() aborts them
 
   function ensureCtx() {
     if (!ctx) ctx = new AudioCtx();
@@ -1151,6 +1151,8 @@ const TTS = (function () {
       layer.source = null;
     }
     layer.playing = false;
+    layer.message = null;
+    layer.next = null;
   }
   function cancel() {
     pending.forEach(ac => { try { ac.abort(); } catch (e) {} });
@@ -1167,6 +1169,31 @@ const TTS = (function () {
     return await ctx.decodeAudioData(bytes);
   }
 
+  // A message is spoken WHOLE, sentence by sentence. Piper synthesises a request before any of it
+  // plays, so one long request made the listener wait (a 1859-character subgoal took 39 s under a
+  // live run, past the server's timeout) -- which is why narration used to be cut to a character
+  // count, mid-word. Per sentence, synthesis is shorter than playback (a 278-character sentence:
+  // 5-9 s to synthesise beside a live run, 19 s to hear), so fetching the next sentence while the
+  // current one plays leaves no gap after the first, and nothing is left out.
+  const CHUNK = 280;
+  function chunksOf(text) {
+    // A sentence ends at . ! or ? followed by a space -- never at the dot inside Foo.java or 0.9.
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    const out = [];
+    for (let sentence of sentences.map(x => x.trim()).filter(Boolean)) {
+      while (sentence.length > CHUNK) {             // a very long sentence: split, never cut
+        const head = sentence.slice(0, CHUNK);
+        let at = Math.max(head.lastIndexOf(', '), head.lastIndexOf('; '), head.lastIndexOf(' — '));
+        if (at < CHUNK / 2) at = head.lastIndexOf(' ');
+        if (at <= 0) at = CHUNK;
+        out.push(sentence.slice(0, at + 1).trim());
+        sentence = sentence.slice(at + 1).trim();
+      }
+      if (sentence) out.push(sentence);
+    }
+    return out;
+  }
+
   function speak(text, opts) {
     if (!enabled || !supported || !text) return;
     const clean = String(text).replace(/\s+/g, ' ').trim();
@@ -1176,12 +1203,12 @@ const TTS = (function () {
     if (clean === lastSpoken && (now - lastSpokenAt) < 2000) return;
     lastSpoken = clean; lastSpokenAt = now;
 
-    // T5-BF: priority maps onto a voice layer — high speaks up front (latest wins on that
-    // layer only; the ambient voice keeps talking underneath), low speaks on the ambient
-    // layer at depth (dropped only when the AMBIENT voice itself is mid-utterance).
+    // T5-BF: priority maps onto a voice layer — high speaks up front, low on the ambient layer at
+    // depth (dropped only when the AMBIENT voice itself is mid-message). On the front layer a click
+    // on a node interrupts, because the operator just asked for it; a narrated message (o.queue)
+    // waits for the one being spoken to finish, and the newest waiting message wins.
     const o = opts || {};
     const layer = o.priority === 'high' ? layers.front : layers.ambient;
-    if (layer === layers.front) stopLayer(layers.front);
     if (layer === layers.ambient && layer.playing) return;
 
     ensureCtx();
@@ -1191,31 +1218,57 @@ const TTS = (function () {
     // context. Never start while suspended; ask for the gesture that unlocks it instead.
     if (ctx.state !== 'running') { needGesture(); return; }
 
-    const ac = new AbortController();
-    pending.set(clean, ac);
+    const message = { chunks: chunksOf(clean), o, index: 0, ahead: null };
+    if (layer === layers.front && o.queue && layer.playing) { layer.next = message; return; }
+    stopLayer(layer);
+    start(layer, message);
+  }
 
-    fetchAndDecode(clean, ac.signal).then(buffer => {
-      if (!enabled) return;                   // toggled off while fetching
-      if (ctx.state !== 'running') return;    // suspended while fetching: never leave a layer jammed
-      if (layer === layers.front) {
-        stopLayer(layers.front);              // a newer front utterance may have started meanwhile
-      } else if (layer.playing) {
-        return;                               // ambient: drop if the background voice is mid-utterance
-      }
+  function fetchChunk(message, i) {
+    if (i >= message.chunks.length) return null;
+    const ac = new AbortController();
+    pending.set(ac, ac);
+    const p = fetchAndDecode(message.chunks[i], ac.signal).finally(() => pending.delete(ac));
+    p.catch(() => {});
+    return p;
+  }
+
+  function start(layer, message) {
+    layer.message = message;
+    layer.playing = true;
+    message.ahead = fetchChunk(message, 0);
+    playChunk(layer, message);
+  }
+
+  function playChunk(layer, message) {
+    const fetching = message.ahead;
+    if (!fetching) return finish(layer, message);
+    fetching.then(buffer => {
+      if (layer.message !== message || !enabled) return;           // stopped or replaced meanwhile
+      if (ctx.state !== 'running') { stopLayer(layer); return; }   // never leave a layer jammed
+      message.index += 1;
+      message.ahead = fetchChunk(message, message.index);          // the next sentence, while this one plays
       const src = ctx.createBufferSource();
       src.buffer = buffer;
-      src.playbackRate.value = o.rate != null ? o.rate : 1.0;
+      src.playbackRate.value = message.o.rate != null ? message.o.rate : 1.0;
       src.connect(layer === layers.front ? effects.input : effects.ambientInput);
-      src.onended = () => { if (layer.source === src) { layer.source = null; layer.playing = false; } };
+      src.onended = () => { if (layer.source === src) { layer.source = null; playChunk(layer, message); } };
       layer.source = src;
-      layer.playing = true;
       src.start(0);
     }).catch(err => {
-      if (err && err.name === 'AbortError') return;
-      console.warn('TTS fetch/decode failed', err);
-    }).finally(() => {
-      pending.delete(clean);
+      if (layer.message !== message) return;
+      if (!(err && err.name === 'AbortError')) console.warn('TTS fetch/decode failed', err);
+      message.index += 1;                                          // skip the one sentence, keep the rest
+      message.ahead = fetchChunk(message, message.index);
+      playChunk(layer, message);
     });
+  }
+
+  function finish(layer, message) {
+    if (layer.message !== message) return;
+    layer.message = null; layer.playing = false;
+    const next = layer.next; layer.next = null;
+    if (next && enabled && ctx.state === 'running') start(layer, next);
   }
   function announceCycle(payload) {
     if (!payload || !payload.cycleResultState) return;
@@ -1231,15 +1284,7 @@ const TTS = (function () {
     if (!detail) return;
     const status = (detail.status || '').toLowerCase();
     const statusWord = status ? status.replace(/_/g, ' ') + '. ' : '';
-    speak(statusWord + cropForSpeech(detail.description || detail.id), { priority: 'high' });
-  }
-  function cropForSpeech(s) {
-    const clean = String(s).replace(/\s+/g, ' ').trim();
-    // Cap at ~240 chars and cut on a sentence/clause boundary if possible.
-    if (clean.length <= 240) return clean;
-    const cut = clean.substring(0, 240);
-    const lastBreak = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf(', '), cut.lastIndexOf('; '));
-    return (lastBreak > 120 ? cut.substring(0, lastBreak + 1) : cut) + '…';
+    speak(statusWord + (detail.description || detail.id), { priority: 'high' });
   }
   // The autoplay rule is lifted only by a user gesture on the page, so every gesture tries to
   // resume, and a visible tab does too. One hint per suspension, not per utterance.
@@ -3028,10 +3073,10 @@ function crop(s, n) {
         return 'Merged ' + n + (n === 1 ? ' file' : ' files') +
           (chatty && n ? ': ' + fileList(p.files, 3) : '') + '.';
       }
-      case 'mutation_rejected': return 'Rejected: ' + crop(p.reason, 110);
+      case 'mutation_rejected': return 'Rejected: ' + (p.reason || '');
       case 'grind_detected':
         return 'The loop is repeating itself. The same failure has now happened ' + (p.occurrences || 'several')
-          + ' times: ' + crop(String(p.signature || '').replace(/^the build fails: /, ''), 140) + '.';
+          + ' times: ' + String(p.signature || '').replace(/^the build fails: /, '').replace(/\.$/, '') + '.';
       case 'llm_response_discarded':
         return (p.consecutive > 2 ? p.consecutive + ' answers in a row were' : 'An answer was')
           + ' discarded because it did not match the expected format.';
@@ -3051,9 +3096,9 @@ function crop(s, n) {
       case 'system_paused':
         // the fulfilled narration already announced this terminal — don't say it twice
         return /goal.?fulfilled/i.test(p.reason || '') ? null
-          : 'System paused' + (p.reason ? ': ' + crop(p.reason, 100) : '') + '.';
+          : 'System paused' + (p.reason ? ': ' + String(p.reason).replace(/\.$/, '') : '') + '.';
       case 'recurring_defect_dominant':
-        return 'Recurring defect: ' + crop(p.errorKind || p.missingToken || '', 60) + '.';
+        return 'Recurring defect: ' + (p.errorKind || p.missingToken || '') + '.';
       case 'cycle_end':
         return p.resultState === 'GOAL_FULFILLED' ? 'Goal fulfilled.' : null;
       case 'mutation_injected':
@@ -3071,7 +3116,7 @@ function crop(s, n) {
         // cycle pulse rides along; without a switch, chatty keeps just the pulse.
         if (subgoalSwitched && lastSubGoal) {
           return (chatty ? 'Cycle ' + (cycleOrdinal || '') + '. ' : '') +
-            /*'Now working on: ' +*/ crop(lastSubGoal, 160);
+            /*'Now working on: ' +*/ lastSubGoal;
         }
         return chatty ? ('Cycle ' + (cycleOrdinal || '') + '.') : null;
       }
@@ -3108,11 +3153,11 @@ function crop(s, n) {
     const p = env.payload || {};
     let text = spokeModeSwitch
       ? ('Mode ' + (p.mode ? p.mode.toLowerCase().replace(/_/g, ' ') : '') + '.' +
-         (verbosity === 'chatty' && p.rationale ? ' ' + crop(p.rationale, 80) : ''))
+         (verbosity === 'chatty' && p.rationale ? ' ' + p.rationale : ''))
       : narrationText(env);
     if (!text) return;
     if (env.event === 'cycle_end' && p.resultState === 'GOAL_FULFILLED') {
-      TTS.speak(text, { priority: 'high' }); // the run's terminal moment cuts through everything
+      TTS.speak(text, { priority: 'high', queue: true }); // the run's terminal moment, after the sentence in progress
       return;
     }
     // The plot line speaks on the FRONT voice: at 'low' it rode the single-utterance ambient
@@ -3120,7 +3165,7 @@ function crop(s, n) {
     // "the ghost shows but the narrator never says it"). Switches are rare, so the front
     // voice does not flood — and the ambient voice keeps talking underneath.
     if (env.event === 'cycle_start' && subgoalSwitched) {
-      TTS.speak(text, { priority: 'high' });
+      TTS.speak(text, { priority: 'high', queue: true });
       return;
     }
     // burst-rate: >=3 narrations within 2s → speak faster to keep up.

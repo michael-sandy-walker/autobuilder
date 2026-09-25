@@ -14,7 +14,6 @@ import io.swagger.v3.oas.annotations.Operation;
 @RequestMapping("/tts")
 public class TtsController {
 
-    private static final int MAX_CHARS = 600;
     private final TtsService tts;
 
     public TtsController(TtsService tts) {
@@ -27,9 +26,10 @@ public class TtsController {
         if (text == null || text.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        String trimmed = text.length() > MAX_CHARS ? text.substring(0, MAX_CHARS) : text;
+        // Never cut: a cut here ended a spoken message mid-word. The page sends one sentence per
+        // request, so a message of any length is heard whole.
         try {
-            byte[] wav = tts.synthesizeWav(trimmed);
+            byte[] wav = tts.synthesizeWav(text);
             return ResponseEntity.ok()
                     .contentType(MediaType.valueOf("audio/wav"))
                     .header("Cache-Control", "no-store")

@@ -86,11 +86,31 @@ public class SeedObligationsGenerator {
                 log.info("T4-CQ: {} is {} -- kept, not regenerated", SeedObligationsFile.PATH, state);
                 return;
             }
-            List<String> lines = parse(ask(seedText));
+            List<String> lines = parse(ask(seedText, List.of()));
+            // The objective is the one sentence the operator wrote as "finished"; a split without it
+            // leaves closure never asking it. Asked once more, naming what was left out; still
+            // missing, the seed's own words are added as a check -- the direction that can only add
+            // a question at closure, never remove one.
+            List<String> missing = ObjectiveCoverage.missing(seedText, lines);
+            if (!missing.isEmpty()) {
+                log.warn("T4-CQ: the generated split leaves out {} OBJECTIVE clause(s) {} -- asking again",
+                        missing.size(), missing);
+                List<String> retried = parse(ask(seedText, missing));
+                List<String> stillMissing = ObjectiveCoverage.missing(seedText, retried);
+                if (stillMissing.size() < missing.size()) {
+                    lines = retried;
+                    missing = stillMissing;
+                }
+            }
             if (lines.stream().noneMatch(SeedObligationsGenerator::isCheckable)) {
                 log.warn("T4-CQ: the generated split has no checkable line ({} lines) -- not written; "
                         + "the derived split stands", lines.size());
                 return;
+            }
+            if (!missing.isEmpty()) {
+                log.warn("T4-CQ: the split still leaves out {} -- added in the seed's own words", missing);
+                lines = new ArrayList<>(lines);
+                lines.addAll(missing);
             }
             fileService.ensureFolderExists("bootstrap");
             fileService.writeFile(SeedObligationsFile.PATH, SeedObligationsFile.render(seedText, lines));
@@ -105,10 +125,15 @@ public class SeedObligationsGenerator {
         }
     }
 
-    private String ask(String seedText) {
+    private String ask(String seedText, List<String> leftOut) {
+        String user = "SPECIFICATION:\n" + seedText;
+        if (!leftOut.isEmpty()) {
+            user += "\n\nAn earlier split left out part of the specification's OBJECTIVE. The lines must "
+                    + "also carry: " + String.join("; ", leftOut);
+        }
         List<Message> messages = List.of(
                 new Message("system", SYSTEM_PROMPT),
-                new Message("user", "SPECIFICATION:\n" + seedText));
+                new Message("user", user));
         ResponseEntity<ChatResponse> resp;
         try (var purpose = LlmCallContext.scopeIfUnscoped("seed-obligations")) {
             resp = llmClient.ask(messages);

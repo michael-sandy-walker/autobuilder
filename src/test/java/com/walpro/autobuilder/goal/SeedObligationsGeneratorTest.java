@@ -103,4 +103,47 @@ class SeedObligationsGeneratorTest {
         when(llm.ask(any())).thenReturn(ResponseEntity.ok(body));
         return llm;
     }
+
+    /** A split without the objective is asked for once more, and the better answer is written. */
+    @Test
+    void aSplitWithoutTheObjectiveIsAskedAgain() throws Exception {
+        FileService files = mock(FileService.class);
+        when(files.exists(SeedObligationsFile.PATH)).thenReturn(false);
+        LLMClient llm = answeringInTurn(
+                "check: The widget page loads.",
+                "check: Every widget route is covered by a test.\ngate: tests The suite passes.");
+
+        new SeedObligationsGenerator(llm, files).ensureFor(SEED);
+
+        verify(llm, org.mockito.Mockito.times(2)).ask(any());
+        var written = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(files).writeFile(eq(SeedObligationsFile.PATH), written.capture());
+        assertThat(written.getValue()).contains("Every widget route is covered by a test.")
+                .doesNotContain("The widget page loads.");
+    }
+
+    /** Still missing after the retry: the seed's own words are added as an ordinary check. */
+    @Test
+    void anObjectiveTheModelKeepsDroppingIsAddedInTheSeedsOwnWords() throws Exception {
+        FileService files = mock(FileService.class);
+        when(files.exists(SeedObligationsFile.PATH)).thenReturn(false);
+        LLMClient llm = answeringInTurn("check: The widget page loads.", "check: The widget page loads.");
+
+        new SeedObligationsGenerator(llm, files).ensureFor(SEED);
+
+        var written = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(files).writeFile(eq(SeedObligationsFile.PATH), written.capture());
+        assertThat(SeedObligationsFile.obligationsFrom(SeedObligationsFile.read(written.getValue(), SEED)).orElseThrow())
+                .containsExactly("The widget page loads.", "every widget route is covered by a test", "the suite passes");
+    }
+
+    private static LLMClient answeringInTurn(String first, String second) {
+        ChatResponse a = mock(ChatResponse.class);
+        when(a.getFirstContent()).thenReturn(first);
+        ChatResponse b = mock(ChatResponse.class);
+        when(b.getFirstContent()).thenReturn(second);
+        LLMClient llm = mock(LLMClient.class);
+        when(llm.ask(any())).thenReturn(ResponseEntity.ok(a), ResponseEntity.ok(b));
+        return llm;
+    }
 }

@@ -453,6 +453,24 @@ class CriterionProbeSynthesizerTest {
         assertThat(synthesizer.synthesize(SPEC_WITH_MEMBERS, a, root)).isPresent();
     }
 
+    /**
+     * T4-DX: two grounded criteria create their member with DIFFERENT values, so against one running
+     * instance the second setup does not collide with the first on a uniqueness rule.
+     */
+    @Test
+    void twoGroundedCriteriaDoNotCreateTheSameResource(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        Path model = root.resolve("src/main/java/com/example/Member.java");
+        Files.createDirectories(model.getParent());
+        Files.writeString(model, "public class Member { private String name; private String email; }");
+
+        var first = synthesizer.synthesize(SPEC_WITH_MEMBERS, BehaviouralCriterionParser.parse(
+                "GET /loans?memberId={id} returns HTTP 200 with a JSON array of loans").orElseThrow(), root);
+        var second = synthesizer.synthesize(SPEC_WITH_MEMBERS, BehaviouralCriterionParser.parse(
+                "GET /loans?memberId={id} returns HTTP 200 listing active and returned loans").orElseThrow(), root);
+
+        assertThat(first.orElseThrow().get(0).body()).isNotEqualTo(second.orElseThrow().get(0).body());
+    }
+
     /** A parameter whose stem matches no collection the specification declares is not guessed at. */
     @Test
     void aReferenceNamingNoDeclaredCollectionIsNotGrounded(@org.junit.jupiter.api.io.TempDir Path root) {

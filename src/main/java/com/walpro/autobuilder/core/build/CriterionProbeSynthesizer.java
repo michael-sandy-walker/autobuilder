@@ -232,7 +232,10 @@ public class CriterionProbeSynthesizer {
         Optional<String> collection = collectionDeclaredFor(parameter, specification);
         if (collection.isEmpty()) return Optional.empty();
 
-        Optional<String> setupBody = DeterministicProbeSynthesizer.derivedBody(collection.get(), artifactRoot);
+        // T4-DX: the criterion's own token, so two grounded criteria against one running instance do
+        // not create the same resource twice and collide on the specification's uniqueness rule.
+        Optional<String> setupBody = DeterministicProbeSynthesizer.derivedBody(
+                collection.get(), artifactRoot, assertion.criterionText());
         if (setupBody.isEmpty()) return Optional.empty();
 
         ProbeRequest asserted = sequence.get(sequence.size() - 1);

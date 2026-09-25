@@ -388,8 +388,26 @@ public final class DeterministicProbeSynthesizer {
         // same constraints and the same per-criterion token acceptableBody gets. The field found
         // this one: run 2026-09-22_11-07-40 still sent {"title":"value","isbn":"value"} from this
         // path and was refused 400, while the shapes going through acceptableBody were fine.
+        return derivedBodyWithToken(path, artifactRoot, CRITERION_TOKEN.get());
+    }
+
+    /**
+     * {@link #derivedBody} for a caller OUTSIDE {@link #synthesize}, where the per-criterion token
+     * has already been cleared: it names its criterion explicitly.
+     *
+     * <p>T4-DX, found by the T3-CB replay (2026-09-26): T2-FL's query-reference grounding builds its
+     * setup after {@code synthesize} returns, so it reached {@link #derivedBody} with no token and
+     * sent the bare placeholder {@code {"name":"value","email":"value"}} for every criterion. Against
+     * one booted instance, 56 of 57 such setups were refused 409 by the specification's own
+     * uniqueness rule.
+     */
+    static Optional<String> derivedBody(String path, Path artifactRoot, String criterionText) {
+        return derivedBodyWithToken(path, artifactRoot, tokenFor(criterionText));
+    }
+
+    private static Optional<String> derivedBodyWithToken(String path, Path artifactRoot, String token) {
         List<String> candidates =
-                RequestBodySynthesizer.candidateBodies(path, artifactRoot, CRITERION_TOKEN.get());
+                RequestBodySynthesizer.candidateBodies(path, artifactRoot, token);
         return candidates.size() > 1 ? Optional.of(withoutAssignedIdentifier(candidates.get(0))) : Optional.empty();
     }
 

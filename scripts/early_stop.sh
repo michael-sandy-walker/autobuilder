@@ -7,7 +7,7 @@
 # COPY of the newest end-of-cycle checkpoint (data/<target>/checkpoint-archive) is scored with the target's declared yardstick (bootstrap/yardstick).
 # Once the run is at least <min_run> minutes old, if the best score has not improved for <patience>
 # minutes, the loop is paused (POST /autobuilder/pause) and preflight records terminal=operator-stop,
-# then scores and archives the run as usual.
+# then scores and archives the run as usual. A closure refusal restarts the patience clock once.
 #
 # A copy, because the yardstick runs the project's build: in the live tree its test reports would
 # be read by the loop's own test gate as fresh evidence. The script never writes to the live tree.
@@ -37,6 +37,14 @@ while alive; do
     score=$(echo "$line" | sed -E 's/^SMOKE: ([0-9]+)\/.*/\1/'); score=${score:-0}
     age=$(( (SECONDS - start) / 60 ))
     if [ "$score" -gt "$best" ]; then best=$score; best_at=$SECONDS; fi
+    # A closure refusal hands the loop new, precise work that no yardstick score can show yet, so it
+    # restarts the patience clock -- once per refusal, so a run cannot live on refusals alone. Run
+    # 2026-09-25_05-14-55 was stopped 10 minutes after one.
+    refusals=$(grep -cE 'root closure (refused|blocked)' "$ROOT/data/$TGT/logs/autobuilder.log" 2>/dev/null)
+    if [ "${refusals:-0}" -gt "${seen_refusals:-0}" ]; then
+        [ -n "${seen_refusals:-}" ] && { best_at=$SECONDS; echo "early_stop: closure refused since the last check -- patience restarted"; }
+        seen_refusals=$refusals
+    fi
     stale=$(( (SECONDS - best_at) / 60 ))
     echo "early_stop: ${age}m ${line:-SMOKE: ?} best=$best unchanged ${stale}m"
     if [ $((SECONDS - start)) -ge "$MINRUN" ] && [ $((SECONDS - best_at)) -ge "$PATIENCE" ]; then

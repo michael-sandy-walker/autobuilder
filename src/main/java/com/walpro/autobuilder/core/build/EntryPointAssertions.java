@@ -123,6 +123,7 @@ public final class EntryPointAssertions {
         boolean anyEcosystem = false;
         JavaParser parser = new JavaParser(new ParserConfiguration()
                 .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17));
+        Map<String, Map<String, String>> returns = declaredReturnTypes(files, parser);
         for (Map.Entry<String, String> e : files.entrySet()) {
             String path = e.getKey().replace('\\', '/');
             if (!path.endsWith(".java") || !(path.startsWith("src/test/") || path.contains("/src/test/"))) continue;
@@ -140,14 +141,53 @@ public final class EntryPointAssertions {
                 if (!isTest) continue;
                 String cls = md.findAncestor(com.github.javaparser.ast.body.ClassOrInterfaceDeclaration.class)
                         .map(c -> c.getNameAsString()).orElse("?");
-                out.add(new MethodView(cls + "." + md.getNameAsString(), md, byName));
+                out.add(new MethodView(cls + "." + md.getNameAsString(), md, byName, returns));
             }
         }
         return anyEcosystem ? out : null;
     }
 
+    /**
+     * What each method of each type the project declares returns, by simple name: {@code type -> method ->
+     * return type}, a record's accessors included. It is how a call is attributed to a type when its
+     * receiver is itself a call ({@code Windows.empty().grant(w)}) or a {@code var} local -- the natural
+     * style for immutable values, which the syntactic cases alone credited to no type. Shown by
+     * participation-b run 2026-09-25_17-43-13: every grant was tested as {@code Windows.empty().grant(w)},
+     * the yardstick scored 12/12, and closure refused "grant is called by no test" for twelve minutes
+     * until the run halted. A name whose overloads return different types maps to none.
+     */
+    static Map<String, Map<String, String>> declaredReturnTypes(Map<String, String> files, JavaParser parser) {
+        Map<String, Map<String, String>> out = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : files.entrySet()) {
+            if (!e.getKey().endsWith(".java")) continue;
+            Optional<CompilationUnit> cu = parser.parse(e.getValue()).getResult();
+            if (cu.isEmpty()) continue;
+            for (com.github.javaparser.ast.body.TypeDeclaration<?> td : cu.get().findAll(com.github.javaparser.ast.body.TypeDeclaration.class)) {
+                Map<String, String> methods = out.computeIfAbsent(td.getNameAsString(), k -> new LinkedHashMap<>());
+                if (td instanceof com.github.javaparser.ast.body.RecordDeclaration rd) {
+                    rd.getParameters().forEach(p -> methods.merge(p.getNameAsString(), erased(p.getType().asString()), EntryPointAssertions::same));
+                }
+                for (MethodDeclaration md : td.getMethods()) {
+                    methods.merge(md.getNameAsString(), erased(md.getType().asString()), EntryPointAssertions::same);
+                }
+            }
+        }
+        return out;
+    }
+
+    private static String same(String a, String b) {
+        return a.equals(b) ? a : "";
+    }
+
+    private static String erased(String type) {
+        String t = type.replaceAll("<.*>", "").trim();
+        int dot = t.lastIndexOf('.');
+        return dot < 0 ? t : t.substring(dot + 1);
+    }
+
     /** One test method, with the helpers of its own class that it calls. */
-    record MethodView(String name, MethodDeclaration method, Map<String, MethodDeclaration> helpers) {
+    record MethodView(String name, MethodDeclaration method, Map<String, MethodDeclaration> helpers,
+                      Map<String, Map<String, String>> returns) {
 
         boolean calls(String type, String name) {
             if (callsIn(method, type, name)) return true;
@@ -164,7 +204,7 @@ public final class EntryPointAssertions {
          * parameter declared with it -- an instance entry point is still that entry point. Missing one
          * of these would turn a covered entry point into a refusal, which walls the run.
          */
-        private static boolean callsIn(MethodDeclaration md, String type, String name) {
+        private boolean callsIn(MethodDeclaration md, String type, String name) {
             Set<String> ofType = namesDeclaredAs(md, type);
             for (MethodCallExpr c : md.findAll(MethodCallExpr.class)) {
                 if (!c.getNameAsString().equals(name) || c.getScope().isEmpty()) continue;
@@ -175,8 +215,51 @@ public final class EntryPointAssertions {
                         && scopeExpr.asObjectCreationExpr().getType().getNameAsString().equals(type)) return true;
                 if (scopeExpr.isNameExpr() && ofType.contains(scope)) return true;
                 if (scopeExpr.isFieldAccessExpr() && ofType.contains(scopeExpr.asFieldAccessExpr().getNameAsString())) return true;
+                if (type.equals(typeOf(scopeExpr, md, 0))) return true;
             }
             return false;
+        }
+
+        /**
+         * The simple name of the type an expression evaluates to, as far as the project's own
+         * declarations say; null when they do not. A call's type is what its receiver's type declares
+         * that method to return; a {@code var} local's is its initializer's.
+         */
+        private String typeOf(com.github.javaparser.ast.expr.Expression e, MethodDeclaration md, int depth) {
+            if (e == null || depth > 12) return null;
+            if (e.isEnclosedExpr()) return typeOf(e.asEnclosedExpr().getInner(), md, depth + 1);
+            if (e.isCastExpr()) return erased(e.asCastExpr().getType().asString());
+            if (e.isObjectCreationExpr()) return e.asObjectCreationExpr().getType().getNameAsString();
+            if (e.isNameExpr()) {
+                String n = e.asNameExpr().getNameAsString();
+                var root = md.findAncestor(com.github.javaparser.ast.body.ClassOrInterfaceDeclaration.class)
+                        .map(c -> (com.github.javaparser.ast.Node) c).orElse(md);
+                for (var v : root.findAll(com.github.javaparser.ast.body.VariableDeclarator.class)) {
+                    if (!v.getNameAsString().equals(n)) continue;
+                    if (!v.getType().isVarType()) return erased(v.getType().asString());
+                    return v.getInitializer().map(i -> typeOf(i, md, depth + 1)).orElse(null);
+                }
+                for (var p : root.findAll(com.github.javaparser.ast.body.Parameter.class)) {
+                    if (p.getNameAsString().equals(n)) return erased(p.getType().asString());
+                }
+                return null;
+            }
+            if (e.isMethodCallExpr()) {
+                var call = e.asMethodCallExpr();
+                String owner;
+                if (call.getScope().isEmpty()) {
+                    owner = md.findAncestor(com.github.javaparser.ast.body.ClassOrInterfaceDeclaration.class)
+                            .map(c -> c.getNameAsString()).orElse(null);
+                } else {
+                    var scope = call.getScope().get();
+                    String asType = scope.isNameExpr() && returns.containsKey(scope.toString()) ? scope.toString() : null;
+                    owner = asType != null ? asType : typeOf(scope, md, depth + 1);
+                }
+                if (owner == null) return null;
+                String r = returns.getOrDefault(owner, Map.of()).get(call.getNameAsString());
+                return r == null || r.isEmpty() ? null : r;
+            }
+            return null;
         }
 
         private static Set<String> namesDeclaredAs(MethodDeclaration md, String type) {

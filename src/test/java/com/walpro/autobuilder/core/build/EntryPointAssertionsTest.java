@@ -92,6 +92,51 @@ class EntryPointAssertionsTest {
                 """))).isEmpty();
     }
 
+    /**
+     * participation, the second module adopted: immutable values are tested in chains and through
+     * {@code var} locals, and two types can share a method name. A call is the entry point's when the
+     * project's own declarations say its receiver IS that type -- and not when it is the other one.
+     */
+    @Test
+    void aCallIsAttributedByTheReceiversDeclaredType_throughChainsAndVarLocals() {
+        var files = new java.util.LinkedHashMap<String, String>();
+        files.put("src/main/java/shop/Crate.java", """
+                package shop;
+                public record Crate(java.util.List<Box> boxes) {
+                    public static Crate empty() { return new Crate(java.util.List.of()); }
+                    public Crate stack(Box b) { return this; }
+                    public Crate seal() { return this; }
+                    public Box top() { return boxes.get(0); }
+                }
+                """);
+        files.put("src/main/java/shop/Box.java", """
+                package shop;
+                public record Box(String label, int weight) {
+                    public static Box of(String label) { return new Box(label, 1); }
+                    public Box seal() { return this; }
+                }
+                """);
+        String stack = "Crate.stack(box) is covered by a test";
+        String sealCrate = "Crate.seal() is covered by a test";
+        String sealBox = "Box.seal() is covered by a test";
+
+        files.put("src/test/java/shop/CrateTest.java", HEAD + """
+                class CrateTest {
+                    @Test void chained() { assertEquals(1, Crate.empty().stack(Box.of("a")).boxes().size()); }
+                    @Test void viaVar() { var c = Crate.empty().stack(Box.of("a")); var s = c.seal(); assertEquals(c, s); }
+                    @Test void boxOnly() { var b = Box.of("a"); assertEquals("a", b.seal().label()); }
+                }
+                """);
+        assertThat(EntryPointAssertions.unmet(List.of(stack, sealCrate, sealBox), files)).isEmpty();
+
+        files.put("src/test/java/shop/CrateTest.java", HEAD + """
+                class CrateTest {
+                    @Test void boxOnly() { var b = Crate.empty().top(); assertEquals("a", b.seal().label()); }
+                }
+                """);
+        assertThat(EntryPointAssertions.unmet(List.of(sealCrate, sealBox), files)).containsOnlyKeys(sealCrate);
+    }
+
     @Test
     void anEntryPointNoTestCallsIsReportedAsSuch() {
         var unmet = EntryPointAssertions.unmet(List.of(OBLIGATION), tests("@Test void other() { assertEquals(1, 1); }"));

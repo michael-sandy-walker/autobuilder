@@ -82,6 +82,30 @@ public final class EntryPointAssertions {
         return out;
     }
 
+    /**
+     * The entry points named by {@code obligations} that the tests in {@code testNames} ({@code
+     * Class.method}) call -- each with only those tests as its callers, whatever they assert. Where a
+     * candidate's own new tests FAIL, these are the calls whose returned value would tell the model
+     * what to assert (participation run 2026-09-25_11-45-07: one test was rewritten nine times, each
+     * failure reporting one field while four others stayed guesses).
+     */
+    public static Map<String, Finding> calledBy(List<String> obligations, Map<String, String> files,
+                                                Set<String> testNames) {
+        Map<String, Finding> out = new LinkedHashMap<>();
+        if (obligations == null || files == null || testNames == null || testNames.isEmpty()) return out;
+        List<MethodView> tests = testMethods(files);
+        if (tests == null) return out;
+        List<MethodView> among = tests.stream().filter(t -> testNames.contains(t.name())).toList();
+        for (String obligation : obligations) {
+            if (obligation == null || !obligation.toLowerCase(java.util.Locale.ROOT).contains("test")) continue;
+            Matcher m = ENTRY_POINT.matcher(obligation);
+            if (!m.find()) continue;
+            Finding f = inspect(m.group(1), m.group(2), among);
+            if (!f.callingTests().isEmpty()) out.putIfAbsent(f.type() + "." + f.method(), f);
+        }
+        return out;
+    }
+
     static Finding inspect(String type, String method, List<MethodView> tests) {
         List<String> calling = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();

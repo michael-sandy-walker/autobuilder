@@ -6,6 +6,7 @@ import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.build.TestRunGate;
 import com.walpro.autobuilder.core.build.TestRunReport;
+import com.walpro.autobuilder.core.build.ValueObservationProbe;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.service.FileService;
@@ -23,6 +24,8 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -42,11 +45,12 @@ class StagedTestFailureHeuristicTest {
     private final GoalPlannerService planner = mock(GoalPlannerService.class);
     private final FileService files = mock(FileService.class);
     private final EvaluationOutcome outcome = mock(EvaluationOutcome.class);
+    private final ValueObservationProbe probe = mock(ValueObservationProbe.class);
     private StagedTestFailureHeuristic heuristic;
 
     @BeforeEach
     void setUp() throws Exception {
-        heuristic = new StagedTestFailureHeuristic(provider(gate), provider(planner), provider(files));
+        heuristic = new StagedTestFailureHeuristic(provider(gate), provider(planner), provider(files), provider(probe));
         GoalEntity root = mock(GoalEntity.class);
         when(root.getDescription()).thenReturn(SEED);
         when(planner.getRootGoal()).thenReturn(root);
@@ -66,6 +70,29 @@ class StagedTestFailureHeuristicTest {
         assertThat(opinion.level()).isEqualTo(ConfidenceLevel.CRITICAL);
         assertThat(opinion.rationale())
                 .contains("WidgetParserTest.parseNamesTheRoot: expected: <Gadget> but was: <shop/Gadget.src>");
+    }
+
+    /**
+     * participation run 2026-09-25_11-45-07: a failure names the first failed assertion only, so one
+     * test was rewritten nine times, a field per rejection. What the call returned, observed by running
+     * the failing test up to it, names every field at once -- and rides the same relayed rationale.
+     */
+    @Test
+    void whatTheFailingTestsCallsReturnedIsObservedAndRelayed() {
+        TestRunReport.Failure failure = new TestRunReport.Failure("shop.widget.WidgetParserTest", "mergesTwo",
+                TestRunReport.Outcome.FAILED, "expected: <10.0> but was: <6.0>");
+        failWith(failure);
+        when(probe.observeFailing(any(), anyList(), anyString())).thenReturn(List.of(new ValueObservationProbe.Observation(
+                "Widget.merge(...)", "WidgetParserTest.mergesTwo", "\"Widget[name=a, weight=0.8, spare=6.0]\"")));
+
+        HeuristicOpinion opinion = heuristic.evaluate(staged(STAGED), outcome);
+
+        assertThat(opinion.rationale())
+                .contains("expected: <10.0> but was: <6.0>")
+                .contains("Widget.merge(...) returned \"Widget[name=a, weight=0.8, spare=6.0]\" (observed in WidgetParserTest.mergesTwo)");
+        verify(probe).observeFailing(org.mockito.ArgumentMatchers.eq(List.of(failure)),
+                org.mockito.ArgumentMatchers.argThat(l -> l.contains("Every widget entry point is covered by a test.")),
+                anyString());
     }
 
     /** Red before this mutation, and the repair item's business -- unrelated work is not blocked. */

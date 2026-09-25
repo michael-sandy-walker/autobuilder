@@ -5,6 +5,7 @@ import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.build.TestRunGate;
 import com.walpro.autobuilder.core.build.TestRunReport;
+import com.walpro.autobuilder.core.build.ValueObservationProbe;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.goal.GoalEntity;
@@ -53,13 +54,16 @@ public class StagedTestFailureHeuristic implements EvaluationHeuristic {
     private final ObjectProvider<TestRunGate> testRunGate;
     private final ObjectProvider<GoalPlannerService> goalPlanner;
     private final ObjectProvider<FileService> fileService;
+    private final ObjectProvider<ValueObservationProbe> valueProbe;
 
     public StagedTestFailureHeuristic(ObjectProvider<TestRunGate> testRunGate,
                                       ObjectProvider<GoalPlannerService> goalPlanner,
-                                      ObjectProvider<FileService> fileService) {
+                                      ObjectProvider<FileService> fileService,
+                                      ObjectProvider<ValueObservationProbe> valueProbe) {
         this.testRunGate = testRunGate;
         this.goalPlanner = goalPlanner;
         this.fileService = fileService;
+        this.valueProbe = valueProbe;
     }
 
     @Override
@@ -84,10 +88,31 @@ public class StagedTestFailureHeuristic implements EvaluationHeuristic {
         List<TestRunReport.Failure> own = ownFailures(report.get().failing(), stagedTests);
         if (own.isEmpty()) return HeuristicOpinion.none(NAME);
 
-        String rationale = rationale(own);
+        String rationale = rationale(own) + observed(own, input.cycleName());
         log.info("{}: {}", NAME, rationale);
         return HeuristicOpinion.ofDefectWithScore(NAME, 0.9, MutationAcceptanceState.REJECTED,
                 GoalProgressState.STAGNATING, rationale, Math.max(0.0, outcome.score() - 0.10));
+    }
+
+    /**
+     * What the entry points these failing tests call actually returned, observed by running each
+     * test up to the call: a failure message names one value, the observation names all of them.
+     */
+    private String observed(List<TestRunReport.Failure> own, String cycleName) {
+        ValueObservationProbe probe = valueProbe.getIfAvailable();
+        FileService files = fileService.getIfAvailable();
+        if (probe == null || files == null) return "";
+        try {
+            List<String> obligations = files.readFile(SeedObligationsFile.PATH).lines()
+                    .filter(l -> !l.isBlank() && !l.startsWith("#")).toList();
+            var observations = probe.observeFailing(own, obligations, cycleName + "-staged-observe");
+            if (observations.isEmpty()) return "";
+            return " Observed by running each failing test up to the call: " + observations.stream()
+                    .map(ValueObservationProbe.Observation::describe).reduce((a, b) -> a + "; " + b).orElse("")
+                    + ". Assert these values, every field you assert.";
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private static List<String> stagedTestSources(CycleContextData input) {

@@ -109,6 +109,52 @@ public class ValueObservationProbe {
         return out;
     }
 
+    /** At most this many entry points are observed for one rejected candidate: each is a test run. */
+    private static final int MAX_ON_FAILURE = 3;
+
+    /**
+     * The same observation, where a candidate's OWN new tests fail: for each seed entry point those
+     * failing tests call, what it actually returned there -- whole, so a record reports every field
+     * at once. A failing test reports only its first failed assertion, so each rejection taught one
+     * value while the test's other guesses stayed wrong (participation run 2026-09-25_11-45-07: 20
+     * of 23 rejections were the model's own failing tests, one test class rewritten nine times, and
+     * the probe -- reached only at root closure -- ran once, before any test called those entry
+     * points). Reads the candidate as it is on disk; never throws.
+     */
+    public List<Observation> observeFailing(java.util.Collection<TestRunReport.Failure> failing,
+                                            List<String> obligations, String cycleId) {
+        if (failing == null || failing.isEmpty() || obligations == null || !buildExecutor.isEnabled()) return List.of();
+        try {
+            Path project = Path.of(fileBasePath, "output");
+            Map<String, String> files = new LinkedHashMap<>();
+            for (String root : List.of("src/main", "src/test")) {
+                Path dir = project.resolve(root);
+                if (!Files.isDirectory(dir)) continue;
+                try (var walk = Files.walk(dir)) {
+                    for (Path p : (Iterable<Path>) walk.filter(f -> f.toString().endsWith(".java"))::iterator) {
+                        files.put(project.relativize(p).toString().replace('\\', '/'), Files.readString(p));
+                    }
+                }
+            }
+            java.util.Set<String> tests = new java.util.LinkedHashSet<>();
+            for (TestRunReport.Failure f : failing) {
+                if (f.className() == null || f.method() == null) continue;
+                String cls = f.className().substring(f.className().lastIndexOf('.') + 1);
+                int nested = cls.indexOf('$');
+                tests.add((nested >= 0 ? cls.substring(nested + 1) : cls) + "." + f.method());
+            }
+            Map<String, EntryPointAssertions.Finding> called = new LinkedHashMap<>();
+            for (var e : EntryPointAssertions.calledBy(obligations, files, tests).entrySet()) {
+                if (called.size() == MAX_ON_FAILURE) break;
+                called.put(e.getKey(), e.getValue());
+            }
+            return observe(called, files, cycleId);
+        } catch (Exception e) {
+            log.info("T4-CQ: value observation of failing tests failed: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
     private Optional<Observation> probe(EntryPointAssertions.Finding f, String test, Map<String, String> files,
                                         Path project, String cycleId) throws Exception {
         int dot = test.lastIndexOf('.');

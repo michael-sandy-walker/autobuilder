@@ -67,6 +67,31 @@ class EntryPointAssertionsTest {
                 """))).containsOnlyKeys(obligation);
     }
 
+    /** Where a candidate's own tests fail: which named entry points do THOSE tests call, whatever they assert. */
+    @Test
+    void theEntryPointsTheNamedTestsCallAreFound_withOnlyThoseTestsAsCallers() {
+        var files = tests("""
+                @Test void failing() { String s = Gadget.describe(new Part()); assertEquals("x", s); }
+                @Test void passing() { assertEquals("wheel", Gadget.describe(new Part())); }
+                @Test void other() { assertEquals(1, Gadget.count()); }
+                """);
+
+        var called = EntryPointAssertions.calledBy(
+                List.of(OBLIGATION, "Gadget.count() is covered by a test", "rule: Gadget.describe(part) keep it"),
+                files, java.util.Set.of("GadgetTest.failing"));
+
+        assertThat(called).containsOnlyKeys("Gadget.describe");
+        assertThat(called.get("Gadget.describe").callingTests()).containsExactly("GadgetTest.failing");
+    }
+
+    /** Null is an exact value: assertNull is assertEquals(null, x). */
+    @Test
+    void assertingNullIsAssertingAValue() {
+        assertThat(EntryPointAssertions.unmet(List.of(OBLIGATION), tests("""
+                @Test void nothingForNoPart() { assertNull(Gadget.describe(null)); }
+                """))).isEmpty();
+    }
+
     @Test
     void anEntryPointNoTestCallsIsReportedAsSuch() {
         var unmet = EntryPointAssertions.unmet(List.of(OBLIGATION), tests("@Test void other() { assertEquals(1, 1); }"));

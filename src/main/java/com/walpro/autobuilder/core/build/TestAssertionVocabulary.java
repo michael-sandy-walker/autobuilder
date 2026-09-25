@@ -20,14 +20,20 @@ public final class TestAssertionVocabulary {
     public static final List<String> GATE_IMPORT_PREFIXES = List.of(
             "org.junit", "org.assertj", "org.hamcrest", "org.testng");
 
-    /** Calls that compare a result with an expected value (static-assert style). */
+    /**
+     * Calls that compare a result with an expected value (static-assert style). {@code assertNull} is
+     * {@code assertEquals(null, x)}: null is an exact value, and some entry points return it by
+     * contract (participation run 2026-09-25_11-45-07: a {@code revoke} test asserting the revoked
+     * role is gone, and any test of a horizon that is null when nothing decays, counted as asserting nothing).
+     */
     public static final Set<String> VALUE_ASSERTIONS = Set.of(
-            "assertEquals", "assertArrayEquals", "assertIterableEquals", "assertLinesMatch", "assertSame");
+            "assertEquals", "assertArrayEquals", "assertIterableEquals", "assertLinesMatch", "assertSame",
+            "assertNull");
 
     /** Fluent-chain steps that compare with an expected value (fluent-assert style). */
     public static final Set<String> VALUE_CHAIN_STEPS = Set.of(
             "isEqualTo", "containsExactly", "containsExactlyInAnyOrder", "hasSize", "containsOnly", "isSameAs",
-            "containsExactlyEntriesOf", "isEqualToIgnoringWhitespace", "equalTo");
+            "containsExactlyEntriesOf", "isEqualToIgnoringWhitespace", "equalTo", "isNull", "nullValue");
 
     /** Truth assertions: a value assertion only when they wrap the entry point's own call (a boolean result). */
     public static final Set<String> TRUTH_ASSERTIONS = Set.of("assertTrue", "assertFalse");

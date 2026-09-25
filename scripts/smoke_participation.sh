@@ -19,14 +19,14 @@ chk(){ n=$((n+1)); if [ "$1" = "$2" ]; then pass=$((pass+1)); echo "PASS [$n] $3
 # expired) exist on more than one type, so a call is attributed to a type by its receiver: the type
 # itself (a static call), a local, field or parameter declared with that type (or `var x = Type.of(..)`
 # / `new Type(..)`), or a chain that starts at the type. A value assertion is an equality, exact
-# contents or a size; for a boolean entry point also assertTrue/assertFalse around the call, or
+# contents, a size or null (assertNull is assertEquals(null, x)); for a boolean entry point also assertTrue/assertFalse around the call, or
 # assertThat(<call>).isTrue()/isFalse(). assertNotNull and "not empty" do not count.
 # Methods are split at @Test; a helper method's assertions count only inside the test that holds them.
 covered(){
     python3 - "$TREE/src/test" "$1" "$2" <<'PY'
 import os, re, sys
 root, cls, m = sys.argv[1], sys.argv[2], sys.argv[3]
-value = re.compile(r'assertEquals\(|assertIterableEquals\(|assertArrayEquals\(|assertLinesMatch\(|assertSame\('
+value = re.compile(r'assertEquals\(|assertNull\(|assertIterableEquals\(|assertArrayEquals\(|assertLinesMatch\(|assertSame\('
                    r'|\.isEqualTo\(|\.isCloseTo\(|\.containsExactly(InAnyOrder)?\(|\.hasSize\(|\.containsOnly\(|\.isSameAs\('
                    r'|\.isNull\(|\.containsEntry\(|\.isEmpty\(')
 T = re.escape(cls)

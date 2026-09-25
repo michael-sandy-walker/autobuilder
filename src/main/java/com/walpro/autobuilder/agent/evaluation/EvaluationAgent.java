@@ -1335,6 +1335,20 @@ public class EvaluationAgent implements ExecutionAgent {
                 .collect(java.util.stream.Collectors.toSet());
     }
 
+    /** The project diff with each injector-fixed file's content as it now is on disk. */
+    static CycleContextData withInjectedFilesInDiff(CycleContextData context, List<FixProposal> appliedFixes) {
+        var diff = context.projectDiff();
+        if (diff == null || diff.changedFiles() == null || appliedFixes == null || appliedFixes.isEmpty()) return context;
+        Map<String, String> files = new java.util.LinkedHashMap<>(diff.changedFiles());
+        for (FixProposal fp : appliedFixes) {
+            for (FileMutation m : fp.mutations()) {
+                if (m != null && m.path() != null && m.content() != null) files.put(m.path(), m.content());
+            }
+        }
+        return context.toBuilder().projectDiff(new com.walpro.autobuilder.analysis.diff.ProjectDiffResult(
+                diff.structuredDiff(), files, diff.deletedPaths())).build();
+    }
+
     private CycleContextData foldInjectorFixes(CycleContextData context, CompileProbeService.ProbeResult probeResult) {
         if (probeResult == null || probeResult.appliedFixes().isEmpty()) return context;
         List<FixProposal> appliedFixes = probeResult.appliedFixes();
@@ -1377,6 +1391,12 @@ public class EvaluationAgent implements ExecutionAgent {
         if (eo != null) {
             context = context.withEvolutionOutcome(eo.withAddedOrChangedFiles(List.copyOf(byPath.values())));
         }
+        // T4-CQ: the evaluator's file block and every heuristic after the probe read the PROJECT DIFF,
+        // computed before the probe. A fix that rewrote a staged file was invisible to them: run
+        // 2026-09-25_07-31-46 compiled clean after DeclaredAccessorResolver rewrote getType() to
+        // type(), and the evaluator rejected it for "retaining invalid accessor calls" it was still
+        // being shown. The diff now carries what is actually on disk.
+        context = withInjectedFilesInDiff(context, appliedFixes);
         return context.withInjectorFixes(List.copyOf(records));
     }
 }

@@ -31,4 +31,20 @@ class EvaluationAgentInjectorPreservationTest {
 
         assertThat(EvaluationAgent.preservableInjectorPaths(ctx)).containsExactly("pom.xml");
     }
+
+    @Test
+    void anInjectorFixToAStagedFileIsWhatTheEvaluatorIsShown() {
+        String path = "src/test/java/shop/GadgetTest.java";
+        CycleContextData ctx = CycleContextData.builder()
+                .projectDiff(new com.walpro.autobuilder.analysis.diff.ProjectDiffResult(null,
+                        java.util.Map.of(path, "g.getKind();"), java.util.Set.of()))
+                .build();
+        var fix = new com.walpro.autobuilder.core.build.inject.FixProposal(
+                List.of(new FileMutation(path, "g.kind();")),
+                new InjectorFixRecord("declared-accessor:getKind", Kind.CANNOT_FIND_SYMBOL, "getKind", List.of(path), "rewrote"));
+
+        CycleContextData after = EvaluationAgent.withInjectedFilesInDiff(ctx, List.of(fix));
+
+        assertThat(after.projectDiff().changedFiles()).containsEntry(path, "g.kind();");
+    }
 }

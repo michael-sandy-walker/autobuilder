@@ -18,7 +18,8 @@ chk(){ n=$((n+1)); if [ "$1" = "$2" ]; then pass=$((pass+1)); echo "PASS [$n] $3
 # Unlike structdiff, most entry points here are instance methods and three names (grant, tick,
 # expired) exist on more than one type, so a call is attributed to a type by its receiver: the type
 # itself (a static call), a local, field or parameter declared with that type (or `var x = Type.of(..)`
-# / `new Type(..)`), or a chain that starts at the type. A value assertion is an equality, exact
+# / `new Type(..)`), or a chain that starts at the type -- read by walking back over the call chain,
+# with comments removed first (a comment above the call once hid a covered entry point). A value assertion is an equality, exact
 # contents, a size or null (assertNull is assertEquals(null, x)); for a boolean entry point also assertTrue/assertFalse around the call, or
 # assertThat(<call>).isTrue()/isFalse(). assertNotNull and "not empty" do not count.
 # Methods are split at @Test; a helper method's assertions count only inside the test that holds them.
@@ -34,16 +35,35 @@ def names_of_type(src):
     ns = set(re.findall(r'(?<![\w.])' + T + r'(?:<[^>]*>)?\s+(\w+)\s*[=;,)]', src))
     ns |= set(re.findall(r'\bvar\s+(\w+)\s*=\s*(?:new\s+' + T + r'\b|' + T + r'\.\w+\()', src))
     return ns
+def receiver(chunk, dot):
+    # Walk back from the '.' before the method over the call chain it ends: identifiers, dots and
+    # balanced (...) groups. Returns the chain's text, e.g. "Type.of(a, b)" or "ticked".
+    i = dot
+    while i > 0:
+        c = chunk[i - 1]
+        if c == ')':
+            depth, j = 0, i - 1
+            while j >= 0:
+                depth += chunk[j] == ')'
+                depth -= chunk[j] == '('
+                if depth == 0: break
+                j -= 1
+            i = j
+        elif c.isalnum() or c in '_.':
+            i -= 1
+        elif c.isspace() and chunk[:i].rstrip().endswith('new'):
+            i = len(chunk[:i].rstrip()) - 3
+        else:
+            break
+    return chunk[i:dot].strip()
 def attributed(chunk, names):
-    for mt in re.finditer(r'([\w.()\s,"\-]*?)\.' + re.escape(m) + r'\(', chunk):
-        recv = mt.group(1).strip()
-        head = re.split(r'[.(]', recv)[0].strip() if recv else ''
-        if recv.split('(')[0].split()[-1:] == [cls] or head == cls or head in names:
-            return True
-        # the receiver is a call chain that starts at the type: Type.of(...).m(  /  new Type(...).m(
-        start = chunk.rfind('\n', 0, mt.start()) + 1
-        line = chunk[start:mt.end()]
-        if re.search(r'(new\s+' + T + r'\b|(?<![\w.])' + T + r'\.)', line):
+    for mt in re.finditer(r'\.' + re.escape(m) + r'\(', chunk):
+        recv = receiver(chunk, mt.start())
+        head = re.split(r'[.(\s]', recv)[0] if recv else ''
+        if head == 'new':
+            head = re.split(r'[.(\s]', recv[3:].strip())[0]
+        # the type itself (static), a name declared with it, or a chain that starts at it
+        if head == cls or head in names:
             return True
     return False
 for d, _, fs in os.walk(root):
@@ -51,6 +71,9 @@ for d, _, fs in os.walk(root):
         if not f.endswith('.java'):
             continue
         src = open(os.path.join(d, f), encoding='utf-8', errors='replace').read()
+        # comments are prose: a receiver or an assertion named in one is not a call
+        src = re.sub(r'/\*.*?\*/', ' ', src, flags=re.S)
+        src = re.sub(r'//[^\n]*', '', src)
         if not re.search(r'\b' + T + r'\b', src):
             continue
         names = names_of_type(src)

@@ -4,7 +4,7 @@
 # Usage: scripts/early_stop.sh <target> [interval_min=10] [patience_min=20] [min_run_min=25] [port=8081]
 #
 # The rule, stated before the run rather than chosen while watching it: every <interval> minutes a
-# COPY of data/<target>/output is scored with the target's declared yardstick (bootstrap/yardstick).
+# COPY of the newest end-of-cycle checkpoint (data/<target>/checkpoint-archive) is scored with the target's declared yardstick (bootstrap/yardstick).
 # Once the run is at least <min_run> minutes old, if the best score has not improved for <patience>
 # minutes, the loop is paused (POST /autobuilder/pause) and preflight records terminal=operator-stop,
 # then scores and archives the run as usual.
@@ -26,7 +26,12 @@ start=$SECONDS; best=-1; best_at=$SECONDS
 while alive; do
     sleep "$INTERVAL"
     alive || break
-    rm -rf "$WORK/output"; cp -a "$TREE" "$WORK/output"; rm -rf "$WORK/output/target"
+    # The newest end-of-cycle checkpoint, not the live tree: during evaluation the probe leaves an
+    # unmerged candidate on disk, and scoring it let a staged file count as progress (run
+    # 2026-09-25_03-03-00 read 6/11 live with nothing merged). Falls back to output/ without one.
+    SRC="$TREE"; CK=$(ls -d "$ROOT/data/$TGT/checkpoint-archive"/cycle-* 2>/dev/null | sort | tail -1)
+    [ -n "$CK" ] && [ -d "$CK/src" ] && SRC="$CK"
+    rm -rf "$WORK/output"; cp -a "$SRC" "$WORK/output"; rm -rf "$WORK/output/target" "$WORK/output/__cache" "$WORK/output/__context.json"
     mkdir -p "$WORK/output/target"; : > "$WORK/output/target/probe.jar"
     line=$("$ROOT/$YARD" "$WORK/output/target/probe.jar" 2>/dev/null | grep -E '^SMOKE: [0-9]+/[0-9]+' | tail -1)
     score=$(echo "$line" | sed -E 's/^SMOKE: ([0-9]+)\/.*/\1/'); score=${score:-0}

@@ -4,7 +4,7 @@
 # Usage: scripts/early_stop.sh <target> [interval_min=10] [patience_min=20] [min_run_min=25] [port=8081]
 #
 # The rule, stated before the run rather than chosen while watching it: every <interval> minutes a
-# COPY of the newest end-of-cycle checkpoint (data/<target>/checkpoint-archive) is scored with the target's declared yardstick (bootstrap/yardstick).
+# COPY of the newest end-of-cycle checkpoint (data/<target>/checkpoint-archive) is scored with the target's declared yardstick (bootstrap/yardstick) -- a terminating one handed the copy, a serving one asked through the copy built and booted on a port of its own.
 # Once the run is at least <min_run> minutes old, if the best score has not improved for <patience>
 # minutes, the loop is paused (POST /autobuilder/pause) and preflight records terminal=operator-stop,
 # then scores and archives the run as usual. A closure refusal with new content restarts the patience clock.
@@ -18,7 +18,13 @@ INTERVAL=$(( ${2:-10} * 60 )); PATIENCE=$(( ${3:-20} * 60 )); MINRUN=$(( ${4:-25
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TREE="$ROOT/data/$TGT/output"
 YARD="$(grep -v '^#' "$ROOT/data/$TGT/bootstrap/yardstick" 2>/dev/null | awk 'NF{print $1; exit}')"
+MODE="$(grep -v '^#' "$ROOT/data/$TGT/bootstrap/yardstick" 2>/dev/null | awk 'NF{print $2; exit}')"; MODE="${MODE:-serving}"
 [ -n "$YARD" ] || { echo "early_stop: $TGT declares no yardstick" >&2; exit 1; }
+# A yardstick this script cannot run must stop it at once, never read as zero: handing a serving
+# yardstick a jar path scored every check 0/23, and a flat zero paused firestarter run
+# 2026-09-25_21-44-42 at 30 minutes although its tree was at 23/23.
+case "$MODE" in terminating|serving) ;; *) echo "early_stop: $TGT's yardstick mode '$MODE' is not one this script can run" >&2; exit 1;; esac
+APORT=$(( 18000 + RANDOM % 1000 ))
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 alive() { curl -s -o /dev/null -m 5 "http://localhost:$PORT/autobuilder/status"; }
 
@@ -32,8 +38,27 @@ while alive; do
     SRC="$TREE"; CK=$(ls -d "$ROOT/data/$TGT/checkpoint-archive"/cycle-* 2>/dev/null | sort | tail -1)
     [ -n "$CK" ] && [ -d "$CK/src" ] && SRC="$CK"
     rm -rf "$WORK/output"; cp -a "$SRC" "$WORK/output"; rm -rf "$WORK/output/target" "$WORK/output/__cache" "$WORK/output/__context.json"
-    mkdir -p "$WORK/output/target"; : > "$WORK/output/target/probe.jar"
-    line=$("$ROOT/$YARD" "$WORK/output/target/probe.jar" 2>/dev/null | grep -E '^SMOKE: [0-9]+/[0-9]+' | tail -1)
+    if [ "$MODE" = terminating ]; then
+        mkdir -p "$WORK/output/target"; : > "$WORK/output/target/probe.jar"
+        line=$("$ROOT/$YARD" "$WORK/output/target/probe.jar" 2>/dev/null | grep -E '^SMOKE: [0-9]+/[0-9]+' | tail -1)
+    else
+        # Serving: the yardstick asks a RUNNING artifact, as preflight's final score does -- build the
+        # copy, boot it on a port of its own, score its URL, stop it. A copy that does not build or
+        # boot scores what it serves: nothing.
+        line=""
+        if (cd "$WORK/output" && timeout 300 mvn -B -q -o package -DskipTests > "$WORK/build.log" 2>&1); then
+            AJAR=$(ls "$WORK"/output/target/*.jar 2>/dev/null | grep -v original | head -1)
+            if [ -n "$AJAR" ]; then
+                java -jar "$AJAR" --server.port="$APORT" > "$WORK/boot.log" 2>&1 &
+                APID=$!
+                for _ in $(seq 1 30); do grep -q 'Started' "$WORK/boot.log" 2>/dev/null && break; sleep 2; done
+                grep -q 'Started' "$WORK/boot.log" 2>/dev/null \
+                    && line=$("$ROOT/$YARD" "http://localhost:$APORT" 2>/dev/null | grep -E '^SMOKE: [0-9]+/[0-9]+' | tail -1)
+                kill "$APID" 2>/dev/null; wait "$APID" 2>/dev/null
+            fi
+        fi
+        [ -n "$line" ] || line="SMOKE: 0/? (did not build or boot)"
+    fi
     score=$(echo "$line" | sed -E 's/^SMOKE: ([0-9]+)\/.*/\1/'); score=${score:-0}
     age=$(( (SECONDS - start) / 60 ))
     if [ "$score" -gt "$best" ]; then best=$score; best_at=$SECONDS; fi
@@ -49,6 +74,14 @@ while alive; do
     fi
     stale=$(( (SECONDS - best_at) / 60 ))
     echo "early_stop: ${age}m ${line:-SMOKE: ?} best=$best unchanged ${stale}m"
+    # At the maximum the score cannot improve, and the only progress left is the loop closing: a
+    # flat maximum is not a stall, and stopping it would throw away the closure (firestarter run
+    # 2026-09-25_21-44-42's tree was at 23/23 when a flat reading cut it). The budget ends such a run.
+    max=$(echo "$line" | sed -nE 's/^SMOKE: [0-9]+\/([0-9]+).*/\1/p')
+    if [ -n "$max" ] && [ "$best" -ge "$max" ]; then
+        [ -z "${said_max:-}" ] && { echo "early_stop: at the maximum ($best/$max) -- not stopping; the budget ends this run"; said_max=1; }
+        continue
+    fi
     if [ $((SECONDS - start)) -ge "$MINRUN" ] && [ $((SECONDS - best_at)) -ge "$PATIENCE" ]; then
         echo "early_stop: STOP -- best $best unchanged for ${stale}m at ${age}m; pausing the loop"
         curl -s -X POST "http://localhost:$PORT/autobuilder/pause"; echo

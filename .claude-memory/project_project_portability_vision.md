@@ -180,3 +180,10 @@ calculator someone else wrote) reached two true completions; `data/structdiff` (
 Autobuilder itself, extracted by `scripts/extract_structdiff.sh`) is under way. The ticket's
 running record is in `roadmap.md` under T4-CQ; the how-to is in the newest block of
 [[project-resume-state]].
+
+## Status 2026-09-25
+
+- **T4-CQ CLOSED** -- two adopted projects with true completions: rung1 (REST calculator, 15/15) and structdiff (a module of Autobuilder itself, 11/11 in run `2026-09-25_09-23-19`). The user's "modules as toy cases" direction now has its first module finished.
+- **T4-CR CLOSED** -- `scripts/bundle.py`; verified by content hash on a clean Neo4j and by a CONTINUE_LINEAGE run resuming the restored lineage. Not built: forking a child lineage from a bundle.
+- **T4-CS still gated** by the T6-G measurement (same-seed lineages share almost nothing). The honest next step, if pursued, is a DIFFERENT-seed or different-module pair; the other open direction is a second Autobuilder module adopted as a target.
+

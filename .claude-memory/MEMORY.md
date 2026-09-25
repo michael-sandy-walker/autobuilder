@@ -34,7 +34,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-24)
+- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-25)
 - `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-25)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
@@ -64,7 +64,7 @@ Design notes, read before touching their area:
 - `project_pattern_recognition_design_note.md`: 6-slice gated plan for pattern recognition. Read before touching `analysis/pattern/` or filing a self-model ticket. (reviewed 2026-09-08)
 - `project_target_domain_plugin_design.md`: T4-DC field proof (CLI target 12/12) cut the design from five seams to two; the design ticket is T4-DD. Read before adding any ecosystem-aware rule. (reviewed 2026-09-08)
 - `project_state_time_travel_design_note.md`: T4-DQ rewind reproduces a STATE, not a TRAJECTORY; restore the carried cycle context. Read before rewind/branching work. (reviewed 2026-09-19)
-- `project_project_portability_vision.md`: import/continue/store/restore/merge a project's code layer; T4-CQ slice 1 fielded on two adopted projects (rung1, structdiff), CR/CS open. Read before import/export work. (reviewed 2026-09-24)
+- `project_project_portability_vision.md`: import/continue/store/restore/merge a project's code layer; T4-CQ and T4-CR closed (rung1 15/15, structdiff 11/11; bundle.py), T4-CS gated. Read before import/export work. (reviewed 2026-09-25)
 - `project_cross_run_knowledge_base.md`: T4-CJ slice 2 -> T4-CN -> T4-CM is ONE chain: reconciling graphs from DIFFERENT runs. (reviewed 2026-07-23)
 - `project_reliability_plan.md`: rationale behind the reliability work (floor up, ceiling free). NOT a queue; everything it selected is filed or closed. (reviewed 2026-07-14)
 - `reference_undone_ideas.md`: the user's unbuilt ideas with document and line in ~/Documents/autobuilder; a reference, never a queue. (reviewed 2026-09-23)
@@ -97,7 +97,7 @@ False completions and diagnosis lenses:
 - `project_meta_concrete_target_hint_idea.md`: historical note; read only if reintroducing a concrete-target hint via a non-LLM path. (reviewed 2026-07-09)
 
 Operations:
-- `project_run_lifecycle_runbook.md`: start/stop/monitor runs; watcher traps. Prove a monitor STREAMS first: `scripts/prove_watcher_streams.sh`. (reviewed 2026-09-21)
+- `project_run_lifecycle_runbook.md`: start/stop/monitor runs; watcher traps; adopted-target runs, `early_stop.sh`, `bundle.py`. Prove a monitor STREAMS first: `scripts/prove_watcher_streams.sh`. (reviewed 2026-09-25)
 - `project_log_and_backup_conventions.md`: current run is UNSUFFIXED `logs/behaviour.ndjson`; files are concatenated pretty JSON, not line-JSON. (reviewed 2026-09-08)
 - `project_tests_rotate_live_logs.md`: SUPERSEDED: redirect `FILE_BASE_PATH` to a scratch dir instead of stopping the app. (reviewed 2026-09-08)
 
@@ -158,6 +158,7 @@ Watchers:
 - `feedback_monitor_every_terminal.md`: a monitor must match EVERY terminal state; stopping one for noise means re-arming a narrower one, never going blind. (reviewed 2026-07-27)
 - `feedback_escalate_unrecoverable_stagnation.md`: watchers must detect periodic failure patterns and inform early, not just terminal markers and silence. (reviewed 2026-07-09)
 - `feedback_waiter_fires_on_loop_terminal.md`: a run waiter fires on the LOOP's terminal line, not only preflight's final line minutes later. (reviewed 2026-09-24)
+- `feedback_cut_flat_runs_short.md`: start `scripts/early_stop.sh` beside every field run; the user wants flat runs cut by a rule stated in advance. (reviewed 2026-09-25)
 
 Writing:
 - `feedback_curly_quotes.md`: no curly quotes/stray non-Latin chars; enforced by `scripts/charset_guard.py`. No `jq`; use python3. (reviewed 2026-08-28)

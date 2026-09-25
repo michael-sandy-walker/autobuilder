@@ -138,4 +138,32 @@ class GoalSimilarityServiceTest {
         assertThat(service.findEquivalent("foo", null)).isNull();
         assertThat(service.findEquivalent("foo", List.of())).isNull();
     }
+
+    /** T4-CQ: invented coordinates; the shape is structdiff run 3's two lost work items. */
+    @Test
+    void itemsNamingDifferentClassesAreNotDuplicates_howeverMuchWordingTheyShare() {
+        String done = "Create a test class `WidgetParserTest` under `src/test/java` (in the package matching the "
+                + "main code, e.g. `shop.widget`) that calls `WidgetParser.parse` with inline source and asserts "
+                + "the exact returned values.";
+        String candidate = "Create `src/test/java/shop/widget/util/GadgetFormatterTest.java` in package "
+                + "`shop.widget.util` that calls `GadgetFormatter.format` and `formatPlainText` with a "
+                + "constructed tree and asserts the exact returned String content.";
+
+        assertThat(service.similarity(candidate, done)).isGreaterThan(0.88f);   // the metric alone says "same"
+        assertThat(service.isDuplicate(candidate, List.of(done))).isFalse();
+    }
+
+    @Test
+    void aParaphraseThatOnlyAddsADetailIsStillTheSameItem() {
+        String done = "Write tests for WidgetParser covering the parse method with inline source.";
+        String candidate = "Write tests for WidgetParser covering the parse method with inline source in WidgetParserTest.";
+
+        assertThat(service.isDuplicate(candidate, List.of(done))).isTrue();
+    }
+
+    @Test
+    void textNamingNoCodeIsJudgedByTheMetricAlone() {
+        assertThat(GoalSimilarityService.nameDifferentCode("Implement the persistence layer",
+                "Implement the storage layer")).isFalse();
+    }
 }

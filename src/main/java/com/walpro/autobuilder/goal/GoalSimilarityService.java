@@ -41,8 +41,7 @@ public class GoalSimilarityService {
 
         for (String known : knownDescriptions) {
             if (known == null) continue;
-            float score = metric.compare(c, normalize(known));
-            if (score >= SIMILARITY_THRESHOLD) {
+            if (same(c, normalize(known))) {
                 return true;
             }
         }
@@ -66,8 +65,9 @@ public class GoalSimilarityService {
         float bestScore = SIMILARITY_THRESHOLD;
         for (GoalEntity g : allGoals) {
             if (g == null || g.getDescription() == null) continue;
-            float score = metric.compare(c, normalize(g.getDescription()));
-            if (score >= bestScore) {
+            String d = normalize(g.getDescription());
+            float score = metric.compare(c, d);
+            if (score >= bestScore && !nameDifferentCode(c, d)) {
                 bestScore = score;
                 best = g;
             }
@@ -90,8 +90,9 @@ public class GoalSimilarityService {
         float bestScore = SIMILARITY_THRESHOLD;
         for (GoalEntity g : givenUpGoals) {
             if (g == null || g.getDescription() == null) continue;
-            float score = metric.compare(c, normalize(g.getDescription()));
-            if (score >= bestScore) {
+            String d = normalize(g.getDescription());
+            float score = metric.compare(c, d);
+            if (score >= bestScore && !nameDifferentCode(c, d)) {
                 bestScore = score;
                 best = g;
             }
@@ -120,7 +121,7 @@ public class GoalSimilarityService {
         if (c.isBlank()) return 0;
         List<String> givenUp = goalGraphService.findDescriptionsByStatus("GIVEN_UP", CANDIDATE_LIMIT);
         return givenUp.stream()
-                .filter(d -> d != null && metric.compare(c, normalize(d)) >= SIMILARITY_THRESHOLD)
+                .filter(d -> d != null && same(c, normalize(d)))
                 .count();
     }
 
@@ -131,6 +132,41 @@ public class GoalSimilarityService {
         if (aa.isBlank() || bb.isBlank()) return 0.0f;
         return metric.compare(aa, bb);
     }
+
+    private boolean same(String a, String b) {
+        return metric.compare(a, b) >= SIMILARITY_THRESHOLD && !nameDifferentCode(a, b);
+    }
+
+    /**
+     * T4-CQ: two work items that each name code the other does not are about different code,
+     * whatever their wording shares. Monge-Elkan matches every word to its best counterpart, so
+     * two long items in one project's vocabulary score high even when the one word that matters
+     * -- the class under test -- differs: structdiff run 2026-09-24_23-33-41 skipped "Create
+     * DiffSummarizerTest ... calls DiffSummarizer.summarize" as a copy of the completed "Create a
+     * test class StructuralDiffTest" (0.918), twice, and five entry points never got a work item.
+     *
+     * <p>Both sides must name something the other lacks: a paraphrase that only ADDS a detail
+     * (a file path the earlier text left out) is still the same item. Text naming no code at all
+     * is judged by the metric alone, exactly as before.
+     */
+    static boolean nameDifferentCode(String a, String b) {
+        java.util.Set<String> ia = codeNames(a);
+        java.util.Set<String> ib = codeNames(b);
+        if (ia.isEmpty() || ib.isEmpty()) return false;
+        return !ib.containsAll(ia) && !ia.containsAll(ib);
+    }
+
+    /** Words with an inner capital -- {@code DiffSummarizer}, {@code summarizePlainText} -- from anywhere, paths included. */
+    static java.util.Set<String> codeNames(String text) {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        if (text == null) return out;
+        java.util.regex.Matcher m = CODE_NAME.matcher(text);
+        while (m.find()) out.add(m.group());
+        return out;
+    }
+
+    private static final java.util.regex.Pattern CODE_NAME =
+            java.util.regex.Pattern.compile("\\b[A-Za-z][a-z0-9]+[A-Z][A-Za-z0-9]*\\b");
 
     private static String normalize(String s) {
         return s == null ? "" : s.trim().replaceAll("\\s+", " ");

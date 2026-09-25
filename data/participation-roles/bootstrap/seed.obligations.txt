@@ -1,0 +1,18 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 58e1eb8210979269bd99bd099325b89117a680dd8bcf04e6300c128491ee4d98
+# body-sha256: e175ce12ca73ab447ab0b4cb71a7aae6d41d35764bee9bb68e0b741674289b9a
+ParticipationWindows.roles() returns the active roles in the order each was first granted
+ParticipationWindows.roles() returns a list that cannot be modified
+ParticipationWindows.strongest() returns the active window with the highest boost
+ParticipationWindows.strongest() returns the window granted earliest when there is a tie on boost
+ParticipationWindows.strongest() returns an empty Optional when there is no active window
+The code under src/main/java provides the methods ParticipationWindows.roles() and ParticipationWindows.strongest()
+The existing public methods of ParticipationWindows remain unchanged
+The project's packages, classes, and naming are preserved
+The tests in RolesSpecTest pass
+The whole test suite passes

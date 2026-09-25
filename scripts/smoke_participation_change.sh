@@ -1,12 +1,12 @@
 #!/bin/bash
 # smoke_participation_change.sh -- the yardstick for a CHANGE target on the participation module
 # (prepared by scripts/prepare_participation_change.sh). Usage: <artifact-jar> (terminating mode);
-# SMOKE_TARGET names the target. Last line: SMOKE: <pass>/<spec tests + 2>.
+# SMOKE_TARGET names the target. Last line: SMOKE: <pass>/<spec tests + 3>.
 #
 # Asserts ONLY what the target's seed states: every test of the named specification class passes
 # (one check per test method, read from the test run's own report), src/test is unmodified (the
-# specification and the existing tests are the operator's), and the whole suite passes -- which
-# includes the characterization suite, i.e. the existing behaviour kept.
+# specification and the existing tests are the operator's), the existing public methods are
+# unchanged, and the whole suite passes -- which includes the characterization suite.
 JAR="${1:?usage: smoke_participation_change.sh <artifact-jar>}"
 TREE="$(cd "$(dirname "$JAR")/.." && pwd)"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -45,6 +45,15 @@ PY
     chk "$r" pass "$SPEC.$m passes"
 done
 chk "$u" untouched "src/test is unmodified"
+# "Keep the existing public methods as they are": every public method and constructor of the original
+# library is still there with the same signature, annotations and body (whitespace aside). Additions
+# are what the seed asks for; the suite passing does not show this, because the existing tests pin
+# only some of the existing behaviour (participation-roles run 2026-09-25_19-57-35 passed 8/8 while
+# its rewrite of ParticipationWindows had changed eight existing members, re-grant among them).
+CH=$(python3 "$ROOT/scripts/java_members.py" changed "$SCRATCH/orig/src/main" "$TREE/src/main")
+[ -z "$CH" ] && k=kept || k=changed
+chk "$k" kept "the existing public methods are unchanged"
+[ -z "$CH" ] || echo "$CH" | head -5 | sed 's/^/      /'
 chk "$suite" pass "the whole suite passes"
 [ "$suite" = pass ] || echo "      $(grep -m1 -E 'Tests run:|ERROR' "$SCRATCH/test.log" 2>/dev/null | head -c 140)"
 rm -rf "${SCRATCH:?}"

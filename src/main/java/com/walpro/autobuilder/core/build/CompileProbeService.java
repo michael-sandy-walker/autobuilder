@@ -436,10 +436,13 @@ public class CompileProbeService {
                         originalContents.put(m.path(), existed ? fileService.readString(relPath) : "");
                         if (!existed) newlyAddedPaths.add(m.path());
                     }
-                    fileService.writeFileResolved(fileService.resolveSecurePath(relPath), m.content());
+                    // T4-CQ: an injector edit keeps a member-protected file's adopted declarations too.
+                    String content = protectedPaths != null
+                            ? protectedPaths.preserve("the compile-fix injector", m.path(), m.content()) : m.content();
+                    fileService.writeFileResolved(fileService.resolveSecurePath(relPath), content);
                     // Mirror into the cycle's mutation dir so MergeAgent picks the file up alongside
                     // the LLM-produced mutations and the meta.json provenance can reference it.
-                    fileService.writeFile(mutationDir + "/" + m.path(), m.content());
+                    fileService.writeFile(mutationDir + "/" + m.path(), content);
                 }
             } catch (IOException e) {
                 log.warn("CompileFixInjector: write failed: {}", e.getMessage());

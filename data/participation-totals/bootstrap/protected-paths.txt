@@ -1,3 +1,6 @@
 # T4-CQ: paths under output/ the loop may not write, one glob per line.
 # The tests are the operator's: the specification and the existing behaviour. The loop changes the code.
 src/test/**
+# The code may grow, but what it declared when adopted stays exactly as it was (seed: "keep the existing
+# public methods as they are"); new declarations beside them are the loop's to add.
+members: src/main/**

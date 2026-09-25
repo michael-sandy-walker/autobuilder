@@ -108,6 +108,10 @@ public class AutobuilderService implements CheckpointableState {
     @lombok.Setter
     private com.walpro.autobuilder.core.init.StartModeService startModeService;
 
+    /** T4-CQ: records an adopted tree's member-protected text; optional, so narrow tests need not wire it. */
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.ProtectedPaths protectedPaths;
+
     /**
      * T4-DR: the tree-property repairs, shared with the merge path. Applied once to the tree a
      * CONTINUE_LINEAGE run is handed, because a merge is an event that run may never have.
@@ -657,6 +661,9 @@ public class AutobuilderService implements CheckpointableState {
         }
         performStart(start);
         StartMode startedAs = start != null ? start.mode() : StartMode.NEW_PROJECT;
+        // T4-CQ: the adopted text is the authority for "keep what exists"; it is recorded before any
+        // cycle can write, and a baseline already there (a restart of the same adoption) is kept.
+        if (startedAs == StartMode.ADOPT_PROJECT && protectedPaths != null) protectedPaths.recordAdoptionBaseline();
         if (startedAs == StartMode.ADOPT_PROJECT && goalPlannerService.getRootGoal() == null) {
             awaitingGoal = true;
             log.warn("T4-CQ: adopted {} and it has no goal yet, so the loop is waiting rather than "

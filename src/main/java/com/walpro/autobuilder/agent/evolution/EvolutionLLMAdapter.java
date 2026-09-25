@@ -115,6 +115,9 @@ public class EvolutionLLMAdapter {
             // anything downstream (graph records, probe, merge) sees the outcome.
             outcome = packageConsolidationService.consolidate(
                     outcome, refreshed.outputPath(), refreshed.cycleName());
+            // T4-CQ: and with every declaration a member-protected file had at adoption kept as it
+            // was -- here, before the graph, the probe or the merge sees the outcome.
+            outcome = preserveAdopted(outcome);
 
             evolutionActionRegistrar.registerEvolution("StaticEvolutionAgent", context, outcome);
             evolveGraph(context, outcome);
@@ -135,6 +138,17 @@ public class EvolutionLLMAdapter {
 
         return context
                 .withEvolutionOutcome(outcome);
+    }
+
+    private EvolutionOutcome preserveAdopted(EvolutionOutcome outcome) {
+        if (protectedPaths == null || outcome == null) return outcome;
+        List<com.walpro.autobuilder.agent.evolution.model.FileMutation> files = outcome.addedOrChangedFiles() == null ? List.of()
+                : outcome.addedOrChangedFiles().stream().map(f -> f == null || f.path() == null ? f
+                        : new com.walpro.autobuilder.agent.evolution.model.FileMutation(f.path(),
+                                protectedPaths.preserve("evolution", f.path(), f.content()))).toList();
+        List<String> deleted = outcome.deletedFiles() == null ? List.of()
+                : outcome.deletedFiles().stream().filter(d -> !protectedPaths.refuseDelete("evolution", d)).toList();
+        return outcome.withAddedOrChangedFiles(files).withDeletedFiles(deleted);
     }
 
     public CycleContextData evolveDivergent(CycleContextData ctx) {

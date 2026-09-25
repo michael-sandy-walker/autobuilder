@@ -249,7 +249,8 @@ public class MergeAgent implements ExecutionAgent {
                 if (!fileExistsInOutput) {
                     newlyAddedPaths.add(path);
                 }
-                fileService.writeFileResolved(outputFile, result.currentContent());
+                fileService.writeFileResolved(outputFile, protectedPaths != null
+                        ? protectedPaths.preserve("the merge", path, result.currentContent()) : result.currentContent());
             } catch (IOException e) {
                 log.warn("Failed to write output file {}: {}", path, e.getMessage());
                 continue;

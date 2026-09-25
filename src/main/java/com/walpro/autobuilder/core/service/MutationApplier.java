@@ -57,7 +57,8 @@ public class MutationApplier {
                     if (protectedPaths != null && protectedPaths.refuse("evolution", file.path())) {
                         continue;
                     }
-                    writeFile(outputPrefix + file.path(), file.content(), "output");
+                    writeFile(outputPrefix + file.path(), protectedPaths != null
+                            ? protectedPaths.preserve("evolution", file.path(), file.content()) : file.content(), "output");
                 } else {
                     writeFile(mutationPrefix + file.path(), file.content(), "mutations");
                 }
@@ -71,7 +72,8 @@ public class MutationApplier {
         for (String deleted : mutations.deletedFiles()) {
             try {
                 if (includeOutput) {
-                    if (protectedPaths != null && protectedPaths.refuse("evolution", deleted)) continue;
+                    if (protectedPaths != null && (protectedPaths.refuse("evolution", deleted)
+                            || protectedPaths.refuseDelete("evolution", deleted))) continue;
                     deleteFile(outputPrefix + deleted, "output");
                 } else {
                     deleteFile(mutationPrefix + deleted, "mutations");

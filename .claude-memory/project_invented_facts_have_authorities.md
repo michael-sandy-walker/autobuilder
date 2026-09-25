@@ -139,3 +139,14 @@ component that performed it. Before concluding an authority has no answer, read 
 answers are consumed by another, name the mismatch before trusting a clean report. Here the probe
 took its questions from the specification and its answers were wanted by the goal tree, and the
 two had drifted 11 criteria apart without a single warning.
+
+**2026-09-25, false completion on structdiff run `2026-09-25_04-35-01` -- the authority was the test
+SOURCE, and the question went to a model instead.** The verifier marked all 26 requirements met in one
+call, "a test must assert what the entry point actually returns" among them, over a test named
+`summarizeReturnsNonEmptyString`. Which assertions a test method makes is a static fact; a model
+reading 26 claims at once is the one reader that can get it wrong. Fixed by `EntryPointAssertions`
+(refusal only). **Triage rule it adds: before a requirement goes to the verifier, ask whether the
+tree itself can answer it by reading structure -- if so, that reading is the gate and the model
+is only asked what structure cannot settle.** Same night, same shape: `DeclaredAccessorResolver`
+(the compiler plus the type's source settle `getType()` vs `type()`) and `ObservedBehaviour` (a
+`but was` line is the code's own answer, kept instead of re-learned each cycle).

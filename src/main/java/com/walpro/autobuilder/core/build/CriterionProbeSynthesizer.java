@@ -203,6 +203,19 @@ public class CriterionProbeSynthesizer {
             String component, String specification, Path artifactRoot) {
         if (specification == null || specification.isBlank()) return Optional.empty();
 
+        // T3-CB: the status must be one the SPECIFICATION supports for this endpoint -- a rule
+        // that names the seed, never a status. Where the seed states success statuses for the
+        // endpoint, a criterion asserting another is not probed against a resource created to
+        // satisfy it; where it states none, success follows from the endpoint being described.
+        // Ported from the loop's own implementation (run 2026-09-26_00-42-19, the first run
+        // whose goal was a ticket: criterion-status, 277/277).
+        SeedStatusSupport.Verdict support = SeedStatusSupport.of(assertion.criterionText(), specification);
+        if (support != SeedStatusSupport.Verdict.SUPPORTED) {
+            log.info("T3-CB: [{}] asserts a status the specification does not support for its endpoint ({}) "
+                    + "-- not grounded", assertion.describe(), support);
+            return Optional.empty();
+        }
+
         // — THE GATE THAT KEEPS THE WITHDRAWAL INTACT. The setup below CREATES the resource, so
         // it establishes that the reference resolves. A criterion asserting what happens when it
         // does NOT resolve has the opposite premise, and grounding it this way would assert a 404

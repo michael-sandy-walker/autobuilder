@@ -1,0 +1,28 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 979aabe5b90f16e91255db64aee946cd6bd93709678b048262c8aca5ea6329f1
+# body-sha256: 08944ab86b57bb7f75089d49649351a8b5c6128c37aed8c0d4a3dfdc1648f0b5
+SeedStatusSupport.of returns NO_OPINION when the criterion is null
+SeedStatusSupport.of returns NO_OPINION when the criterion is blank
+SeedStatusSupport.of returns NO_OPINION when the specification is null
+SeedStatusSupport.of returns NO_OPINION when the specification is blank
+SeedStatusSupport.of returns NO_OPINION when BehaviouralCriterionParser.parse reads no single endpoint with a single status from the criterion
+SeedStatusSupport.of returns UNSUPPORTED when the specification does not name the criterion's endpoint at all
+SeedStatusSupport.of returns SUPPORTED when the criterion's status is outside 200-299 and is among the statuses the specification states for that endpoint
+SeedStatusSupport.of returns UNSUPPORTED when the criterion's status is outside 200-299 and is not among the statuses the specification states for that endpoint
+SeedStatusSupport.of returns SUPPORTED when the criterion's status is in 200-299 and the specification states no status in 200-299 for that endpoint
+SeedStatusSupport.of returns SUPPORTED when the criterion's status is in 200-299 and the specification states this one for that endpoint
+SeedStatusSupport.of returns UNSUPPORTED when the criterion's status is in 200-299 and the specification states a different status in 200-299 for that endpoint
+SeedStatusSupport reads the specification's statuses through SpecEndpointBehaviourQuery.statedBehaviours
+SeedStatusSupport reads the criterion through BehaviouralCriterionParser.parse
+SeedStatusSupport uses EndpointPaths.declaredIn to determine if the specification names the criterion's endpoint
+Only SeedStatusSupport under src/main/java is changed
+No files under src/test are modified
+All other classes remain exactly as they are
+The project's packages, classes and naming are kept
+gate: tests every test in SeedStatusSupportSpecTest passes
+gate: tests the whole suite passes

@@ -432,6 +432,27 @@ class CriterionProbeSynthesizerTest {
         assertThat(synthesizer.synthesize(SPEC_WITH_MEMBERS, a, root)).isEmpty();
     }
 
+    /**
+     * T3-CB: grounding follows the SPECIFICATION's statuses for the endpoint. Where it states a
+     * success status of its own, a criterion asserting a different one is not probed against a
+     * resource created for it; the same criterion under a specification stating none is grounded
+     * (the test above).
+     */
+    @Test
+    void aSuccessStatusTheSpecificationDoesNotStateIsNotGrounded(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        Path model = root.resolve("src/main/java/com/example/Member.java");
+        Files.createDirectories(model.getParent());
+        Files.writeString(model, "public class Member { private String name; private String email; }");
+
+        var a = BehaviouralCriterionParser.parse(
+                "GET /loans?memberId={id} returns HTTP 200 with a JSON array of loans").orElseThrow();
+        String statesAnother = SPEC_WITH_MEMBERS.replace("(list loans for a member)",
+                "(list loans for a member; 206 with a partial list)");
+
+        assertThat(synthesizer.synthesize(statesAnother, a, root)).isEmpty();
+        assertThat(synthesizer.synthesize(SPEC_WITH_MEMBERS, a, root)).isPresent();
+    }
+
     /** A parameter whose stem matches no collection the specification declares is not guessed at. */
     @Test
     void aReferenceNamingNoDeclaredCollectionIsNotGrounded(@org.junit.jupiter.api.io.TempDir Path root) {

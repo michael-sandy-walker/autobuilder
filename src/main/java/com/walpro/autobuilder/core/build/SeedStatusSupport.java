@@ -1,5 +1,14 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.analysis.structure.Endpoint;
+import com.walpro.autobuilder.analysis.structure.EndpointPaths;
+import com.walpro.autobuilder.analysis.structure.SpecEndpointBehaviourQuery;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
 /**
  * T3-CB: is the response status an acceptance criterion asserts one its specification supports?
  *
@@ -32,6 +41,40 @@ public final class SeedStatusSupport {
 
     /** The verdict for {@code criterion} under {@code specification}; see the class comment. */
     public static Verdict of(String criterion, String specification) {
-        throw new UnsupportedOperationException("not implemented");
+        if (criterion == null || criterion.isBlank() || specification == null || specification.isBlank()) {
+            return Verdict.NO_OPINION;
+        }
+
+        Optional<BehaviouralCriterionParser.Assertion> parsed = BehaviouralCriterionParser.parse(criterion);
+        if (parsed.isEmpty()) {
+            return Verdict.NO_OPINION;
+        }
+
+        BehaviouralCriterionParser.Assertion assertion = parsed.get();
+        Endpoint endpoint = new Endpoint(assertion.verb(), assertion.path());
+        int assertedStatus = assertion.expectedStatus();
+
+        Set<Endpoint> declared = EndpointPaths.declaredIn(specification);
+        if (!declared.contains(endpoint)) {
+            return Verdict.UNSUPPORTED;
+        }
+
+        Map<Endpoint, List<SpecEndpointBehaviourQuery.StatedBehaviour>> behaviours =
+                new SpecEndpointBehaviourQuery().statedBehaviours(specification);
+        List<SpecEndpointBehaviourQuery.StatedBehaviour> stated = behaviours.getOrDefault(endpoint, List.of());
+
+        if (assertedStatus >= 200 && assertedStatus <= 299) {
+            boolean anySuccessStated = stated.stream().anyMatch(b -> b.status() >= 200 && b.status() <= 299);
+            if (!anySuccessStated) {
+                return Verdict.SUPPORTED;
+            }
+            return stated.stream().anyMatch(b -> b.status() == assertedStatus)
+                    ? Verdict.SUPPORTED
+                    : Verdict.UNSUPPORTED;
+        }
+
+        return stated.stream().anyMatch(b -> b.status() == assertedStatus)
+                ? Verdict.SUPPORTED
+                : Verdict.UNSUPPORTED;
     }
 }

@@ -19,6 +19,7 @@ metadata:
 - **Ported** the loop's body verbatim (`27459ebc`), wired before the 2xx creation-premise gate in `groundQueryReference`. Replay (`PatternCriterionProbeReplayTest -Dt3cb.replay.tree=data/firestarter/meta/preserved-artifact [-Dt3cb.replay.fresh=true]`): identical before/after; fresh boot 57/57 confirmed, 0 contradicted. T3-CB stays open only on the handler-walk unification.
 - **Waiting on the user:** (a) T3-CB's open reading -- is a missing required query parameter "invalid input" in the seed's sense (the absent-input 400 probe is outside the rule)? (b) the carried T4-DY and obligations-marker decisions from session 5.
 - **Watches, not filed (single sightings):** one boot + identical derived setup bodies -> 409 on the second setup (replay 56/57 on one boot; field 1); an HTTP-shaped advisory ("no HTTP status mapping ... 500s") shown to the model for a LIBRARY target; the change-target spec now has two copies (target bootstrap = frozen input, `src/test` = Autobuilder's regression).
+- **Session 2's generator check, done (`9fb80457`):** `ObjectiveCoverage` + one retry + seed-words fallback; 28/28 live samples carried the objective and gate markers. T4-DY still waits on the user's decision.
 - **Environment:** Docker Desktop was OOM-killed at 00:25 during run 1 (swap; one local-model call took 4 min) -- the previous Claude session died with it. Restart: `systemctl --user start docker-desktop`.
 
 ## 2026-09-25 LATE NIGHT (Opus 5.5, session 5, closing) — THE NEXT SESSIONS: WHERE TO START AND WHAT TO PROMPT

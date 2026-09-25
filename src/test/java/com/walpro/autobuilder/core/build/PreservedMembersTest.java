@@ -74,6 +74,32 @@ class PreservedMembersTest {
         assertThat(PreservedMembers.restore(ADOPTED, r.content()).restored()).isEmpty();
     }
 
+    /**
+     * participation-totals run 2026-09-25_20-51-35: the rewrite also dropped a record component and two
+     * imports. The result is the ADOPTED file plus what was added -- its header and imports included --
+     * so no restored member can refer to something the rewrite took away.
+     */
+    @Test
+    void aRewrittenHeaderAndDroppedImportsAreTheAdoptedOnes_withTheAdditionKept() {
+        String rewrite = """
+                package zeta;
+
+                public record Inkwell(java.util.Map<String, Integer> wells, int spare) {
+                    public Inkwell pour(String well, int drops) { return this; }
+                    public int total() { return wells.size(); }
+                }
+                """;
+
+        var r = PreservedMembers.restore(ADOPTED, rewrite);
+
+        assertThat(r.content()).startsWith(ADOPTED.substring(0, ADOPTED.indexOf("public record")))
+                .contains("public record Inkwell(Map<String, Integer> wells) {", "next.merge(well, drops, Integer::sum);",
+                        "/** Adds to what is there. */", "public int total() { return wells.size(); }")
+                .doesNotContain("int spare");
+        assertThat(r.restored()).contains("Inkwell declaration (changed)", "Inkwell.pour(String,int) (changed)",
+                "Inkwell.field DRY (removed)");
+    }
+
     /** Comments and layout are the writer's: only a difference in the code puts a member back. */
     @Test
     void aReformattedOrUncommentedMemberIsNotAChange() {

@@ -1,0 +1,18 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 1a858dba5129ef57ffa352d45523765d56597d763e83802d97f04959a37d3b21
+# body-sha256: 6e3a7fcb969f039f7ebb46c563434382b689df008a0fcc7cc11e7412b0d3a209
+ParticipationWindows.totalBoost() returns the sum of the active windows' boosts
+ParticipationWindows.totalBoost() returns 0.0 when there are no active windows
+ChannelRequest.withoutMeta(key) returns a copy of the request without that meta key
+ChannelRequest.withoutMeta(key) leaves every other field unchanged
+ChannelRequest.withoutMeta(key) returns the same request when the key is absent
+The code under src/main/java provides the two methods
+The existing public methods remain unchanged
+The project's packages, classes and naming are kept
+The tests in TotalsSpecTest pass
+The whole test suite passes

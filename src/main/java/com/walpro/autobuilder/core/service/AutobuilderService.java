@@ -1484,7 +1484,7 @@ public class AutobuilderService implements CheckpointableState {
                 Double scoreBefore = anchoredInThisRun ? snap.evalScoreBefore() : null;
                 if (scoreNow != null && scoreNow >= 0.75
                         && (scoreBefore == null || scoreNow >= scoreBefore - 0.05)) {
-                    log.info("{} consecutive same-fingerprint cycles + stable score ({:.3f}) — promoting criteria-less subgoal to FULFILLED (subGoalId={}).",
+                    log.info("{} consecutive same-fingerprint cycles + stable score ({}) — promoting criteria-less subgoal to FULFILLED (subGoalId={}).",
                             consecutiveSameFingerprintCycles, scoreNow, cdSubGoalId);
                     consecutiveSameFingerprintCycles = 0;
                     consecutiveStagnatingCyclesWithoutMerge = 0;

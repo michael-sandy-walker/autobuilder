@@ -51,7 +51,7 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
                 && original.mutationState() == MutationAcceptanceState.REJECTED
                 && original.score() != null
                 && original.score() < SOFT_BAND_LOWER) {
-            log.info("DeterministicScoreHeuristic abstaining — LLM REJECTED at score={:.2f} (below soft-band floor {:.2f}); project-level globalScore not relevant"
+            log.info("DeterministicScoreHeuristic abstaining — LLM REJECTED at score=%.2f (below soft-band floor %.2f); project-level globalScore not relevant"
                     .formatted(original.score(), SOFT_BAND_LOWER));
             return HeuristicOpinion.none(NAME);
         }
@@ -82,8 +82,24 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
             return evaluateSoftBand(input, scoring, s, rawConfidence, effectiveLowerBand, lastAccepted, original);
         }
 
-        // Below effective lower band: REJECTED at raw confidence (can reach CRITICAL)
-        return rejected(s, rawConfidence, original, "Deterministic score from ScoringService.globalScore=%.3f confidence=%.2f".formatted(s, rawConfidence));
+        // Below effective lower band: REJECTED at raw confidence (can reach CRITICAL) -- unless the
+        // score rests on diff SHAPE alone.
+        //
+        // T4-CQ: with no finding behind it, the per-file score is arithmetic on line counts (a
+        // modified file changing more than 50 lines is 0.60), so every large rewrite scores the
+        // same, and the confidence above measures how STABLE that number is between cycles. The
+        // two together made "same size class as last time" a certainty: structdiff run
+        // 2026-09-25_00-53-42 overturned 7 of the model's 15 acceptances at confidence 1.00 on a
+        // constant 0.630, four in a row while the suite was red -- the rewrites that repair
+        // failing tests are exactly the ones that change many lines. Capped at HIGH, it stays a
+        // vote the other heuristics and the model can outweigh; a real finding keeps the veto.
+        double confidence = rawConfidence;
+        String basis = "";
+        if (scoring.findings() == null || scoring.findings().isEmpty()) {
+            confidence = Math.min(rawConfidence, SOFT_BAND_REJECTED_CONFIDENCE_CAP);
+            basis = " (diff shape only, no finding -- capped)";
+        }
+        return rejected(s, confidence, original, "Deterministic score from ScoringService.globalScore=%.3f confidence=%.2f%s".formatted(s, confidence, basis));
     }
 
     /**

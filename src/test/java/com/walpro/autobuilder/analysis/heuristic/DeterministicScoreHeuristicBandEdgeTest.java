@@ -30,6 +30,24 @@ class DeterministicScoreHeuristicBandEdgeTest {
         return new ScoringResult(score, score, null, null, Map.of(), List.of(), Map.of(), Map.of(), "g");
     }
 
+    /** A score with an actual finding behind it -- the case that keeps its veto. */
+    private ScoringResult stableScoringWithFinding(double score) {
+        return new ScoringResult(score, score, null, null, Map.of(),
+                List.of(new HeuristicFinding("More than 3 files deleted", HeuristicFinding.Severity.WARNING,
+                        "high-deletion-risk", null)),
+                Map.of(), Map.of(), "g");
+    }
+
+    private CycleContextData ctxWithFinding(double score, Double lastAcceptedSubgoalScore) {
+        return CycleContextData.builder()
+                .scoringResult(stableScoringWithFinding(score))
+                .projectDiff(meaningfulDiff())
+                .problemContext(noBlockers())
+                .previousProblemContext(noBlockers())
+                .lastAcceptedSubgoalScore(lastAcceptedSubgoalScore)
+                .build();
+    }
+
     private ProjectDiffResult meaningfulDiff() {
         return new ProjectDiffResult(null, Map.of("LoanService.java", "new content"), Set.of());
     }
@@ -131,12 +149,27 @@ class DeterministicScoreHeuristicBandEdgeTest {
 
     @Test
     void belowSoftBand_rejected_atCritical() {
-        CycleContextData input = ctx(0.69, meaningfulDiff(), noBlockers(), noBlockers(), null);
+        CycleContextData input = ctxWithFinding(0.69, null);
 
         HeuristicOpinion opinion = heuristic.evaluate(input, DUMMY_LLM_ACCEPTED);
 
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
         assertThat(opinion.level()).isEqualTo(ConfidenceLevel.CRITICAL);
+    }
+
+    /**
+     * T4-CQ: a score resting on diff shape alone (no finding) repeats for every rewrite of the same
+     * size, and its stability is what drove confidence to 1.0 -- it may still reject, never veto.
+     */
+    @Test
+    void belowSoftBand_withNoFinding_rejectsAtHighNotCritical() {
+        CycleContextData input = ctx(0.63, meaningfulDiff(), noBlockers(), noBlockers(), null);
+
+        HeuristicOpinion opinion = heuristic.evaluate(input, DUMMY_LLM_ACCEPTED);
+
+        assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.HIGH);
+        assertThat(opinion.rationale()).contains("diff shape only");
     }
 
     // ---- (d) At or above 0.75: ACCEPTED at CRITICAL (unchanged behaviour) ----
@@ -167,7 +200,7 @@ class DeterministicScoreHeuristicBandEdgeTest {
     void dynamicFloor_raisedWhenLastAcceptedIsHigh() {
         // lastAccepted=0.80, effectiveLowerBand=max(0.70, 0.75)=0.75
         // score=0.72 < effectiveLowerBand=0.75 → below band → REJECTED CRITICAL
-        CycleContextData input = ctx(0.72, meaningfulDiff(), noBlockers(), noBlockers(), 0.80);
+        CycleContextData input = ctxWithFinding(0.72, 0.80);
 
         HeuristicOpinion opinion = heuristic.evaluate(input, DUMMY_LLM_ACCEPTED);
 

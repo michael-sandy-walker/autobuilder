@@ -4480,7 +4480,10 @@ public class GoalPlannerService {
                                 unasserted.size() + " obligation(s) name an entry point no test calls and value-asserts: "
                                         + unasserted.values().stream().map(
                                                 com.walpro.autobuilder.core.build.EntryPointAssertions.Finding::describe)
-                                                .distinct().limit(5).reduce((a, b) -> a + "; " + b).orElse(""),
+                                                .distinct().limit(5).reduce((a, b) -> a + "; " + b).orElse("")
+                                        + ". To learn a value you do not know, assert your best guess with an equality"
+                                        + " assertion: the test run reports what the code actually returned ('but was'),"
+                                        + " and that is the value to assert.",
                                 new ArrayList<>(unasserted.keySet()));
                 if (!unasserted.isEmpty()) {
                     log.warn("T4-CQ: root closure refused by the test sources -- {}", completionVerification.unconfirmed().orElse(""));

@@ -17,7 +17,7 @@ metadata:
 - **The ticket scan (for T4-CF's "goal from a ticket"):** no open ticket's change lands in an extractable module; `scripts/module_closures.py summary` = 145 of 478 classes with a closure > 50, 17% of lines in small Spring-free closures. Recorded on `T4-CF`.
 - **Next session, first: a goal from a REAL ticket.** T3-CB's candidate rule as a pure classifier in a small home beside `SeedRequirements`; spec tests derived from the graph's labelled criteria (97: 51 / 27 / 13); Autobuilder's own existing tests of that closure as the regression suite; run as a change target; then port the patch back into Autobuilder as a reviewed diff and wire it where `CriterionProbeSynthesizer` needs it. Re-read `T3-CB` and `T3-CC` first (the exclusion half is done by T3-CC).
 - **Small decisions waiting on the user:** `T4-DY` -- narrow to a diagnosis request + in-loop halt, or close on slice 1's measurement. The obligations generator's missing `gate:`/`rule:` markers on change seeds (a watch; a cheap check: every OBJECTIVE clause of the seed appears among the obligations).
-- **Later, the user's "make Autobuilder more modular":** a measured extraction programme with `module_closures.py` as its instrument (the 17% is the baseline) -- not filed; the user decides whether it becomes a ticket.
+- **Filed on the user's word: `T5-BR`** -- make Autobuilder modular enough that a ticket's change lands in a small extractable closure; instrument `scripts/module_closures.py` (baseline 17%). Its first extraction is the T3-CB rule's home, which is also session 1's task.
 
 ## 2026-09-25 NIGHT (Opus 5.5, session 5 continued) — THE LOOP CHANGES ADOPTED CODE; T4-CS SLICE 2 VALIDATED; THE EVOLUTION PROMPT NOW SHOWS SOURCE
 

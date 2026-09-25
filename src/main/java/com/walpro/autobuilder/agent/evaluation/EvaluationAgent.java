@@ -587,9 +587,14 @@ public class EvaluationAgent implements ExecutionAgent {
             // injector's deterministic infrastructure (a bootstrapped pom.xml, skeletons): it made
             // the build green and is not the evaluated LLM work, so reverting it just strands the
             // project (re-bootstrap then gets T2-DY-blacklisted → wedge on "no POM").
-            java.util.Set<String> injectorPaths = context.injectorFixes().stream()
-                    .flatMap(f -> f.touchedPaths().stream())
-                    .collect(java.util.stream.Collectors.toSet());
+            //
+            // T4-CQ: only what the injector ADDED beside the candidate. A fix that edited one of the
+            // model's own staged files (DeclaredAccessorResolver rewriting getType() in a new test)
+            // is part of the rejected candidate: preserving it left rejected, failing tests in the
+            // tree -- run 2026-09-25_03-54-52 logged "rolled back 0 paths (preserved 1
+            // injector-created file(s))" five times and ended with two failing tests nothing merged.
+            // The probe's own rollback already excludes staged paths (selectPreservableInjectorFiles).
+            java.util.Set<String> injectorPaths = preservableInjectorPaths(context);
             mergeRollbackService.rollback(rollbackPoint, context.outputPath(), fileService, injectorPaths);
             log.info("EvaluationAgent T1-EC: LLM rejected after compile-OK probe — rolling back {} staged files, preserving injector-created infrastructure",
                     rollbackPoint.originalContents().size());
@@ -1316,6 +1321,20 @@ public class EvaluationAgent implements ExecutionAgent {
      * the same provenance). Injector mutations override LLM mutations on the same path because the
      * injector wrote the file last on disk.
      */
+    /** The injector's paths an evaluation rollback keeps: those it added beside the model's own staged files. */
+    static java.util.Set<String> preservableInjectorPaths(CycleContextData context) {
+        java.util.Set<String> llmStaged = context.evolutionOutcome() == null
+                || context.evolutionOutcome().addedOrChangedFiles() == null ? java.util.Set.of()
+                : context.evolutionOutcome().addedOrChangedFiles().stream()
+                        .filter(java.util.Objects::nonNull).map(m -> m.path())
+                        .filter(java.util.Objects::nonNull)
+                        .collect(java.util.stream.Collectors.toSet());
+        return context.injectorFixes().stream()
+                .flatMap(f -> f.touchedPaths().stream())
+                .filter(path -> !llmStaged.contains(path))
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
     private CycleContextData foldInjectorFixes(CycleContextData context, CompileProbeService.ProbeResult probeResult) {
         if (probeResult == null || probeResult.appliedFixes().isEmpty()) return context;
         List<FixProposal> appliedFixes = probeResult.appliedFixes();

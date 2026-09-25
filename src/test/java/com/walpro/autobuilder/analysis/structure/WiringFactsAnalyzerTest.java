@@ -42,7 +42,7 @@ class WiringFactsAnalyzerTest {
                     }
                 }
                 """);
-        assertThat(analyzer.analyze(files))
+        assertThat(analyzer.analyze(serving(files)))
                 .anyMatch(o -> o.contains("no HTTP status mapping"));
     }
 
@@ -102,7 +102,7 @@ class WiringFactsAnalyzerTest {
                             public String h(BookAlreadyLoanedException e) { return e.getMessage(); }
                         }
                         """);
-        List<String> obs = analyzer.analyze(files);
+        List<String> obs = analyzer.analyze(serving(files));
         assertThat(obs).anyMatch(o -> o.contains("RuntimeException")
                 && o.contains("not covered by any mapped type"));
         assertThat(obs).anyMatch(o -> o.contains("BookAlreadyLoanedException")
@@ -144,7 +144,7 @@ class WiringFactsAnalyzerTest {
                             }
                         }
                         """);
-        List<String> obs = analyzer.analyze(files);
+        List<String> obs = analyzer.analyze(serving(files));
         assertThat(obs).anyMatch(o -> o.contains("WITH a status mapping in place")
                 && o.contains("MaxActiveLoansExceededException → HttpStatus.UNPROCESSABLE_ENTITY"));
         // The wiring is complete on both sides — neither gap fact may fire for this type.
@@ -583,7 +583,7 @@ class WiringFactsAnalyzerTest {
         Map<String, String> files = Map.of(
                 "src/main/java/LoanService.java", SERVICE_THROWING_RUNTIME);
 
-        assertThat(analyzer.statusRiskFacts(files))
+        assertThat(analyzer.statusRiskFacts(serving(files)))
                 .anyMatch(f -> f.contains("no HTTP status mapping was found")
                         && f.contains("surface as 500s"));
     }
@@ -594,7 +594,7 @@ class WiringFactsAnalyzerTest {
                 "src/main/java/LoanService.java", SERVICE_THROWING_RUNTIME,
                 "src/main/java/LoanController.java", CONTROLLER_CATCHING_SUBCLASSES);
 
-        assertThat(analyzer.statusRiskFacts(files))
+        assertThat(analyzer.statusRiskFacts(serving(files)))
                 .anyMatch(f -> f.contains("RuntimeException") && f.contains("not covered"));
     }
 
@@ -630,7 +630,7 @@ class WiringFactsAnalyzerTest {
                 "src/main/java/LoanService.java", SERVICE_THROWING_NAMED,
                 "src/main/java/LoanController.java", swallowing);
 
-        assertThat(analyzer.statusRiskFacts(files))
+        assertThat(analyzer.statusRiskFacts(serving(files)))
                 .anyMatch(f -> f.contains("no HTTP status mapping was found"));
     }
 
@@ -642,9 +642,9 @@ class WiringFactsAnalyzerTest {
         Map<String, String> files = Map.of(
                 "src/main/java/LoanService.java", SERVICE_THROWING_RUNTIME);
 
-        String fromVerifier = analyzer.analyze(files).stream()
+        String fromVerifier = analyzer.analyze(serving(files)).stream()
                 .filter(f -> f.contains("no HTTP status mapping")).findFirst().orElseThrow();
-        String fromPrompt = analyzer.statusRiskFacts(files).stream()
+        String fromPrompt = analyzer.statusRiskFacts(serving(files)).stream()
                 .filter(f -> f.contains("no HTTP status mapping")).findFirst().orElseThrow();
 
         assertThat(fromPrompt).isEqualTo(fromVerifier);
@@ -899,5 +899,35 @@ class WiringFactsAnalyzerTest {
 
         assertThat(obs).noneMatch(o -> o.contains("'other'")).noneMatch(o -> o.contains("'unused'"));
         assertThat(obs).as("an ordinary method still reports it").anyMatch(o -> o.contains("'factor'"));
+    }
+
+    /**
+     * The fixtures above state a thrown exception and whatever maps it; the project they stand for
+     * serves requests, which a status fact presupposes. Added as one handler rather than written into
+     * every fixture.
+     */
+    private static Map<String, String> serving(Map<String, String> files) {
+        Map<String, String> out = new java.util.HashMap<>(files);
+        out.put("src/main/java/ServedApi.java", """
+                @RestController
+                public class ServedApi {
+                    @GetMapping("/served")
+                    public String served() { return "ok"; }
+                }
+                """);
+        return out;
+    }
+
+    /**
+     * A status is a fact only about code that answers requests. Run 2026-09-26_00-42-19 (a plain
+     * library with no handler anywhere) was told "no HTTP status mapping was found ... failures will
+     * surface as 500s" -- an ecosystem check with no marker to gate on must have no opinion.
+     */
+    @Test
+    void aLibraryThatServesNothingGetsNoStatusFact() {
+        Map<String, String> files = Map.of("src/main/java/LoanService.java", SERVICE_THROWING_RUNTIME);
+
+        assertThat(analyzer.statusRiskFacts(files)).noneMatch(f -> f.contains("status mapping") || f.contains("not covered"));
+        assertThat(analyzer.analyze(files)).noneMatch(f -> f.contains("status mapping") || f.contains("not covered"));
     }
 }

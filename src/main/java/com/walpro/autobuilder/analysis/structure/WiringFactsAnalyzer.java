@@ -161,9 +161,10 @@ public class WiringFactsAnalyzer {
         collectUnregisteredInjectedTypes(units, observations);
         if (observations.size() >= MAX_OBSERVATIONS) return observations.subList(0, MAX_OBSERVATIONS);
 
-        if (anyThrow && !anyStatusMapping && catchMappedTypes(units).isEmpty()) {
+        boolean serves = servesRequests(units);
+        if (serves && anyThrow && !anyStatusMapping && catchMappedTypes(units).isEmpty()) {
             observations.add(NO_STATUS_MAPPING_FACT);
-        } else if (anyThrow) {
+        } else if (serves && anyThrow) {
             // Type-level half of the same invariant (field run 3, 2026-07-03): the artifact mapped
             // 8 dedicated exception types in a @ControllerAdvice and threw raw RuntimeException
             // everywhere — every business-rule violation surfaced as a 500 while the file-level
@@ -948,12 +949,29 @@ public class WiringFactsAnalyzer {
         // same method. Both halves now reach the agent that can act, from the first cycle a throw
         // exists rather than from the first cycle a mapping does.
         boolean anyMapping = anyStatusMapping || !catchMappedTypes(units).isEmpty();
-        if (anyThrow && !anyMapping) {
+        boolean serves = servesRequests(units);
+        if (serves && anyThrow && !anyMapping) {
             out.add(NO_STATUS_MAPPING_FACT);
-        } else if (anyThrow) {
+        } else if (serves && anyThrow) {
             collectThrowMappingObservations(units, out);
         }
         return out;
+    }
+
+    /**
+     * Whether the project serves requests at all -- a request-mapping annotation appears somewhere.
+     *
+     * <p>A response status is a fact only about code that answers requests. The status-mapping facts
+     * fired on any project that throws: on 2026-09-26 the criterion-status target, a plain library
+     * with no handler anywhere, was told "no HTTP status mapping was found ... failures will surface
+     * as 500s". An ecosystem-specific check self-gates on the ecosystem's own markers and has no
+     * opinion on a project without them.
+     */
+    private static boolean servesRequests(List<CompilationUnit> units) {
+        return units.stream().anyMatch(u -> u.findAll(com.github.javaparser.ast.expr.AnnotationExpr.class).stream()
+                .map(a -> a.getNameAsString())
+                .anyMatch(n -> AnnotationVocabularies.VERB_MAPPING.containsKey(n)
+                        || AnnotationVocabularies.GENERIC_MAPPING.equals(n)));
     }
 
     /**

@@ -104,6 +104,11 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
 
+    /** T4-CQ: observes what an unasserted entry point returns; optional in narrow tests. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.ValueObservationProbe valueObservationProbe;
+
     /**
      * T4-CQ: writes the seed's obligations file, markers included, when a root goal is set and the
      * target has none -- optional, present only where {@code autobuilder.obligations.generate} is on.
@@ -4474,6 +4479,19 @@ public class GoalPlannerService {
                         com.walpro.autobuilder.core.build.EntryPointAssertions.unmet(
                                 SeedRequirements.verifiableObligationsOrSplit(root.getDescription(), writtenObligations()),
                                 output);
+                // T4-CQ: and where a test already calls the entry point, OBSERVE what it returns, so the
+                // work item carries the value to assert instead of asking the model to guess it.
+                String observedValues = "";
+                if (!unasserted.isEmpty() && valueObservationProbe != null) {
+                    var observations = valueObservationProbe.observe(unasserted, output,
+                            currentCycleContext != null ? currentCycleContext.cycleName() : "closure");
+                    if (!observations.isEmpty()) {
+                        observedValues = " Observed by running the existing tests: " + observations.stream()
+                                .map(com.walpro.autobuilder.core.build.ValueObservationProbe.Observation::describe)
+                                .reduce((a, b) -> a + "; " + b).orElse("") + ".";
+                    }
+                }
+                final String observedSuffix = observedValues;
                 var completionVerification = unasserted.isEmpty()
                         ? criteriaVerificationService.verifyCompletion(root.getDescription(), toVerify, output)
                         : com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.blocked(
@@ -4483,7 +4501,7 @@ public class GoalPlannerService {
                                                 .distinct().limit(5).reduce((a, b) -> a + "; " + b).orElse("")
                                         + ". To learn a value you do not know, assert your best guess with an equality"
                                         + " assertion: the test run reports what the code actually returned ('but was'),"
-                                        + " and that is the value to assert.",
+                                        + " and that is the value to assert." + observedSuffix,
                                 new ArrayList<>(unasserted.keySet()));
                 if (!unasserted.isEmpty()) {
                     log.warn("T4-CQ: root closure refused by the test sources -- {}", completionVerification.unconfirmed().orElse(""));

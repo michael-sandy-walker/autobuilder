@@ -34,4 +34,11 @@ public final class TestAssertionVocabulary {
 
     /** Annotations that mark a method as a test. */
     public static final Set<String> TEST_ANNOTATIONS = Set.of("Test", "ParameterizedTest", "RepeatedTest");
+
+    /**
+     * The one assertion call the value-observation probe writes ({@link ValueObservationProbe}), and the
+     * import that says a source can compile it. $SENTINEL and $VALUE are filled in by the probe.
+     */
+    public static final String PROBE_ASSERTION = "org.junit.jupiter.api.Assertions.assertEquals($SENTINEL, $VALUE);";
+    public static final String PROBE_ASSERTION_IMPORT = "org.junit.jupiter";
 }

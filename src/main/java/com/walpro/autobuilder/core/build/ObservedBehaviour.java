@@ -62,6 +62,14 @@ public class ObservedBehaviour {
         }
     }
 
+    /** Record one value observed directly (the value-observation probe), as of {@code mainDigest}. */
+    public synchronized void observeValue(String where, String observation, String mainDigest) {
+        if (observation == null || mainDigest == null) return;
+        String msg = observation.length() > MAX_MESSAGE * 3 ? observation.substring(0, MAX_MESSAGE * 3) + "..." : observation;
+        entries.put(msg, new Entry(where, mainDigest));
+        log.info("T4-CQ: observed behaviour -- {}: {}", where, msg);
+    }
+
     /** The block for an evolution prompt, or null when nothing observed still describes the code. */
     public synchronized String promptBlock(String currentMainDigest) {
         if (currentMainDigest == null) return null;

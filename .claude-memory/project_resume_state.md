@@ -11,7 +11,15 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-25 AFTERNOON (Opus 5.5, session 5, autonomous) — SECOND AUTOBUILDER MODULE `participation` ADOPTED; TRUE COMPLETION 14/14 (RUN 2); NARRATION NO LONGER CUT — START HERE
+## 2026-09-25 EVENING (Opus 5.5, session 5 continued, autonomous "until I say otherwise") — T4-CS FIRST SLICE: A CHILD FROM TWO DIFFERENT-SEED LINEAGES SCORES 20/20 WHERE THE BETTER PARENT SCORES 16 — START HERE
+
+- **The pair:** `participation-b` (same module, second seed: 10 entry points, 2 shared with seed A). Run 1 `2026-09-25_17-43-13` stalled at 12/12 on chained calls -> `a141fea7` (the held receiver-type fix, now shown by a run; held patch deleted). Run 2 `2026-09-25_18-34-49`: GOAL_FULFILLED 12/12 in 35 min.
+- **Gate:** `scripts/code_lineage_overlap.py` -- same-seed union = better parent (negative, as T6-G); different-seed union 20/20 vs 16/20 (positive).
+- **Built:** `core/merge/LineageTestMerge` + `scripts/merge_lineages.sh` (`d02a9fe8`). Child `~/.autobuilder/merged/participation-A2+B2`: suite 38/38, 14/14 on seed A and 12/12 on seed B. Controls hold. Suite 3321/0. Full account appended to `T4-CS` (now `[~]`).
+- **Trees kept:** `~/.autobuilder/participation-after-run{1,2}`, `~/.autobuilder/participation-b-after-run{1,2}`; `data/participation-b/output` is run 2's tree.
+- **Next if the chain continues:** the code-merge half of T4-CS -- two parents whose library code DIFFERS. Needs a module adopted with a goal that changes code, under two seeds; nothing like it exists yet.
+
+## 2026-09-25 AFTERNOON (Opus 5.5, session 5, autonomous) — SECOND AUTOBUILDER MODULE `participation` ADOPTED; TRUE COMPLETION 14/14 (RUN 2); NARRATION NO LONGER CUT
 
 **Head: see `git log`; nothing pushed. The user asked to continue the portability chain with a SECOND Autobuilder module as a target (TODO_20260921's "modules as toy cases"), chosen by measurement, stopping on a true completion or 3 runs with no new defect.**
 

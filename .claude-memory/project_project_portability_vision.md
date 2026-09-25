@@ -198,3 +198,13 @@ running record is in `roadmap.md` under T4-CQ; the how-to is in the newest block
 - **T4-CS still gated.** Two modules share no code; merging their trees tests nothing. A pair worth
   merging needs two lineages of the SAME module on DIFFERENT seeds (or goals).
 
+## Status 2026-09-25 evening -- T4-CS first slice
+
+- The re-entry condition (lineages from DIFFERENT seeds) now exists at the code layer: `participation`
+  and `participation-b`, one module under two seeds. Gate positive there (union 20/20, better parent
+  16/20) and negative for the same-seed pair (union = better parent), matching T6-G.
+- **Built:** `LineageTestMerge` + `scripts/merge_lineages.sh`. The child of the different-seed pair
+  passes its suite and meets BOTH seeds. Hard part 3 above ("code-layer equivalence") is avoided,
+  not solved: this slice requires identical library code, so only test classes can collide.
+- **Not built:** merging two parents that changed the library -- where behaviour can conflict.
+

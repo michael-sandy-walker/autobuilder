@@ -5,15 +5,22 @@
 # Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
 # takes the test run's verdict instead of asking a model to read the source.
 # seed-sha256: f85c06a9b68f301535e5e58000b7eae9e49eb2882fed16495202615f5e149d58
-# body-sha256: a85f391fad7421deba07da150fa682c09de8f71cc9a7f8d83b78bfae86961429
-Every entry point the library declares is covered by a test that calls it through its public API and asserts what it returns.
-gate: tests The whole test suite passes.
-Add tests under src/test/java.
-rule: Work inside the project as it is.
-rule: Keep the project's packages, classes, naming, and test framework choice.
-rule: Do not modify anything under src/main/java: not the formatting, not the signatures, not the logic.
-rule: If a test does not pass, the test is what is wrong.
-rule: A test must assert what the entry point actually returns.
-rule: Do not assume a result: call the entry point with Java source written inside the test, observe the answer, and assert that.
-rule: If the behaviour looks wrong, still assert the behaviour it has, and say what looked wrong in the test name or a comment.
-rule: Deciding whether a behaviour should change is not part of this objective.
+# body-sha256: 78a892ccd87502e4b65af3de8e2d1638d9b14c81013a472edcad3e691c8cc13a
+JavaStructureParser.parse(path, code) is covered by a test in the project's own test suite
+StructuralDiffUtils.flatten(root) is covered by a test in the project's own test suite
+StructuralDiffBuilder.diff(oldElement, newElement) is covered by a test in the project's own test suite
+StructuralDiffUtils.filterByType(root, type) is covered by a test in the project's own test suite
+StructuralJavaDiffBuilder.diffJavaFile(...) is covered by a test in the project's own test suite
+StructuralDiffUtils.hasChanges(node) is covered by a test in the project's own test suite
+DiffSummarizer.summarize(root) is covered by a test in the project's own test suite
+DiffSummarizer.summarizePlainText(root) is covered by a test in the project's own test suite
+DiffSummarizer.summarizeForPrompt(root) is covered by a test in the project's own test suite
+gate: tests the whole suite passes
+rule: Work inside the project as it is
+rule: Keep its packages, its classes, its naming and its test framework choice
+Add tests under src/test/java
+rule: DO NOT modify anything under src/main/java: not the formatting, not the signatures, not the logic
+rule: If a test you wrote does not pass, the test is what is wrong
+A test must assert what the entry point actually returns
+rule: Do not assume a result: call it with Java source written inside the test itself, observe the answer, and assert that
+rule: If the behaviour looks wrong to you, still assert the behaviour it has, and say what looked wrong in the test name or a comment

@@ -1,0 +1,25 @@
+  An existing project, adopted, and now asked to grow. It was written by someone else and it
+  already builds. In its own words, from its README:
+
+    "participation -- Per-role participation windows and the request records they are built from.
+    A window says that a role participates, with a boost, for a stated number of cycles. Windows and
+    requests are immutable: granting, raising, shrinking and ageing one returns a new value, and a
+    value past its horizon or below its threshold reports itself expired."
+
+  It is a library. Its existing behaviour is characterised by the tests already in src/test/java.
+  Two new capabilities are wanted on ParticipationWindows:
+
+    ParticipationWindows.roles()       the active roles, in the order each was first granted, as a
+                                       list that cannot be modified
+    ParticipationWindows.strongest()   the active window with the highest boost -- on a tie, the one
+                                       granted earliest -- or an empty Optional when there is none
+
+  The specification is RolesSpecTest in src/test/java: its tests say exactly what the two methods
+  must return, and they fail until the code provides them.
+
+  OBJECTIVE: every test in RolesSpecTest passes, and the whole suite passes.
+
+  Change the code under src/main/java to provide the two methods. DO NOT modify anything under
+  src/test: the specification and the existing tests are the operator's, and if one of them fails,
+  the code is what is wrong. Keep the existing public methods as they are -- their tests must keep
+  passing -- and keep the project's packages, classes and naming.

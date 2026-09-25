@@ -1,0 +1,24 @@
+  An existing project, adopted, and now asked to grow. It was written by someone else and it
+  already builds. In its own words, from its README:
+
+    "participation -- Per-role participation windows and the request records they are built from.
+    A window says that a role participates, with a boost, for a stated number of cycles. Windows and
+    requests are immutable: granting, raising, shrinking and ageing one returns a new value, and a
+    value past its horizon or below its threshold reports itself expired."
+
+  It is a library. Its existing behaviour is characterised by the tests already in src/test/java.
+  Two new capabilities are wanted:
+
+    ParticipationWindows.totalBoost()   the sum of the active windows' boosts, 0.0 when there is none
+    ChannelRequest.withoutMeta(key)     a copy of the request without that meta key, every other
+                                        field unchanged -- or the same request when the key is absent
+
+  The specification is TotalsSpecTest in src/test/java: its tests say exactly what the two methods
+  must return, and they fail until the code provides them.
+
+  OBJECTIVE: every test in TotalsSpecTest passes, and the whole suite passes.
+
+  Change the code under src/main/java to provide the two methods. DO NOT modify anything under
+  src/test: the specification and the existing tests are the operator's, and if one of them fails,
+  the code is what is wrong. Keep the existing public methods as they are -- their tests must keep
+  passing -- and keep the project's packages, classes and naming.

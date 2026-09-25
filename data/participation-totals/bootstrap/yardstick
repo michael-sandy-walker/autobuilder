@@ -1,0 +1,3 @@
+# T4-DG: the yardstick this target is scored by. One line: <script> [mode]
+# A change target: the specification tests pass, src/test is the operator's and unmodified, the whole suite passes.
+scripts/smoke_participation_totals.sh terminating

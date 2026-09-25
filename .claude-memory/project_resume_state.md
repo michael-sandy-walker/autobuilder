@@ -11,7 +11,17 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-25 (Opus 5.5, session 4) — T4-CQ: MARKERS GENERATED; STRUCTDIFF RUN 3 FOUND THE REPAIR ITEM BLIND TO ASSERTION VALUES — START HERE
+## 2026-09-25 NIGHT (Opus 5.5, session 4, autonomous on the user's word) — T4-CQ AND T4-CR CLOSED; SIX LOOP DEFECTS FIXED FROM STRUCTDIFF RUNS 3-5; EARLY STOP — START HERE
+
+**Head: see `git log`; nothing pushed. The user said "just fix it continuously and autonomously", then "continue further on the chain we're trying to complete (TODO_20260921)" = the portability chain T4-CQ/CR/CS on Autobuilder's own modules.**
+
+- **Closed:** `T4-CQ` (DoD met on rung1 long ago); `T4-CR` -- `scripts/bundle.py store|restore|list`, verified by content hash on a clean Neo4j container (`neo4j-bundle-test`, 7475/7688) and by a CONTINUE_LINEAGE run resuming the restored lineage there. `T4-CS` stays gated (T6-G negative for same-seed lineages) -- the chain's next honest step is a DIFFERENT-seed or different-module pair, if the user wants it.
+- **Fixed tonight from structdiff runs 3-5 (roadmap T4-CQ appends):** assertion failure lines reach the repair item; `StagedTestFailureHeuristic` (own failing tests rejected before merge, observed values relayed); goal dedup no longer merges items naming different classes; `DeterministicScoreHeuristic` no longer vetoes on line-count arithmetic (twice: the second time the INFO `minor-edits` note had kept the veto alive); protected-type advice pairs `getType() -> type()`; generator prompt v4 (what the tests must assert is a check). Plus `semantic-memory-substrate` `591bacd` (commit validated the whole graph, 7-25 min per commit; now the batch only), installed to `~/.m2`.
+- **`scripts/early_stop.sh <target>`** beside a run: pauses it when the yardstick copy has been flat for 20 min after 25 min; preflight records `terminal=operator-stop`. Fired correctly on run 5.
+- **State left behind:** `data/structdiff/bootstrap/seed.obligations.txt` is the v4 GENERATED file (the hand file is in git and at `~/.autobuilder/structdiff-hand-obligations/`); `data/structdiff-r/` is the restored test target; bundle `~/.autobuilder/bundles/structdiff-run4`.
+- **Next:** structdiff run 6 on this build (veto cap now effective, accessor pairing); the open speed limit is one assertion discovered per cycle -- letting the model OBSERVE an entry point's return before asserting is a capability, not filed yet.
+
+## 2026-09-25 (Opus 5.5, session 4) — T4-CQ: MARKERS GENERATED; STRUCTDIFF RUN 3 FOUND THE REPAIR ITEM BLIND TO ASSERTION VALUES
 
 **Head `fc16cb39` plus uncommitted work (not committed; the user's call). Suite 3281/0/5 with the generator; `TestRunGateTest` green with the gate fix.**
 

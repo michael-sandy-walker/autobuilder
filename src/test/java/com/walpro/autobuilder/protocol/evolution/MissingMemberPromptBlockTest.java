@@ -37,6 +37,17 @@ class MissingMemberPromptBlockTest {
                 .doesNotContain("ADD TO Quill.java").doesNotContain("do NOT change the caller");
         assertThat(MissingMemberPromptBlock.render(ctx)).as("unprotected: the standing advice")
                 .contains("ADD TO Quill.java");
+        // T4-CQ: the failed accessor is paired with the member it names.
+        assertThat(block).contains("getInk(...) -> ink()");
+    }
+
+    @Test
+    void meantMember_pairsAnAccessorWithTheMemberItNames_inEitherDirection() {
+        var declared = java.util.List.of("ink()", "nib()", "isSharp()");
+        assertThat(MissingMemberPromptBlock.meantMember("getInk", declared)).isEqualTo("ink()");
+        assertThat(MissingMemberPromptBlock.meantMember("sharp", declared)).isEqualTo("isSharp()");
+        assertThat(MissingMemberPromptBlock.meantMember("getColour", declared)).isNull();
+        assertThat(MissingMemberPromptBlock.meantMember("getting", declared)).isNull();
     }
 
     @Test

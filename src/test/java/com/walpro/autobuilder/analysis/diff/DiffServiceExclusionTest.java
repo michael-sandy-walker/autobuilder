@@ -34,7 +34,7 @@ class DiffServiceExclusionTest {
     @BeforeEach
     void setUp() {
         DiffConfigProperties config = new DiffConfigProperties();
-        config.setExcludeFolders(List.of("logs", "responses", "target", ".mvn"));
+        config.setExcludeFolders(List.of("logs", "responses", "target", "build", ".mvn"));
         config.setExcludeFiles(List.of("meta.json"));
         diffService = new DiffService(new FileService(tmp.toString(), new ObjectMapper()), config);
     }
@@ -83,5 +83,39 @@ class DiffServiceExclusionTest {
         assertThat(report.entries()).extracting(DiffEntry::path)
                 .as("a change the loop makes to a test must be visible to the loop that made it")
                 .contains("src/test/java/ATest.java");
+    }
+
+    @Test
+    @DisplayName("a SOURCE folder named like build output stays visible -- the name is not the place")
+    void aSourcePackageNamedLikeBuildOutputIsVisible() throws IOException {
+        // Run 2026-09-26_00-16-35: the class to change lived in package core.build, the diff
+        // dropped it on both sides, and a correct implementation read as no change at all.
+        Files.createDirectories(tmp.resolve("new/src/main/java/com/example/build"));
+        Files.writeString(tmp.resolve("new/pom.xml"), "<project/>");
+        Files.writeString(tmp.resolve("new/src/main/java/com/example/build/Rule.java"), "class Rule {}");
+
+        DiffReport report = diffService.compareFolders(null, "new", java.util.Set.of());
+
+        assertThat(report.entries()).extracting(DiffEntry::path)
+                .contains("src/main/java/com/example/build/Rule.java");
+    }
+
+    @Test
+    @DisplayName("build output is excluded at the root and beside a module's own descriptor")
+    void buildOutputAtTheRootAndInAModuleIsExcluded() throws IOException {
+        Files.createDirectories(tmp.resolve("new/target"));
+        Files.createDirectories(tmp.resolve("new/moduleA/build"));
+        Files.createDirectories(tmp.resolve("new/moduleA/.mvn/wrapper"));
+        Files.writeString(tmp.resolve("new/descriptor.txt"), "root");
+        Files.writeString(tmp.resolve("new/moduleA/descriptor.txt"), "module");
+        Files.writeString(tmp.resolve("new/target/Gen.java"), "class Gen {}");
+        Files.writeString(tmp.resolve("new/moduleA/build/Out.java"), "class Out {}");
+        Files.writeString(tmp.resolve("new/moduleA/.mvn/wrapper/W.java"), "class W {}");
+
+        DiffReport report = diffService.compareFolders(null, "new", java.util.Set.of());
+
+        assertThat(report.entries()).extracting(DiffEntry::path)
+                .contains("descriptor.txt", "moduleA/descriptor.txt")
+                .doesNotContain("target/Gen.java", "moduleA/build/Out.java", "moduleA/.mvn/wrapper/W.java");
     }
 }

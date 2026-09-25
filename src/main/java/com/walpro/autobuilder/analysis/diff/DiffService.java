@@ -83,11 +83,14 @@ public class DiffService {
         Map<String, String> fileMap = new HashMap<>();
         int unreadable = 0;
         String firstUnreadable = null;
-        for (var info : fileService.listFiles(folder)) {
+        var files = fileService.listFiles(folder);
+        Set<String> moduleRoots = moduleRoots(files.stream()
+                .map(info -> info.getName().replace("\\", "/")).toList());
+        for (var info : files) {
             String rawPath = info.getName();
             String normalized = rawPath.replace("\\", "/");
 
-            if (isExcluded(normalized)) {
+            if (isExcluded(normalized, moduleRoots)) {
                 log.debug("Skipping excluded path: {}", normalized);
                 continue;
             } else if (diffConfig.getExcludeFiles().stream().anyMatch(normalized::endsWith)) {
@@ -117,20 +120,60 @@ public class DiffService {
     }
 
     /**
-     * Whether a path lies under an excluded folder, matched by PATH SEGMENT.
+     * Whether a path lies under an excluded folder.
      *
      * <p>This compared prefixes until 2026-09-05, which works only for a tree the loop wrote
      * itself, where every excluded folder sits at the root. An imported project puts them
-     * anywhere: {@code .mvn/wrapper/} holds a binary the old test never matched, and a prefix rule
-     * would also have to be told about {@code src/test/java} separately from {@code test}.
+     * anywhere: {@code .mvn/wrapper/} holds a binary, and a module of a multi-module project has
+     * its own build output beside its own descriptor.
+     *
+     * <p><b>But matching the name at ANY depth hid source code.</b> Run 2026-09-26_00-16-35 (the
+     * criterion-status change target, T4-CF) adopted a module whose one class to change lives in
+     * a package named {@code build}. Every file under {@code .../core/build/} was dropped from
+     * both sides of the diff, so the model's correct implementation read as no change at all:
+     * cycle 2 was skipped as an empty diff, and the evaluator of cycles 3 and 4 answered "no code
+     * changes provided". A build-output folder is a place in the PROJECT's layout, not a word, so
+     * a name matches only where a build writes its output:
+     * <ul>
+     *   <li>at the root of the tree;</li>
+     *   <li>directly under a module root -- a directory that holds a file of the same name as
+     *       one the root holds, the way a nested project repeats its root's descriptor;</li>
+     *   <li>at any depth when the name is hidden (dot-prefixed): tool state, never a source
+     *       folder.</li>
+     * </ul>
      */
-    private boolean isExcluded(String normalizedPath) {
-        for (String segment : normalizedPath.split("/")) {
-            if (diffConfig.getExcludeFolders().contains(segment)) return true;
+    private boolean isExcluded(String normalizedPath, Set<String> moduleRoots) {
+        String[] segments = normalizedPath.split("/");
+        String parent = "";
+        for (int i = 0; i < segments.length - 1; i++) {
+            String segment = segments[i];
+            if (diffConfig.getExcludeFolders().contains(segment)
+                    && (segment.startsWith(".") || moduleRoots.contains(parent))) {
+                return true;
+            }
+            parent = parent.isEmpty() ? segment : parent + "/" + segment;
         }
         return false;
     }
 
+    /**
+     * The root ({@code ""}) and every directory holding a file named like one the root holds
+     * directly: where a build writes its output. Derived from the tree itself, so no build
+     * system's file names are written down here.
+     */
+    static Set<String> moduleRoots(List<String> paths) {
+        Set<String> rootFiles = new HashSet<>();
+        for (String p : paths) {
+            if (p.indexOf('/') < 0) rootFiles.add(p);
+        }
+        Set<String> roots = new HashSet<>();
+        roots.add("");
+        for (String p : paths) {
+            int slash = p.lastIndexOf('/');
+            if (slash > 0 && rootFiles.contains(p.substring(slash + 1))) roots.add(p.substring(0, slash));
+        }
+        return roots;
+    }
 
     private Map<String, String> normalizeMapKeys(Map<String, String> original) {
         return original.entrySet().stream()

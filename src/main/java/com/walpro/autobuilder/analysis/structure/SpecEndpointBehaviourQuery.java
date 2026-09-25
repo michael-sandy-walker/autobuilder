@@ -1,8 +1,5 @@
 package com.walpro.autobuilder.analysis.structure;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -52,14 +49,15 @@ import java.util.regex.Pattern;
  *
  * <p>Erring toward silence throughout: a specification that states no codes, or names no
  * endpoints, produces an empty map — never a default expectation.
+ *
+ * <p>T5-BR: a plain class, registered as a bean in {@code AppConfig} rather than annotated, so the
+ * rules that read a specification's statuses (T3-CB) can be lifted out with it as a small module
+ * that carries no Spring.
  */
-@Slf4j
-@Component
 public class SpecEndpointBehaviourQuery {
 
-    /** Verb-qualified path mention; same grammar the endpoint surface query reads. */
-    private static final Pattern ENDPOINT = Pattern.compile(
-            "\\b(GET|POST|PUT|PATCH|DELETE)\\s+(/[A-Za-z0-9_\\-{}/.?=&]*)");
+    /** Verb-qualified path mention; the one grammar, held in {@link EndpointPaths}. */
+    private static final Pattern ENDPOINT = EndpointPaths.MENTION;
 
     /** Blank-line paragraph separator, tolerating the trailing whitespace real specs carry. */
     private static final Pattern PARAGRAPH_BREAK = Pattern.compile("\\n\\s*\\n");
@@ -95,19 +93,19 @@ public class SpecEndpointBehaviourQuery {
      * Statuses the specification states per endpoint, in document order. Empty map = no opinion
      * (no endpoints named, or no statuses stated anywhere).
      */
-    public Map<EndpointSurfaceQuery.Endpoint, List<StatedBehaviour>> statedBehaviours(String specText) {
-        Map<EndpointSurfaceQuery.Endpoint, List<StatedBehaviour>> out = new LinkedHashMap<>();
+    public Map<Endpoint, List<StatedBehaviour>> statedBehaviours(String specText) {
+        Map<Endpoint, List<StatedBehaviour>> out = new LinkedHashMap<>();
         if (specText == null || specText.isBlank()) return out;
 
         List<int[]> paragraphs = paragraphSpans(specText);
         List<int[]> mentions = new ArrayList<>();
-        List<EndpointSurfaceQuery.Endpoint> endpoints = new ArrayList<>();
+        List<Endpoint> endpoints = new ArrayList<>();
         Matcher m = ENDPOINT.matcher(specText);
         while (m.find()) {
-            String path = EndpointSurfaceQuery.normalizePath(m.group(2));
+            String path = EndpointPaths.normalizePath(m.group(2));
             if (path == null) continue;
             mentions.add(new int[]{m.start()});
-            endpoints.add(new EndpointSurfaceQuery.Endpoint(m.group(1).toUpperCase(), path));
+            endpoints.add(new Endpoint(m.group(1).toUpperCase(), path));
         }
         if (endpoints.isEmpty()) return out;
 
@@ -216,7 +214,7 @@ public class SpecEndpointBehaviourQuery {
      * executable-criterion parser can read them back (one endpoint, one status, an explicit
      * {@code HTTP} marker) and so a reader sees the specification's own condition wording.
      */
-    public List<String> criteriaFor(EndpointSurfaceQuery.Endpoint endpoint, List<StatedBehaviour> behaviours) {
+    public List<String> criteriaFor(Endpoint endpoint, List<StatedBehaviour> behaviours) {
         List<String> out = new ArrayList<>();
         if (endpoint == null || behaviours == null) return out;
         for (StatedBehaviour b : behaviours) {

@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.goal;
 
+import com.walpro.autobuilder.analysis.structure.Endpoint;
+import com.walpro.autobuilder.analysis.structure.EndpointPaths;
+
 import com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery;
 import com.walpro.autobuilder.core.build.TestRunGate;
 import lombok.RequiredArgsConstructor;
@@ -59,7 +62,7 @@ public class SpecTraceability {
             return Binding.EXTRA;
         }
 
-        Set<EndpointSurfaceQuery.Endpoint> declared = endpointSurfaceQuery.declaredInSpec(specText);
+        Set<Endpoint> declared = endpointSurfaceQuery.declaredInSpec(specText);
         if (!declared.isEmpty() && mentionsDeclaredEndpoint(text, declared)) {
             return Binding.REQUIRED;
         }
@@ -79,15 +82,15 @@ public class SpecTraceability {
                 && !endpointSurfaceQuery.declaredInSpec(specText).isEmpty();
     }
 
-    private boolean mentionsDeclaredEndpoint(String text, Set<EndpointSurfaceQuery.Endpoint> declared) {
+    private boolean mentionsDeclaredEndpoint(String text, Set<Endpoint> declared) {
         // Verb-qualified mentions must match a declared endpoint exactly.
-        for (EndpointSurfaceQuery.Endpoint mentioned : endpointSurfaceQuery.declaredInSpec(text)) {
+        for (Endpoint mentioned : endpointSurfaceQuery.declaredInSpec(text)) {
             if (declared.contains(mentioned)) return true;
         }
         // A bare path counts when it equals a declared path (any verb) after normalization.
         var m = BARE_PATH.matcher(text);
         while (m.find()) {
-            String path = EndpointSurfaceQuery.normalizePath(m.group(2));
+            String path = EndpointPaths.normalizePath(m.group(2));
             if (path != null && declared.stream().anyMatch(e -> e.path().equals(path))) return true;
         }
         return false;

@@ -1007,7 +1007,7 @@ public class GoalPlannerService {
             }
 
             // A demand that an endpoint EXIST is decided by the sources, not by a probe.
-            Optional<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint> demanded =
+            Optional<com.walpro.autobuilder.analysis.structure.Endpoint> demanded =
                     endpointWhoseExistenceIsDemanded(criterion);
             if (demanded.isPresent()) {
                 if (!goalPlannerConfig.isStructureQueryEnabled()) {
@@ -2234,7 +2234,7 @@ public class GoalPlannerService {
      * {@code EndpointSurfaceQuery.endpointFromWorkItem}, and for the same reason: a criterion that
      * merely resembles this one must not be read as it.
      */
-    private Optional<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint>
+    private Optional<com.walpro.autobuilder.analysis.structure.Endpoint>
             endpointWhoseExistenceIsDemanded(String criterion) {
         if (criterion == null || endpointSurfaceQuery == null) return Optional.empty();
         return endpointWhoseExistenceIsDemanded(criterion, endpointSurfaceQuery);
@@ -2244,7 +2244,7 @@ public class GoalPlannerService {
      * The template inversion itself, public so an offline readout (the criterion parse report)
      * asks THIS question rather than re-deriving it — one home for one predicate.
      */
-    public static Optional<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint>
+    public static Optional<com.walpro.autobuilder.analysis.structure.Endpoint>
             endpointWhoseExistenceIsDemanded(String criterion,
                     com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery surfaceQuery) {
         if (criterion == null || surfaceQuery == null) return Optional.empty();
@@ -2261,7 +2261,7 @@ public class GoalPlannerService {
     }
 
     private List<String> coverageItemCriteria(
-            com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint endpoint, String specText) {
+            com.walpro.autobuilder.analysis.structure.Endpoint endpoint, String specText) {
         // T2-EV CORRECTED 2026-07-28: the spec's stated statuses are NOT attached here. Attaching
         // them turned a cheap structural item into a behavioural contract that cannot close: run
         // 2026-07-28_01-50-15 carried TWELVE criteria on the POST /loans coverage item (this one,

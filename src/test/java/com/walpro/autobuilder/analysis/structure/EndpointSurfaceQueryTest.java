@@ -2,7 +2,7 @@ package com.walpro.autobuilder.analysis.structure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Endpoint;
+import com.walpro.autobuilder.analysis.structure.Endpoint;
 
 import java.util.List;
 import java.util.Map;
@@ -194,10 +194,10 @@ class EndpointSurfaceQueryTest {
 
     @Test
     void normalizePath_handlesVariablesQueryStringsAndSlashes() {
-        assertThat(EndpointSurfaceQuery.normalizePath("/loans?memberId=42")).isEqualTo("/loans");
-        assertThat(EndpointSurfaceQuery.normalizePath("/books/{bookId}")).isEqualTo("/books/{}");
-        assertThat(EndpointSurfaceQuery.normalizePath("books//list/")).isEqualTo("/books/list");
-        assertThat(EndpointSurfaceQuery.normalizePath("/")).isNull();
-        assertThat(EndpointSurfaceQuery.normalizePath("  ")).isNull();
+        assertThat(EndpointPaths.normalizePath("/loans?memberId=42")).isEqualTo("/loans");
+        assertThat(EndpointPaths.normalizePath("/books/{bookId}")).isEqualTo("/books/{}");
+        assertThat(EndpointPaths.normalizePath("books//list/")).isEqualTo("/books/list");
+        assertThat(EndpointPaths.normalizePath("/")).isNull();
+        assertThat(EndpointPaths.normalizePath("  ")).isNull();
     }
 }

@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.build;
 
-import com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery;
+import com.walpro.autobuilder.analysis.structure.EndpointPaths;
+
 
 import java.util.LinkedHashSet;
 import java.util.Optional;
@@ -111,7 +112,7 @@ public final class BehaviouralCriterionParser {
         if (criterion == null) return Optional.empty();
         Matcher em = ENDPOINT.matcher(criterion);
         while (em.find()) {
-            Optional<String> stated = EndpointSurfaceQuery.discardedInput(em.group(2));
+            Optional<String> stated = EndpointPaths.discardedInput(em.group(2));
             if (stated.isPresent()) return stated;
         }
         return Optional.empty();
@@ -162,8 +163,7 @@ public final class BehaviouralCriterionParser {
         return criterion != null && ENDPOINT.matcher(criterion).find();
     }
 
-    private static final Pattern ENDPOINT = Pattern.compile(
-            "\\b(GET|POST|PUT|PATCH|DELETE)\\s+(/[A-Za-z0-9_\\-{}/.?=&]*)");
+    private static final Pattern ENDPOINT = EndpointPaths.MENTION;
 
     /**
      * A response status must be introduced by a marker. {@code HTTP 201}, {@code status 404} and
@@ -213,7 +213,7 @@ public final class BehaviouralCriterionParser {
             // runs across 190 refused closure attempts. The component is not lost: statedInput
             // reads it back, exercisable() decides whether it can be grounded, and the probe
             // synthesizer carries it into the request. Nothing is decided in this loop.
-            String normalized = EndpointSurfaceQuery.normalizePath(em.group(2));
+            String normalized = EndpointPaths.normalizePath(em.group(2));
             if (normalized == null) continue;
             String key = em.group(1).toUpperCase() + " " + normalized;
             if (endpoints.add(key)) {

@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.config;
 
+import com.walpro.autobuilder.analysis.structure.SpecEndpointBehaviourQuery;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -20,5 +21,11 @@ public class AppConfig {
         executor.setThreadNamePrefix("FileWatcher-");
         executor.initialize();
         return executor;
+    }
+
+    /** T5-BR: the specification's per-endpoint statuses -- a pure reader, so it carries no annotation. */
+    @Bean
+    public SpecEndpointBehaviourQuery specEndpointBehaviourQuery() {
+        return new SpecEndpointBehaviourQuery();
     }
 }

@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.analysis.structure.Endpoint;
+
 import com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.Setter;
@@ -349,7 +351,7 @@ public class BootGate {
             log.info("T4-BV: packaged artifact predates the sources — no fresh execution observation, abstaining");
             return Optional.empty();
         }
-        Set<EndpointSurfaceQuery.Endpoint> declared = specText == null
+        Set<Endpoint> declared = specText == null
                 ? Set.of() : endpointSurfaceQuery.declaredInSpec(specText);
         // T4-CQ: routes are asked where the artifact serves them, not only where the code says.
         servedPrefix = coldReadService == null ? "" : coldReadService.servedPrefix(workingDir).orElse("");
@@ -375,7 +377,7 @@ public class BootGate {
      * environment failure to even spawn the process is an abstain, but everything the process
      * itself does (crash, silence, wrong answers) is the artifact's own behaviour and can block.
      */
-    private Optional<ClaimRefutation> launchAndObserve(Path artifact, Set<EndpointSurfaceQuery.Endpoint> declared,
+    private Optional<ClaimRefutation> launchAndObserve(Path artifact, Set<Endpoint> declared,
                                               Path workingDir, String specText,
                                               List<String> behaviouralCriteria,
                                               boolean allowModelFallback,
@@ -533,7 +535,7 @@ public class BootGate {
             }
             // T2-EV: endpoints whose behaviour the specification states — for these the criterion
             // probes below hold the verdict, so the fixed status rules defer.
-            Set<EndpointSurfaceQuery.Endpoint> specStated = specBehaviourQuery == null
+            Set<Endpoint> specStated = specBehaviourQuery == null
                     ? Set.of() : specBehaviourQuery.statedBehaviours(specText).keySet();
             List<String> endpointFailures = probeDeclaredEndpoints(
                     client, port, declared, workingDir, specStated);
@@ -1115,10 +1117,10 @@ public class BootGate {
      * Anything else proves the endpoint is live.
      */
     private List<String> probeDeclaredEndpoints(HttpClient client, int port,
-                                                Set<EndpointSurfaceQuery.Endpoint> declared, Path workingDir,
-                                                Set<EndpointSurfaceQuery.Endpoint> specStatesStatusFor) {
+                                                Set<Endpoint> declared, Path workingDir,
+                                                Set<Endpoint> specStatesStatusFor) {
         List<String> failures = new ArrayList<>();
-        for (EndpointSurfaceQuery.Endpoint endpoint : declared) {
+        for (Endpoint endpoint : declared) {
             if (failures.size() >= MAX_NAMED_FAILURES) break;
             if (endpoint.path().contains("{}")) continue; // an unknown id would 404/behave legitimately
             // T2-EV: where the SPECIFICATION states what this endpoint returns, the specification

@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.build;
 
-import com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery;
+import com.walpro.autobuilder.analysis.structure.Endpoint;
+
 import com.walpro.autobuilder.analysis.structure.SpecEndpointBehaviourQuery;
 import com.walpro.autobuilder.core.build.CriterionProbeSynthesizer.ProbeRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -156,7 +157,7 @@ class SpecRequirementProbeCoverageTest {
     }
 
     private Optional<List<ProbeRequest>> probeFor(String verb, String path, int status) {
-        var endpoint = new EndpointSurfaceQuery.Endpoint(verb, path);
+        var endpoint = new Endpoint(verb, path);
         for (var entry : behaviourQuery.statedBehaviours(SPEC).entrySet()) {
             if (!entry.getKey().equals(endpoint)) continue;
             for (String requirement : behaviourQuery.criteriaFor(entry.getKey(), entry.getValue())) {

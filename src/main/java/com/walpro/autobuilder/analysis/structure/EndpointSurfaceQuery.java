@@ -46,19 +46,10 @@ import java.util.regex.Pattern;
 @Component
 public class EndpointSurfaceQuery {
 
-    /** One normalized endpoint: upper-case verb (or {@code *} = any) + normalized path. */
-    public record Endpoint(String verb, String path) {
-        @Override
-        public String toString() {
-            return verb + " " + path;
-        }
-    }
-
     private static final Pattern JAVA_FILE = Pattern.compile(".*\\.java$");
 
-    /** Verb-qualified path mention in spec prose, e.g. {@code GET /loans?memberId=} or {@code POST /books}. */
-    private static final Pattern SPEC_ENDPOINT = Pattern.compile(
-            "\\b(GET|POST|PUT|PATCH|DELETE)\\s+(/[A-Za-z0-9_\\-{}/.?=&]*)");
+    /** Verb-qualified path mention in spec prose -- one grammar, held in {@link EndpointPaths}. */
+    private static final Pattern SPEC_ENDPOINT = EndpointPaths.MENTION;
 
     // Request-mapping vocabulary (ecosystem knowledge as data rows — T4-BM territory). Held in
     // AnnotationVocabularies since 2026-09-08, because RequestBodyContractQuery reads the same
@@ -98,7 +89,7 @@ public class EndpointSurfaceQuery {
         if (description == null) return Optional.empty();
         Matcher m = WORK_ITEM_ENDPOINT.matcher(description.strip());
         if (!m.matches()) return Optional.empty();
-        String path = normalizePath(m.group(2));
+        String path = EndpointPaths.normalizePath(m.group(2));
         if (path == null) return Optional.empty();
         return Optional.of(new Endpoint(m.group(1), path));
     }
@@ -160,13 +151,7 @@ public class EndpointSurfaceQuery {
 
     /** Verb-qualified endpoint mentions in the spec text, normalized. Also consumed by T4-BT. */
     public Set<Endpoint> declaredInSpec(String specText) {
-        Set<Endpoint> declared = new LinkedHashSet<>();
-        Matcher m = SPEC_ENDPOINT.matcher(specText);
-        while (m.find()) {
-            String path = normalizePath(m.group(2));
-            if (path != null) declared.add(new Endpoint(m.group(1).toUpperCase(), path));
-        }
-        return declared;
+        return EndpointPaths.declaredIn(specText);
     }
 
     /**
@@ -229,7 +214,7 @@ public class EndpointSurfaceQuery {
                     if (methodPaths.isEmpty()) methodPaths = List.of("");
                     for (String prefix : prefixes) {
                         for (String mp : methodPaths) {
-                            String full = normalizePath(prefix + "/" + mp);
+                            String full = EndpointPaths.normalizePath(prefix + "/" + mp);
                             if (full != null) {
                                 // A generic mapping's verb attribute is not parsed — claim all
                                 // verbs so an unusual-but-valid mapping never reads as missing.
@@ -277,45 +262,5 @@ public class EndpointSurfaceQuery {
             return true;
         }
         return false;
-    }
-
-    /**
-     * Normalizes a path for comparison: strips any query string, collapses duplicate slashes,
-     * lower-cases, replaces every path variable with {@code {}}, drops the trailing slash.
-     * Returns null for blank/unusable input. Also consumed by T4-BT.
-     */
-    /**
-     * The part of a stated input that {@link #normalizePath} discards — everything it drops in
-     * order to compare two mentions of the same endpoint for IDENTITY.
-     *
-     * <p>T1-FW: normalization for comparison is lossy BY DESIGN, and six callers want exactly that.
-     * The one caller that builds a REQUEST wants the opposite, and for want of this method it had
-     * no way to tell that it had been handed less than the requirement stated — a criterion about
-     * {@code /loans?memberId={id}} was exercised as bare {@code /loans}, the application correctly
-     * refused a missing required parameter, and the artifact was recorded as failing. Asking what
-     * was discarded is what lets a builder decline rather than exercise a different input.
-     *
-     * <p>Returns empty when nothing was discarded, so the common case stays silent.
-     */
-    public static Optional<String> discardedInput(String raw) {
-        if (raw == null) return Optional.empty();
-        int q = raw.indexOf('?');
-        if (q < 0 || q == raw.length() - 1) return Optional.empty();
-        String discarded = raw.substring(q + 1).trim();
-        return discarded.isBlank() ? Optional.empty() : Optional.of(discarded);
-    }
-
-    public static String normalizePath(String raw) {
-        if (raw == null) return null;
-        String p = raw.trim();
-        int q = p.indexOf('?');
-        if (q >= 0) p = p.substring(0, q);
-        if (p.isBlank()) return null;
-        if (!p.startsWith("/")) p = "/" + p;
-        p = p.replaceAll("/{2,}", "/");
-        p = p.replaceAll("\\{[^}]*}", "{}");
-        if (p.length() > 1 && p.endsWith("/")) p = p.substring(0, p.length() - 1);
-        String lower = p.toLowerCase();
-        return lower.equals("/") ? null : lower;
     }
 }

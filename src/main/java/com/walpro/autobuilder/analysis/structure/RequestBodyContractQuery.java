@@ -90,7 +90,7 @@ public final class RequestBodyContractQuery {
      * which one the probe will reach.
      */
     public static Optional<AcceptedBody> acceptedBodyFor(String path, Path artifactRoot) {
-        String wanted = EndpointSurfaceQuery.normalizePath(path);
+        String wanted = EndpointPaths.normalizePath(path);
         if (wanted == null || artifactRoot == null) return Optional.empty();
 
         Set<AcceptedBody> found = new LinkedHashSet<>();
@@ -139,7 +139,7 @@ public final class RequestBodyContractQuery {
             if (methodPaths.isEmpty()) methodPaths = List.of("");
             for (String prefix : prefixes) {
                 for (String mp : methodPaths) {
-                    if (wanted.equals(EndpointSurfaceQuery.normalizePath(prefix + "/" + mp))) return true;
+                    if (wanted.equals(EndpointPaths.normalizePath(prefix + "/" + mp))) return true;
                 }
             }
         }

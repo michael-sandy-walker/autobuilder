@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.core.build;
 
+import com.walpro.autobuilder.analysis.structure.EndpointPaths;
+
 import com.walpro.autobuilder.core.checkpoint.StateBucket;
 import com.walpro.autobuilder.core.checkpoint.StateHolder;
 
@@ -427,7 +429,7 @@ public class CriterionProbeSynthesizer {
         List<ProbeRequest> out = new ArrayList<>();
         Matcher m = REQUEST_LINE.matcher(raw);
         while (m.find()) {
-            String path = EndpointSurfaceQuery.normalizePath(m.group(2));
+            String path = EndpointPaths.normalizePath(m.group(2));
             if (path == null) continue;
             String body = m.group(3) == null ? "" : m.group(3).strip();
             out.add(new ProbeRequest(m.group(1).toUpperCase(),

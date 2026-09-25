@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.core.coldread;
 
+import com.walpro.autobuilder.analysis.structure.Endpoint;
+
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -75,7 +77,7 @@ public class ColdReadService {
         ColdRead.Runtime runtime = readRuntime(text);
         List<String> prose = readProse(text);
 
-        Optional<Set<EndpointSurfaceQuery.Endpoint>> served =
+        Optional<Set<Endpoint>> served =
                 endpointSurfaceQuery.servedByCode(mainSources(java));
         List<String> surface = served.map(s -> s.stream()
                         .map(e -> e.verb() + " " + e.path()).sorted().toList())

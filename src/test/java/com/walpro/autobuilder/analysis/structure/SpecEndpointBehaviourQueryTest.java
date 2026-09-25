@@ -37,10 +37,10 @@ class SpecEndpointBehaviourQueryTest {
             """;
 
     private List<Integer> statusesFor(String verb, String path) {
-        Map<EndpointSurfaceQuery.Endpoint, List<SpecEndpointBehaviourQuery.StatedBehaviour>> all =
+        Map<Endpoint, List<SpecEndpointBehaviourQuery.StatedBehaviour>> all =
                 query.statedBehaviours(SPEC);
         List<SpecEndpointBehaviourQuery.StatedBehaviour> b =
-                all.get(new EndpointSurfaceQuery.Endpoint(verb, path));
+                all.get(new Endpoint(verb, path));
         return b == null ? List.of()
                 : b.stream().map(SpecEndpointBehaviourQuery.StatedBehaviour::status).sorted().toList();
     }
@@ -88,9 +88,9 @@ class SpecEndpointBehaviourQueryTest {
 
     @Test
     void criteriaAreReadableAndCarryTheSpecsOwnCondition() {
-        Map<EndpointSurfaceQuery.Endpoint, List<SpecEndpointBehaviourQuery.StatedBehaviour>> all =
+        Map<Endpoint, List<SpecEndpointBehaviourQuery.StatedBehaviour>> all =
                 query.statedBehaviours(SPEC);
-        EndpointSurfaceQuery.Endpoint members = new EndpointSurfaceQuery.Endpoint("POST", "/members");
+        Endpoint members = new Endpoint("POST", "/members");
         List<String> criteria = query.criteriaFor(members, all.get(members));
 
         assertThat(criteria).anySatisfy(c -> assertThat(c).contains("POST /members returns HTTP 409")
@@ -103,9 +103,9 @@ class SpecEndpointBehaviourQueryTest {
     void everyRenderedCriterionIsExecutable() {
         // The criteria must be readable back by the executable-criterion parser, or the
         // behavioural verification shipped alongside this has nothing to probe.
-        Map<EndpointSurfaceQuery.Endpoint, List<SpecEndpointBehaviourQuery.StatedBehaviour>> all =
+        Map<Endpoint, List<SpecEndpointBehaviourQuery.StatedBehaviour>> all =
                 query.statedBehaviours(SPEC);
-        EndpointSurfaceQuery.Endpoint members = new EndpointSurfaceQuery.Endpoint("POST", "/members");
+        Endpoint members = new Endpoint("POST", "/members");
 
         for (String criterion : query.criteriaFor(members, all.get(members))) {
             var parsed = com.walpro.autobuilder.core.build.BehaviouralCriterionParser.parse(criterion);

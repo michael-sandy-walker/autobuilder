@@ -129,34 +129,9 @@ public final class MissingMemberPromptBlock {
         sb.append("\n");
     }
 
-    /**
-     * T4-CQ: the declared member a missing accessor names -- {@code getType} names {@code type()}
-     * on a record. structdiff run 2026-09-25_02-01-18 was shown ParsedElement's members in this
-     * block for six cycles and kept writing getType()/getId()/getChildren(): its sibling type in
-     * the same library, StructuralDiffNode, does declare getType() and getId(), and a list of
-     * members beside a list of failures left the pairing to the model. Lexical and domain-free:
-     * a get/is/has prefix dropped and the next letter lowered, in either direction.
-     */
+    /** T4-CQ: see {@link com.walpro.autobuilder.core.build.DeclaredMembers#meantBy}. */
     static String meantMember(String missing, List<String> declared) {
-        if (missing == null) return null;
-        String bare = stripAccessorPrefix(missing);
-        for (String d : declared) {
-            int paren = d.indexOf('(');
-            String name = paren < 0 ? d : d.substring(0, paren);
-            if (name.equals(missing)) continue;
-            if (name.equals(bare) || stripAccessorPrefix(name).equals(missing)) return d;
-        }
-        return null;
-    }
-
-    private static String stripAccessorPrefix(String name) {
-        for (String prefix : new String[]{"get", "is", "has"}) {
-            if (name.length() > prefix.length() && name.startsWith(prefix)
-                    && Character.isUpperCase(name.charAt(prefix.length()))) {
-                return Character.toLowerCase(name.charAt(prefix.length())) + name.substring(prefix.length() + 1);
-            }
-        }
-        return name;
+        return com.walpro.autobuilder.core.build.DeclaredMembers.meantBy(missing, declared);
     }
 
     private static String resolveTargetFile(String simpleType, Map<String, String> previousOutput) {

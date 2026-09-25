@@ -11,7 +11,15 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-25 NIGHT (Opus 5.5, session 5 continued) — THE LOOP CHANGES ADOPTED CODE; T4-CS SLICE 2 VALIDATED; THE EVOLUTION PROMPT NOW SHOWS SOURCE — START HERE
+## 2026-09-25 LATE NIGHT (Opus 5.5, session 5, closing) — THE NEXT SESSIONS: WHERE TO START AND WHAT TO PROMPT — START HERE
+
+- **This session proved:** the loop adopts an Autobuilder module, characterises it, and CHANGES it against operator spec tests with true completions; two lineages of one module merge into a child that meets both seeds (T4-CS slices 1 and 2). Everything is committed and pushed by the user.
+- **The ticket scan (for T4-CF's "goal from a ticket"):** no open ticket's change lands in an extractable module; `scripts/module_closures.py summary` = 145 of 478 classes with a closure > 50, 17% of lines in small Spring-free closures. Recorded on `T4-CF`.
+- **Next session, first: a goal from a REAL ticket.** T3-CB's candidate rule as a pure classifier in a small home beside `SeedRequirements`; spec tests derived from the graph's labelled criteria (97: 51 / 27 / 13); Autobuilder's own existing tests of that closure as the regression suite; run as a change target; then port the patch back into Autobuilder as a reviewed diff and wire it where `CriterionProbeSynthesizer` needs it. Re-read `T3-CB` and `T3-CC` first (the exclusion half is done by T3-CC).
+- **Small decisions waiting on the user:** `T4-DY` -- narrow to a diagnosis request + in-loop halt, or close on slice 1's measurement. The obligations generator's missing `gate:`/`rule:` markers on change seeds (a watch; a cheap check: every OBJECTIVE clause of the seed appears among the obligations).
+- **Later, the user's "make Autobuilder more modular":** a measured extraction programme with `module_closures.py` as its instrument (the 17% is the baseline) -- not filed; the user decides whether it becomes a ticket.
+
+## 2026-09-25 NIGHT (Opus 5.5, session 5 continued) — THE LOOP CHANGES ADOPTED CODE; T4-CS SLICE 2 VALIDATED; THE EVOLUTION PROMPT NOW SHOWS SOURCE
 
 - **Change targets** `participation-roles` / `participation-totals` (operator spec tests + the 38-test characterization suite; `src/test/**` and `members: src/main/**` protected). roles run 1 was a FALSE COMPLETION (rewrote 8 existing members) -> `members:` guard (`a486e421`) -> roles run 2 true 9/9. totals run 1 broke ON that guard (spliced members into a rewrite with a changed header) -> `bd29ab70` builds from the adopted file.
 - **Root cause, fixed (`1732e55a`):** evolution saw an existing file only as a method-name summary, never its source. `SubgoalSourcePromptBlock` shows the source of the files the subgoal names. totals run 2: true 8/8 in 10 min, zero restorations -- the model no longer rewrites what it can read.

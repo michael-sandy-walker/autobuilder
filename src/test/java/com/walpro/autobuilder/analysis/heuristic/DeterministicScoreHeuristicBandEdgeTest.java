@@ -162,13 +162,14 @@ class DeterministicScoreHeuristicBandEdgeTest {
      * size, and its stability is what drove confidence to 1.0 -- it may still reject, never veto.
      */
     @Test
-    void belowSoftBand_withNoFinding_rejectsAtHighNotCritical() {
+    void belowSoftBand_withNoFinding_rejectsBelowTheVoteFloor() {
         CycleContextData input = ctx(0.63, meaningfulDiff(), noBlockers(), noBlockers(), null);
 
         HeuristicOpinion opinion = heuristic.evaluate(input, DUMMY_LLM_ACCEPTED);
 
         assertThat(opinion.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
-        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.HIGH);
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.MEDIUM);
+        assertThat(opinion.confidence()).isLessThan(0.6);   // the negotiator's floor: it cannot overturn the model alone
         assertThat(opinion.rationale()).contains("diff shape only");
     }
 
@@ -185,7 +186,7 @@ class DeterministicScoreHeuristicBandEdgeTest {
 
         HeuristicOpinion opinion = heuristic.evaluate(input, DUMMY_LLM_ACCEPTED);
 
-        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.HIGH);
+        assertThat(opinion.level()).isEqualTo(ConfidenceLevel.MEDIUM);
     }
 
     // ---- (d) At or above 0.75: ACCEPTED at CRITICAL (unchanged behaviour) ----

@@ -29,6 +29,9 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
     // Soft-veto rejection capped at HIGH (< 0.90 CRITICAL) so other heuristics retain real influence
     private static final double SOFT_BAND_REJECTED_CONFIDENCE_CAP = 0.75;
     private static final double K = 0.05;
+    // T4-CQ: a rejection resting on diff shape alone sits below the negotiator's 0.6 vote floor, so it
+    // cannot overturn the model by itself but still counts beside another rejecting heuristic.
+    private static final double DIFF_SHAPE_ONLY_CONFIDENCE_CAP = 0.55;
 
     /** T4-J Phase 2: optional — tests constructing this class directly keep the code default. */
     @lombok.Setter
@@ -102,7 +105,10 @@ public class DeterministicScoreHeuristic implements EvaluationHeuristic {
         boolean adverseFinding = scoring.findings() != null && scoring.findings().stream()
                 .anyMatch(f -> f.severity() != HeuristicFinding.Severity.INFO);
         if (!adverseFinding) {
-            confidence = Math.min(rawConfidence, SOFT_BAND_REJECTED_CONFIDENCE_CAP);
+            // Capped at HIGH first (0.75): run 2026-09-25_05-49-15 showed that still wins the
+            // weighted vote ALONE (it needs 0.6), rejecting an LLM-accepted 0.82 fix at 06:05 when
+            // no other heuristic had an opinion on a test-only change.
+            confidence = Math.min(rawConfidence, DIFF_SHAPE_ONLY_CONFIDENCE_CAP);
             basis = " (diff shape only, no adverse finding -- capped)";
         } else {
             // Named, so a veto can be traced to what it rested on (run 2026-09-25_02-01-18 vetoed

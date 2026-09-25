@@ -565,6 +565,14 @@ public class EvolutionProtocolContract {
             prompt.append("\n");
         }
 
+        // T4-CQ: the files the subgoal names, as they are -- the structure summary alone gives a model
+        // told to keep a file's declarations only their names (see SubgoalSourcePromptBlock).
+        String subgoalSource = SubgoalSourcePromptBlock.render(input,
+                promptHeadroomTokens - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(prompt));
+        if (subgoalSource != null) {
+            prompt.append("\n").append(subgoalSource).append("\n");
+        }
+
         String implStatus = currentImplementationStatusBlock(input);
         if (implStatus != null) {
             prompt.append(implStatus);

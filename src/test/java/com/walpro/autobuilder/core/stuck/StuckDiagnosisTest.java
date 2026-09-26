@@ -45,7 +45,9 @@ class StuckDiagnosisTest {
                 .orElseThrow();
 
         assertThat(asked.answer()).contains("as it was adopted").contains("record Quill(String nib, int reach)");
-        assertThat(StuckDiagnosis.ask(StuckObservation.Source.BUILD, "x", List.of(), 3, a)).as("three questions only").isEmpty();
+        assertThat(StuckDiagnosis.ask(StuckObservation.Source.BUILD, "x", List.of(), 3, a).orElseThrow().answered())
+                .as("the fourth question is the observer's; none wired here").isFalse();
+        assertThat(StuckDiagnosis.ask(StuckObservation.Source.BUILD, "x", List.of(), 4, a)).as("four questions only").isEmpty();
     }
 
     @Test

@@ -41,18 +41,34 @@ public final class StuckDiagnosis {
         }
     }
 
-    /** The inputs every question may consult. Maps are path relative to the project root -> content. */
-    public record Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed) {
+    /**
+     * The inputs every question may consult. Maps are path relative to the project root -> content.
+     * {@code observer} is the OBSERVATION authority (T4-DZ's terminal agent), asked only after every
+     * structural question for a signature was asked and the signature came back; null when there is none.
+     */
+    public record Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed,
+                              Observer observer) {
         public Authorities {
             currentSources = currentSources == null ? Map.of() : currentSources;
             adoptedSources = adoptedSources == null ? Map.of() : adoptedSources;
         }
+
+        public Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed) {
+            this(currentSources, adoptedSources, seed, null);
+        }
+    }
+
+    /** An authority that answers by observing -- running something -- rather than by reading declarations. */
+    @FunctionalInterface
+    public interface Observer {
+        /** The answer to what {@code signature} poses, observed; an unanswered {@link Asked} when nothing showed it. */
+        Asked observe(String signature, List<String> evidence);
     }
 
     /** How many questions a source has; a rung at or past this has none left. */
     public static int questionsFor(StuckObservation.Source source) {
         return switch (source) {
-            case BUILD -> 3;
+            case BUILD -> 4;
             case PROTECTED_WRITE, CLOSURE_REFUSAL -> 1;
             case FLAT_ROOT, EXHAUSTION -> 0;
         };
@@ -66,7 +82,8 @@ public final class StuckDiagnosis {
             case BUILD -> switch (rung) {
                 case 0 -> declared(signature, authorities);
                 case 1 -> failingLine(detail, authorities);
-                default -> declaringFile(signature, authorities);
+                case 2 -> declaringFile(signature, authorities);
+                default -> observed(signature, detail, authorities);
             };
             case PROTECTED_WRITE -> protectedFile(signature, authorities);
             case CLOSURE_REFUSAL -> refusedRequirement(signature, detail, authorities);
@@ -206,6 +223,23 @@ public final class StuckDiagnosis {
             if (!c.isEmpty()) return c;
         }
         return List.of();
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // BUILD, rung 3: structure has said all it can and the failure came back -- observe.
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * T4-DZ: the model proposes which fact would let the move succeed and the commands that would show
+     * it; the commands run in a read-only copy and their output is the answer -- an observation, never
+     * the model's reading. Unanswered when no observer is wired.
+     */
+    static Asked observed(String signature, List<String> evidence, Authorities a) {
+        if (a.observer() == null) {
+            return new Asked("Which fact would let this move succeed? (no observer to run commands)", "observation", null, false);
+        }
+        Asked asked = a.observer().observe(signature, evidence == null ? List.of() : evidence);
+        return asked == null ? new Asked("Which fact would let this move succeed?", "observation", null, false) : asked;
     }
 
     static String render(StuckQuestions.Answer ans) {

@@ -52,6 +52,16 @@ public class StuckLayer {
     @Autowired(required = false)
     private FileService fileService;
 
+    /** T4-DZ: the observation authority, asked after structure; optional. */
+    @Autowired(required = false)
+    private TerminalAgent terminalAgent;
+
+    @Autowired(required = false)
+    private TerminalAgentRecorder terminalAgentRecorder;
+
+    /** The last failed change per signature -- rolled back in the tree, needed by the observer's copy. Memory only. */
+    private final Map<String, Map<String, String>> lastChange = new java.util.concurrent.ConcurrentHashMap<>();
+
     private String currentCycle;
     private String currentSubGoal;
     private boolean ledgerFileStarted;
@@ -100,6 +110,11 @@ public class StuckLayer {
         if (change != StuckLedger.Change.NONE && change != StuckLedger.Change.COUNTED) writeLedger();
     }
 
+    /** Keeps the files of the change that failed with {@code signature}, for the observer's read-only copy. */
+    public void rememberChange(String signature, Map<String, String> files) {
+        if (signature != null && files != null && !files.isEmpty()) lastChange.put(signature, Map.copyOf(files));
+    }
+
     /** A build compiled: the build signatures whose answer was delivered have ended. */
     public void buildSucceeded(String cycleId) {
         List<StuckLedger.Entry> ended = ledger.buildSucceeded(cycleId);
@@ -131,8 +146,13 @@ public class StuckLayer {
     public String promptBlock(CycleContextData context, int maxTokens) {
         String cycle = context == null ? null : context.cycleName();
         String subGoal = context == null ? null : context.currentSubGoalId();
-        StuckDiagnosis.Authorities authorities = new StuckDiagnosis.Authorities(
-                context == null ? Map.of() : context.previousOutput(), adoptedSources(), seed());
+        Map<String, String> live = context == null || context.previousOutput() == null ? Map.of() : context.previousOutput();
+        StuckDiagnosis.Observer observer = terminalAgent == null || !terminalAgent.available() ? null
+                : (signature, evidence) -> {
+                    if (terminalAgentRecorder != null) terminalAgentRecorder.attribute(context);
+                    return terminalAgent.ask(signature, evidence, live, lastChange.getOrDefault(signature, Map.of()), cycle);
+                };
+        StuckDiagnosis.Authorities authorities = new StuckDiagnosis.Authorities(live, adoptedSources(), seed(), observer);
         boolean changed = false;
         for (StuckLedger.Entry e : ledger.pending()) {
             changed = true;

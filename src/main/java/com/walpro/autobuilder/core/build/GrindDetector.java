@@ -130,6 +130,7 @@ public class GrindDetector {
             return;
         }
         for (String s : signaturesOf(outcome)) {
+            if (stuckLayer != null) stuckLayer.rememberChange(s, candidate);
             observe(cycleId, StuckObservation.Source.BUILD, s, evidenceFor(s, outcome, candidate));
         }
     }
@@ -145,20 +146,31 @@ public class GrindDetector {
      * or does not hold that file.
      */
     static List<String> evidenceFor(String signature, BuildOutcome outcome, Map<String, String> candidate) {
-        if (candidate == null || candidate.isEmpty() || outcome == null || outcome.stderrTail() == null) return List.of();
+        if (outcome == null || outcome.stderrTail() == null) return List.of();
         String plain = BuildErrorClassifier.ANSI_ESCAPE.matcher(outcome.stderrTail()).replaceAll("");
-        for (String line : plain.split("\\R")) {
+        String[] lines = plain.split("\\R");
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
             var m = ERROR_AT.matcher(line);
             if (!m.find()) continue;
             if (!signature.startsWith("the build fails: " + m.group(2) + ": " + m.group(4).strip())) continue;
+            // T4-DZ: the compiler's own block for this error, positions and all, for the observer.
+            StringBuilder block = new StringBuilder(line.replaceFirst("^\\[ERROR]\\s*", "").strip());
+            for (int j = i + 1; j < Math.min(lines.length, i + 5); j++) {
+                String next = lines[j].replaceFirst("^\\[ERROR]", "");
+                if (!next.startsWith("  ") || ERROR_AT.matcher(next).find()) break;
+                block.append('\n').append(next.strip());
+            }
+            if (candidate == null || candidate.isEmpty()) return List.of("compiler=" + block);
             String path = m.group(1).replace('\\', '/');
             for (Map.Entry<String, String> f : candidate.entrySet()) {
                 String key = f.getKey().replace('\\', '/');
                 if (f.getValue() == null || !(path.endsWith("/" + key) || path.equals(key))) continue;
                 String[] src = f.getValue().split("\\R", -1);
                 int n = Integer.parseInt(m.group(3));
-                if (n < 1 || n > src.length) return List.of();
+                if (n < 1 || n > src.length) return List.of("compiler=" + block);
                 List<String> out = new ArrayList<>();
+                out.add("compiler=" + block);
                 out.add("line=" + src[n - 1].strip());
                 var c = CONSTRUCTED.matcher(src[n - 1]);
                 Set<String> types = new java.util.LinkedHashSet<>();
@@ -174,7 +186,7 @@ public class GrindDetector {
                 }
                 return out;
             }
-            return List.of();
+            return List.of("compiler=" + block);
         }
         return List.of();
     }

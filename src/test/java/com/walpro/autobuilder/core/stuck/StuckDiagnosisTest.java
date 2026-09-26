@@ -36,16 +36,16 @@ class StuckDiagnosisTest {
     }
 
     @Test
-    void theSecondBuildQuestionShowsTheDeclaringFileWholeAsAdopted() {
+    void theThirdBuildQuestionShowsTheDeclaringFileWholeAsAdopted() {
         var a = new StuckDiagnosis.Authorities(Map.of("src/main/java/org/ink/Quill.java", QUILL_NOW),
                 Map.of("src/main/java/org/ink/Quill.java", QUILL_ADOPTED), "");
 
         var asked = StuckDiagnosis.ask(StuckObservation.Source.BUILD,
-                "the build fails: Quill.java: incompatible types: inference variable E has incompatible bounds", List.of(), 1, a)
+                "the build fails: Quill.java: incompatible types: inference variable E has incompatible bounds", List.of(), 2, a)
                 .orElseThrow();
 
         assertThat(asked.answer()).contains("as it was adopted").contains("record Quill(String nib, int reach)");
-        assertThat(StuckDiagnosis.ask(StuckObservation.Source.BUILD, "x", List.of(), 2, a)).as("two questions only").isEmpty();
+        assertThat(StuckDiagnosis.ask(StuckObservation.Source.BUILD, "x", List.of(), 3, a)).as("three questions only").isEmpty();
     }
 
     @Test
@@ -84,5 +84,49 @@ class StuckDiagnosisTest {
         var a = new StuckDiagnosis.Authorities(Map.of(), Map.of(), "");
         assertThat(StuckDiagnosis.ask(StuckObservation.Source.FLAT_ROOT, "flat", List.of(), 0, a)).isEmpty();
         assertThat(StuckDiagnosis.ask(StuckObservation.Source.EXHAUSTION, "given up", List.of(), 0, a)).isEmpty();
+    }
+
+    @Test
+    void anAmbiguousNameIsResolvedByWhatTheFileImportsAsAdopted() {
+        String adopted = "package org.ink;\nimport java.util.List;\npublic class Well { List<String> drops; }\n";
+        String now = "package org.ink;\npublic class Well { List<String> drops; }\n";
+        var a = new StuckDiagnosis.Authorities(Map.of("src/main/java/org/ink/Well.java", now),
+                Map.of("src/main/java/org/ink/Well.java", adopted), "");
+
+        var asked = StuckDiagnosis.ask(StuckObservation.Source.BUILD,
+                "the build fails: Well.java: cannot find symbol class List in class Well", List.of(), 0, a).orElseThrow();
+
+        assertThat(asked.answer()).contains("java.awt.List").contains("java.util.List")
+                .contains("Well.java imports java.util.List as adopted -- that is the one meant");
+    }
+
+    @Test
+    void withoutAnImportInTheFileTheRestOfTheProjectDecides() {
+        var a = new StuckDiagnosis.Authorities(Map.of(
+                "src/main/java/org/ink/Well.java", "package org.ink;\nclass Well { List<String> d; }\n",
+                "src/main/java/org/ink/Pen.java", "package org.ink;\nimport java.util.*;\nclass Pen {}\n"), Map.of(), "");
+
+        var asked = StuckDiagnosis.ask(StuckObservation.Source.BUILD,
+                "the build fails: Well.java: cannot find symbol class List in class Well", List.of(), 0, a).orElseThrow();
+
+        assertThat(asked.answer()).contains("the project imports java.util.List (1 file(s)) and never the other");
+    }
+
+    @Test
+    void theFailingLineIsSetBesideTheDeclarationAsAdoptedAndAsTheChangeHadIt() {
+        String adopted = "package org.ink;\npublic class Well {\n  public record Drop(String colour, java.util.List<Well> wells) {}\n}\n";
+        var a = new StuckDiagnosis.Authorities(Map.of(), Map.of("src/main/java/org/ink/Well.java", adopted), "");
+        List<String> evidence = List.of("line=return new Drop(\"red\", List.of());", "declared-by-change=Drop(String colour, int count)",
+                "constructs=Drop");
+
+        var asked = StuckDiagnosis.ask(StuckObservation.Source.BUILD,
+                "the build fails: Well.java: incompatible types: inference variable E has incompatible bounds", evidence, 1, a)
+                .orElseThrow();
+
+        assertThat(asked.answer()).contains("return new Drop(\"red\", List.of());")
+                .contains("declared as adopted as: Drop(String colour, java.util.List<Well> wells)")
+                .contains("The change redeclared it as: Drop(String colour, int count)");
+        assertThat(StuckDiagnosis.ask(StuckObservation.Source.BUILD, "x", List.of(), 1, a).orElseThrow().answered())
+                .as("no line known: nothing to answer, the ladder moves on").isFalse();
     }
 }

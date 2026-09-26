@@ -50,7 +50,8 @@ class StuckLedgerTest {
         StuckLedger.Entry e = l.pending().get(0);
         StuckDiagnosis.Asked none = new StuckDiagnosis.Asked("q", "structure", null, false);
         assertThat(l.recordAsked(e, none, "c3", "sg")).isFalse();
-        assertThat(l.recordAsked(e, none, "c3", "sg")).as("both BUILD questions asked, neither answered").isTrue();
+        assertThat(l.recordAsked(e, none, "c3", "sg")).isFalse();
+        assertThat(l.recordAsked(e, none, "c3", "sg")).as("all three BUILD questions asked, none answered").isTrue();
         assertThat(e.status()).isEqualTo(StuckLedger.Status.UNANSWERED);
         assertThat(l.noQuestionLeft(e)).as("asked once, not again").isFalse();
     }

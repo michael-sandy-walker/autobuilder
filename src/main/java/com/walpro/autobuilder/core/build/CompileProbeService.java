@@ -295,7 +295,7 @@ public class CompileProbeService {
                     && anyStagedTestPathInErrors(outcome.stderrTail(), proposedFiles.keySet());
             if (!stagedTestSourceBroken) {
                 log.info("T4-BN-2: probe failure is TEST-ONLY (main compiles) — keeping mutation, surfacing as steering");
-                observeResidual(context, outcome, List.of());
+                observeResidual(context, outcome, List.of(), proposedFiles);
                 return new ProbeResult(outcome, rollbackPoint, List.of());
             }
             log.info("T4-BN-3: test-only mutation breaks its own staged test sources — gating instead of steering");
@@ -310,17 +310,17 @@ public class CompileProbeService {
                 // T2-EF: feed the run-level recurring-defect tracker with the POST-inner-loop
                 // residual — a solved-but-recurring fix the inner loop handles does not count as
                 // the dominant defect, and a green re-probe records its fixes as standing knowledge.
-                observeResidual(context, injected.outcome(), injected.appliedFixes());
+                observeResidual(context, injected.outcome(), injected.appliedFixes(), proposedFiles);
                 return injected;
             }
             // No fix or fix-write failed — restore so the working tree is clean for the next attempt.
             mergeRollbackService.rollback(rollbackPoint, outputPath, fileService);
-            observeResidual(context, outcome, List.of());
+            observeResidual(context, outcome, List.of(), proposedFiles);
             return new ProbeResult(outcome, null, List.of());
         }
 
         // COMPILE_OK (or TIMEOUT/SKIPPED): leave files on disk; caller decides what to do next.
-        observeResidual(context, outcome, List.of());
+        observeResidual(context, outcome, List.of(), proposedFiles);
         return new ProbeResult(outcome, rollbackPoint, List.of());
     }
 
@@ -348,11 +348,13 @@ public class CompileProbeService {
     }
 
     /** T2-EF: hand the residual outcome to the recurring-defect tracker when one is wired. */
-    private void observeResidual(CycleContextData context, BuildOutcome outcome, List<FixProposal> appliedFixes) {
-        // T4-CQ: every failure signature of the residual build, for the grind detector.
+    private void observeResidual(CycleContextData context, BuildOutcome outcome, List<FixProposal> appliedFixes,
+                                 Map<String, String> proposedFiles) {
+        // T4-CQ: every failure signature of the residual build, for the grind detector -- with the
+        // change's own files, which are rolled back by now (T4-DY: the failing line is read from them).
         if (grindDetector != null) {
             try {
-                grindDetector.observeBuild(context.cycleName(), outcome);
+                grindDetector.observeBuild(context.cycleName(), outcome, proposedFiles);
             } catch (RuntimeException e) {
                 log.debug("T4-CQ: grind observe failed: {}", e.getMessage());
             }

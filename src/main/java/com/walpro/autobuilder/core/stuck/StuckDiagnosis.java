@@ -52,7 +52,7 @@ public final class StuckDiagnosis {
     /** How many questions a source has; a rung at or past this has none left. */
     public static int questionsFor(StuckObservation.Source source) {
         return switch (source) {
-            case BUILD -> 2;
+            case BUILD -> 3;
             case PROTECTED_WRITE, CLOSURE_REFUSAL -> 1;
             case FLAT_ROOT, EXHAUSTION -> 0;
         };
@@ -63,7 +63,11 @@ public final class StuckDiagnosis {
                                       int rung, Authorities authorities) {
         if (rung < 0 || rung >= questionsFor(source)) return Optional.empty();
         return Optional.of(switch (source) {
-            case BUILD -> rung == 0 ? declared(signature, authorities) : declaringFile(signature, authorities);
+            case BUILD -> switch (rung) {
+                case 0 -> declared(signature, authorities);
+                case 1 -> failingLine(detail, authorities);
+                default -> declaringFile(signature, authorities);
+            };
             case PROTECTED_WRITE -> protectedFile(signature, authorities);
             case CLOSURE_REFUSAL -> refusedRequirement(signature, detail, authorities);
             case FLAT_ROOT, EXHAUSTION -> throw new IllegalStateException("no question for " + source);
@@ -81,6 +85,7 @@ public final class StuckDiagnosis {
         Optional<StuckQuestions.Answer> adopted = StuckQuestions.answer(signature, a.adoptedSources());
         if (now.isEmpty() && adopted.isEmpty()) return new Asked(question, authority, null, false);
         StringBuilder sb = new StringBuilder();
+        String meant = meantByImports(signature, now.or(() -> adopted).get(), a);
         if (now.isPresent()) {
             sb.append(render(now.get()));
             if (adopted.isPresent() && !adopted.get().declared().equals(now.get().declared())) {
@@ -89,7 +94,118 @@ public final class StuckDiagnosis {
         } else {
             sb.append("Not declared in the current tree. When the project was adopted: ").append(render(adopted.get()));
         }
+        if (meant != null) sb.append(' ').append(meant);
         return new Asked(question, authority, sb.toString(), false);
+    }
+
+    private static final Pattern IMPORT = Pattern.compile("^\\s*import\\s+([\\w.]+)\\.(\\w+|\\*)\\s*;", Pattern.MULTILINE);
+
+    /**
+     * T4-DY, the user's decision 2026-09-26: a name declared more than once (java.util.List and
+     * java.awt.List) is ambiguous only until one asks which one the code imports. First the failing
+     * file itself, as adopted and then as it stands; else the rest of the project, counted. Null when
+     * the name is not ambiguous or no import decides it.
+     */
+    static String meantByImports(String signature, StuckQuestions.Answer ans, Authorities a) {
+        if (ans.kind() != StuckQuestions.Kind.SYMBOL || ans.declared().size() < 2) return null;
+        List<String> qualified = new ArrayList<>();
+        for (String d : ans.declared()) {
+            String name = d.replaceAll("\\s*\\(.*$", "");
+            if (name.contains(".") && Character.isLowerCase(name.charAt(0))) qualified.add(name);
+        }
+        if (qualified.size() < 2) return null;
+        String file = typeNamed(signature);
+        for (Map<String, String> tree : List.of(a.adoptedSources(), a.currentSources())) {
+            for (Map.Entry<String, String> e : tree.entrySet()) {
+                String p = e.getKey().replace('\\', '/');
+                if (file == null || !(p.endsWith("/" + file + ".java") || p.equals(file + ".java"))) continue;
+                String hit = importedAmong(e.getValue(), qualified);
+                if (hit != null) {
+                    return "Of these, " + file + ".java imports " + hit + (tree == a.adoptedSources() ? " as adopted" : "")
+                            + " -- that is the one meant; import it.";
+                }
+            }
+        }
+        java.util.Map<String, Integer> votes = new java.util.LinkedHashMap<>();
+        for (Map<String, String> tree : List.of(a.currentSources(), a.adoptedSources())) {
+            for (String content : tree.values()) {
+                String hit = importedAmong(content, qualified);
+                if (hit != null) votes.merge(hit, 1, Integer::sum);
+            }
+        }
+        if (votes.size() != 1) return null;
+        var only = votes.entrySet().iterator().next();
+        return "Of these, the project imports " + only.getKey() + " (" + only.getValue() + " file(s)) and never the other"
+                + " -- that is the one meant; import it.";
+    }
+
+    private static String importedAmong(String source, List<String> qualified) {
+        if (source == null) return null;
+        String hit = null;
+        Matcher m = IMPORT.matcher(source);
+        while (m.find()) {
+            for (String q : qualified) {
+                String pkg = q.substring(0, q.lastIndexOf('.')), simple = q.substring(q.lastIndexOf('.') + 1);
+                boolean match = m.group(1).equals(pkg) && (m.group(2).equals(simple) || m.group(2).equals("*"));
+                if (!match) continue;
+                if (hit != null && !hit.equals(q)) return null; // imports both: no decision
+                hit = q;
+            }
+        }
+        return hit;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // BUILD, rung 1: the failure names no type -- what does the failing line construct, and how is it
+    // declared, as adopted and as the change declared it?
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * T4-DY, the user's decision 2026-09-26. An inference error ("inference variable E has incompatible
+     * bounds", "no instance of E so that List<E> conforms to int") names no type, yet the fact that ends
+     * it is a declaration: the change had redeclared the record the failing line constructs. The
+     * detector carries the change's line and its declarations ({@code line=}, {@code constructs=},
+     * {@code declared-by-change=}); the answer sets them beside the declaration as adopted, else as the
+     * tree has it now.
+     */
+    static Asked failingLine(List<String> evidence, Authorities a) {
+        String question = "What does the failing line construct, and how is that declared -- as adopted, and by the change?";
+        String authority = "structure: the change's own line, the adopted tree and the current tree";
+        String line = null;
+        List<String> types = new ArrayList<>(), byChange = new ArrayList<>();
+        for (String e : evidence == null ? List.<String>of() : evidence) {
+            if (e.startsWith("line=")) line = e.substring(5);
+            else if (e.startsWith("constructs=")) types.add(e.substring(11));
+            else if (e.startsWith("declared-by-change=")) byChange.add(e.substring(19));
+        }
+        if (line == null || types.isEmpty()) return new Asked(question, authority, null, false);
+        StringBuilder sb = new StringBuilder("The failing line is: ").append(line);
+        boolean any = false;
+        for (String type : types) {
+            List<String> adopted = constructorsInTree(type, a.adoptedSources());
+            List<String> now = adopted.isEmpty() ? constructorsInTree(type, a.currentSources()) : adopted;
+            if (now.isEmpty()) continue;
+            any = true;
+            List<String> changed = byChange.stream().filter(d -> d.startsWith(type + "(")).toList();
+            sb.append("\n    It constructs ").append(type).append(", declared ").append(adopted.isEmpty() ? "now" : "as adopted")
+                    .append(" as: ").append(String.join("; ", now)).append('.');
+            if (!changed.isEmpty() && !changed.equals(now)) {
+                sb.append("\n    The change redeclared it as: ").append(String.join("; ", changed))
+                        .append(". Keep the declaration as ").append(adopted.isEmpty() ? "it is" : "adopted")
+                        .append(" and build the line against it.");
+            }
+        }
+        return any ? new Asked(question, authority, sb.toString(), false)
+                : new Asked(question, authority, null, false);
+    }
+
+    private static List<String> constructorsInTree(String type, Map<String, String> tree) {
+        for (String content : tree.values()) {
+            if (content == null || !content.contains(type)) continue;
+            List<String> c = StuckQuestions.constructorsIn(content, type);
+            if (!c.isEmpty()) return c;
+        }
+        return List.of();
     }
 
     static String render(StuckQuestions.Answer ans) {
@@ -105,7 +221,7 @@ public final class StuckDiagnosis {
     }
 
     // ---------------------------------------------------------------------------------------------
-    // BUILD, rung 1: the declared names did not stop it -- what does the declaring file say, whole?
+    // BUILD, rung 2: neither the names nor the line ended it -- what does the declaring file say, whole?
     // ---------------------------------------------------------------------------------------------
 
     /** Past this a file is not shown: half a file invites the same invention a summary did. */
@@ -115,7 +231,7 @@ public final class StuckDiagnosis {
             "(?:fails: ([A-Z]\\w*) has no|in (?:record|class|interface|enum) (?:[\\w]+\\.)*([A-Z]\\w*)|fails: ([A-Z]\\w*)\\.java:)");
 
     static Asked declaringFile(String signature, Authorities a) {
-        String question = "The declared names did not end this failure. What does the file that declares the type say, whole?";
+        String question = "Neither the declared names nor the failing line ended this failure. What does the file that declares the type say, whole?";
         String authority = "structure: the declaring file, as adopted where it was adopted";
         String type = typeNamed(signature);
         if (type == null) return new Asked(question, authority, null, false);

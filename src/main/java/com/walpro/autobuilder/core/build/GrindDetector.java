@@ -80,10 +80,14 @@ public class GrindDetector {
 
     /** Records one failure the {@code source} detector saw. */
     public void observe(String cycleId, StuckObservation.Source source, String signature) {
+        observe(cycleId, source, signature, List.of());
+    }
+
+    private void observe(String cycleId, StuckObservation.Source source, String signature, List<String> evidence) {
         if (signature == null || signature.isBlank()) return;
         // Every occurrence, before this detector's per-cycle count: the layer must also see one that
         // follows its own answer within the same cycle.
-        if (stuckLayer != null) stuckLayer.report(source, signature, List.of());
+        if (stuckLayer != null) stuckLayer.report(source, signature, evidence);
         count(cycleId, signature);
     }
 
@@ -111,11 +115,68 @@ public class GrindDetector {
      * (structdiff run 2 still warned about a getter error forty minutes after the last one).
      */
     public void observeBuild(String cycleId, BuildOutcome outcome) {
+        observeBuild(cycleId, outcome, Map.of());
+    }
+
+    /**
+     * As {@link #observeBuild(String, BuildOutcome)}, with the files the failed change proposed (path
+     * relative to the project root -> content). They are rolled back before the failure is observed, so
+     * this is the only moment the line the compiler pointed at can still be read: each signature
+     * carries it, and the declarations the change gave the types that line constructs (T4-DY).
+     */
+    public void observeBuild(String cycleId, BuildOutcome outcome, Map<String, String> candidate) {
         if (outcome != null && outcome.result() == BuildResult.COMPILE_OK) {
             if (stuckLayer != null) stuckLayer.buildSucceeded(cycleId);
             return;
         }
-        for (String s : signaturesOf(outcome)) observe(cycleId, s);
+        for (String s : signaturesOf(outcome)) {
+            observe(cycleId, StuckObservation.Source.BUILD, s, evidenceFor(s, outcome, candidate));
+        }
+    }
+
+    private static final java.util.regex.Pattern ERROR_AT =
+            java.util.regex.Pattern.compile("(\\S*?([A-Za-z0-9_]+\\.java)):\\[(\\d+),\\d+]\\s*(.+)$");
+    private static final java.util.regex.Pattern CONSTRUCTED = java.util.regex.Pattern.compile("\\bnew\\s+([A-Z]\\w*)\\s*(?:<[^>]*>)?\\s*\\(");
+
+    /**
+     * For a signature naming a file, the failed change's own line at the position the compiler gave,
+     * as {@code line=<text>}, and for each type that line constructs the constructors the change
+     * declared for it, as {@code declared-by-change=<Type(...)>}. Empty when the change is not known
+     * or does not hold that file.
+     */
+    static List<String> evidenceFor(String signature, BuildOutcome outcome, Map<String, String> candidate) {
+        if (candidate == null || candidate.isEmpty() || outcome == null || outcome.stderrTail() == null) return List.of();
+        String plain = BuildErrorClassifier.ANSI_ESCAPE.matcher(outcome.stderrTail()).replaceAll("");
+        for (String line : plain.split("\\R")) {
+            var m = ERROR_AT.matcher(line);
+            if (!m.find()) continue;
+            if (!signature.startsWith("the build fails: " + m.group(2) + ": " + m.group(4).strip())) continue;
+            String path = m.group(1).replace('\\', '/');
+            for (Map.Entry<String, String> f : candidate.entrySet()) {
+                String key = f.getKey().replace('\\', '/');
+                if (f.getValue() == null || !(path.endsWith("/" + key) || path.equals(key))) continue;
+                String[] src = f.getValue().split("\\R", -1);
+                int n = Integer.parseInt(m.group(3));
+                if (n < 1 || n > src.length) return List.of();
+                List<String> out = new ArrayList<>();
+                out.add("line=" + src[n - 1].strip());
+                var c = CONSTRUCTED.matcher(src[n - 1]);
+                Set<String> types = new java.util.LinkedHashSet<>();
+                while (c.find()) types.add(c.group(1));
+                for (String type : types) {
+                    for (String content : candidate.values()) {
+                        List<String> declared = content == null ? List.of() : StuckQuestions.constructorsIn(content, type);
+                        if (declared.isEmpty()) continue;
+                        declared.forEach(d -> out.add("declared-by-change=" + d));
+                        break;
+                    }
+                    out.add("constructs=" + type);
+                }
+                return out;
+            }
+            return List.of();
+        }
+        return List.of();
     }
 
     /**

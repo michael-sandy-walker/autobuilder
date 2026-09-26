@@ -269,6 +269,14 @@ public final class StuckQuestions {
         return source.replaceAll("(?s)/\\*.*?\\*/", " ").replaceAll("//[^\\n]*", " ");
     }
 
+    /**
+     * The constructors {@code source} declares for {@code simpleType} (a nested type included), as
+     * {@code Type(ParamType name, ...)}, a record's canonical one first; empty when it declares no such type.
+     */
+    public static List<String> constructorsIn(String source, String simpleType) {
+        return extractConstructors(source, simpleType);
+    }
+
     private static List<String> extractConstructors(String source, String simpleType) {
         if (source == null || simpleType == null) return List.of();
         CompilationUnit cu;

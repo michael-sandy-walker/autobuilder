@@ -29,3 +29,17 @@ THE BAR, stated 2026-09-26 before measuring:
     only with an aid to the proposer. <= 1 of 6 -> the local model cannot drive it; do not wire.
   - Safety, every arm: 0 writes to the copy (content hash before/after), every command outside the
     allow-list refused and counted, every command inside a 10 s budget.
+
+STRUCTURAL LOOKUPS (T4-DY, the user's decision 2026-09-26: "first add the two structural lookups"), bar stated
+before they were built:
+  - (a) an ambiguous name is resolved by what the failing file IMPORTS as adopted (else what the rest of the
+    project imports); (b) for a failure at a line naming no type, the types that line constructs, as declared
+    in the adopted tree vs as declared by the change.
+  - Measured through the REAL detector and layer (compiler block + candidate files + adopted tree), on the
+    FIRST answer the ladder delivers for the signature -- not on whether a later whole-file dump happens to
+    contain the fact (slice B's last question shows the declaring file whole; that would "answer" all six
+    and prove nothing about the lookups).
+  - Pass: q4-q6 -- the first answer names java.util.List as the one meant; q2-q3 -- the first answer states
+    TickResult as adopted (ParticipationWindows windows, List<ParticipationWindow> expired) beside the change's
+    differing declaration. 5 of 5 expected; q1 (indexOf on a Map) is covered by neither lookup and is expected
+    to stay unanswered at the first answer -- it stays the terminal agent's case.

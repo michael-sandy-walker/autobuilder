@@ -159,7 +159,7 @@ Watchers:
 - `feedback_monitor_every_terminal.md`: a monitor must match EVERY terminal state; stopping one for noise means re-arming a narrower one, never going blind. (reviewed 2026-07-27)
 - `feedback_escalate_unrecoverable_stagnation.md`: watchers must detect periodic failure patterns and inform early, not just terminal markers and silence. (reviewed 2026-07-09)
 - `feedback_waiter_fires_on_loop_terminal.md`: a run waiter fires on the LOOP's terminal line, not only preflight's final line minutes later. (reviewed 2026-09-24)
-- `feedback_cut_flat_runs_short.md`: start `scripts/early_stop.sh` beside every field run; the user wants flat runs cut by a rule stated in advance. (reviewed 2026-09-25)
+- `feedback_cut_flat_runs_short.md`: start `scripts/early_stop.sh` beside every field run; the user wants flat runs cut by a rule stated in advance, but "30 minutes is too soon" -- firestarter uses patience 30, minimum 45. (reviewed 2026-09-26)
 
 Writing:
 - `feedback_curly_quotes.md`: no curly quotes/stray non-Latin chars; enforced by `scripts/charset_guard.py`. No `jq`; use python3. (reviewed 2026-08-28)

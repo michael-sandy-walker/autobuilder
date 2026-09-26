@@ -1,0 +1,30 @@
+  An existing project, adopted, and now asked to grow. It was written by someone else and it
+  already builds. In its own words, from its README:
+
+    "What a type in a Java project actually declares, read from its source, extracted from Autobuilder. DeclaredMembers lists a type's callable members -- its public methods, and for a record its component accessors -- and names the declared member a missing accessor most likely meant (getType -> type()). Pure: source text in, values out."
+
+  It is a library. Its existing behaviour is characterised by the tests already in src/test/java.
+  The change wanted is written in the ticket that asked for it. In the ticket's own words:
+
+    2. Question, not countermeasure. For each observation the layer derives the QUESTION the signature
+     poses, deterministically where it can: a compile signature naming `X.m()` asks "what does X declare?";
+     a repeated refusal asks "which requirement, and what evidence would answer it?"; an assertion
+     `expected A but was B` asks "what does the entry point return?". Where no rule applies, the local
+     model may PROPOSE the question ("which fact would let this move succeed?") -- proposing, never
+     answering.
+    Slice A -- the question router, offline, no loop change. A pure function
+    `StuckObservation -> Question` plus `Question x tree -> Answer?` over the structural authority only,
+    replayed over the archive.
+
+  The one class to change is StuckQuestions. Its signature and the meaning of what it returns are in its
+  class comment; its method is not implemented yet.
+
+  The specification is StuckQuestionsSpecTest in src/test/java: its tests say exactly what the method must return,
+  using real data from the test resources, and they fail until the code provides it.
+
+  OBJECTIVE: every test in StuckQuestionsSpecTest passes, and the whole suite passes.
+
+  Change only StuckQuestions under src/main/java, and read what the code declares through the classes that
+  already read it. DO NOT modify anything under src/test: the specification and the existing tests are
+  the operator's, and if one of them fails, the code is what is wrong. Keep every other class exactly as
+  it is, and keep the project's packages, classes and naming.

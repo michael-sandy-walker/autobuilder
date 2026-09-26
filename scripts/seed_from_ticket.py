@@ -12,7 +12,7 @@ module's README, the specification class and the one class to change; then CHECK
 identifier the passage names which exists in the module, and every number, reached the seed.
 Identifiers the module does not define are listed as a warning for the operator to rephrase.
 
-Usage: seed_from_ticket.py --passage-from {roadmap:<ID>|<note.md>} [--section <heading text>] [--keep <regex>] [--before <date>]
+Usage: seed_from_ticket.py --passage-from {roadmap:<ID>|<note.md>} [--section <heading text>] [--keep <regex>] [--lines <a-b,c-d>] [--before <date>]
                            --module-dir <prepared tree> --spec <SpecClass> --change <Class> [--out seed.txt]
 Exit 1 (and no file) when the check fails.
 """
@@ -27,7 +27,7 @@ LINK = re.compile(r'\s*\(?\[\[[^\]]+\]\]\)?')
 RUN_ID = re.compile(r'`?\b20\d\d-\d\d-\d\d_\d\d-\d\d-\d\d\b`?')
 
 
-def passage(src, section, keep, before=None):
+def passage(src, section, keep, before=None, lines_spec=None):
     if src.startswith('roadmap:'):
         tid = src.split(':', 1)[1]
         lines = open(os.path.join(ROOT, '.claude-memory/roadmap.md')).read().split('\n')
@@ -38,6 +38,12 @@ def passage(src, section, keep, before=None):
         body = lines[start:end]
     else:
         body = open(src).read().split('\n')
+    if lines_spec:
+        keep_idx = []
+        for part in lines_spec.split(','):
+            lo, hi = (int(x) for x in part.split('-'))
+            keep_idx += range(lo - 1, hi)
+        body = [body[i] for i in keep_idx if i < len(body)]
     if section:
         s = next(i for i, l in enumerate(body) if l.lstrip('#- *').startswith(section) or section in l and l.startswith('#'))
         e = next((j for j in range(s + 1, len(body)) if body[j].startswith('#')), len(body))
@@ -87,11 +93,12 @@ def main():
     ap.add_argument('--module-dir', required=True)
     ap.add_argument('--spec', required=True)
     ap.add_argument('--change', required=True)
+    ap.add_argument('--lines', help='line ranges of the source to quote, e.g. 43-54,80-83')
     ap.add_argument('--before', help='drop dated appends on or after this date (YYYY-MM-DD)')
     ap.add_argument('--out')
     a = ap.parse_args()
 
-    raw = passage(a.passage_from, a.section, a.keep, a.before)
+    raw = passage(a.passage_from, a.section, a.keep, a.before, a.lines)
     quoted = clean(raw)
     readme = open(os.path.join(a.module_dir, 'README.md')).read().strip().split('\n')
     readme = ' '.join(l for l in readme if not l.startswith('#')).strip()

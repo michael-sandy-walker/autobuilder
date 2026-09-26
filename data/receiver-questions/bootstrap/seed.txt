@@ -8,8 +8,8 @@
 
     - 2026-09-26 night: THE RECEIVER QUESTION -- the next structural rule, read from what the terminal agent had to answer. A method called on a receiver whose type is a JDK type is a question the router cannot ask today: "the build fails: Object has no getBookId()" and "cannot find symbol method indexOf(ParticipationWindow) in record component active of type Map<String,ParticipationWindow>" name a type the project's sources do not declare, so no answer comes back. The archive holds 14 distinct such failures across 8 runs (receivers typed Object, Map, GraphicsConfiguration, BufferStrategy). What ends them is a fact: which methods the receiver's JDK type really declares -- it has no such method -- and which of the project's own types do declare the method that was called, because a receiver typed Object usually means the element type was lost on the way. The question: when the type a failure names is not declared in the sources but is a class of the running JDK, answer what that JDK class declares and where the called method is declared in the sources.
 
-  The one class to change is StuckQuestions. It already works as its class comment says; keep every
-  declaration it has exactly as it is, and add what the ticket asks for beside them.
+  The one class to change is StuckQuestions. It already works as its class comment says, and its
+  existing tests must keep passing; extend it so that it also answers what the ticket asks.
 
   The specification is ReceiverQuestionsSpecTest in src/test/java: its tests say exactly what the method must return,
   using real data from the test resources, and they fail until the code provides it.

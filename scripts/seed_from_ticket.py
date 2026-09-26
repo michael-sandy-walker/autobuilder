@@ -108,8 +108,10 @@ def main():
     quoted = clean(raw)
     readme = open(os.path.join(a.module_dir, 'README.md')).read().strip().split('\n')
     readme = ' '.join(l for l in readme if not l.startswith('#')).strip()
-    change_line = (f'''  The one class to change is {a.change}. It already works as its class comment says; keep every
-  declaration it has exactly as it is, and add what the ticket asks for beside them.''' if a.grow else
+    # --grow: the class already works and must answer more. Its existing tests hold what it does now, so the
+    # seed does not ask to keep its declarations untouched -- extending an entry point means changing one.
+    change_line = (f'''  The one class to change is {a.change}. It already works as its class comment says, and its
+  existing tests must keep passing; extend it so that it also answers what the ticket asks.''' if a.grow else
                    f'''  The one class to change is {a.change}. Its signature and the meaning of what it returns are in its
   class comment; its method is not implemented yet.''')
     seed = f'''  An existing project, adopted, and now asked to grow. It was written by someone else and it

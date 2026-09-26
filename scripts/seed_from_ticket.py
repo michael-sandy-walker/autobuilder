@@ -96,6 +96,7 @@ def main():
     ap.add_argument('--lines', help='line ranges of the source to quote, e.g. 43-54,80-83')
     ap.add_argument('--before', help='drop dated appends on or after this date (YYYY-MM-DD)')
     ap.add_argument('--out')
+    ap.add_argument('--obligations-out', help='also write bootstrap/seed.obligations.txt for this seed')
     a = ap.parse_args()
 
     raw = passage(a.passage_from, a.section, a.keep, a.before, a.lines)
@@ -146,6 +147,41 @@ def main():
         open(a.out, 'w').write(seed)
     else:
         sys.stdout.write(seed)
+    if a.obligations_out:
+        open(a.obligations_out, 'w').write(obligations(seed, quoted, a.spec, a.change))
+        print(f'seed_from_ticket: wrote {a.obligations_out}', file=sys.stderr)
+
+
+def obligations(seed, quoted, spec, change):
+    """The obligations file for this seed, in the loop's own format (SeedObligationsFile.render), so it
+    reads PRISTINE and the loop's generator never replaces it.
+
+    Why written here and not left to the model's split: stuck-questions run 1 (2026-09-26) quoted a
+    design note, and the model's split turned every design sentence into a binding obligation -- "The
+    function is replayed over the archive", "StuckQuestions contains a method that maps StuckObservation
+    to Question" -- which no reading of the code can confirm, so a correct, green artifact was refused
+    closure. The ticket's words GUIDE the work (rule:); the objective's clauses are answered by the test
+    run (gate: tests); the change's limits are rules."""
+    import hashlib
+    text = ' '.join(l.strip() for l in quoted.split('\n'))
+    sentences = [x.strip() for x in re.split(r'(?<=[.;?!])\s+(?=[A-Z0-9"(`])', text) if len(x.strip()) > 3]
+    lines = ['rule: ' + x for x in sentences]
+    lines += [f'rule: Change only {change} under src/main/java',
+              'rule: Do not modify anything under src/test',
+              'rule: Keep every other class exactly as it is, and the project\'s packages, classes and naming',
+              f'gate: tests every test in {spec} passes',
+              'gate: tests the whole suite passes']
+    body = ''.join(l.strip() + '\n' for l in lines if l.strip())
+    sha = lambda t: hashlib.sha256(t.encode('utf-8')).hexdigest()
+    return ('# Obligations derived from bootstrap/seed.txt, one per line.\n'
+            '# Edit freely: a hand-edited file is kept, and reported as yours.\n'
+            "# Prefix a line with 'rule:' when it says HOW the work is done rather than something the\n"
+            '# result can be checked for: it still guides the work, but never blocks completion.\n'
+            "# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then\n"
+            "# takes the test run's verdict instead of asking a model to read the source.\n"
+            '# Written by scripts/seed_from_ticket.py: the ticket guides (rule:), the tests decide (gate: tests).\n'
+            f'# seed-sha256: {sha(seed)}\n'
+            f'# body-sha256: {sha(body)}\n' + body)
 
 
 if __name__ == '__main__':

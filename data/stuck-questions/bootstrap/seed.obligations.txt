@@ -1,0 +1,19 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# Written by scripts/seed_from_ticket.py: the ticket guides (rule:), the tests decide (gate: tests).
+# seed-sha256: 63b26aa81825acc339c9ef5b50fba1c2c08b79e5ce33d0ea67aff9ce88933d22
+# body-sha256: f00ece47196b60ac49ea213b6acfbaba2f8152eae1ddf4759b19e13b73de03a8
+rule: Question, not countermeasure.
+rule: For each observation the layer derives the QUESTION the signature poses, deterministically where it can: a compile signature naming `X.m()` asks "what does X declare?"; a repeated refusal asks "which requirement, and what evidence would answer it?"; an assertion `expected A but was B` asks "what does the entry point return?".
+rule: Where no rule applies, the local model may PROPOSE the question ("which fact would let this move succeed?") -- proposing, never answering.
+rule: Slice A -- the question router, offline, no loop change.
+rule: A pure function `StuckObservation -> Question` plus `Question x tree -> Answer?` over the structural authority only, replayed over the archive.
+rule: Change only StuckQuestions under src/main/java
+rule: Do not modify anything under src/test
+rule: Keep every other class exactly as it is, and the project's packages, classes and naming
+gate: tests every test in StuckQuestionsSpecTest passes
+gate: tests the whole suite passes

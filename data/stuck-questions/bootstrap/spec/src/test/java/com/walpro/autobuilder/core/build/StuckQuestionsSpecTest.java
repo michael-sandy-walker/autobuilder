@@ -9,16 +9,15 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,8 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>The signatures are not written here. {@code stuck/signatures.tsv} is every distinct failure
  * signature the grind detector recorded in the archived runs of 2026-09-24/25 on three adopted
  * projects, beside the source tree that project had (its {@code src/main} at the revision it was
- * adopted from, under {@code stuck/<project>/}, stored as {@code .java.txt} so no tool mistakes
- * them for this project's own sources). The expected answers are what those sources declare;
+ * adopted from, packed per project in {@code stuck/trees.zip} so no tool or prompt mistakes them for
+ * this project's own sources). The expected answers are what those sources declare;
  * where the signature names a missing accessor, the declared member it means is the one the archive's
  * own later fixes recorded (ParsedElement.getType() -> type(), getId() -> id(), getChildren() ->
  * children(); StructuralDiffNode.getChildren() -> children()).
@@ -40,19 +39,16 @@ class StuckQuestionsSpecTest {
 
     private static Map<String, String> tree(String project) {
         return TREES.computeIfAbsent(project, p -> {
-            try {
-                Path root = Path.of(StuckQuestionsSpecTest.class.getResource("/stuck/" + p).toURI());
-                Map<String, String> files = new LinkedHashMap<>();
-                try (Stream<Path> walk = Files.walk(root)) {
-                    for (Path f : walk.filter(x -> x.toString().endsWith(".java.txt")).sorted().toList()) {
-                        String rel = root.relativize(f).toString().replace('\\', '/');
-                        files.put(rel.substring(0, rel.length() - ".txt".length()), Files.readString(f));
-                    }
+            Map<String, String> files = new LinkedHashMap<>();
+            try (ZipInputStream zip = new ZipInputStream(StuckQuestionsSpecTest.class.getResourceAsStream("/stuck/trees.zip"))) {
+                for (ZipEntry e; (e = zip.getNextEntry()) != null; ) {
+                    if (e.isDirectory() || !e.getName().startsWith(p + "/")) continue;
+                    files.put(e.getName().substring(p.length() + 1), new String(zip.readAllBytes(), StandardCharsets.UTF_8));
                 }
-                return files;
-            } catch (IOException | URISyntaxException e) {
+            } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
+            return files;
         });
     }
 

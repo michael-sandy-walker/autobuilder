@@ -357,10 +357,20 @@ public class CriteriaVerificationService {
 
         // Combine cached + fresh; absent or false ⇒ unconfirmed.
         List<String> unconfirmed = new ArrayList<>();
+        // A claim that tests pass is answered by the test run of exactly this tree, not by the reading
+        // (TestRunClaims: whole-claim only, confirm-only).
+        var report = testRunGate == null ? java.util.Optional.<com.walpro.autobuilder.core.build.TestRunReport>empty()
+                : testRunGate.freshReport();
         for (String c : requiredCriteria) {
             Boolean ok = cachedByKey.containsKey(CriterionResultEntity.keyOf(c))
                     ? cachedByKey.get(CriterionResultEntity.keyOf(c))
                     : freshByCriterion.get(c);
+            if ((ok == null || !ok) && report.isPresent()
+                    && com.walpro.autobuilder.core.build.TestRunClaims.provenBy(c, report.get())) {
+                log.info("T4-CQ: [{}] answered by the project's test run of this tree ({} run, 0 failed), not by a reading",
+                        c, report.get().run());
+                ok = true;
+            }
             if (ok == null || !ok) unconfirmed.add(c);
         }
         if (unconfirmed.isEmpty()) {

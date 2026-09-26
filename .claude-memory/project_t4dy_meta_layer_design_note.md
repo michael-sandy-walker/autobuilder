@@ -149,3 +149,7 @@ yes in substance; #2 (diagnosis channel) and #3 (self-initiated halt) still open
   terminal agent: two lookups added (`8cff94ab`) -- ambiguous names resolved by imports; a new second BUILD question
   setting the failing line's constructions beside their adopted declarations (the detector now receives the failed
   change's files). BUILD ladder is now: declared names -> the failing line -> the declaring file whole.
+- **2026-09-26 night: the observation authority is in (T4-DZ, `e8f33e48`).** BUILD ladder: declared names ->
+  the failing line -> the declaring file whole -> the terminal agent (model proposes, read-only commands answer,
+  graph-recorded) -> diagnosis request. Every fact in the six open archived questions was structural; the agent is
+  for what no rule covers yet, and its graph records are where the next structural rule should be read from.

@@ -115,4 +115,9 @@ the missing fact) is ended in-loop by a delivered fact, and the ledger shows it.
    `cannot find symbol` signatures -- the detector drops the symbol and location the question needs. Either
    (a) the signature format is the defect: keep the compiler's symbol/location lines and re-measure against
    the same bar of 6; or (b) take the stated rule at its word and revisit the design. Slice B waits on this.
+**User decisions 2026-09-26 (evening):** #4 -- yes, the model may propose questions; a proposed question may be
+answered by a terminal execution agent (read-only for now), and questions may be kept to question the model in
+later sessions. #5 -- (a): the dropped symbol is the defect; fixed, and slice A re-measured at 7 of 7 against the
+same bar (ambiguous `List`; the adopted tree must be an authority beside the current one in slice B). #1 answered
+yes in substance; #2 (diagnosis channel) and #3 (self-initiated halt) still open.
 

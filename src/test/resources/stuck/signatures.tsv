@@ -1,0 +1,18 @@
+participation	the build fails: ParticipationWindows.java: cannot find symbol	NONE	-	-	-	-
+participation	the build fails: ParticipationWindows.java: incompatible types: no instance(s) of type variable(s) E exist so that java.util.List<E> conforms to int	NONE	-	-	-	-
+participation	the build fails: ChannelRequest.java: cannot find symbol	NONE	-	-	-	-
+participation	the build fails: ChannelRequest.java: constructor ChannelRequest in record com.walpro.autobuilder.core.lifecycle.ChannelRequest cannot be applied to given types;	CONSTRUCTOR	ChannelRequest	-	-	ChannelRequest(SignalType kind, double urgency, String source, String subGoalId, int age, Integer validForCycles, Map<String,Object> meta)
+participation	the build fails: ParticipationWindows.java: cannot find symbol	NONE	-	-	-	-
+participation	the build fails: ParticipationWindows.java: incompatible types: inference variable E has incompatible bounds	NONE	-	-	-	-
+participation	write to src/test/java/com/walpro/autobuilder/core/lifecycle/ChannelRequestTest.java refused: protected	NONE	-	-	-	-
+structdiff	the build fails: ParsedElement has no getChildren()	MEMBERS	ParsedElement	getChildren	children()	id() | type() | content() | metadata() | children()
+structdiff	the build fails: ParsedElement has no getId()	MEMBERS	ParsedElement	getId	id()	id() | type() | content() | metadata() | children()
+structdiff	the build fails: ParsedElement has no getType()	MEMBERS	ParsedElement	getType	type()	id() | type() | content() | metadata() | children()
+structdiff	the build fails: StructuralDiffNode has no addChild(com.walpro.autobuilder.analysis.diff.model.StructuralDiffNode)	MEMBERS	StructuralDiffNode	addChild	-	oldElement() | newElement() | children() | isAdded() | isDeleted() | isModified() | isUnchanged() | getType() | getId()
+structdiff	the build fails: StructuralDiffNode has no createChild(com.walpro.autobuilder.analysis.diff.model.ElementType,java.lang.String,<nulltype>,<nulltype>,<nulltype>)	MEMBERS	StructuralDiffNode	createChild	-	oldElement() | newElement() | children() | isAdded() | isDeleted() | isModified() | isUnchanged() | getType() | getId()
+structdiff	the build fails: StructuralDiffNode has no getChildren()	MEMBERS	StructuralDiffNode	getChildren	children()	oldElement() | newElement() | children() | isAdded() | isDeleted() | isModified() | isUnchanged() | getType() | getId()
+structdiff	the build fails: StructuralDiffTest.java: method diffJavaFile in class com.walpro.autobuilder.analysis.diff.builder.StructuralJavaDiffBuilder cannot be applied to given types;	OVERLOADS	StructuralJavaDiffBuilder	diffJavaFile	-	diffJavaFile(String relPath, String oldContent, String newContent)
+structdiff	the build fails: StructuralDiffUtilsFlattenTest.java: error: constructor ElementDescriptor in record com.walpro.autobuilder.analysis.diff.model.ElementDescriptor cannot be applied to given types;	CONSTRUCTOR	ElementDescriptor	-	-	ElementDescriptor(String id, ElementType type, String content, Map<String,Object> metadata)
+structdiff	the build fails: StructuralDiffUtilsTest.java: cannot find symbol	NONE	-	-	-	-
+structdiff	the build fails: StructuralDiffUtilsTest.java: com.walpro.autobuilder.analysis.diff.util.DiffSummarizer.ChangeKind has private access in com.walpro.autobuilder.analysis.diff.util.DiffSummarizer	NONE	-	-	-	-
+structdiff	the build fails: StructuralJavaDiffBuilderTest.java: method diffJavaFile in class com.walpro.autobuilder.analysis.diff.builder.StructuralJavaDiffBuilder cannot be applied to given types;	OVERLOADS	StructuralJavaDiffBuilder	diffJavaFile	-	diffJavaFile(String relPath, String oldContent, String newContent)

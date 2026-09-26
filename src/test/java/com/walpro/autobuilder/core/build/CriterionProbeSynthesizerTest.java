@@ -485,19 +485,35 @@ class CriterionProbeSynthesizerTest {
      * error, which is why 10 such criteria across 103 archived trees went unprobed, and one of
      * them was the second criterion on the leaf that kept run 2026-09-22_15-59-33's 23/23
      * artifact from closing its root.
+     *
+     * <p>T3-CB (2026-09-26): only where the specification states that status for the endpoint.
      */
     @Test
     void anInputStatedAsAbsentIsExercisedByOmittingIt() {
         var a = BehaviouralCriterionParser.parse(
                 "GET /loans?memberId={id} returns HTTP 400 with JSON body {\"message\": \"<reason>\"} "
                         + "when memberId is missing").orElseThrow();
+        String states400 = SPEC_WITH_MEMBERS.replace("(list loans for a member)",
+                "(list loans for a member; 400 if memberId is missing)");
 
-        var seq = synthesizer.synthesize(SPEC_WITH_MEMBERS, a, null);
+        var seq = synthesizer.synthesize(states400, a, null);
 
         assertThat(seq).isPresent();
         assertThat(seq.get()).hasSize(1);
         assertThat(seq.get().get(0).method()).isEqualTo("GET");
         assertThat(seq.get().get(0).path()).isEqualTo("/loans");   // the parameter is omitted
+    }
+
+    /**
+     * T3-CB, the user's reading: what a missing parameter does is not important unless the
+     * specification says so. Stated nowhere for the endpoint, the criterion is not asserted.
+     */
+    @Test
+    void anAbsentInputTheSpecificationStatesNothingAboutIsNotProbed() {
+        var a = BehaviouralCriterionParser.parse(
+                "GET /loans?memberId={id} returns HTTP 400 when memberId is missing").orElseThrow();
+
+        assertThat(synthesizer.synthesize(SPEC_WITH_MEMBERS, a, null)).isEmpty();
     }
 
     /**

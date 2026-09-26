@@ -313,6 +313,16 @@ public class CriterionProbeSynthesizer {
         if (parameter.isPresent()
                 && assertion.expectedStatus() >= 400 && assertion.expectedStatus() <= 499
                 && BehaviouralCriterionParser.statesAbsentInput(assertion.criterionText(), parameter.get())) {
+            // T3-CB, the user's reading (2026-09-26): what happens when a parameter is missing
+            // matters only if the specification says so. A specification that names the endpoint
+            // but states no such status for it makes this criterion the loop's own elaboration,
+            // and asserting it could report a correct artifact as defective. No specification at
+            // all is no opinion, and the probe stands as before.
+            if (SeedStatusSupport.of(assertion.criterionText(), specification) == SeedStatusSupport.Verdict.UNSUPPORTED) {
+                log.info("T3-CB: [{}] asserts what a missing {} does, and the specification states no such "
+                        + "status for the endpoint -- not probed", assertion.describe(), parameter.get());
+                return Optional.empty();
+            }
             return Optional.of(sequence);
         }
 

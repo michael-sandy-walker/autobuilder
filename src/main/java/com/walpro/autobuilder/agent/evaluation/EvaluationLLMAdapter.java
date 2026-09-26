@@ -37,9 +37,18 @@ public class EvaluationLLMAdapter {
     @Value("${autobuilder.evaluation.fileContentBudgetChars:40000}")
     private int fileContentMaxLines;
 
+    /** Optional: absent, the evaluator reads source only, as before. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private EvaluationTestEvidence testEvidence;
+
     public ParsedEvaluation evaluate(CycleContextData context) {
         String systemPrompt = EvaluationProtocolContract.getSystemPrompt();
         String userPrompt = EvaluationProtocolContract.getUserPrompt(context, fileContentMaxLines);
+        if (testEvidence != null) {
+            String evidence = testEvidence.block(context).orElse(null);
+            if (evidence != null) userPrompt = userPrompt + "\n\n" + evidence;
+        }
 
         LLMResponseResult<EvaluationOutcome> result = protocolInvoker.callWithValidation(
                 llmClient,

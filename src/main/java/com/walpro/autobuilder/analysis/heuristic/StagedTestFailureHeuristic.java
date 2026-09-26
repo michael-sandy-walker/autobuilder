@@ -8,10 +8,8 @@ import com.walpro.autobuilder.core.build.TestRunReport;
 import com.walpro.autobuilder.core.build.ValueObservationProbe;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FileService;
-import com.walpro.autobuilder.goal.GoalEntity;
-import com.walpro.autobuilder.goal.GoalPlannerService;
+import com.walpro.autobuilder.goal.DeclaredTestSuite;
 import com.walpro.autobuilder.goal.SeedObligationsFile;
-import com.walpro.autobuilder.goal.SeedRequirements;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.extern.slf4j.Slf4j;
@@ -52,16 +50,16 @@ public class StagedTestFailureHeuristic implements EvaluationHeuristic {
     private static final int MAX_MESSAGE = 240;
 
     private final ObjectProvider<TestRunGate> testRunGate;
-    private final ObjectProvider<GoalPlannerService> goalPlanner;
+    private final ObjectProvider<DeclaredTestSuite> declaredSuite;
     private final ObjectProvider<FileService> fileService;
     private final ObjectProvider<ValueObservationProbe> valueProbe;
 
     public StagedTestFailureHeuristic(ObjectProvider<TestRunGate> testRunGate,
-                                      ObjectProvider<GoalPlannerService> goalPlanner,
+                                      ObjectProvider<DeclaredTestSuite> declaredSuite,
                                       ObjectProvider<FileService> fileService,
                                       ObjectProvider<ValueObservationProbe> valueProbe) {
         this.testRunGate = testRunGate;
-        this.goalPlanner = goalPlanner;
+        this.declaredSuite = declaredSuite;
         this.fileService = fileService;
         this.valueProbe = valueProbe;
     }
@@ -126,18 +124,8 @@ public class StagedTestFailureHeuristic implements EvaluationHeuristic {
     }
 
     private boolean suiteIsDeclared() {
-        GoalPlannerService planner = goalPlanner.getIfAvailable();
-        FileService files = fileService.getIfAvailable();
-        if (planner == null || files == null) return false;
-        GoalEntity root = planner.getRootGoal();
-        if (root == null) return false;
-        try {
-            if (!files.exists(SeedObligationsFile.PATH)) return false;
-            return !SeedRequirements.answeredByGate(root.getDescription(),
-                    files.readFile(SeedObligationsFile.PATH), SeedRequirements.GATE_TESTS).isEmpty();
-        } catch (Exception e) {
-            return false;
-        }
+        DeclaredTestSuite declared = declaredSuite.getIfAvailable();
+        return declared != null && declared.isDeclared();
     }
 
     /** The failures whose test class is one of the staged source files. */

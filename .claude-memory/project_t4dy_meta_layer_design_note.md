@@ -145,3 +145,7 @@ yes in substance; #2 (diagnosis channel) and #3 (self-initiated halt) still open
   behaviour log first) plus the ledger file; #3 the layer does NOT halt a run -- the existing brakes keep their
   own halts and early_stop stays the outside cut. Reason: the smallest reversible step; a self-initiated halt
   should wait until diagnosis requests have been seen in the field and judged.
+- **2026-09-26 late evening: the user CONFIRMED #2 and #3 as taken ("No, they're ok").** Chose structure before the
+  terminal agent: two lookups added (`8cff94ab`) -- ambiguous names resolved by imports; a new second BUILD question
+  setting the failing line's constructions beside their adopted declarations (the detector now receives the failed
+  change's files). BUILD ladder is now: declared names -> the failing line -> the declaring file whole.

@@ -172,6 +172,17 @@ public class CriteriaVerificationService {
         }
         Map<Integer, Boolean> passMap = assessment.passMap();
         if (passMap.isEmpty()) return Map.of();
+        // A claim with an authority other than a reading is answered by it, here as at the completion
+        // edge: receiver-questions run 2026-09-26_22-44-36 walled a subgoal on three claims that nothing
+        // was changed, which a model reading the source cannot confirm and the adoption manifest can.
+        passMap = new java.util.LinkedHashMap<>(passMap);
+        String goalText = (context.currentGoalDescription() == null ? "" : context.currentGoalDescription())
+                + " " + (description == null ? "" : description);
+        for (int i = 1; i <= criteria.size(); i++) {
+            if (!Boolean.TRUE.equals(passMap.get(i)) && structurallyProven(criteria.get(i - 1), goalText) != null) {
+                passMap.put(i, Boolean.TRUE);
+            }
+        }
 
         recordToGraph(context, subGoalId, criteria, passMap);
         long passed = passMap.values().stream().filter(Boolean::booleanValue).count();
@@ -357,20 +368,11 @@ public class CriteriaVerificationService {
 
         // Combine cached + fresh; absent or false ⇒ unconfirmed.
         List<String> unconfirmed = new ArrayList<>();
-        // A claim that tests pass is answered by the test run of exactly this tree, not by the reading
-        // (TestRunClaims: whole-claim only, confirm-only).
-        var report = testRunGate == null ? java.util.Optional.<com.walpro.autobuilder.core.build.TestRunReport>empty()
-                : testRunGate.freshReport();
         for (String c : requiredCriteria) {
             Boolean ok = cachedByKey.containsKey(CriterionResultEntity.keyOf(c))
                     ? cachedByKey.get(CriterionResultEntity.keyOf(c))
                     : freshByCriterion.get(c);
-            if ((ok == null || !ok) && report.isPresent()
-                    && com.walpro.autobuilder.core.build.TestRunClaims.provenBy(c, report.get())) {
-                log.info("T4-CQ: [{}] answered by the project's test run of this tree ({} run, 0 failed), not by a reading",
-                        c, report.get().run());
-                ok = true;
-            }
+            if ((ok == null || !ok) && structurallyProven(c, rootDescription) != null) ok = true;
             if (ok == null || !ok) unconfirmed.add(c);
         }
         if (unconfirmed.isEmpty()) {
@@ -404,6 +406,33 @@ public class CriteriaVerificationService {
     /** T4-CQ: optional -- absent, the verifier reads source only, as before. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
+
+    /** T4-DK: what changed since adoption, for claims that something was not changed; optional. */
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.AdoptionManifest adoptionManifest;
+
+    /**
+     * One home for the claims a reading is not the authority for -- confirm-only, whole claims only:
+     * that tests pass (the test run of exactly this tree, {@code TestRunClaims}) and that nothing was
+     * changed (the changes since adoption, {@code UnchangedClaims}). Returns what proved it, or null.
+     */
+    String structurallyProven(String criterion, String goalText) {
+        var report = testRunGate == null ? java.util.Optional.<com.walpro.autobuilder.core.build.TestRunReport>empty()
+                : testRunGate.freshReport();
+        if (report.isPresent() && com.walpro.autobuilder.core.build.TestRunClaims.provenBy(criterion, report.get())) {
+            log.info("T4-CQ: [{}] answered by the project's test run of this tree ({} run, 0 failed), not by a reading",
+                    criterion, report.get().run());
+            return "test run";
+        }
+        var changes = adoptionManifest == null ? java.util.Optional.<com.walpro.autobuilder.core.build.AdoptionManifest.Changes>empty()
+                : adoptionManifest.changes();
+        if (changes.isPresent() && com.walpro.autobuilder.core.build.UnchangedClaims.provenBy(criterion, changes.get(), goalText)) {
+            log.info("T4-DK: [{}] answered by the changes since adoption ({} modified, {} added, {} removed), not by a reading",
+                    criterion, changes.get().modified().size(), changes.get().added().size(), changes.get().removed().size());
+            return "adoption manifest";
+        }
+        return null;
+    }
 
     /**
      * The test-run block for the files this prompt will show, or null when there is no report of

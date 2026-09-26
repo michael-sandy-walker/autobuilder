@@ -71,6 +71,11 @@ public class AutobuilderService implements CheckpointableState {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T4-DK: the digest of the adopted tree, recorded at adoption. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.AdoptionManifest adoptionManifest;
+
     /** T4-DY slice B: the exhaustion runaway is reported to the one home for "stuck". */
     @Setter
     @Autowired(required = false)
@@ -669,6 +674,8 @@ public class AutobuilderService implements CheckpointableState {
         // T4-CQ: the adopted text is the authority for "keep what exists"; it is recorded before any
         // cycle can write, and a baseline already there (a restart of the same adoption) is kept.
         if (startedAs == StartMode.ADOPT_PROJECT && protectedPaths != null) protectedPaths.recordAdoptionBaseline();
+        // T4-DK: and the digest of every adopted file, so "was anything changed?" is a fact, not a reading.
+        if (startedAs == StartMode.ADOPT_PROJECT && adoptionManifest != null) adoptionManifest.recordIfAbsent();
         if (startedAs == StartMode.ADOPT_PROJECT && goalPlannerService.getRootGoal() == null) {
             awaitingGoal = true;
             log.warn("T4-CQ: adopted {} and it has no goal yet, so the loop is waiting rather than "

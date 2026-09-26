@@ -1,6 +1,6 @@
 ---
 name: project-resume-state
-description: "2026-09-25 session 4 (Opus 5.5): T4-CQ -- obligations file markers now generated; structdiff run 3 (3/11) exposed assertion values missing from the test-gate repair item, fixed. No run is live. Read the newest block first."
+description: "2026-09-26 session 7 (Opus 5.5): firestarter closes twice; T4-DY slice B built and its DoD met in the field; T4-DZ filed, offline slice 4/6. No run is live. Read the newest block first."
 metadata:
   node_type: memory
   type: project
@@ -11,7 +11,16 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-26 NIGHT (Opus 5.5, session 6, autonomous) — THE FIRST LOOP RUN WHOSE GOAL CAME FROM A REAL TICKET: TRUE COMPLETION; T3-CB's RULE PORTED AND WIRED — START HERE
+## 2026-09-26 EVENING (Opus 5.5, session 7, autonomous) — THE THREE PLANNED SESSIONS DONE: FIRESTARTER CLOSES TWICE; T4-DY SLICE B BUILT, DoD MET IN THE FIELD; T4-DZ FILED AND MEASURED 4/6 — START HERE
+
+- **Head `d7117714` + this block; nothing pushed.** Suite 3680/0.
+- **Session 1 -- firestarter closes at 23/23, twice** (`17-10-21` 34 min, `17-47-08` 16 min; same build as the `15-13-48` deadline, which stays variance). User mid-run: **"30 minutes is too soon"** -> firestarter early_stop is `scripts/early_stop.sh firestarter 10 30 45` (feedback memory updated).
+- **Session 2 -- T4-DY slice B built (`7da6f73f`, `b79b14b4`):** `core/stuck/` is the one home for stuck; detectors only report; questions answered from structure (current tree + adopted baseline + seed) while the evolution prompt is built; ledger `meta/stuck-ledger.json` + events `stuck_question_asked / stuck_recurred / stuck_ended / diagnosis_request`; GrindDetector's prose block deleted. **DoD met:** replay (`StuckLayerReplayTest`) and field -- participation-totals `18-10-06` with the source block OFF regrew the ChannelRequest grind, the answer was delivered 47 s after the third occurrence, the grind ended in that cycle, **GOAL_FULFILLED 8/8** (n=1). **Firestarter regression on slice B (`18-28-14`): GOAL_FULFILLED 23/23 in 19 min.** Decisions #2/#3 were taken by me, reversibly: request = behaviour event; the layer does not halt.
+- **Session 3 -- T4-DZ filed and its offline slice measured** (`23dd6695` bar committed first, `843c2cd1` result): 6 open questions (router: 3 unanswered, 3 ambiguous List); ceiling 6/6, **model arm 4/6 = bar met**, 0 writes/refusals/timeouts. Every missing fact was in the adopted files; both misses are candidate-vs-adopted differences.
+- **Waiting on the user:** T4-DZ (a) wire the agent as the third authority now, or first add the two structural rules its misses point at; (b) javac in the allow-list; (c) where the Q&A ledger lives. T4-DY: confirm or change the two autonomous decisions (request channel; no self-halt).
+- **Tools added:** `scripts/terminal_agent_replay.py oracle|model`, `StuckQuestionsArchiveReplayTest` (gated, `-Dt4dz.archive=...`), replay switch `--autobuilder.evolution.subgoal-source-block=false`. participation-totals' previous state moved to `~/.autobuilder/participation-totals-state-before-t4dy-b`.
+
+## 2026-09-26 NIGHT (Opus 5.5, session 6, autonomous) — THE FIRST LOOP RUN WHOSE GOAL CAME FROM A REAL TICKET: TRUE COMPLETION; T3-CB's RULE PORTED AND WIRED
 
 - **Head `27459ebc` + docs; nothing pushed.** Session 1 of the plan below, done end to end.
 - **T5-BR CLOSED** (`355c6ecb`): `Endpoint` + `EndpointPaths` out of the Spring `EndpointSurfaceQuery`, `SpecEndpointBehaviourQuery` Spring-free (bean in `AppConfig`); extractable share 17% -> 18%. The rule's home is `core/build/SeedStatusSupport` (5 classes, no Spring) -- in `core.build`, not beside `SeedRequirements`, because the seed reader it needs is `SpecEndpointBehaviourQuery`.

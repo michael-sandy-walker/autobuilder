@@ -121,3 +121,27 @@ later sessions. #5 -- (a): the dropped symbol is the defect; fixed, and slice A 
 same bar (ambiguous `List`; the adopted tree must be an authority beside the current one in slice B). #1 answered
 yes in substance; #2 (diagnosis channel) and #3 (self-initiated halt) still open.
 
+## Slice B built (2026-09-26, `7da6f73f`) -- what exists now
+
+- **Home:** `core/stuck/` -- `StuckObservation` (typed report: source, signature, subgoal, cycle, detail),
+  `StuckLedger` (pure: counts once per cycle unless an answer was delivered in between; WATCHING -> PENDING
+  at the 3rd occurrence, 1st for the brakes -> DELIVERED -> ENDED on a green build, or back to PENDING at the
+  NEXT rung on a recurrence -> UNANSWERED with a diagnosis request when no question is left),
+  `StuckDiagnosis` (pure question ladder), `StuckLayer` (Spring wiring, `meta/stuck-ledger.json`).
+- **Reporters:** GrindDetector (build signatures + protected-write refusals, every occurrence), closure refusals
+  (`GoalPlannerService.recordClosureRefusal`, keyed by goal description + reason, no ids), RootConvergenceTracker
+  (flat root at half its window), the exhaustion runaway. GrindDetector's prompt paragraph is DELETED.
+- **Questions:** BUILD -- (0) what the code declares for the name (StuckQuestions over the current tree AND the
+  adopted baseline, differences stated) then (1) the declaring file whole, adopted first (never cut; a file over
+  12k chars is no answer). PROTECTED_WRITE -- the protected file as it is. CLOSURE_REFUSAL (criterion 3's first
+  rule) -- the refused requirements and the gate's reason, plus the code-like names in each criterion the seed
+  never mentions; such a name makes the answer ALSO a diagnosis request (only the operator binds or releases a
+  requirement). FLAT_ROOT / EXHAUSTION -- no question: an immediate diagnosis request.
+- **Delivery:** the evolution prompt asks every due question while it is built and carries the answers (one answer
+  once, under every signature it answers; within half the free headroom, a non-fitting answer left out whole).
+  Build answers stand until a green build; others only while their subgoal is current.
+- **Decisions #2 and #3, taken autonomously for this slice (the user said "act fully autonomously"; override
+  freely):** #2 the diagnosis request lands as a `diagnosis_request` BEHAVIOUR EVENT (runs are analysed from the
+  behaviour log first) plus the ledger file; #3 the layer does NOT halt a run -- the existing brakes keep their
+  own halts and early_stop stays the outside cut. Reason: the smallest reversible step; a self-initiated halt
+  should wait until diagnosis requests have been seen in the field and judged.

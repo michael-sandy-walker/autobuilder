@@ -77,4 +77,25 @@ class GrindDetectorTest {
 
         assertThat(d.promptBlock()).as("the grind ended with a green build").isNull();
     }
+
+    /**
+     * "cannot find symbol" keeps its symbol and location: without them the signature named only the
+     * file, and three of the seven grinds that outlived every reaction could not be asked about.
+     * The lines are the archive's own (participation-totals run 2026-09-25_20-51-35).
+     */
+    @Test
+    void aCannotFindSymbolSignatureCarriesTheSymbolAndWhereItWasLookedFor() {
+        String stderr = String.join("\n",
+                "[ERROR] /x/src/main/java/com/walpro/autobuilder/core/lifecycle/ChannelRequest.java:[76,45] cannot find symbol",
+                "[ERROR]   symbol:   variable subGoalId",
+                "[ERROR]   location: class com.walpro.autobuilder.core.lifecycle.ChannelRequest",
+                "[ERROR] /x/src/main/java/com/walpro/autobuilder/core/lifecycle/ParticipationWindows.java:[40,9] cannot find symbol",
+                "[ERROR]   symbol:   class ArrayList",
+                "[ERROR]   location: class com.walpro.autobuilder.core.lifecycle.ParticipationWindows");
+        var signatures = GrindDetector.signaturesOf(new BuildOutcome(BuildResult.COMPILE_ERROR, stderr, 1L, "mvn", "probe"));
+
+        org.assertj.core.api.Assertions.assertThat(signatures).containsExactly(
+                "the build fails: ChannelRequest.java: cannot find symbol variable subGoalId in class ChannelRequest",
+                "the build fails: ParticipationWindows.java: cannot find symbol class ArrayList in class ParticipationWindows");
+    }
 }

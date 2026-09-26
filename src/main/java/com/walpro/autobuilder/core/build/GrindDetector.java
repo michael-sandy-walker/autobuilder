@@ -119,15 +119,38 @@ public class GrindDetector {
         }
         if (!out.isEmpty()) return out;
         String plain = BuildErrorClassifier.ANSI_ESCAPE.matcher(outcome.stderrTail()).replaceAll("");
-        for (String line : plain.split("\\R")) {
+        String[] lines = plain.split("\\R");
+        for (int i = 0; i < lines.length; i++) {
             // "[ERROR] /abs/path/File.java:[12,5] message" -> "File.java: message"
-            var m = java.util.regex.Pattern.compile("([A-Za-z0-9_]+\\.java):\\[\\d+,\\d+]\\s*(.+)$").matcher(line);
+            var m = java.util.regex.Pattern.compile("([A-Za-z0-9_]+\\.java):\\[\\d+,\\d+]\\s*(.+)$").matcher(lines[i]);
             if (!m.find()) continue;
-            String s = "the build fails: " + m.group(1) + ": " + m.group(2).strip();
+            String message = m.group(2).strip();
+            if (message.equals("cannot find symbol")) message += symbolAndLocation(lines, i + 1);
+            String s = "the build fails: " + m.group(1) + ": " + message;
             if (!out.contains(s)) out.add(s);
             if (out.size() >= 5) break;
         }
         return out;
+    }
+
+    /**
+     * The {@code symbol:} and {@code location:} lines javac prints under "cannot find symbol", as
+     * " variable subGoalId in class ChannelRequest", packages dropped. Without them the signature named
+     * only the file, and the question it poses ("where is this name declared?") could not be asked:
+     * three of the seven grinds that outlived every reaction in the archive were such signatures
+     * (T4-DY slice A, 2026-09-26). Empty when the lines are not there.
+     */
+    static String symbolAndLocation(String[] lines, int from) {
+        String symbol = null, location = null;
+        for (int j = from; j < Math.min(lines.length, from + 3); j++) {
+            var sm = java.util.regex.Pattern.compile("symbol:\\s*(.+)$").matcher(lines[j]);
+            var lm = java.util.regex.Pattern.compile("location:\\s*(.+)$").matcher(lines[j]);
+            if (symbol == null && sm.find()) symbol = sm.group(1).strip();
+            else if (location == null && lm.find()) location = lm.group(1).strip();
+        }
+        if (symbol == null) return "";
+        String out = " " + symbol + (location == null ? "" : " in " + location);
+        return out.replaceAll("\\b(?:[a-z_][\\w]*\\.)+([A-Z][\\w$]*)", "$1");
     }
 
     /**

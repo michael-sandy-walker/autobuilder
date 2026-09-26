@@ -35,7 +35,13 @@ public final class StuckQuestions {
         /** A record was constructed with arguments its constructor may not take: what does it take? */
         CONSTRUCTOR,
         /** A method was called with arguments it may not take: which overloads does its class declare? */
-        OVERLOADS
+        OVERLOADS,
+        /**
+         * A name could not be resolved: where IS it declared? In the project's sources, and for a class
+         * name also in the running JDK. Added 2026-09-26: three of the seven grinds that outlived every
+         * reaction were "cannot find symbol" signatures, answerable once the detector kept the symbol.
+         */
+        SYMBOL
     }
 
     /**
@@ -47,7 +53,10 @@ public final class StuckQuestions {
      * @param declared what the type declares: for MEMBERS, {@link DeclaredMembers#of}'s list; for
      *                 CONSTRUCTOR, each constructor as {@code Type(ParamType name, ...)} starting with
      *                 a record's canonical one; for OVERLOADS, each method of that name as
-     *                 {@code name(ParamType name, ...)}
+     *                 {@code name(ParamType name, ...)}; for SYMBOL, every declaration of the name --
+     *                 {@code Owner.Name (private enum)}, {@code Type.name (record component)},
+     *                 {@code Type.name (field)}, {@code Type.name(ParamType, ...) (method)} from the sources,
+     *                 then {@code java.util.Name (JDK class)} for a class name the JDK declares
      * @param meant    for MEMBERS, the declared member the missing one names ({@link DeclaredMembers#meantBy}),
      *                 or null when none; null for the other kinds
      */
@@ -60,6 +69,8 @@ public final class StuckQuestions {
     private static final Pattern MEMBERS_PATTERN = Pattern.compile("has no (\\w+)\\(");
     private static final Pattern CONSTRUCTOR_PATTERN = Pattern.compile("constructor (\\w+) in (?:record|class) ([\\w.]+)");
     private static final Pattern OVERLOADS_PATTERN = Pattern.compile("method (\\w+) in (?:record|class) ([\\w.]+)");
+    private static final Pattern SYMBOL_PATTERN = Pattern.compile(
+            "cannot find symbol (class|variable|method) (\\w+)(?:\\([^)]*\\))? in (?:class|interface|record|enum|variable \\w+ of type) ([\\w.$]+)");
 
     /**
      * The answer the project's sources give to the question {@code signature} poses, or empty.
@@ -113,7 +124,103 @@ public final class StuckQuestions {
             }
         }
 
+        // A name that could not be resolved: where is it declared?
+        Matcher symbolMatcher = SYMBOL_PATTERN.matcher(signature);
+        if (symbolMatcher.find()) {
+            String kind = symbolMatcher.group(1), name = symbolMatcher.group(2), location = symbolMatcher.group(3);
+            String locationType = location.substring(location.lastIndexOf('.') + 1);
+            List<String> declared = new ArrayList<>(declarationsInSources(name, sources));
+            if (kind.equals("class") || declared.isEmpty() && Character.isUpperCase(name.charAt(0))) {
+                declared.addAll(jdkClasses(name));
+            }
+            return declared.isEmpty() ? Optional.empty()
+                    : Optional.of(new Answer(Kind.SYMBOL, locationType, name, declared, null));
+        }
+
         return Optional.empty();
+    }
+
+    /** Every declaration of {@code name} in the sources: types (nested ones as Outer.Name), record components, fields, methods. */
+    private static List<String> declarationsInSources(String name, Map<String, String> sources) {
+        List<String> out = new ArrayList<>();
+        JavaParser parser = new JavaParser(new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17));
+        for (Map.Entry<String, String> entry : new java.util.TreeMap<>(sources).entrySet()) {
+            if (!entry.getKey().endsWith(".java") || entry.getValue() == null || !entry.getValue().contains(name)) continue;
+            CompilationUnit cu;
+            try {
+                cu = parser.parse(entry.getValue()).getResult().orElse(null);
+            } catch (RuntimeException e) {
+                continue;
+            }
+            if (cu == null) continue;
+            for (TypeDeclaration<?> t : cu.findAll(TypeDeclaration.class)) {
+                String owner = qualifiedName(t);
+                if (t.getNameAsString().equals(name)) {
+                    out.add(owner + " (" + visibility(t.getModifiers()) + kindOf(t) + ")");
+                }
+                if (t instanceof RecordDeclaration r) {
+                    r.getParameters().stream().filter(p -> p.getNameAsString().equals(name))
+                            .forEach(p -> out.add(owner + "." + name + " (record component)"));
+                }
+                for (var f : t.getFields()) {
+                    f.getVariables().stream().filter(v -> v.getNameAsString().equals(name))
+                            .forEach(v -> out.add(owner + "." + name + " (" + visibility(f.getModifiers()) + "field)"));
+                }
+                for (MethodDeclaration m : t.getMethods()) {
+                    if (!m.getNameAsString().equals(name)) continue;
+                    out.add(owner + "." + name + "(" + m.getParameters().stream().map(p -> p.getType().asString())
+                            .collect(Collectors.joining(", ")) + ") (" + visibility(m.getModifiers()) + "method)");
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The type's name with its enclosing types, e.g. DiffSummarizer.ChangeKind. */
+    private static String qualifiedName(TypeDeclaration<?> t) {
+        StringBuilder sb = new StringBuilder(t.getNameAsString());
+        var parent = t.getParentNode().orElse(null);
+        while (parent instanceof TypeDeclaration<?> p) {
+            sb.insert(0, p.getNameAsString() + ".");
+            parent = p.getParentNode().orElse(null);
+        }
+        return sb.toString();
+    }
+
+    private static String visibility(com.github.javaparser.ast.NodeList<Modifier> modifiers) {
+        for (Modifier m : modifiers) {
+            if (m.getKeyword() == Modifier.Keyword.PRIVATE) return "private ";
+            if (m.getKeyword() == Modifier.Keyword.PROTECTED) return "protected ";
+        }
+        return "";
+    }
+
+    private static String kindOf(TypeDeclaration<?> t) {
+        if (t.isEnumDeclaration()) return "enum";
+        if (t.isRecordDeclaration()) return "record";
+        if (t.isClassOrInterfaceDeclaration() && t.asClassOrInterfaceDeclaration().isInterface()) return "interface";
+        return "class";
+    }
+
+    /**
+     * Public classes of that simple name in the running JDK's own modules, discovered rather than
+     * listed: every package a {@code java.*} module exports, asked whether it holds the name.
+     */
+    private static List<String> jdkClasses(String simpleName) {
+        java.util.TreeSet<String> found = new java.util.TreeSet<>();
+        for (Module module : ModuleLayer.boot().modules()) {
+            if (!module.getName().startsWith("java.")) continue;
+            for (String pkg : module.getPackages()) {
+                if (!module.isExported(pkg)) continue;
+                try {
+                    Class<?> c = Class.forName(pkg + "." + simpleName, false, ClassLoader.getPlatformClassLoader());
+                    if (java.lang.reflect.Modifier.isPublic(c.getModifiers())) found.add(c.getName() + " (JDK class)");
+                } catch (ClassNotFoundException | LinkageError ignored) {
+                    // not in this package
+                }
+            }
+        }
+        return new ArrayList<>(found);
     }
 
     private static String extractTypeFromMembersSignature(String signature) {

@@ -28,7 +28,16 @@ public final class TestRunClaims {
                     + "(?: in full)?(?: with no regressions)?|all tests pass(?: under \\S+)?");
 
     private static final Pattern CLASS = Pattern.compile(
-            "(?:every test in |all tests in |the tests in )?([A-Z][A-Za-z0-9_]*Tests?) pass(?:es)?(?: in full)?");
+            "(?:(?i:every test in |all tests in |the tests in ))?([A-Z][A-Za-z0-9_]*Tests?) pass(?:es)?(?: in full)?");
+
+    /**
+     * A parenthetical that only lists test classes, anywhere in the claim: "The full test suite (ATest,
+     * BTest) passes" (receiver-questions run 2026-09-26_21-50-02 -- the loop's own wording, which neither
+     * pattern matched, so the reader's wrong cross on a green run stood and the goal never closed). Each
+     * class it names must have run green too, so the claim stays one this can only confirm.
+     */
+    private static final Pattern LISTED_CLASSES = Pattern.compile(
+            "\\s*\\(((?:[A-Z][A-Za-z0-9_]*Tests?)(?:\\s*,\\s*(?:and\\s+)?[A-Z][A-Za-z0-9_]*Tests?)*)\\)");
 
     private TestRunClaims() {
     }
@@ -36,14 +45,25 @@ public final class TestRunClaims {
     /** True when {@code criterion} claims only that tests pass, and {@code report} shows exactly that. */
     public static boolean provenBy(String criterion, TestRunReport report) {
         if (criterion == null || report == null || !report.passes()) return false;
-        String claim = criterion.strip()
+        String claim = criterion.strip().replaceAll("`", "");
+        Matcher listed = LISTED_CLASSES.matcher(claim);
+        List<String> named = new java.util.ArrayList<>();
+        while (listed.find()) {
+            for (String n : listed.group(1).split("\\s*,\\s*(?:and\\s+)?")) named.add(n.strip());
+        }
+        claim = LISTED_CLASSES.matcher(claim).replaceAll("")
                 .replaceAll("\\s*\\([^()]*\\)\\s*$", "")   // "(all test methods green)"
-                .replaceAll("[.\\s]+$", "")
-                .replaceAll("`", "");
+                .replaceAll("[.\\s]+$", "");
+        for (String n : named) {
+            if (!ranGreen(n, report)) return false;
+        }
         if (SUITE.matcher(claim.toLowerCase(Locale.ROOT)).matches()) return true;
         Matcher m = CLASS.matcher(claim);
         if (!m.matches()) return false;
-        String simple = m.group(1);
+        return ranGreen(m.group(1), report);
+    }
+
+    private static boolean ranGreen(String simple, TestRunReport report) {
         for (Map.Entry<String, List<TestRunReport.Case>> e : report.byClass().entrySet()) {
             String cls = e.getKey();
             if (!cls.equals(simple) && !cls.endsWith("." + simple)) continue;

@@ -45,4 +45,14 @@ class TestRunClaimsTest {
         assertThat(TestRunClaims.provenBy("the whole suite passes", red)).isFalse();
         assertThat(TestRunClaims.provenBy("CoilSpecTest passes", null)).isFalse();
     }
+
+    /** receiver-questions run 2026-09-26_21-50-02: the loop's own criteria, crossed on a green run. */
+    @Test
+    void theReceiverQuestionsWordingIsProvenByAGreenRun() {
+        assertThat(TestRunClaims.provenBy("Every test in CoilSpecTest passes", GREEN)).isTrue();
+        assertThat(TestRunClaims.provenBy("The full test suite (CoilSpecTest, HarnessTest) passes", GREEN)).isTrue();
+        assertThat(TestRunClaims.provenBy("The full test suite (CoilSpecTest, PlasmaTest) passes", GREEN))
+                .as("a listed class that did not run").isFalse();
+        assertThat(TestRunClaims.provenBy("Every test in CoilSpecTest passes and the coils align", GREEN)).isFalse();
+    }
 }

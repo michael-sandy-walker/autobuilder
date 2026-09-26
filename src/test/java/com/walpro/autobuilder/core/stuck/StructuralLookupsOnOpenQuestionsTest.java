@@ -98,12 +98,17 @@ class StructuralLookupsOnOpenQuestionsTest {
         }
     }
 
+    /**
+     * Neither of the two lookups covered it, and only the terminal agent answered it -- until the loop
+     * itself built the receiver question from the ticket that case produced (receiver-questions toy case,
+     * 2026-09-26): now the first question answers it, from the JDK.
+     */
     @ParameterizedTest(name = "{0}")
     @CsvSource("q1-indexOf-on-map")
-    void neitherLookupCoversAMethodCalledOnTheWrongKindOfCollection(String question) throws Exception {
+    void aMethodCalledOnTheWrongKindOfCollectionIsAnsweredByTheReceiverQuestion(String question) throws Exception {
         String[] first = firstAnswer(question);
-        System.out.println("T4-DY lookups | " + question + " | rung " + first[0] + " | "
-                + (first[1] == null ? null : first[1].substring(0, Math.min(120, first[1].length()))));
-        assertThat(first[0]).as("only the whole declaring file, the last question").isEqualTo("2");
+        System.out.println("T4-DY lookups | " + question + " | rung " + first[0] + " | " + first[1]);
+        assertThat(first[0]).isEqualTo("0");
+        assertThat(first[1]).startsWith("Map declares: ").contains("get(Object)").contains("It has no indexOf()");
     }
 }

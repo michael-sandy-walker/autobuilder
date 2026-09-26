@@ -153,7 +153,10 @@ class TerminalAgentTest {
             detector.observeBuild(c, failed, change);
         }
         layer.beginCycle("c4", "sg");
-        assertThat(layer.promptBlock(ctx)).as("structure answers first: the declaring file whole").contains("as it was adopted");
+        assertThat(layer.promptBlock(ctx)).as("structure answers first: what the receiver's JDK type declares")
+                .contains("Map declares:");
+        detector.observeBuild("c4", failed, change); // it came back after the declared names
+        assertThat(layer.promptBlock(ctx)).as("the line constructs nothing; the declaring file whole").contains("as it was adopted");
         verify(llm, never()).ask(anyList());
 
         detector.observeBuild("c4", failed, change); // it came back after the whole file

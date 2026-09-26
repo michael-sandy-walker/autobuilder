@@ -67,6 +67,9 @@ public final class StuckQuestions {
     }
 
     private static final Pattern MEMBERS_PATTERN = Pattern.compile("has no (\\w+)\\(");
+    /** javac's wording for a method called on a record component whose type the sources do not declare. */
+    private static final Pattern RECEIVER_METHOD_PATTERN = Pattern.compile(
+            "cannot find symbol method (\\w+)\\([^)]*\\) in record component \\w+ of type ([\\w.$]+(?:<[^>]*>)?)");
     /**
      * javac's own wording ("constructor X in record a.b.X"), or the grind detector's for "no suitable
      * constructor found" ("X has no constructor X(args)") -- the second was not recognised until slice B
@@ -89,6 +92,16 @@ public final class StuckQuestions {
             return Optional.empty();
         }
 
+        // A method called on a record component whose type is not the project's (T4-DY, the receiver question)
+        Matcher receiverMatcher = RECEIVER_METHOD_PATTERN.matcher(signature);
+        if (receiverMatcher.find()) {
+            String rawType = receiverMatcher.group(2);
+            String type = rawType.contains("<") ? rawType.substring(0, rawType.indexOf('<')) : rawType;
+            type = type.substring(type.lastIndexOf('.') + 1);
+            Optional<Answer> jdk = answerJdkReceiver(type, receiverMatcher.group(1), sources);
+            if (jdk.isPresent()) return jdk;
+        }
+
         // Try MEMBERS pattern first
         Matcher membersMatcher = MEMBERS_PATTERN.matcher(signature);
         if (membersMatcher.find()) {
@@ -102,6 +115,8 @@ public final class StuckQuestions {
                     String meant = DeclaredMembers.meantBy(memberName, declared);
                     return Optional.of(new Answer(Kind.MEMBERS, type, memberName, declared, meant));
                 }
+                Optional<Answer> jdk = answerJdkReceiver(type, memberName, sources);
+                if (jdk.isPresent()) return jdk;
             }
         }
 
@@ -144,6 +159,38 @@ public final class StuckQuestions {
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * The receiver question (T4-DY, built by the loop in the receiver-questions toy case, ported with review
+     * fixes): a type the sources do not declare but the running JDK does, uniquely by that simple name. The
+     * answer is what that JDK class declares -- its public methods, own and inherited, as
+     * {@code name(ParameterSimpleType, ...)}, sorted -- and, as {@code meant}, where the sources declare the
+     * called method ({@code Type.name(ParameterTypes)}): a receiver typed Object usually lost its element type.
+     * Empty when the JDK has no such class, or more than one.
+     */
+    private static Optional<Answer> answerJdkReceiver(String type, String memberName, Map<String, String> sources) {
+        List<String> candidates = jdkClasses(type);
+        if (candidates.size() != 1) return Optional.empty();
+        Class<?> jdkClass;
+        try {
+            jdkClass = Class.forName(candidates.get(0).replace(" (JDK class)", ""), false, ClassLoader.getPlatformClassLoader());
+        } catch (ClassNotFoundException | LinkageError e) {
+            return Optional.empty();
+        }
+        java.util.TreeSet<String> declared = new java.util.TreeSet<>();
+        for (java.lang.reflect.Method m : jdkClass.getMethods()) {
+            declared.add(m.getName() + "(" + java.util.Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
+                    .collect(Collectors.joining(", ")) + ")");
+        }
+        String meant = null;
+        for (String d : declarationsInSources(memberName, sources)) {
+            if (d.endsWith("method)")) {
+                meant = d.substring(0, d.lastIndexOf(" ("));
+                break;
+            }
+        }
+        return Optional.of(new Answer(Kind.MEMBERS, type, memberName, new ArrayList<>(declared), meant));
     }
 
     /** Every declaration of {@code name} in the sources: types (nested ones as Outer.Name), record components, fields, methods. */

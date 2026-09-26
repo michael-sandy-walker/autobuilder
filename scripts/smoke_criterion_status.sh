@@ -1,7 +1,8 @@
 #!/bin/bash
 # smoke_criterion_status.sh -- the yardstick for the criterion-status CHANGE target (prepared by
 # scripts/prepare_criterion_status_change.sh). Usage: <artifact-jar> (terminating mode); SMOKE_TARGET
-# names the target (default criterion-status). Last line: SMOKE: <pass>/<checks>.
+# names the target (default criterion-status); SMOKE_PREPARE the script that prepares its pristine tree
+# (default prepare_criterion_status_change.sh). Last line: SMOKE: <pass>/<checks>.
 #
 # Asserts ONLY what the target's seed states: every case of the named specification class passes (one
 # check per test case, parameterized invocations included, read from the test run's own report), src/test
@@ -18,7 +19,7 @@ n=0; pass=0
 chk(){ n=$((n+1)); if [ "$1" = "$2" ]; then pass=$((pass+1)); [ -n "${QUIET:-}" ] || echo "PASS [$n] $3"; \
        else echo "FAIL [$n] $3 (want $2 got $1)"; fi; }
 SCRATCH=$(mktemp -d)
-"$ROOT/scripts/prepare_criterion_status_change.sh" "$TGT" "$SCRATCH/orig" > /dev/null 2>&1
+"${SMOKE_PREPARE:-$ROOT/scripts/prepare_criterion_status_change.sh}" "$TGT" "$SCRATCH/orig" > /dev/null 2>&1
 diff -rq "$SCRATCH/orig/src/test" "$TREE/src/test" > /dev/null 2>&1 && u=untouched || u=modified
 # Every source the module had, other than the one class the seed says to change, byte for byte.
 kept=kept

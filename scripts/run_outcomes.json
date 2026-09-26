@@ -5629,7 +5629,37 @@
    "start_tree": "FOREIGN",
    "terminal": "deadline",
    "total_cycles": "21"
+  },
+  "2026-09-26_23-51-47": {
+   "clauses_closed_vs_control": "0",
+   "cost_readout": "build=84164ms/32 package-gate=13856ms/5 sms-commit=2277ms/19 sms-batch-build=1945ms/19 boot-gate=1216ms/5 sms-lineage-stamp=106ms/19 sms-cycle-link=67ms/18 sms-cycle-merge=66ms/19",
+   "criteria_authored": "33",
+   "criteria_elaboration": "3",
+   "criteria_executable_count": "0",
+   "criteria_executable_pct": "0",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "128",
+   "merges": "2",
+   "peaked_at_cycle": "cycle-1790461926159 (20/20)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-09-27",
+   "repeat_proposals": "0",
+   "repeats_refused": "0",
+   "run_duration_min": "38.7",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 14/16",
+   "smoke_failed_checks": "1,16",
+   "smoke_pass": 14,
+   "smoke_preserved": "SMOKE: 14/16",
+   "smoke_strict": "14/16 discounted=none",
+   "smoke_total": 16,
+   "start_cleared_tree": "no",
+   "start_mode": "ADOPT_PROJECT",
+   "start_tree": "FOREIGN",
+   "terminal": "operator-stop",
+   "total_cycles": "20"
   }
  },
- "updated": "2026-09-26"
+ "updated": "2026-09-27"
 }

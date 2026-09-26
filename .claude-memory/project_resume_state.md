@@ -1,6 +1,6 @@
 ---
 name: project-resume-state
-description: "2026-09-26 session 7 (Opus 5.5): firestarter closes twice; T4-DY slice B built and its DoD met in the field; T4-DZ filed, offline slice 4/6. No run is live. Read the newest block first."
+description: "2026-09-27 session 7 (Opus 5.5): T4-DZ wired; the loop built the receiver question (receiver-questions, ported); two closure defects fixed (TestRunClaims wording, AdoptionManifest/UnchangedClaims); closure not yet shown. No run is live. Read the newest block first."
 metadata:
   node_type: memory
   type: project
@@ -11,7 +11,16 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-26 EVENING (Opus 5.5, session 7, autonomous) — THE THREE PLANNED SESSIONS DONE: FIRESTARTER CLOSES TWICE; T4-DY SLICE B BUILT, DoD MET IN THE FIELD; T4-DZ FILED AND MEASURED 4/6 — START HERE
+## 2026-09-27 NIGHT (Opus 5.5, session 7 continued, "continue without asking ... make this application productive and self-sustainable") — TERMINAL AGENT WIRED; THE LOOP BUILT ITS OWN NEXT RULE; TWO CLOSURE DEFECTS FIXED — START HERE
+
+- **Head: see `git log`; nothing pushed. Suite 3714/0.** No run is live.
+- **User decisions acted on:** structure first -> two lookups (`8cff94ab`, 5/5 on the frozen questions); T4-DZ stays separate; javac = compile, never execute; the agent's Q&A in the GRAPH; slice-B decisions confirmed. Then "Yes, please" -> **T4-DZ wired (`e8f33e48`)** as BUILD question 4 (after names, failing line, whole file): `ReadOnlyCopy` + `TerminalAgent` + `TerminalAgentRecorder`; Java port 4/6 against the model at temperature 0. Firestarter regressions on these builds: 23/23 each (`19-42`, `20-20`, `22-30`).
+- **The third ticket-driven toy case, `receiver-questions`** (the rule the agent's own case asked for): 3 runs under a stated rule, 3 real defects -- my `members:` guard undid the extension (`45465063`); failing tests relayed by FIRST LINE only (`24acf303`); `TestRunClaims` missed the loop's wording (`213af020`). Run 3 wrote the rule (16/16); **ported with review fixes (`213af020`) -- structure now answers all six questions the router had left open.**
+- **Closure: two checks, neither closed.** Run 4: 16/16 at minute 20, deadline -- the planner made "keep src/test / other classes unchanged" a verify subgoal no reading can confirm -> **`26a7662f` (T4-DK): `AdoptionManifest` + `UnchangedClaims`, one home `structurallyProven` at BOTH verification points.** Run 5: a worse design path, 14/16, cut at 40 min -- fix not exercised.
+- **Live firsts:** the terminal agent fired 3 times (all on JavaParser dependency types -- out of its copy's reach); the stuck layer made its first diagnosis request (flat root).
+- **Next, in order:** (1) a `members:` guard with an exception for the entry point a ticket extends, then the receiver-questions closure check again; (2) the receiver question over the DEPENDENCY classpath (3 live sightings); (3) the runbook note: firestarter early_stop `10 30 45`.
+
+## 2026-09-26 EVENING (Opus 5.5, session 7, autonomous) — THE THREE PLANNED SESSIONS DONE: FIRESTARTER CLOSES TWICE; T4-DY SLICE B BUILT, DoD MET IN THE FIELD; T4-DZ FILED AND MEASURED 4/6
 
 - **Head: see `git log`; nothing pushed.** Suite 3689/0.
 - **Session 1 -- firestarter closes at 23/23, twice** (`17-10-21` 34 min, `17-47-08` 16 min; same build as the `15-13-48` deadline, which stays variance). User mid-run: **"30 minutes is too soon"** -> firestarter early_stop is `scripts/early_stop.sh firestarter 10 30 45` (feedback memory updated).

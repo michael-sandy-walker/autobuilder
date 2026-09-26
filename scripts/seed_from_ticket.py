@@ -23,6 +23,8 @@ import sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 TICKET_ID = re.compile(r'\(?`?\bT\d-[A-Z]{1,3}(?:-\d+)?\b`?\)?')
+# A parenthetical that cites a ticket, e.g. "(T4-DZ q1)": removed whole, or its remainder dangles ("q1)").
+TICKET_PAREN = re.compile(r'\s*\([^()]*\bT\d-[A-Z]{1,3}(?:-\d+)?\b[^()]*\)')
 LINK = re.compile(r'\s*\(?\[\[[^\]]+\]\]\)?')
 RUN_ID = re.compile(r'`?\b20\d\d-\d\d-\d\d_\d\d-\d\d-\d\d\b`?')
 
@@ -63,6 +65,7 @@ def clean(text):
     text = re.sub(r'[^\x00-\x7f]', '', text)   # emoji and markers mean nothing to the adopted project
     text = LINK.sub('', text)
     text = RUN_ID.sub('a recorded run', text)
+    text = TICKET_PAREN.sub('', text)
     text = TICKET_ID.sub('', text)
     text = re.sub(r'\*\*|__', '', text)
     text = re.sub(r'[ \t]{2,}', ' ', text)
@@ -96,6 +99,8 @@ def main():
     ap.add_argument('--lines', help='line ranges of the source to quote, e.g. 43-54,80-83')
     ap.add_argument('--before', help='drop dated appends on or after this date (YYYY-MM-DD)')
     ap.add_argument('--out')
+    ap.add_argument('--grow', action='store_true',
+                    help='the class to change already works as its comment says and grows (default: a stub to implement)')
     ap.add_argument('--obligations-out', help='also write bootstrap/seed.obligations.txt for this seed')
     a = ap.parse_args()
 
@@ -103,6 +108,10 @@ def main():
     quoted = clean(raw)
     readme = open(os.path.join(a.module_dir, 'README.md')).read().strip().split('\n')
     readme = ' '.join(l for l in readme if not l.startswith('#')).strip()
+    change_line = (f'''  The one class to change is {a.change}. It already works as its class comment says; keep every
+  declaration it has exactly as it is, and add what the ticket asks for beside them.''' if a.grow else
+                   f'''  The one class to change is {a.change}. Its signature and the meaning of what it returns are in its
+  class comment; its method is not implemented yet.''')
     seed = f'''  An existing project, adopted, and now asked to grow. It was written by someone else and it
   already builds. In its own words, from its README:
 
@@ -113,8 +122,7 @@ def main():
 
 {chr(10).join('    ' + l for l in quoted.split(chr(10)))}
 
-  The one class to change is {a.change}. Its signature and the meaning of what it returns are in its
-  class comment; its method is not implemented yet.
+{change_line}
 
   The specification is {a.spec} in src/test/java: its tests say exactly what the method must return,
   using real data from the test resources, and they fail until the code provides it.

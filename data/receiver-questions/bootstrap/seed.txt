@@ -1,0 +1,22 @@
+  An existing project, adopted, and now asked to grow. It was written by someone else and it
+  already builds. In its own words, from its README:
+
+    "A stuck build's failure signature read as a question about the code, answered from the code itself, extracted from Autobuilder. StuckQuestions answers what a type declares, how a record is constructed, which overloads a method has, and where an unresolved name is declared -- from the project's sources and, for a class name, from the running JDK. DeclaredMembers lists a type's callable members. Pure: source text in, values out."
+
+  It is a library. Its existing behaviour is characterised by the tests already in src/test/java.
+  The change wanted is written in the ticket that asked for it. In the ticket's own words:
+
+    - 2026-09-26 night: THE RECEIVER QUESTION -- the next structural rule, read from what the terminal agent had to answer. A method called on a receiver whose type is a JDK type is a question the router cannot ask today: "the build fails: Object has no getBookId()" and "cannot find symbol method indexOf(ParticipationWindow) in record component active of type Map<String,ParticipationWindow>" name a type the project's sources do not declare, so no answer comes back. The archive holds 14 distinct such failures across 8 runs (receivers typed Object, Map, GraphicsConfiguration, BufferStrategy). What ends them is a fact: which methods the receiver's JDK type really declares -- it has no such method -- and which of the project's own types do declare the method that was called, because a receiver typed Object usually means the element type was lost on the way. The question: when the type a failure names is not declared in the sources but is a class of the running JDK, answer what that JDK class declares and where the called method is declared in the sources.
+
+  The one class to change is StuckQuestions. It already works as its class comment says; keep every
+  declaration it has exactly as it is, and add what the ticket asks for beside them.
+
+  The specification is ReceiverQuestionsSpecTest in src/test/java: its tests say exactly what the method must return,
+  using real data from the test resources, and they fail until the code provides it.
+
+  OBJECTIVE: every test in ReceiverQuestionsSpecTest passes, and the whole suite passes.
+
+  Change only StuckQuestions under src/main/java, and read what the code declares through the classes that
+  already read it. DO NOT modify anything under src/test: the specification and the existing tests are
+  the operator's, and if one of them fails, the code is what is wrong. Keep every other class exactly as
+  it is, and keep the project's packages, classes and naming.

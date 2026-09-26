@@ -139,9 +139,14 @@ class StuckQuestionsSpecTest {
         assertThat(a.declared()).containsExactly("align(Coil coil)", "align(List<Coil> coils, boolean strict)");
     }
 
+    /**
+     * A type neither the sources nor the JDK declare has no answer. (Until 2026-09-26 this also pinned
+     * "String has no getLength()" as unanswered -- slice A's limit to the project's own sources. The
+     * receiver question lifts that limit on purpose: String does declare length(), and saying so is the
+     * fact; see ReceiverQuestionsSpecTest in the receiver-questions toy case.)
+     */
     @Test
     void aTypeWhoseSourceIsNotInTheProjectHasNoAnswer() {
-        assertThat(StuckQuestions.answer("the build fails: String has no getLength()", COILS)).isEmpty();
         assertThat(StuckQuestions.answer("the build fails: Plasma has no getHeat()", COILS)).isEmpty();
     }
 

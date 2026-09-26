@@ -70,8 +70,8 @@ public final class SurefireReports {
                     for (Node c = tc.getFirstChild(); c != null; c = c.getNextSibling()) {
                         if (!(c instanceof Element e)) continue;
                         switch (e.getTagName()) {
-                            case "failure" -> { outcome = TestRunReport.Outcome.FAILED; message = firstLine(e); }
-                            case "error" -> { outcome = TestRunReport.Outcome.ERROR; message = firstLine(e); }
+                            case "failure" -> { outcome = TestRunReport.Outcome.FAILED; message = message(e); }
+                            case "error" -> { outcome = TestRunReport.Outcome.ERROR; message = message(e); }
                             case "skipped" -> outcome = TestRunReport.Outcome.SKIPPED;
                             default -> { }
                         }
@@ -96,10 +96,21 @@ public final class SurefireReports {
         return Optional.of(new TestRunReport(run, failures, errors, skipped, List.copyOf(failing), byClass));
     }
 
-    private static String firstLine(Element e) {
+    /**
+     * The failure's message, every line of it joined onto one. It was the first line only, and an
+     * assertion message's first line is often not the observation: AssertJ puts "expected: X" first and
+     * "but was: Y" second, and a described assertion puts its description first -- receiver-questions run
+     * 2026-09-26_21-17 relayed "expected: MEMBERS" and "[archived in ...]" for eleven failures and never
+     * what the code returned, so the model grinded on a value it was never shown. The stack trace is not
+     * part of the message attribute; when only the element's text is there, its trace lines are dropped.
+     */
+    static String message(Element e) {
         String m = e.getAttribute("message");
-        if (m == null || m.isBlank()) m = e.getTextContent();
+        boolean fromText = m == null || m.isBlank();
+        if (fromText) m = e.getTextContent();
         if (m == null) return "";
-        return m.strip().lines().findFirst().orElse("");
+        return String.join(" / ", m.strip().lines().map(String::strip).filter(l -> !l.isEmpty())
+                .filter(l -> !(fromText && (l.startsWith("at ") || l.startsWith("... "))))
+                .toList());
     }
 }

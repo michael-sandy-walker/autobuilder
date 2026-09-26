@@ -47,7 +47,30 @@ class TestRunEvidenceTest {
         assertThat(r.passes()).isFalse();
         assertThat(r.byClass()).as("a removed class's leftover report is not this run's").doesNotContainKey("org.sample.GoneTest");
         assertThat(r.failing()).extracting(TestRunReport.Failure::message)
-                .containsExactly("expected 2 but was 3", "No qualifying bean");
+                .containsExactly("expected 2 but was 3", "No qualifying bean / more");
+    }
+
+    /**
+     * The whole assertion message, not its first line: AssertJ's first line is "expected: X" or an
+     * assertion's description, and the observation -- what the code returned -- comes after it
+     * (receiver-questions run 2026-09-26_21-17: eleven failures relayed as "expected: MEMBERS" and
+     * "[archived in ...]" alone).
+     */
+    @Test
+    void anAssertionMessageIsRelayedWholeSoItsObservedValueIsSeen() throws Exception {
+        long start = System.currentTimeMillis();
+        Files.writeString(tmp.resolve("TEST-org.sample.InkTest.xml"), report("org.sample.InkTest",
+                "<testcase classname=\"org.sample.InkTest\" name=\"kind\"><failure message=\"&#10;expected: MEMBERS&#10; but was: RECEIVER\">trace</failure></testcase>",
+                "<testcase classname=\"org.sample.InkTest\" name=\"described\"><failure message=\"[archived in run 7] &#10;Expecting ArrayList:&#10;  [&quot;a()&quot;]&#10;to contain:&#10;  [&quot;b()&quot;]\"/></testcase>",
+                "<testcase classname=\"org.sample.InkTest\" name=\"textOnly\"><error>boom&#10;\tat org.sample.Ink.run(Ink.java:3)</error></testcase>"));
+
+        TestRunReport r = SurefireReports.read(tmp, start - 1_000).orElseThrow();
+
+        assertThat(r.failing()).extracting(TestRunReport.Failure::message).containsExactly(
+                "expected: MEMBERS / but was: RECEIVER",
+                "[archived in run 7] / Expecting ArrayList: / [\"a()\"] / to contain: / [\"b()\"]",
+                "boom");
+        assertThat(TestRunPromptBlock.render(r, List.of(), 4_000)).contains("but was: RECEIVER");
     }
 
     @Test

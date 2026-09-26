@@ -2971,7 +2971,8 @@ public class GoalPlannerService {
         // and why, in words the evolution prompt can carry (no goal id, no gate name).
         if (stuckLayer != null && reason != null) {
             GoalEntity refused = goalMap.get(goalId);
-            String what = refused != null && refused.getDescription() != null ? refused.getDescription() : "the goal";
+            String what = refused != null && refused.getDescription() != null
+                    ? refused.getDescription().strip().replaceAll("\\s+", " ") : "the goal";
             if (what.length() > 160) what = what.substring(0, 160) + "...";
             String why = reason.strip().replaceAll("\\s+", " ");
             if (why.length() > 400) why = why.substring(0, 400) + "...";

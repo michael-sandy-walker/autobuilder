@@ -55,9 +55,15 @@ public class EvolutionLLMAdapter {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.ObservedBehaviour observedBehaviour;
 
-    /** T4-CQ: repeated failures, named in the prompt; optional in narrow tests. */
+    /** T4-DY slice B's replay switch: the subgoal source block, on unless a replay takes it away. */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.evolution.subgoal-source-block:true}")
+    void setSubgoalSourceBlock(boolean on) {
+        com.walpro.autobuilder.protocol.evolution.SubgoalSourcePromptBlock.setEnabled(on);
+    }
+
+    /** T4-DY: answers to what kept failing, asked before this prompt is built; optional in narrow tests. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private com.walpro.autobuilder.core.build.GrindDetector grindDetector;
+    private com.walpro.autobuilder.core.stuck.StuckLayer stuckLayer;
 
     public CycleContextData evolve(CycleContextData context) throws IOException {
         return evolve(context, false);
@@ -81,10 +87,12 @@ public class EvolutionLLMAdapter {
             String block = protectedPaths.promptBlock();
             if (block != null) userPrompt = userPrompt + "\n\n" + block;
         }
-        // T4-CQ: a move that has failed again and again is named, so it is not made once more.
-        if (grindDetector != null) {
-            String grind = grindDetector.promptBlock();
-            if (grind != null) userPrompt = userPrompt + "\n\n" + grind;
+        // T4-DY: a failure that kept repeating is a question about the code; its answer, read from the
+        // sources now, is in the move it is about.
+        if (stuckLayer != null) {
+            String answers = stuckLayer.promptBlock(refreshed, Math.max(0, promptTokenBudget.promptHeadroomTokens()
+                    - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(userPrompt)) / 2);
+            if (answers != null) userPrompt = userPrompt + "\n\n" + answers;
         }
         // T4-CQ: what the code was seen to return, for as long as that code is unchanged.
         if (observedBehaviour != null && refreshed.outputPath() != null) {

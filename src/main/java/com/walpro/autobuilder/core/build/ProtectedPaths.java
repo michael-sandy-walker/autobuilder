@@ -75,7 +75,7 @@ public class ProtectedPaths {
     public boolean refuse(String writer, String pathUnderOutput) {
         if (!isProtected(pathUnderOutput)) return false;
         log.warn("T4-CQ: {} did not write {} — it is protected by {}", writer, pathUnderOutput, PATH);
-        if (grindDetector != null) grindDetector.observe(null, "write to " + normalise(pathUnderOutput) + " refused: protected");
+        if (grindDetector != null) grindDetector.observe(null, com.walpro.autobuilder.core.stuck.StuckObservation.Source.PROTECTED_WRITE, "write to " + normalise(pathUnderOutput) + " refused: protected");
         synchronized (unreportedRefusals) {
             unreportedRefusals.add(normalise(pathUnderOutput));
         }

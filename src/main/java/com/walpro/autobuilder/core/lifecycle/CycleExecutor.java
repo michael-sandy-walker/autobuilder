@@ -168,6 +168,10 @@ public class CycleExecutor implements CheckpointableState {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.GrindDetector grindDetector;
 
+    /** T4-DY: the stuck layer attributes observations to the cycle and subgoal they happen in. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.stuck.StuckLayer stuckLayer;
+
     public CycleContextData runCycle(CycleContextData context) {
 
         goalPlannerService.setCurrentCycleContext(context);
@@ -175,6 +179,7 @@ public class CycleExecutor implements CheckpointableState {
         context = syncContextFromGoals(context);
 
         if (grindDetector != null) grindDetector.beginCycle(context.cycleName());
+        if (stuckLayer != null) stuckLayer.beginCycle(context.cycleName(), context.currentSubGoalId());
 
         if (behaviourLogger != null) {
             behaviourLogger.cycleStart(context.cycleName(), context.currentGoalId(), context.currentSubGoalId(),

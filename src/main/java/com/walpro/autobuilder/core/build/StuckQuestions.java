@@ -67,7 +67,13 @@ public final class StuckQuestions {
     }
 
     private static final Pattern MEMBERS_PATTERN = Pattern.compile("has no (\\w+)\\(");
-    private static final Pattern CONSTRUCTOR_PATTERN = Pattern.compile("constructor (\\w+) in (?:record|class) ([\\w.]+)");
+    /**
+     * javac's own wording ("constructor X in record a.b.X"), or the grind detector's for "no suitable
+     * constructor found" ("X has no constructor X(args)") -- the second was not recognised until slice B
+     * put the router in the loop, where the detector's wording is what it is asked.
+     */
+    private static final Pattern CONSTRUCTOR_PATTERN = Pattern.compile(
+            "constructor (\\w+) in (?:record|class) ([\\w.]+)|has no constructor (\\w+)\\(");
     private static final Pattern OVERLOADS_PATTERN = Pattern.compile("method (\\w+) in (?:record|class) ([\\w.]+)");
     private static final Pattern SYMBOL_PATTERN = Pattern.compile(
             "cannot find symbol (class|variable|method) (\\w+)(?:\\([^)]*\\))? in (?:class|interface|record|enum|variable \\w+ of type) ([\\w.$]+)");
@@ -102,7 +108,7 @@ public final class StuckQuestions {
         // Try CONSTRUCTOR pattern
         Matcher constructorMatcher = CONSTRUCTOR_PATTERN.matcher(signature);
         if (constructorMatcher.find()) {
-            String fqcn = constructorMatcher.group(2);
+            String fqcn = constructorMatcher.group(2) != null ? constructorMatcher.group(2) : constructorMatcher.group(3);
             String simpleType = fqcn.substring(fqcn.lastIndexOf('.') + 1);
             Optional<String> source = findSourceForType(simpleType, sources);
             if (source.isPresent()) {

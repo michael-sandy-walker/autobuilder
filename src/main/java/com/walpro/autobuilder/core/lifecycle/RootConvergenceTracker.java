@@ -48,6 +48,11 @@ public class RootConvergenceTracker implements CheckpointableState {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.PreHaltPackagingCheck preHaltPackagingCheck;
 
+    /** T4-DY slice B: a flat root is reported to the one home for "stuck"; optional in narrow tests. */
+    @Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.stuck.StuckLayer stuckLayer;
+
     /** Consecutive cycles without root progress before the loop halts for review. */
     @Setter
     @Value("${autobuilder.deadlock.root-convergence-cycle-limit:20}")
@@ -300,6 +305,13 @@ public class RootConvergenceTracker implements CheckpointableState {
         if (cyclesSinceProgress * 2 >= cycleLimit) {
             log.warn("T4-I: no root progress for {} cycles (limit {}); completed-with-merge subgoals frozen at {}",
                     cyclesSinceProgress, cycleLimit, progressNow);
+            // T4-DY slice B: half the window is spent -- the operator hears it now, while the run can
+            // still act on an answer, not only at the halt.
+            if (stuckLayer != null) {
+                stuckLayer.report(com.walpro.autobuilder.core.stuck.StuckObservation.Source.FLAT_ROOT,
+                        "the root has not moved for half its window: completed subgoals frozen at " + progressNow,
+                        java.util.List.of());
+            }
         }
         return context;
     }

@@ -38,9 +38,21 @@ public final class SubgoalSourcePromptBlock {
     private SubgoalSourcePromptBlock() {
     }
 
+    /**
+     * On by default. Off only to REPLAY the grind this block ended (T4-DY slice B's DoD: the
+     * participation-totals constructor grind, recreated by taking the fact away again), set from
+     * {@code autobuilder.evolution.subgoal-source-block}.
+     */
+    private static volatile boolean enabled = true;
+
+    public static void setEnabled(boolean on) {
+        enabled = on;
+    }
+
     private static final Pattern CLASS_NAME = Pattern.compile("\\b([A-Z][A-Za-z0-9_]{2,})\\b");
 
     public static String render(CycleContextData input, int headroomTokens) {
+        if (!enabled) return null;
         if (input == null || input.previousOutput() == null || input.previousOutput().isEmpty()) return null;
         StringBuilder text = new StringBuilder();
         if (input.currentSubGoalDescription() != null) text.append(input.currentSubGoalDescription()).append('\n');

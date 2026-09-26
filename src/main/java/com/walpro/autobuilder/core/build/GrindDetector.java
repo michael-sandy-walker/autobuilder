@@ -2,6 +2,8 @@ package com.walpro.autobuilder.core.build;
 
 import com.walpro.autobuilder.core.checkpoint.StateBucket;
 import com.walpro.autobuilder.core.checkpoint.StateHolder;
+import com.walpro.autobuilder.core.stuck.StuckLayer;
+import com.walpro.autobuilder.core.stuck.StuckObservation;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +34,11 @@ import java.util.Set;
  * occurrence and again each time its count doubles: a grind that goes on forever gets louder, not
  * quieter. Three is the smallest count that is a repetition of a repetition; the doubling keeps a
  * long grind from flooding the log while never letting it go silent.
+ *
+ * <p>T4-DY slice B: a REPORTER only. It used to add a paragraph to the evolution prompt -- "change the
+ * approach, not the wording" -- which named the grind and supplied nothing; every grind in the archive
+ * that outlived it was ended by a FACT instead. Each occurrence now goes to {@link StuckLayer}, which
+ * asks what the code declares and delivers the answer; the paragraph is deleted.
  */
 @Slf4j
 @Component
@@ -44,10 +51,12 @@ public class GrindDetector {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    @Autowired(required = false)
+    private StuckLayer stuckLayer;
+
     private final Map<String, Entry> bySignature = new LinkedHashMap<>();
     private String currentCycle;
     private final Set<String> seenThisCycle = new HashSet<>();
-    private String lastCycleWithFailure;
 
     private static final class Entry {
         int occurrences;
@@ -64,13 +73,24 @@ public class GrindDetector {
         }
     }
 
-    /** Records one failure. {@code cycleId} may be null, then the current cycle is assumed. */
-    public synchronized void observe(String cycleId, String signature) {
+    /** Records one build failure. {@code cycleId} may be null, then the current cycle is assumed. */
+    public void observe(String cycleId, String signature) {
+        observe(cycleId, StuckObservation.Source.BUILD, signature);
+    }
+
+    /** Records one failure the {@code source} detector saw. */
+    public void observe(String cycleId, StuckObservation.Source source, String signature) {
         if (signature == null || signature.isBlank()) return;
+        // Every occurrence, before this detector's per-cycle count: the layer must also see one that
+        // follows its own answer within the same cycle.
+        if (stuckLayer != null) stuckLayer.report(source, signature, List.of());
+        count(cycleId, signature);
+    }
+
+    private synchronized void count(String cycleId, String signature) {
         if (cycleId != null) beginCycle(cycleId);
         String cycle = currentCycle;
         if (!seenThisCycle.add(signature)) return;
-        lastCycleWithFailure = cycle;
         Entry e = bySignature.computeIfAbsent(signature, k -> new Entry());
         e.occurrences++;
         if (e.firstCycle == null) e.firstCycle = cycle;
@@ -92,9 +112,7 @@ public class GrindDetector {
      */
     public void observeBuild(String cycleId, BuildOutcome outcome) {
         if (outcome != null && outcome.result() == BuildResult.COMPILE_OK) {
-            synchronized (this) {
-                lastCycleWithFailure = null;
-            }
+            if (stuckLayer != null) stuckLayer.buildSucceeded(cycleId);
             return;
         }
         for (String s : signaturesOf(outcome)) observe(cycleId, s);
@@ -151,25 +169,6 @@ public class GrindDetector {
         if (symbol == null) return "";
         String out = " " + symbol + (location == null ? "" : " in " + location);
         return out.replaceAll("\\b(?:[a-z_][\\w]*\\.)+([A-Z][\\w$]*)", "$1");
-    }
-
-    /**
-     * The evolution prompt's block: every signature that has reached its first notice and failed
-     * again in the most recent failing cycle. Null when nothing is grinding.
-     */
-    public synchronized String promptBlock() {
-        List<String> lines = new ArrayList<>();
-        for (Map.Entry<String, Entry> e : bySignature.entrySet()) {
-            Entry v = e.getValue();
-            if (v.occurrences >= FIRST_NOTICE && v.lastCycle != null && v.lastCycle.equals(lastCycleWithFailure)) {
-                lines.add("  - " + e.getKey() + " -- " + v.occurrences + " times so far");
-            }
-        }
-        if (lines.isEmpty()) return null;
-        return "--- THIS HAS FAILED REPEATEDLY ---\n"
-                + "The loop has made the same failing move again and again. Doing it once more will fail\n"
-                + "the same way. Change the approach, not the wording:\n"
-                + String.join("\n", lines);
     }
 
     /** Signatures and their occurrence counts, for tests and the run report. */

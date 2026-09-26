@@ -71,6 +71,11 @@ public class AutobuilderService implements CheckpointableState {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T4-DY slice B: the exhaustion runaway is reported to the one home for "stuck". */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.stuck.StuckLayer stuckLayer;
+
     /**
      * T4-CA: optional — preserves the best verified snapshot at the pause transition. Null in
      * pure-unit tests, where the halt path behaves exactly as before.
@@ -1223,6 +1228,11 @@ public class AutobuilderService implements CheckpointableState {
                     if (consecutiveSubgoalExhaustionsWithoutMerge >= maxConsecutiveSubgoalExhaustionsWithoutMerge) {
                         log.error("Exhaustion runaway detected: {} consecutive subgoal exhaustions without a merge. Escalating to root exhaustion — manual input required.",
                                 consecutiveSubgoalExhaustionsWithoutMerge);
+                        if (stuckLayer != null) {
+                            stuckLayer.report(com.walpro.autobuilder.core.stuck.StuckObservation.Source.EXHAUSTION,
+                                    consecutiveSubgoalExhaustionsWithoutMerge + " subgoals in a row were given up without a merge",
+                                    java.util.List.of());
+                        }
                         // Emit GOAL_EXHAUSTED + SYSTEM_PAUSED signals; the cycle continues normally
                         // so deriveCycleResult picks up GOAL_EXHAUSTED → next scheduled run halts.
                         context = context

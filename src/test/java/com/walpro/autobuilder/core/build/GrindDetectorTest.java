@@ -57,25 +57,31 @@ class GrindDetectorTest {
         verify(logger, never()).grindDetected(anyString(), anyString(), anyInt(), anyString());
     }
 
+    /**
+     * T4-DY slice B: the detector is a reporter. Every occurrence reaches the stuck layer -- also a
+     * second one in the same cycle, which the layer needs when its answer was delivered in between --
+     * and a green build tells the layer the build signatures ended. The detector no longer writes
+     * a prompt paragraph of its own.
+     */
     @Test
-    void thePromptNamesOnlyWhatIsStillGrinding() {
+    void everyOccurrenceIsReportedToTheStuckLayerAndAGreenBuildEndsTheGrind() {
         GrindDetector d = new GrindDetector();
-        for (int c = 1; c <= 3; c++) d.observeBuild("cycle-" + c, failed());
-        assertThat(d.promptBlock()).contains("FAILED REPEATEDLY").contains("Quill has no getInk()").contains("3 times");
+        com.walpro.autobuilder.core.stuck.StuckLayer layer = mock(com.walpro.autobuilder.core.stuck.StuckLayer.class);
+        ReflectionTestUtils.setField(d, "stuckLayer", layer);
 
-        d.observe("cycle-4", "the build fails: Ink.java: something else");
-        assertThat(d.promptBlock()).as("the grind did not recur in the latest failing cycle").isNull();
-    }
+        d.observeBuild("cycle-1", failed());
+        d.observeBuild("cycle-1", failed());
+        d.observe("cycle-2", com.walpro.autobuilder.core.stuck.StuckObservation.Source.PROTECTED_WRITE,
+                "write to src/main/Quill.java refused: protected");
+        d.observeBuild("cycle-3", new BuildOutcome(BuildResult.COMPILE_OK, "", 1L, "mvn", "probe"));
 
-    @Test
-    void aSuccessfulBuildEndsTheGrindTheNextPromptNames() {
-        GrindDetector d = new GrindDetector();
-        for (int c = 1; c <= 3; c++) d.observeBuild("cycle-" + c, failed());
-        assertThat(d.promptBlock()).isNotNull();
-
-        d.observeBuild("cycle-4", new BuildOutcome(BuildResult.COMPILE_OK, "", 1L, "mvn", "probe"));
-
-        assertThat(d.promptBlock()).as("the grind ended with a green build").isNull();
+        verify(layer, times(2)).report(eq(com.walpro.autobuilder.core.stuck.StuckObservation.Source.BUILD),
+                eq("the build fails: Quill has no getInk()"), eq(java.util.List.of()));
+        verify(layer).report(eq(com.walpro.autobuilder.core.stuck.StuckObservation.Source.PROTECTED_WRITE),
+                eq("write to src/main/Quill.java refused: protected"), eq(java.util.List.of()));
+        verify(layer).buildSucceeded("cycle-3");
+        assertThat(d.occurrences()).as("the detector's own count stays once per cycle")
+                .containsEntry("the build fails: Quill has no getInk()", 1);
     }
 
     /**

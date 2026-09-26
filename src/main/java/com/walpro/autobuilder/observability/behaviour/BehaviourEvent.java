@@ -639,6 +639,69 @@ public sealed interface BehaviourEvent {
         public String event() { return "grind_detected"; }
     }
 
+    /**
+     * T4-DY slice B: the diagnostic layer asked a question about a repeated failure. {@code answered}
+     * false means the authority had no answer and the next question follows.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record StuckQuestionAsked(
+            Instant timestamp,
+            String cycleId,
+            String source,
+            String signature,
+            int rung,
+            String question,
+            String authority,
+            boolean answered,
+            String answer,
+            String deliveredToSubGoal
+    ) implements BehaviourEvent {
+        public String event() { return "stuck_question_asked"; }
+    }
+
+    /** T4-DY slice B: a signature came back after its answer was delivered; the next question is due. */
+    record StuckRecurred(
+            Instant timestamp,
+            String cycleId,
+            String source,
+            String signature,
+            int recurrencesAfterDelivery,
+            int nextRung
+    ) implements BehaviourEvent {
+        public String event() { return "stuck_recurred"; }
+    }
+
+    /** T4-DY slice B: a build succeeded after an answer was delivered and the signature did not come back. */
+    record StuckEnded(
+            Instant timestamp,
+            String cycleId,
+            String source,
+            String signature,
+            String deliveredCycleId,
+            int recurrencesAfterDelivery,
+            int questionsAsked
+    ) implements BehaviourEvent {
+        public String event() { return "stuck_ended"; }
+    }
+
+    /**
+     * T4-DY slice B: the operator's hand-off. No authority in the loop answered this stuck observation,
+     * or the answer names a requirement only the operator may bind: what it is, how often, what was asked.
+     */
+    record DiagnosisRequest(
+            Instant timestamp,
+            String cycleId,
+            String source,
+            String signature,
+            int occurrences,
+            String firstCycleId,
+            String why,
+            java.util.List<String> asked,
+            java.util.List<String> detail
+    ) implements BehaviourEvent {
+        public String event() { return "diagnosis_request"; }
+    }
+
     /** TTL or LRU cap evicted the deferred mutation. */
     record DeferredMutationEvicted(
             Instant timestamp,

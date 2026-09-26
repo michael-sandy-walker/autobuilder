@@ -1,0 +1,20 @@
+[ERROR] /target/src/main/java/com/walpro/autobuilder/core/lifecycle/ParticipationWindows.java:[66,16] incompatible types: inference variable E has incompatible bounds
+    equality constraints: java.lang.String
+    lower bounds: com.walpro.autobuilder.core.lifecycle.ParticipationWindow
+[ERROR] /target/src/main/java/com/walpro/autobuilder/core/lifecycle/ParticipationWindows.java:[84,78] cannot find symbol
+  symbol:   class LinkedHashMap
+  location: class com.walpro.autobuilder.core.lifecycle.ParticipationWindows
+[ERROR] /target/src/main/java/com/walpro/autobuilder/core/lifecycle/ChannelRequest.java:[17,16] constructor ChannelRequest in record com.walpro.autobuilder.core.lifecycle.ChannelRequest cannot be applied to given types;
+  required: com.walpro.autobuilder.core.lifecycle.SignalType,double,java.lang.String,java.lang.Integer,int,java.util.Map<java.lang.String,java.lang.Object>
+  found:    com.walpro.autobuilder.core.lifecycle.SignalType,double,java.lang.String,<nulltype>,int,<nulltype>,java.util.Map<java.lang.Object,java.lang.Object>
+  reason: actual and formal argument lists differ in length
+[ERROR] /target/src/main/java/com/walpro/autobuilder/core/lifecycle/ChannelRequest.java:[21,16] constructor ChannelRequest in record com.walpro.autobuilder.core.lifecycle.ChannelRequest cannot be applied to given types;
+  required: com.walpro.autobuilder.core.lifecycle.SignalType,double,java.lang.String,java.lang.Integer,int,java.util.Map<java.lang.String,java.lang.Object>
+  found:    com.walpro.autobuilder.core.lifecycle.SignalType,double,java.lang.String,<nulltype>,int,java.lang.Integer,java.util.Map<java.lang.Object,java.lang.Object>
+  reason: actual and formal argument lists differ in length
+[ERROR] /target/src/main/java/com/walpro/autobuilder/core/lifecycle/ChannelRequest.java:[30,43] cannot find symbol
+  symbol:   class HashMap
+  location: class com.walpro.autobuilder.core.lifecycle.ChannelRequest
+[ERROR] /target/src/main/java/com/walpro/autobuilder/core/lifecycle/ChannelRequest.java:[32,58] cannot find symbol
+  symbol:   variable subGoalId
+  location: class com.walpro.autobuilder.core.lifecycle.ChannelRequest

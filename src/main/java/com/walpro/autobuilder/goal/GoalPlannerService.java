@@ -2929,6 +2929,10 @@ public class GoalPlannerService {
      * does, the ordinary exhaustion path retires the goal as GIVEN_UP — which is a true statement
      * about the run, where COMPLETED would have been a false one.
      */
+    /** T4-DY slice B: repeated closure refusals are reported to the stuck layer; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.stuck.StuckLayer stuckLayer;
+
     private GoalProgressApplicationResult refuseClosure(String goalId, ClaimRefutation refutation) {
         recordRefutedClosure(goalId, refutation);
         return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
@@ -2963,6 +2967,17 @@ public class GoalPlannerService {
      * refutation nothing could attribute — see {@link ClaimRefutation}.
      */
     void recordClosureRefusal(String gate, String goalId, String reason, List<String> criteria) {
+        // T4-DY slice B: the same refusal again is a stuck observation -- keyed by what was refused
+        // and why, in words the evolution prompt can carry (no goal id, no gate name).
+        if (stuckLayer != null && reason != null) {
+            GoalEntity refused = goalMap.get(goalId);
+            String what = refused != null && refused.getDescription() != null ? refused.getDescription() : "the goal";
+            if (what.length() > 160) what = what.substring(0, 160) + "...";
+            String why = reason.strip().replaceAll("\\s+", " ");
+            if (why.length() > 400) why = why.substring(0, 400) + "...";
+            stuckLayer.report(com.walpro.autobuilder.core.stuck.StuckObservation.Source.CLOSURE_REFUSAL,
+                    "closing '" + what + "' was refused: " + why, criteria == null ? List.of() : criteria);
+        }
         if (behaviourLogger == null) return;
         behaviourLogger.closureRefused(
                 currentCycleContext != null ? currentCycleContext.cycleName() : null,

@@ -389,6 +389,28 @@ public class BehaviourLogger {
         emit(new BehaviourEvent.GrindDetected(Instant.now(), cycleId, signature, occurrences, firstCycleId));
     }
 
+    public void stuckQuestionAsked(String cycleId, String source, String signature, int rung, String question,
+                                   String authority, boolean answered, String answer, String deliveredToSubGoal) {
+        emit(new BehaviourEvent.StuckQuestionAsked(Instant.now(), cycleId, source, signature, rung, question,
+                authority, answered, answer, deliveredToSubGoal));
+    }
+
+    public void stuckRecurred(String cycleId, String source, String signature, int recurrencesAfterDelivery, int nextRung) {
+        emit(new BehaviourEvent.StuckRecurred(Instant.now(), cycleId, source, signature, recurrencesAfterDelivery, nextRung));
+    }
+
+    public void stuckEnded(String cycleId, String source, String signature, String deliveredCycleId,
+                           int recurrencesAfterDelivery, int questionsAsked) {
+        emit(new BehaviourEvent.StuckEnded(Instant.now(), cycleId, source, signature, deliveredCycleId,
+                recurrencesAfterDelivery, questionsAsked));
+    }
+
+    public void diagnosisRequest(String cycleId, String source, String signature, int occurrences, String firstCycleId,
+                                 String why, java.util.List<String> asked, java.util.List<String> detail) {
+        emit(new BehaviourEvent.DiagnosisRequest(Instant.now(), cycleId, source, signature, occurrences, firstCycleId,
+                why, asked, detail));
+    }
+
     public void llmResponseDiscarded(String cycleId, String role, String reason, String firstLine, int consecutive) {
         emit(new BehaviourEvent.LlmResponseDiscarded(Instant.now(), cycleId, role, reason, firstLine, consecutive));
     }

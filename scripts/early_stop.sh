@@ -11,7 +11,7 @@
 #
 # A copy, because the yardstick runs the project's build: in the live tree its test reports would
 # be read by the loop's own test gate as fresh evidence. The script never writes to the live tree.
-# Exits when the app is gone, so it can be started beside every run and forgotten.
+# Exits when the run it was started beside is gone, so it can be started beside every run and forgotten.
 set -u
 TGT="${1:?usage: early_stop.sh <target> [interval_min] [patience_min] [min_run_min] [port]}"
 INTERVAL=$(( ${2:-10} * 60 )); PATIENCE=$(( ${3:-20} * 60 )); MINRUN=$(( ${4:-25} * 60 )); PORT="${5:-8081}"
@@ -26,7 +26,18 @@ MODE="$(grep -v '^#' "$ROOT/data/$TGT/bootstrap/yardstick" 2>/dev/null | awk 'NF
 case "$MODE" in terminating|serving) ;; *) echo "early_stop: $TGT's yardstick mode '$MODE' is not one this script can run" >&2; exit 1;; esac
 APORT=$(( 18000 + RANDOM % 1000 ))
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
-alive() { curl -s -o /dev/null -m 5 "http://localhost:$PORT/autobuilder/status"; }
+# Alive means THIS run: the port answers AND the run's own log still begins with the line it began
+# with when this watcher started. Polling the port alone let a watcher outlive its run -- three
+# criterion-status runs back to back on 2026-09-26 left the first two watchers adopting the third,
+# each able to pause a run whose clock it had not started. A new launch rotates the log away.
+LOG="$ROOT/data/$TGT/logs/autobuilder.log"
+RUNMARK=""
+alive() {
+    curl -s -o /dev/null -m 5 "http://localhost:$PORT/autobuilder/status" || return 1
+    local head; head=$(head -1 "$LOG" 2>/dev/null)
+    [ -n "$RUNMARK" ] || RUNMARK="$head"
+    [ "$head" = "$RUNMARK" ]
+}
 
 start=$SECONDS; best=-1; best_at=$SECONDS
 while alive; do
@@ -88,4 +99,4 @@ while alive; do
         exit 0
     fi
 done
-echo "early_stop: app gone -- nothing to do"
+echo "early_stop: the run it was started beside is gone -- nothing to do"

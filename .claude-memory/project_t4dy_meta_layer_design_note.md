@@ -111,3 +111,8 @@ the missing fact) is ended in-loop by a delivered fact, and the ledger shows it.
    self-initiated stop.
 4. **Model-proposed questions:** allowed from slice B onwards, or only after a replay shows the local
    model proposes useful questions on archived signatures?
+5. **(added 2026-09-26 after slice A was measured) Criterion (1) failed: 4 of 7.** The three misses are bare
+   `cannot find symbol` signatures -- the detector drops the symbol and location the question needs. Either
+   (a) the signature format is the defect: keep the compiler's symbol/location lines and re-measure against
+   the same bar of 6; or (b) take the stated rule at its word and revisit the design. Slice B waits on this.
+

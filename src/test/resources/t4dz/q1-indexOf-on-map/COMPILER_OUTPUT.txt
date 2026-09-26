@@ -1,0 +1,3 @@
+/data/participation-roles/output/src/main/java/com/walpro/autobuilder/core/lifecycle/ParticipationWindows.java:[82,35] cannot find symbol
+symbol:   method indexOf(com.walpro.autobuilder.core.lifecycle.ParticipationWindow)
+location: record component active of type java.util.Map<java.lang.String,com.walpro.autobuilder.core.lifecycle.ParticipationWindow>

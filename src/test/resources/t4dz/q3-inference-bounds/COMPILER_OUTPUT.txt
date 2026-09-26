@@ -1,0 +1,3 @@
+/data/participation-totals/output/src/main/java/com/walpro/autobuilder/core/lifecycle/ParticipationWindows.java:[66,16] incompatible types: inference variable E has incompatible bounds
+equality constraints: java.lang.String
+lower bounds: com.walpro.autobuilder.core.lifecycle.ParticipationWindow

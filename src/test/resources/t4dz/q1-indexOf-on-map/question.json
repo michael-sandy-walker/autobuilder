@@ -1,0 +1,7 @@
+{
+ "id": "q1-indexOf-on-map",
+ "run": "2026-09-25_19-57-35",
+ "signature": "the build fails: ParticipationWindows.java: cannot find symbol method indexOf(ParticipationWindow) in record component active of type Map<String,ParticipationWindow>",
+ "truth_regex": "Map<\\s*String,\\s*ParticipationWindow>\\s+active|public interface java\\.util\\.Map<K, V>",
+ "truth_in_words": "active is a Map<String, ParticipationWindow>, and java.util.Map declares no indexOf"
+}

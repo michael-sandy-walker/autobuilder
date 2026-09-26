@@ -1,0 +1,7 @@
+{
+ "id": "q6-list-ambiguous-record",
+ "run": "2026-09-25_20-51-35",
+ "signature": "the build fails: ChannelRequest.java: cannot find symbol class List in class ChannelRequest",
+ "truth_regex": "import java\\.util\\.List;",
+ "truth_in_words": "java.util.List is meant"
+}

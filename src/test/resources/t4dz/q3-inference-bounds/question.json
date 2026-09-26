@@ -1,0 +1,7 @@
+{
+ "id": "q3-inference-bounds",
+ "run": "2026-09-25_20-51-35",
+ "signature": "the build fails: ParticipationWindows.java: incompatible types: inference variable E has incompatible bounds",
+ "truth_regex": "record TickResult\\(ParticipationWindows windows, List<ParticipationWindow> expired\\)",
+ "truth_in_words": "as adopted, TickResult's second component is List<ParticipationWindow> expired; the candidate made it List<String>"
+}

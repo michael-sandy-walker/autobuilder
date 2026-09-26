@@ -1,0 +1,3 @@
+/data/participation-totals/output/src/main/java/com/walpro/autobuilder/core/lifecycle/ParticipationWindows.java:[63,59] cannot find symbol
+symbol:   variable List
+location: class com.walpro.autobuilder.core.lifecycle.ParticipationWindows

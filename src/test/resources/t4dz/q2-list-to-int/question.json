@@ -1,0 +1,7 @@
+{
+ "id": "q2-list-to-int",
+ "run": "2026-09-25_20-26-27",
+ "signature": "the build fails: ParticipationWindows.java: incompatible types: no instance(s) of type variable(s) E exist so that java.util.List<E> conforms to int",
+ "truth_regex": "record TickResult\\(ParticipationWindows windows, List<ParticipationWindow> expired\\)",
+ "truth_in_words": "as adopted, TickResult's second component is List<ParticipationWindow> expired; the candidate redeclared it"
+}

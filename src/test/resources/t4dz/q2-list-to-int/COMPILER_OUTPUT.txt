@@ -1,0 +1,1 @@
+/data/participation-roles/output/src/main/java/com/walpro/autobuilder/core/lifecycle/ParticipationWindows.java:[56,38] incompatible types: no instance(s) of type variable(s) E exist so that java.util.List<E> conforms to int

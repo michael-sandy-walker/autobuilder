@@ -1,0 +1,7 @@
+{
+ "id": "q5-list-ambiguous-variable",
+ "run": "2026-09-25_20-51-35",
+ "signature": "the build fails: ParticipationWindows.java: cannot find symbol variable List in class ParticipationWindows",
+ "truth_regex": "import java\\.util\\.List;",
+ "truth_in_words": "java.util.List is meant (List.of / List.copyOf are java.util.List's)"
+}

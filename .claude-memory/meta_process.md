@@ -145,8 +145,29 @@ its tools in `process/`, apart from the product's `scripts/` and `src/`.
 - **State per slice:** the `LOOP-BUILT: ... -- PORT: <state>` tag on the product ticket the code belongs to
   (the port changes that ticket's code); `scripts/next_work.py` lists the open ones.
 - **Decided so far:** receiver-questions -- the proposed port approved and ported (`e4c92306`). criterion-status and
-  stuck-questions -- retro packets published, decisions open.
+  stuck-questions -- retro packets published; superseded by M-F (treated as ordinary code).
+- **2026-09-27, OFF THE CRITICAL PATH (M-F):** loop solutions are no longer ported by default.
 - **Known limit, raised by the user 2026-09-27:** the "blind" reference is a subagent of the session; it very likely
   receives the project's CLAUDE.md and memory index as context, so it is instructed-blind, not information-equal.
   The user's reading of the gap (option b): the fault is on the loop's side -- the LOOP is information-starved
   compared with any developer; that is a product change, filed on T4-CF, not here.
+
+## M-F — Roadmap tickets are developed directly; the loop's own capability is tested separately, on versioned toy cases
+
+**Decided by the user 2026-09-27:** "I don't think we should mix our roadmap work of Autobuilder with the work
+Autobuilder is capable of doing itself on its own further for now. We want to test that capability as toy cases
+while we continue development of the tickets separately. Otherwise we would bottleneck the capabilities of the
+overall development too much regarding the capabilities of the local model."
+
+- **Tickets:** the session implements roadmap tickets directly (suite, field checks as before). No loop run is on a
+  ticket's critical path.
+- **Toy cases:** a ticket may still become a toy case -- as a CAPABILITY TEST of the loop. Its output is measured, not
+  ported. The port review stage (M-E) leaves the critical path; it applies only when a loop solution is clearly
+  better than ours and someone proposes porting it.
+- **Reference:** a toy case frozen at the commit before a ticket was implemented can be compared with OUR
+  implementation of that ticket -- a reference written with full context (answers the "instructed-blind" limit of M-E).
+- **Versioned toy cases (the user, same day):** "That's why we version the toy cases. If there is more up-to-date code,
+  we could update the toy cases and version themselves. So we also have a history what changed regarding the toy cases
+  over time." Each toy case carries a version and a changelog; every run records the version it faced.
+- **The two open retro reviews** (criterion-status, stuck-questions): treated as ordinary code in `src/`; the
+  stuck-questions assessor's fixes are ordinary ticket work (T4-DY), criterion-status closes as reviewed.

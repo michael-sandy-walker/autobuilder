@@ -81,8 +81,9 @@ public final class StuckQuestions {
      * put the router in the loop, where the detector's wording is what it is asked.
      */
     private static final Pattern CONSTRUCTOR_PATTERN = Pattern.compile(
-            "constructor (\\w+) in (?:record|class) ([\\w.]+)|has no constructor (\\w+)\\(");
-    private static final Pattern OVERLOADS_PATTERN = Pattern.compile("method (\\w+) in (?:record|class) ([\\w.]+)");
+            "constructor (\\w+) in (?:record|class|interface|enum) ([\\w.$]+)|has no constructor (\\w+)\\(");
+    /** javac names the declaring type with its package, and with its kind -- a class, record, interface or enum. */
+    private static final Pattern OVERLOADS_PATTERN = Pattern.compile("method (\\w+) in (?:record|class|interface|enum) ([\\w.$]+)");
     private static final Pattern SYMBOL_PATTERN = Pattern.compile(
             "cannot find symbol (class|variable|method) (\\w+)(?:\\([^)]*\\))? in (?:class|interface|record|enum|variable \\w+ of type) ([\\w.$]+)");
 
@@ -136,11 +137,9 @@ public final class StuckQuestions {
         Matcher constructorMatcher = CONSTRUCTOR_PATTERN.matcher(signature);
         if (constructorMatcher.find()) {
             String fqcn = constructorMatcher.group(2) != null ? constructorMatcher.group(2) : constructorMatcher.group(3);
-            String simpleType = fqcn.substring(fqcn.lastIndexOf('.') + 1);
-            Optional<String> source = findSourceForType(simpleType, sources);
-            if (source.isPresent()) {
-                List<String> constructors = extractConstructors(source.get(), simpleType);
-                return Optional.of(new Answer(Kind.CONSTRUCTOR, simpleType, null, constructors, null));
+            Optional<TypeDeclaration<?>> type = declaringType(fqcn, sources);
+            if (type.isPresent()) {
+                return Optional.of(new Answer(Kind.CONSTRUCTOR, type.get().getNameAsString(), null, constructorsOf(type.get()), null));
             }
         }
 
@@ -148,12 +147,10 @@ public final class StuckQuestions {
         Matcher overloadsMatcher = OVERLOADS_PATTERN.matcher(signature);
         if (overloadsMatcher.find()) {
             String methodName = overloadsMatcher.group(1);
-            String fqcn = overloadsMatcher.group(2);
-            String simpleType = fqcn.substring(fqcn.lastIndexOf('.') + 1);
-            Optional<String> source = findSourceForType(simpleType, sources);
-            if (source.isPresent()) {
-                List<String> overloads = extractOverloads(source.get(), simpleType, methodName);
-                return Optional.of(new Answer(Kind.OVERLOADS, simpleType, methodName, overloads, null));
+            Optional<TypeDeclaration<?>> type = declaringType(overloadsMatcher.group(2), sources);
+            if (type.isPresent()) {
+                return Optional.of(new Answer(Kind.OVERLOADS, type.get().getNameAsString(), methodName,
+                        overloadsOf(type.get(), methodName), null));
             }
         }
 
@@ -212,7 +209,7 @@ public final class StuckQuestions {
         if (name == null || name.isBlank()) return Optional.empty();
         String bare = name.contains("<") ? name.substring(0, name.indexOf('<')) : name;
         if (bare.contains(".")) return load(bare, loader);
-        if (findSourceForType(bare, sources).isPresent()) return Optional.empty();
+        if (declaresType(bare, sources)) return Optional.empty();
         java.util.Set<String> singleImports = singleTypeImports(bare, sources);
         if (singleImports.size() > 1) return Optional.empty();
         if (singleImports.size() == 1) return load(singleImports.iterator().next(), loader);
@@ -372,26 +369,77 @@ public final class StuckQuestions {
     }
 
     /**
-     * The source that DECLARES {@code simpleType}: the file named after it first, then any file with a
-     * real declaration of that name. Port review (2026-09-26): the loop's version matched
-     * {@code "class " + simpleType} as a substring, so {@code ParsedElement} also matched
-     * {@code class ParsedElementBuilder} and a name in a comment -- right on the archive only because
-     * the file map happened to list the named file first.
+     * The source that DECLARES {@code simpleType}: of every file with a real declaration of that name, the one
+     * named after it; when several remain, the one outside {@code src/test}; when that still leaves more than
+     * one, none -- the signature does not say which (port review 2026-09-27: a test double {@code Foo} beside
+     * the real one was answered from whichever came first in the map). Port review 2026-09-26: the loop's first
+     * version matched {@code "class " + simpleType} as a substring, so {@code ParsedElement} also matched
+     * {@code class ParsedElementBuilder} and a name in a comment.
      */
     private static Optional<String> findSourceForType(String simpleType, Map<String, String> sources) {
-        Pattern declaration = Pattern.compile("\\b(?:class|record|interface|enum)\\s+" + Pattern.quote(simpleType) + "\\b");
-        for (Map.Entry<String, String> entry : sources.entrySet()) {
-            String path = entry.getKey().replace('\\', '/');
-            if ((path.endsWith("/" + simpleType + ".java") || path.equals(simpleType + ".java"))
-                    && entry.getValue() != null && declaration.matcher(withoutComments(entry.getValue())).find()) {
-                return Optional.of(entry.getValue());
-            }
+        List<Map.Entry<String, String>> declaring = declaringSources(simpleType, sources);
+        if (declaring.size() > 1) {
+            List<Map.Entry<String, String>> named = declaring.stream()
+                    .filter(e -> e.getKey().replace('\\', '/').endsWith("/" + simpleType + ".java")
+                            || e.getKey().equals(simpleType + ".java")).toList();
+            if (!named.isEmpty()) declaring = named;
         }
-        for (Map.Entry<String, String> entry : sources.entrySet()) {
+        if (declaring.size() > 1) {
+            List<Map.Entry<String, String>> main = declaring.stream()
+                    .filter(e -> !e.getKey().replace('\\', '/').contains("src/test/")).toList();
+            if (!main.isEmpty()) declaring = main;
+        }
+        return declaring.size() == 1 ? Optional.of(declaring.get(0).getValue()) : Optional.empty();
+    }
+
+    /** True when any source declares a type of that simple name -- the project's own name, however many times. */
+    private static boolean declaresType(String simpleType, Map<String, String> sources) {
+        return !declaringSources(simpleType, sources).isEmpty();
+    }
+
+    private static List<Map.Entry<String, String>> declaringSources(String simpleType, Map<String, String> sources) {
+        Pattern declaration = Pattern.compile("\\b(?:class|record|interface|enum)\\s+" + Pattern.quote(simpleType) + "\\b");
+        List<Map.Entry<String, String>> out = new ArrayList<>();
+        for (Map.Entry<String, String> entry : new java.util.TreeMap<>(sources).entrySet()) {
             String content = entry.getValue();
             if (content != null && entry.getKey().endsWith(".java") && declaration.matcher(withoutComments(content)).find()) {
-                return Optional.of(content);
+                out.add(entry);
             }
+        }
+        return out;
+    }
+
+    /**
+     * The type javac names: a qualified name is matched exactly against each declaration's own qualified name
+     * (package and enclosing types), so {@code b.y.Foo} is never answered with {@code a.x.Foo}; a simple name
+     * falls back to {@link #findSourceForType}. Type arguments are ignored. Empty when the project declares no
+     * such type.
+     */
+    private static Optional<TypeDeclaration<?>> declaringType(String name, Map<String, String> sources) {
+        String bare = name.contains("<") ? name.substring(0, name.indexOf('<')) : name;
+        String simple = bare.substring(bare.lastIndexOf('.') + 1);
+        if (!bare.contains(".")) {
+            return findSourceForType(simple, sources).flatMap(src -> typeIn(src, simple, null));
+        }
+        for (Map.Entry<String, String> e : declaringSources(simple, sources)) {
+            Optional<TypeDeclaration<?>> t = typeIn(e.getValue(), simple, bare);
+            if (t.isPresent()) return t;
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<TypeDeclaration<?>> typeIn(String source, String simple, String qualified) {
+        CompilationUnit cu;
+        try {
+            cu = new JavaParser(new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17))
+                    .parse(source).getResult().orElse(null);
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+        if (cu == null) return Optional.empty();
+        for (TypeDeclaration<?> t : cu.findAll(TypeDeclaration.class)) {
+            if (!t.getNameAsString().equals(simple)) continue;
+            if (qualified == null || qualified.equals(t.getFullyQualifiedName().orElse(null))) return Optional.of(t);
         }
         return Optional.empty();
     }
@@ -409,81 +457,42 @@ public final class StuckQuestions {
     }
 
     private static List<String> extractConstructors(String source, String simpleType) {
-        if (source == null || simpleType == null) return List.of();
-        CompilationUnit cu;
-        try {
-            cu = new JavaParser(new ParserConfiguration()
-                    .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17))
-                    .parse(source).getResult().orElse(null);
-        } catch (RuntimeException e) {
-            return List.of();
-        }
-        if (cu == null) return List.of();
-        
-        TypeDeclaration<?> found = null;
-        for (TypeDeclaration<?> t : cu.findAll(TypeDeclaration.class)) {
-            if (t.getNameAsString().equals(simpleType)) {
-                found = t;
-                break;
-            }
-        }
-        if (found == null) return List.of();
-        
+        return typeIn(source == null ? "" : source, simpleType, null).map(StuckQuestions::constructorsOf).orElse(List.of());
+    }
+
+    /**
+     * A type's constructors as {@code Type(ParamType name, ...)}: a record's canonical one first, and an explicit
+     * constructor with the canonical's parameter types not again; every visibility, a private one marked
+     * {@code (private)} so it is not mistaken for one the caller can use; varargs as {@code Type... name}.
+     */
+    static List<String> constructorsOf(TypeDeclaration<?> found) {
+        String simpleType = found.getNameAsString();
         List<String> constructors = new ArrayList<>();
-        // For records, the canonical constructor comes first
+        List<String> canonicalTypes = null;
         if (found instanceof RecordDeclaration r) {
-            String params = r.getParameters().stream()
-                    .map(p -> p.getType().asString() + " " + p.getNameAsString())
-                    .collect(Collectors.joining(", "));
-            constructors.add(simpleType + "(" + params + ")");
+            canonicalTypes = r.getParameters().stream().map(p -> p.getType().asString()).toList();
+            constructors.add(simpleType + "(" + params(r.getParameters()) + ")");
         }
-        
-        // Add explicit constructors
         for (ConstructorDeclaration c : found.getConstructors()) {
-            if (c.isPrivate()) continue;
-            String params = c.getParameters().stream()
-                    .map(p -> p.getType().asString() + " " + p.getNameAsString())
-                    .collect(Collectors.joining(", "));
-            constructors.add(simpleType + "(" + params + ")");
+            List<String> types = c.getParameters().stream().map(p -> p.getType().asString()).toList();
+            if (types.equals(canonicalTypes)) continue;
+            constructors.add(simpleType + "(" + params(c.getParameters()) + ")" + (c.isPrivate() ? " (private)" : ""));
         }
-        
         return constructors;
     }
 
-    private static List<String> extractOverloads(String source, String simpleType, String methodName) {
-        if (source == null || simpleType == null || methodName == null) return List.of();
-        CompilationUnit cu;
-        try {
-            cu = new JavaParser(new ParserConfiguration()
-                    .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17))
-                    .parse(source).getResult().orElse(null);
-        } catch (RuntimeException e) {
-            return List.of();
-        }
-        if (cu == null) return List.of();
-        
-        TypeDeclaration<?> found = null;
-        for (TypeDeclaration<?> t : cu.findAll(TypeDeclaration.class)) {
-            if (t.getNameAsString().equals(simpleType)) {
-                found = t;
-                break;
-            }
-        }
-        if (found == null) return List.of();
-        
+    /** Every method of that name the type declares, every visibility, a private one marked {@code (private)}. */
+    static List<String> overloadsOf(TypeDeclaration<?> found, String methodName) {
         List<String> overloads = new ArrayList<>();
-        boolean isInterface = found.isClassOrInterfaceDeclaration()
-                && found.asClassOrInterfaceDeclaration().isInterface();
-        
         for (MethodDeclaration m : found.getMethods()) {
             if (!m.getNameAsString().equals(methodName)) continue;
-            if (!(isInterface || m.hasModifier(Modifier.Keyword.PUBLIC))) continue;
-            String params = m.getParameters().stream()
-                    .map(p -> p.getType().asString() + " " + p.getNameAsString())
-                    .collect(Collectors.joining(", "));
-            overloads.add(methodName + "(" + params + ")");
+            overloads.add(methodName + "(" + params(m.getParameters()) + ")" + (m.isPrivate() ? " (private)" : ""));
         }
-        
         return overloads;
+    }
+
+    private static String params(com.github.javaparser.ast.NodeList<com.github.javaparser.ast.body.Parameter> ps) {
+        return ps.stream().map(p -> p.getType().asString() + (p.isVarArgs() ? "..." : "") + " " + p.getNameAsString())
+                .collect(Collectors.joining(", "));
     }
 }

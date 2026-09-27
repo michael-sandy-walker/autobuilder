@@ -1,6 +1,6 @@
 ---
 name: project-resume-state
-description: "2026-09-27 session 7 (Opus 5.5): T4-DZ wired; the loop built the receiver question (receiver-questions, ported); two closure defects fixed (TestRunClaims wording, AdoptionManifest/UnchangedClaims); closure not yet shown. No run is live. Read the newest block first."
+description: "2026-09-27 evening (Opus 5.5): direction M-F -- tickets developed directly, the loop tested on VERSIONED toy cases; T4-EA briefing built (A/B pending); receiver-questions port approved. No run is live. Read the newest block first."
 metadata:
   node_type: memory
   type: project
@@ -11,7 +11,15 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-27 NIGHT (Opus 5.5, session 7 continued, "continue without asking ... make this application productive and self-sustainable") — TERMINAL AGENT WIRED; THE LOOP BUILT ITS OWN NEXT RULE; TWO CLOSURE DEFECTS FIXED — START HERE
+## 2026-09-27 EVENING (Opus 5.5, session 7 continued) — DIRECTION CHANGED: TICKETS DIRECT, THE LOOP TESTED ON VERSIONED TOY CASES — START HERE
+
+- **Head: see `git log`; nothing pushed. Suite 3725/0.** No run is live.
+- **The user's decisions today, all recorded:** the receiver-questions proposed port APPROVED and ported (`e4c92306`: one type authority in Java's resolution order; JDK index shared with discovery; the project's dependency classpath in the loop). Process work lives apart from the product (`process/`, `meta_process.md` M-E; memory `feedback_process_apart_from_product`). The loop is information-starved ("b") -> **T4-EA built** (`63ed8499`: a target may carry `bootstrap/briefing/`, selected per prompt; `scripts/briefing_from_ticket.py` from git at origin-rev) -- its A/B NOT yet run. **M-F: roadmap tickets are developed directly; the loop is tested separately on toy cases, output measured not ported** (memory `feedback_tickets_direct_loop_as_toy_cases`). **Toy cases are versioned** (`99375c14`, `scripts/toycase_version.py`; history reconstructed from git; preflight records `toycase=<t> v<N>`).
+- **Also built:** `members: <glob> except <names>` (`f4e7cdbb`) for toy cases that extend an entry point; retro packets for criterion-status and stuck-questions (closed as ordinary code under M-F).
+- **Firestarter regressions today:** `19-22-57` GOAL_FULFILLED 23/23 (clean). `19-00-13` is INVALID (Docker OOM-killed while review agents and packet builds ran beside it -- `INVALID.txt` in its archive; never run builds or agents beside a live run).
+- **Next, in order:** (1) ticket work directly: the stuck-questions assessor's findings on `StuckQuestions` (look up javac-reported types by full name; accept interface/enum in the CONSTRUCTOR/OVERLOADS patterns; overloads of every visibility; varargs; no duplicate record constructor) -- probes already in `process/ports/stuck-router/`; (2) T4-EA's A/B as a toy-case measurement (receiver-questions v4 with and without the briefing, 3+3, alternating, one build); (3) back to the roadmap queue (`scripts/next_work.py`).
+
+## 2026-09-27 NIGHT (Opus 5.5, session 7 continued, "continue without asking ... make this application productive and self-sustainable") — TERMINAL AGENT WIRED; THE LOOP BUILT ITS OWN NEXT RULE; TWO CLOSURE DEFECTS FIXED
 
 - **Head: see `git log`; nothing pushed. Suite 3714/0.** No run is live.
 - **User decisions acted on:** structure first -> two lookups (`8cff94ab`, 5/5 on the frozen questions); T4-DZ stays separate; javac = compile, never execute; the agent's Q&A in the GRAPH; slice-B decisions confirmed. Then "Yes, please" -> **T4-DZ wired (`e8f33e48`)** as BUILD question 4 (after names, failing line, whole file): `ReadOnlyCopy` + `TerminalAgent` + `TerminalAgentRecorder`; Java port 4/6 against the model at temperature 0. Firestarter regressions on these builds: 23/23 each (`19-42`, `20-20`, `22-30`).

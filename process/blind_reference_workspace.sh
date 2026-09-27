@@ -2,13 +2,13 @@
 # blind_reference_workspace.sh -- an isolated workspace in which an independent writer (a fresh agent that
 # has seen neither the loop's code nor the session's port) implements a ticket toy case from exactly what
 # the loop had: the pristine module at bootstrap/origin-rev, the seed, and the specification tests.
-# Its result is the REFERENCE in the operator's port review (design/ports/<target>/).
+# Its result is the REFERENCE in the operator's port review (process/ports/<target>/).
 #
 # No git history, no run data, no Autobuilder sources: the workspace is a plain directory outside the
 # repository. What the writer must not read is stated in TASK.md; this machine cannot enforce it, so the
 # review packet records that limit.
 #
-# Usage: scripts/blind_reference_workspace.sh <target> [dest-dir]   (default ~/.autobuilder/blind/<target>-<stamp>)
+# Usage: process/blind_reference_workspace.sh <target> [dest-dir]   (default ~/.autobuilder/blind/<target>-<stamp>)
 set -euo pipefail
 TGT="${1:?usage: blind_reference_workspace.sh <target> [dest-dir]}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

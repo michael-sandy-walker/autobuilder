@@ -360,7 +360,7 @@ def find_dead_deps(tickets):
 # stands. One tag line per loop-built slice, in the ticket's own appends; a later line for the same
 # target and run supersedes an earlier one (append, never rewrite). The operator reviews every port
 # (2026-09-27: "the review stage should be done by me ... followed by the decision if the porting goes
-# through or not"), from the packet in design/ports/<target>/.
+# through or not"), from the packet in process/ports/<target>/.
 #   LOOP-BUILT: <target> run <run-id>, yardstick <n/m>, ... -- PORT: <state> [details]
 # states: awaiting-review | ported-unreviewed (ported before the review stage existed) |
 #         approved (review passed, port pending) | ported (reviewed and in src/) | declined
@@ -428,7 +428,7 @@ def digest(tickets, args, out):
     if not waiting:
         write("  none\n")
     for b in waiting:
-        write("  %s -- %s run %s: %s %s\n      packet: design/ports/%s/\n"
+        write("  %s -- %s run %s: %s %s\n      packet: process/ports/%s/\n"
               % (b["id"], b["target"], b["run"], PORT_OPEN[b["state"]], b["rest"][:120], b["target"]))
 
     live = [t for t in tickets if t["marker"] in LIVE_MARKERS]

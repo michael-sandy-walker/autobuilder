@@ -1,6 +1,6 @@
 #!/bin/bash
 # differential.sh <module-dir> <out.tsv> -- the stuck router's answers to every archived signature
-# (differential-signatures.tsv), from the StuckQuestions in <module-dir>. Used by scripts/port_review.py.
+# (differential-signatures.tsv), from the StuckQuestions in <module-dir>. Used by process/port_review.py.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 MOD="$1"; OUT="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"

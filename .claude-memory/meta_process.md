@@ -129,3 +129,24 @@ Net: wave 2 needs **no Fable 5 session** on current reads — its intelligent co
   - **DoD:** `find_warnings` distinguishes the two reverse cases and warns only on the second; the candidate set is audited body-by-body with each ticket either re-opened or its prose corrected; the count that ends up quoted is the audited one, never the grep; and `T4-DK`'s appended finding is reachable from the live queue.
   - **Tier note:** `M-` — this is the development process (how YOU+ME pick work), not a product capability. Sits beside [[M-C]], which built the selection mechanism this extends.
   - **CLOSED 2026-09-08 (Phase 2 plan 02-02) — all four DoD clauses met on the `.planning/` surface; see `.planning/phases/01-queue-integrity/`.** (1) `find_warnings()` gained the reverse `closed-with-residual` direction, gated by `claims_own_residual(line)` AND `not declines_build(body)` — distinguishing a body that asserts its own remaining work from one that declines the build (Phase 1 plan 01-01). (2) The candidate set was audited body-by-body in `.planning/phases/01-queue-integrity/01-AUDIT.md`: population read 17 (all five closed kinds) — 2 REOPEN (`T4-CK`, `T5-BD`), 7 CORRECT, 8 NO EDIT, plus `T2-FH` ACKNOWLEDGE outside this candidate set (Phase 1 plan 01-02). (3) The audited disposition counts are what gets quoted from here on, never the text-scan number — the scan itself returns 17 over all five closed kinds, or 16 over the `[x]`-only population (one fewer, since `T4-DK` had already left that population the same day it was filed); `01-AUDIT.md`'s own scan-header records both readings and why they differ. (4) `T4-DK`'s appended finding is reachable from the live queue, demonstrated in `.planning/phases/01-queue-integrity/01-03-SUMMARY.md`'s QUEUE-03 check. **Repeating the warning this ticket itself carries: the population figure is a candidate set, not a count — quote the audited dispositions above, never a bare scan total.**
+
+## M-E — The port review stage: loop-built ticket code reaches `src/` only on the operator's approval
+
+**Filed 2026-09-27 on the user's decisions** ("the review stage should be done by me ... which then needs
+approval, followed by the decision if the porting goes through or not"), and **moved here from T4-CF the same
+day** on the user's word: "the meta tasks are directly implemented as code ... it's mixed together". The review
+stage is how the operator and the session work, not what Autobuilder does, so its record lives on this axis and
+its tools in `process/`, apart from the product's `scripts/` and `src/`.
+
+- **Flow:** the run's artifact is archived durably (a product concern: `preflight.sh`'s run archive) -> a blind
+  reference (`process/blind_reference_workspace.sh`) -> a measured packet (`process/port_review.py` ->
+  `process/ports/<target>/REVIEW.md`) -> an independent assessment (a fresh agent) -> a page with a Decision list ->
+  the operator decides -> only then a commit to `src/`.
+- **State per slice:** the `LOOP-BUILT: ... -- PORT: <state>` tag on the product ticket the code belongs to
+  (the port changes that ticket's code); `scripts/next_work.py` lists the open ones.
+- **Decided so far:** receiver-questions -- the proposed port approved and ported (`e4c92306`). criterion-status and
+  stuck-questions -- retro packets published, decisions open.
+- **Known limit, raised by the user 2026-09-27:** the "blind" reference is a subagent of the session; it very likely
+  receives the project's CLAUDE.md and memory index as context, so it is instructed-blind, not information-equal.
+  The user's reading of the gap (option b): the fault is on the loop's side -- the LOOP is information-starved
+  compared with any developer; that is a product change, filed on T4-CF, not here.

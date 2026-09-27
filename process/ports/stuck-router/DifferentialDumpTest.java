@@ -13,7 +13,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Port review instrument (design/ports/stuck-router): asks this module's StuckQuestions every archived
+ * Port review instrument (process/ports/stuck-router): asks this module's StuckQuestions every archived
  * signature and writes one line per signature -- kind, type, member, meant, declared -- so versions of the
  * class can be compared on inputs beyond their specification. Copied into a module copy by
  * differential.sh; never part of any suite.

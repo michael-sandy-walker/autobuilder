@@ -10,9 +10,9 @@ reviewed it and approved. The session prepares, never decides:
    the ticket gets a tag line `LOOP-BUILT: <target> run <run>, yardstick <n/m>, ... -- PORT: <state>`
    (`awaiting-review | ported-unreviewed | approved | ported | declined`); `scripts/next_work.py` lists the
    open ones under "LOOP-BUILT: WAITING FOR THE OPERATOR".
-2. A BLIND reference: `scripts/blind_reference_workspace.sh <target>` + a fresh agent that sees only the
+2. A BLIND reference: `process/blind_reference_workspace.sh <target>` + a fresh agent that sees only the
    pristine module, the seed and the spec (instructed, not enforced -- say so in the packet).
-3. `scripts/port_review.py` writes `design/ports/<target>/REVIEW.md`: the four versions (origin, loop, reference,
+3. `process/port_review.py` writes `process/ports/<target>/REVIEW.md`: the four versions (origin, loop, reference,
    port), suite results, size/churn/tables, and behaviour beyond the spec (a differential over archived inputs
    plus labelled probes). No opinion in it.
 4. A second fresh agent writes `ASSESSMENT.md` (better/worse) -- the session that wrote the spec and the port

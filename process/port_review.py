@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The operator's port review packet for a loop-built ticket solution (design/ports/<target>/REVIEW.md).
+"""The operator's port review packet for a loop-built ticket solution (process/ports/<target>/REVIEW.md).
 
 The operator reviews every port (2026-09-27: "the review stage should be done by me ... which then needs
 approval, followed by the decision if the porting goes through or not"). This lays four versions of the
@@ -9,12 +9,12 @@ assessment is a separate section, written by an independent comparer, and the de
   origin     the class at the toy case's bootstrap/origin-rev (what the loop was given)
   loop       what the loop wrote (run-archive/<run>/artifact-src.tar.gz)
   reference  an independent implementation by a writer that saw neither of the others
-             (scripts/blind_reference_workspace.sh)
+             (process/blind_reference_workspace.sh)
   port       what is (or would be) in Autobuilder's src/ (a commit, or a proposed file)
   proposed   optional: a change proposed after review, not in src/ (--proposed-file, with any other
              file it needs in the module copy via --proposed-extra <source>:<path in the module>)
 
-Usage: scripts/port_review.py --target T --run RUN --reference DIR [--port-commit C | --port-file F]
+Usage: process/port_review.py --target T --run RUN --reference DIR [--port-commit C | --port-file F]
                               [--differential SCRIPT] [--state STATE]
 """
 import argparse
@@ -173,7 +173,7 @@ def main():
             src, dest = spec_.split(':', 1)
             extras[dest] = open(src).read()
 
-    out_dir = os.path.join(ROOT, 'design', 'ports', a.target)
+    out_dir = os.path.join(ROOT, 'process', 'ports', a.target)
     os.makedirs(out_dir, exist_ok=True)
     for k, v in versions.items():
         os.makedirs(os.path.join(out_dir, k), exist_ok=True)

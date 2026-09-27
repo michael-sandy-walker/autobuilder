@@ -36,6 +36,10 @@ public class BriefingSource {
     @Autowired(required = false)
     private FileService fileService;
 
+    /** Off only to MEASURE the briefing (T4-EA's A/B): the same toy case, with and without it. */
+    @Value("${autobuilder.briefing.enabled:true}")
+    private boolean enabled = true;
+
     /** Share of the prompt's free headroom a briefing may take, and its ceiling in tokens. */
     @Value("${autobuilder.briefing.headroom-share:0.25}")
     private double headroomShare = 0.25;
@@ -47,6 +51,7 @@ public class BriefingSource {
 
     /** The briefing block for a prompt about {@code about}, given the prompt's free headroom; null when none. */
     public String block(String about, int headroomTokens) {
+        if (!enabled) return null;
         Briefing b = briefing();
         if (b.isEmpty()) return null;
         int budget = (int) Math.min(maxTokens, Math.max(0, headroomTokens) * headroomShare);

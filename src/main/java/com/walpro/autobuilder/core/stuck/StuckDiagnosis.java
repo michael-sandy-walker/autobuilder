@@ -47,14 +47,20 @@ public final class StuckDiagnosis {
      * structural question for a signature was asked and the signature came back; null when there is none.
      */
     public record Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed,
-                              Observer observer) {
+                              Observer observer, StuckQuestions.TypeAuthority types) {
         public Authorities {
             currentSources = currentSources == null ? Map.of() : currentSources;
             adoptedSources = adoptedSources == null ? Map.of() : adoptedSources;
+            types = types == null ? StuckQuestions.TypeAuthority.platform() : types;
         }
 
         public Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed) {
-            this(currentSources, adoptedSources, seed, null);
+            this(currentSources, adoptedSources, seed, null, null);
+        }
+
+        public Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed,
+                           Observer observer) {
+            this(currentSources, adoptedSources, seed, observer, null);
         }
     }
 
@@ -98,8 +104,8 @@ public final class StuckDiagnosis {
     static Asked declared(String signature, Authorities a) {
         String question = "What does the code declare for the name this failure is about?";
         String authority = "structure: the current tree and the adopted original";
-        Optional<StuckQuestions.Answer> now = StuckQuestions.answer(signature, a.currentSources());
-        Optional<StuckQuestions.Answer> adopted = StuckQuestions.answer(signature, a.adoptedSources());
+        Optional<StuckQuestions.Answer> now = StuckQuestions.answer(signature, a.currentSources(), a.types());
+        Optional<StuckQuestions.Answer> adopted = StuckQuestions.answer(signature, a.adoptedSources(), a.types());
         if (now.isEmpty() && adopted.isEmpty()) return new Asked(question, authority, null, false);
         StringBuilder sb = new StringBuilder();
         String meant = meantByImports(signature, now.or(() -> adopted).get(), a);

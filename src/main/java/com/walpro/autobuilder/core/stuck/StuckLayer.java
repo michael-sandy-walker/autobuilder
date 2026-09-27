@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.stuck;
 
 import com.walpro.autobuilder.core.build.ProtectedPaths;
+import com.walpro.autobuilder.core.build.StuckQuestions;
 import com.walpro.autobuilder.core.checkpoint.StateBucket;
 import com.walpro.autobuilder.core.checkpoint.StateHolder;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
@@ -51,6 +52,10 @@ public class StuckLayer {
 
     @Autowired(required = false)
     private FileService fileService;
+
+    /** Which class a type name denotes: the JDK and the project's own classpath; optional (JDK only without it). */
+    @Autowired(required = false)
+    private ProjectTypeAuthority projectTypeAuthority;
 
     /** T4-DZ: the observation authority, asked after structure; optional. */
     @Autowired(required = false)
@@ -152,7 +157,10 @@ public class StuckLayer {
                     if (terminalAgentRecorder != null) terminalAgentRecorder.attribute(context);
                     return terminalAgent.ask(signature, evidence, live, lastChange.getOrDefault(signature, Map.of()), cycle);
                 };
-        StuckDiagnosis.Authorities authorities = new StuckDiagnosis.Authorities(live, adoptedSources(), seed(), observer);
+        StuckQuestions.TypeAuthority types = projectTypeAuthority == null || context == null || context.outputPath() == null
+                ? StuckQuestions.TypeAuthority.platform()
+                : projectTypeAuthority.forProject(java.nio.file.Path.of(context.outputPath()));
+        StuckDiagnosis.Authorities authorities = new StuckDiagnosis.Authorities(live, adoptedSources(), seed(), observer, types);
         boolean changed = false;
         for (StuckLedger.Entry e : ledger.pending()) {
             changed = true;

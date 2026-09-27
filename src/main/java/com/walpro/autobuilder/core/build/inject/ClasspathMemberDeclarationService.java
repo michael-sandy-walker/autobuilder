@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.core.build.inject;
 
+import com.walpro.autobuilder.core.build.JdkPlatformTypeIndex;
+
 import com.walpro.autobuilder.core.build.ProjectClasspathService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

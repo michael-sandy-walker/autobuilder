@@ -1,4 +1,4 @@
-package com.walpro.autobuilder.core.build.inject;
+package com.walpro.autobuilder.core.build;
 
 import org.junit.jupiter.api.Test;
 

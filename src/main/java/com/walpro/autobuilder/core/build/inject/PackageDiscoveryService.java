@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.core.build.inject;
 
+import com.walpro.autobuilder.core.build.JdkPlatformTypeIndex;
+
 import com.walpro.autobuilder.core.build.ProjectClasspathService;
 import com.walpro.autobuilder.core.build.inject.SymbolImportLookupService.Resolution;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
@@ -342,8 +344,11 @@ public class PackageDiscoveryService {
         return jars;
     }
 
-    /** FQN → providing-jar-path for every top-level class named {@code simpleName} on the classpath. */
-    private static Map<String, String> scanJarsForType(List<String> jars, String simpleName) {
+    /**
+     * FQN → providing-jar-path for every top-level class named {@code simpleName} on the classpath. Public:
+     * the stuck router's project type authority reads the classpath through this same scan (2026-09-27).
+     */
+    public static Map<String, String> scanJarsForType(List<String> jars, String simpleName) {
         String needle = "/" + simpleName + ".class";
         String rootNeedle = simpleName + ".class";
         Map<String, String> hits = new LinkedHashMap<>();

@@ -1,6 +1,4 @@
-package com.walpro.autobuilder.core.build.inject;
-
-import lombok.extern.slf4j.Slf4j;
+package com.walpro.autobuilder.core.build;
 
 import java.io.IOException;
 import java.lang.module.ModuleDescriptor;
@@ -19,7 +17,7 @@ import java.util.stream.Collectors;
  * used to resolve to whatever jar happened to republish the simple name (field-observed 2026-07-08/09:
  * {@code org.apache.el.stream.Optional} from a transitive {@code tomcat-embed-el}, injected across
  * six files plus a pom dependency, churning until an unrelated rewrite dropped it). This index makes
- * the platform's own vocabulary visible to {@link PackageDiscoveryService} the same way the resolved
+ * the platform's own vocabulary visible to {@code PackageDiscoveryService} the same way the resolved
  * classpath is: discovered live from the running JDK ({@link ModuleFinder#ofSystem()}), never a
  * hardcoded package list.
  *
@@ -28,9 +26,14 @@ import java.util.stream.Collectors;
  * module every Java program requires implicitly (JPMS: all modules read {@code java.base}) — its
  * names are the language's core vocabulary, which is what makes a unique {@code java.base} match
  * strong enough to act on while other modules' names only participate as an ambiguity observation.
+ *
+ * <p>2026-09-27: moved from {@code core.build.inject} and made public, so the stuck router's type
+ * authority ({@link StuckQuestions.TypeAuthority}) reads the SAME index instead of its own second scan of
+ * the runtime image. Logging through {@link System.Logger}, so the class has no dependency beyond the JDK.
  */
-@Slf4j
-final class JdkPlatformTypeIndex {
+public final class JdkPlatformTypeIndex {
+
+    private static final System.Logger LOG = System.getLogger(JdkPlatformTypeIndex.class.getName());
 
     private record Index(Map<String, Set<String>> all, Map<String, Set<String>> base,
                          Map<String, Set<String>> byPackage) {}
@@ -40,13 +43,13 @@ final class JdkPlatformTypeIndex {
     private JdkPlatformTypeIndex() {}
 
     /** FQNs of exported top-level platform types with this simple name, across all system modules. */
-    static Set<String> exportedTypes(String simpleName) {
+    public static Set<String> exportedTypes(String simpleName) {
         if (simpleName == null || simpleName.isBlank()) return Set.of();
         return index().all().getOrDefault(simpleName, Set.of());
     }
 
     /** The {@code java.base} subset of {@link #exportedTypes(String)}. */
-    static Set<String> javaBaseTypes(String simpleName) {
+    public static Set<String> javaBaseTypes(String simpleName) {
         if (simpleName == null || simpleName.isBlank()) return Set.of();
         return index().base().getOrDefault(simpleName, Set.of());
     }
@@ -56,7 +59,7 @@ final class JdkPlatformTypeIndex {
      * lookup needs the package's whole membership, which the simple-name maps cannot answer;
      * it comes from the same module walk rather than a second pass over the runtime image.
      */
-    static Set<String> typesInPackage(String packageName) {
+    public static Set<String> typesInPackage(String packageName) {
         if (packageName == null || packageName.isBlank()) return Set.of();
         return index().byPackage().getOrDefault(packageName, Set.of());
     }
@@ -106,13 +109,13 @@ final class JdkPlatformTypeIndex {
                     }
                 });
             } catch (IOException e) {
-                log.debug("T4-BM: unreadable system module {} — {}", descriptor.name(), e.getMessage());
+                LOG.log(System.Logger.Level.DEBUG, "T4-BM: unreadable system module {0} -- {1}", descriptor.name(), e.getMessage());
             }
         }
         all.replaceAll((k, v) -> Set.copyOf(v));
         base.replaceAll((k, v) -> Set.copyOf(v));
         byPackage.replaceAll((k, v) -> Set.copyOf(v));
-        log.info("T4-BM: JDK platform type index built ({} simple names, {} in java.base, {}ms)",
+        LOG.log(System.Logger.Level.INFO, "T4-BM: JDK platform type index built ({0} simple names, {1} in java.base, {2}ms)",
                 all.size(), base.size(), System.currentTimeMillis() - start);
         return new Index(Map.copyOf(all), Map.copyOf(base), Map.copyOf(byPackage));
     }

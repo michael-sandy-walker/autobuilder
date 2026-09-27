@@ -113,6 +113,7 @@ How to work:
 - `feedback_operator_reviews_ports.md`: IF a loop-built solution is ever ported, the user reviews a packet first (process/, M-E); since M-F ports are off the default path. (reviewed 2026-09-27)
 - `feedback_process_apart_from_product.md`: how we work (reviews, packets, session tooling) lives in meta_process.md + process/, never as product tickets or in src/ / scripts/. (reviewed 2026-09-27)
 - `feedback_tickets_direct_loop_as_toy_cases.md`: implement tickets directly; the loop is tested separately on VERSIONED toy cases, output measured not ported. (reviewed 2026-09-27)
+- `feedback_local_means_no_call_cost.md`: local model -- LLM call/token cost is no constraint; wall-clock time, context size and box memory still are. (reviewed 2026-09-27)
 - `feedback_never_edit_a_running_script.md`: never edit preflight.sh (or what it reads) mid-run, and a git merge/rebase/checkout counts as an edit — bash reads scripts incrementally, so edits land half-applied and silently. (reviewed 2026-09-24)
 - `feedback_no_heavy_mvn_beside_a_live_run.md`: a full suite beside a live run starves the box and kills the run via Neo4j timeouts. (reviewed 2026-09-08)
 - `feedback_flag_ceremony_cost_early.md`: when process costs more than the task, say so BEFORE running it. (reviewed 2026-09-08)

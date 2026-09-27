@@ -19,11 +19,40 @@ The four versions are in `origin/`, `loop/`, `reference/`, `port/` beside this f
 
 ### Behaviour beyond the specification
 
-Every input of `design/ports/stuck-router/differential.sh`, answered by each version. Listed: the inputs where the versions do NOT all agree (44 inputs in all).
+Every input of `design/ports/stuck-router/differential.sh`, answered by each version. Listed: the inputs where the versions do NOT all agree (50 inputs in all).
 
 Not listed: 44 input(s) where loop, reference and port agree with each other but differ from origin (the change itself); their answers are in `<version>/differential.tsv`.
 
-None: loop, reference and port answer every input identically.
+- `the build fails: T.java: constructor P in record a.P cannot be applied to given types;` (tree `explicit-record`)
+  - origin: `(threw UnsupportedOperationException)`
+  - loop: `CONSTRUCTOR | P | null | meant=null | [P(int x), P(int x)]`
+  - reference: `CONSTRUCTOR | P | null | meant=null | [P(int x)]`
+  - port: `CONSTRUCTOR | P | null | meant=null | [P(int x), P(int x)]`
+- `the build fails: T.java: method put in class a.Box<T> cannot be applied to given types;` (tree `generic-box`)
+  - origin: `(threw UnsupportedOperationException)`
+  - loop: `OVERLOADS | Box | put | meant=null | [put(T t), put(T t, int i)]`
+  - reference: `(no answer)`
+  - port: `OVERLOADS | Box | put | meant=null | [put(T t), put(T t, int i)]`
+- `the build fails: T.java: method m in interface a.Shape cannot be applied to given types;` (tree `iface`)
+  - origin: `(threw UnsupportedOperationException)`
+  - loop: `(no answer)`
+  - reference: `OVERLOADS | Shape | m | meant=null | [m(int x)]`
+  - port: `(no answer)`
+- `the build fails: Foo has no bar()` (tree `main-test-dup`)
+  - origin: `(threw UnsupportedOperationException)`
+  - loop: `MEMBERS | Foo | bar | meant=null | [qux()]`
+  - reference: `(no answer)`
+  - port: `MEMBERS | Foo | bar | meant=null | [baz()]`
+- `the build fails: T.java: method bar in class a.Foo cannot be applied to given types;` (tree `overloads-vis`)
+  - origin: `(threw UnsupportedOperationException)`
+  - loop: `OVERLOADS | Foo | bar | meant=null | [bar(String s)]`
+  - reference: `OVERLOADS | Foo | bar | meant=null | [bar(int a), bar(String... s)]`
+  - port: `OVERLOADS | Foo | bar | meant=null | [bar(String s)]`
+- `the build fails: T.java: constructor Foo in record b.y.Foo cannot be applied to given types;` (tree `two-pkgs`)
+  - origin: `(threw UnsupportedOperationException)`
+  - loop: `CONSTRUCTOR | Foo | null | meant=null | [Foo(int n)]`
+  - reference: `CONSTRUCTOR | Foo | null | meant=null | [Foo(String s)]`
+  - port: `CONSTRUCTOR | Foo | null | meant=null | [Foo(int n)]`
 
 ## Diffs
 

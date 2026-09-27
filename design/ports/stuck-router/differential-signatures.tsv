@@ -49,3 +49,10 @@ probe	imports-util	the build fails: List has no getFirstItem()
 probe	imports-foreign	the build fails: Module has no configure()
 probe	imports-foreign	the build fails: Base64 has no decodeBase64(String)
 probe	none	the build fails: Quill.java: cannot find symbol method indexOf(Quill) in variable active of type java.util.Map<java.lang.String,org.ink.Quill>
+# Probes added 2026-09-27 from the stuck-questions assessment (constructor/overload/member shapes the archive lacks).
+probe	two-pkgs	the build fails: T.java: constructor Foo in record b.y.Foo cannot be applied to given types;
+probe	generic-box	the build fails: T.java: method put in class a.Box<T> cannot be applied to given types;
+probe	iface	the build fails: T.java: method m in interface a.Shape cannot be applied to given types;
+probe	overloads-vis	the build fails: T.java: method bar in class a.Foo cannot be applied to given types;
+probe	explicit-record	the build fails: T.java: constructor P in record a.P cannot be applied to given types;
+probe	main-test-dup	the build fails: Foo has no bar()

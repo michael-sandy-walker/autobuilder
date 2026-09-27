@@ -42,3 +42,9 @@ imports-util	the build fails: List has no getFirstItem()	(no answer)
 imports-foreign	the build fails: Module has no configure()	(no answer)
 imports-foreign	the build fails: Base64 has no decodeBase64(String)	(no answer)
 none	the build fails: Quill.java: cannot find symbol method indexOf(Quill) in variable active of type java.util.Map<java.lang.String,org.ink.Quill>	(no answer)
+two-pkgs	the build fails: T.java: constructor Foo in record b.y.Foo cannot be applied to given types;	CONSTRUCTOR | Foo | null | meant=null | [Foo(int n)]
+generic-box	the build fails: T.java: method put in class a.Box<T> cannot be applied to given types;	OVERLOADS | Box | put | meant=null | [put(T t), put(T t, int i)]
+iface	the build fails: T.java: method m in interface a.Shape cannot be applied to given types;	(no answer)
+overloads-vis	the build fails: T.java: method bar in class a.Foo cannot be applied to given types;	OVERLOADS | Foo | bar | meant=null | [bar(String s)]
+explicit-record	the build fails: T.java: constructor P in record a.P cannot be applied to given types;	CONSTRUCTOR | P | null | meant=null | [P(int x), P(int x)]
+main-test-dup	the build fails: Foo has no bar()	MEMBERS | Foo | bar | meant=null | [baz()]

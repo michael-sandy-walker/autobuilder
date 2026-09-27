@@ -22,6 +22,20 @@ class DifferentialDumpTest {
 
     private static Map<String, String> tree(String project) throws Exception {
         if (project.equals("none")) return Map.of("src/main/java/org/ink/Quill.java", "package org.ink;\npublic record Quill(String nib) {}\n");
+        // Probe trees from the stuck-questions assessment (2026-09-27), one shape each.
+        if (project.equals("two-pkgs")) return new java.util.LinkedHashMap<>(Map.of(
+                "src/main/java/a/x/Foo.java", "package a.x;\npublic record Foo(int n) {}\n",
+                "src/main/java/b/y/Foo.java", "package b.y;\npublic record Foo(String s) {}\n"));
+        if (project.equals("generic-box")) return Map.of("src/main/java/a/Box.java",
+                "package a;\npublic class Box<T> {\n  public void put(T t) {}\n  public void put(T t, int i) {}\n}\n");
+        if (project.equals("iface")) return Map.of("src/main/java/a/Shape.java", "package a;\npublic interface Shape {\n  void m(int x);\n}\n");
+        if (project.equals("overloads-vis")) return Map.of("src/main/java/a/Foo.java",
+                "package a;\npublic class Foo {\n  void bar(int a) {}\n  public void bar(String... s) {}\n}\n");
+        if (project.equals("explicit-record")) return Map.of("src/main/java/a/P.java",
+                "package a;\npublic record P(int x) {\n  public P(int x) { this.x = x; }\n}\n");
+        if (project.equals("main-test-dup")) return new java.util.LinkedHashMap<>(Map.of(
+                "src/main/java/a/Foo.java", "package a;\npublic class Foo {\n  public int baz() { return 1; }\n}\n",
+                "src/test/java/a/Foo.java", "package a;\npublic class Foo {\n  public int qux() { return 2; }\n}\n"));
         // A project that imports java.util.List: the import is what says which List it means.
         if (project.equals("imports-util")) return Map.of(
                 "src/main/java/org/ink/Well.java", "package org.ink;\nimport java.util.List;\npublic class Well { List<String> drops; }\n");

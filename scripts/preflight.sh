@@ -266,6 +266,15 @@ run_live() {
     run_dir="/tmp/preflight_runs/$stamp"
     mkdir -p "$run_dir"
     echo "target=$target_name" > "$run_dir/target.txt"
+    # Which VERSION of the toy case this run faced (scripts/toycase_version.py; the user, 2026-09-27: toy cases
+    # are versioned, so runs stay comparable as the code they are cut from moves on). A bootstrap changed
+    # without a new version is recorded as such, never silently as the old version.
+    if toycase=$(python3 "$(dirname "$0")/toycase_version.py" check "$target_name" 2>/dev/null); then
+        echo "$toycase" >> "$run_dir/target.txt"
+    else
+        echo "${toycase:-toycase=$target_name unversioned}" >> "$run_dir/target.txt"
+        say "WARNING: ${toycase:-$target_name has no toy-case version} -- run scripts/toycase_version.py bump $target_name --reason ..."
+    fi
 
     guard_no_jvm
     probe_model || fail_out
@@ -674,7 +683,7 @@ PYSTART
         done
         # The code the run wrote, as sources (build output excluded, a few KB): the only copy that
         # outlives the next run of this target and a reboot. A loop-built solution waiting for the
-        # operator's port review is read from here (design/ports/), never from data/<target>/output,
+        # operator's port review is read from here (process/ports/), never from data/<target>/output,
         # which the next run replaces. Before 2026-09-27 such trees survived only when a session
         # moved them aside by hand.
         for tree in artifact preserved-artifact; do

@@ -1,0 +1,45 @@
+# Every distinct archived stuck signature (grind corpus of 2026-09-24/25 via StuckQuestionsArchiveReplayTest, plus
+# the receiver-questions archive signatures), with the packed tree (stuck/trees.zip) its run had: run 	 tree 	 signature.
+# "none" = a one-file unrelated tree. The input of the stuck router's differential behaviour check in port reviews.
+2026-09-24_22-23-05	structdiff	the build fails: ParsedElement has no getType()
+2026-09-24_22-23-05	structdiff	the build fails: ParsedElement has no getId()
+2026-09-24_22-23-05	structdiff	the build fails: ParsedElement has no getChildren()
+2026-09-24_22-23-05	structdiff	the build fails: StructuralDiffNode has no getChildren()
+2026-09-25_03-54-52	structdiff	the build fails: StructuralJavaDiffBuilderTest.java: method diffJavaFile in class com.walpro.autobuilder.analysis.diff.builder.StructuralJavaDiffBuilder cannot be applied to given types;
+2026-09-25_07-31-46	structdiff	the build fails: StructuralDiffUtilsTest.java: cannot find symbol variable ChangeKind in class StructuralDiffNode
+2026-09-25_08-29-53	structdiff	the build fails: StructuralDiffTest.java: method diffJavaFile in class com.walpro.autobuilder.analysis.diff.builder.StructuralJavaDiffBuilder cannot be applied to given types;
+2026-09-25_08-29-53	structdiff	the build fails: StructuralDiffNode has no addChild(com.walpro.autobuilder.analysis.diff.model.StructuralDiffNode)
+2026-09-25_08-29-53	structdiff	the build fails: StructuralDiffUtilsFlattenTest.java: error: constructor ElementDescriptor in record com.walpro.autobuilder.analysis.diff.model.ElementDescriptor cannot be applied to given types;
+2026-09-25_08-29-53	structdiff	the build fails: StructuralDiffNode has no createChild(com.walpro.autobuilder.analysis.diff.model.ElementType,java.lang.String,<nulltype>,<nulltype>,<nulltype>)
+2026-09-25_19-57-35	participation	the build fails: ParticipationWindows.java: cannot find symbol method indexOf(ParticipationWindow) in record component active of type Map<String,ParticipationWindow>
+2026-09-25_20-26-27	participation	the build fails: ParticipationWindows.java: incompatible types: no instance(s) of type variable(s) E exist so that java.util.List<E> conforms to int
+2026-09-25_20-51-35	participation	the build fails: ParticipationWindows.java: cannot find symbol variable Collections in class ParticipationWindows
+2026-09-25_20-51-35	participation	the build fails: ParticipationWindows.java: cannot find symbol variable List in class ParticipationWindows
+2026-09-25_20-51-35	participation	the build fails: ParticipationWindows.java: cannot find symbol class List in class ParticipationWindows
+2026-09-25_20-51-35	participation	the build fails: ParticipationWindows.java: cannot find symbol class ArrayList in class ParticipationWindows
+2026-09-25_20-51-35	participation	the build fails: ParticipationWindows.java: cannot find symbol class LinkedHashMap in class ParticipationWindows
+2026-09-25_20-51-35	participation	the build fails: ParticipationWindows.java: incompatible types: inference variable E has incompatible bounds
+2026-09-25_20-51-35	participation	the build fails: ChannelRequest.java: constructor ChannelRequest in record com.walpro.autobuilder.core.lifecycle.ChannelRequest cannot be applied to given types;
+2026-09-25_20-51-35	participation	the build fails: ChannelRequest.java: cannot find symbol class HashMap in class ChannelRequest
+2026-09-25_20-51-35	participation	the build fails: ChannelRequest.java: cannot find symbol variable subGoalId in class ChannelRequest
+2026-09-25_20-51-35	participation	the build fails: ChannelRequest.java: cannot find symbol variable subGoalId in variable other of type ChannelRequest
+2026-09-25_20-51-35	participation	the build fails: ChannelRequest.java: cannot find symbol class List in class ChannelRequest
+2026-09-25_20-51-35	participation	write to src/test/java/com/walpro/autobuilder/core/lifecycle/ChannelRequestTest.java refused: protected
+2026-08-28_05-27-49	none	the build fails: BufferStrategy has no next()
+2026-08-28_05-27-49	none	the build fails: GraphicsConfiguration has no createGraphics()
+2026-08-24_00-07-06	none	the build fails: Object has no getBookId()
+2026-09-01_00-17-05	none	the build fails: Object has no getEmail()
+2026-09-25_07-31-46	structdiff	the build fails: Object has no getId()
+2026-09-25_07-31-46	structdiff	the build fails: Object has no getType()
+2026-09-25_07-31-46	structdiff	the build fails: Object has no isModified()
+2026-08-22_02-54-35	none	the build fails: Object has no isReturned()
+2026-08-22_02-54-35	none	the build fails: Object has no setReturned(boolean)
+# Probes (DESIGNED inputs, not archived; added 2026-09-27 from the blind reference's own list of ambiguities):
+probe	none	the build fails: List has no getFirstItem()
+probe	none	the build fails: String has no getLength()
+probe	none	the build fails: Quill.java: method max in class java.lang.Math cannot be applied to given types;
+probe	none	the build fails: Plasma has no getHeat()
+# Probes added 2026-09-27 from the independent assessment: a type the project AND the JDK declare.
+probe	shadow	the build fails: Clock.java: cannot find symbol method stop() in record component t of type Timer
+probe	shadow	the build fails: Timer has no stop()
+probe	shadow	the build fails: Clock.java: cannot find symbol method decode(String) in record component code of type Base64

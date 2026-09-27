@@ -672,6 +672,16 @@ PYSTART
         for f in behaviour.ndjson autobuilder.log GoalStack.json; do
             [ -f "$run_dir/$f" ] && gzip -c "$run_dir/$f" > "$archive/$f.gz" 2>/dev/null
         done
+        # The code the run wrote, as sources (build output excluded, a few KB): the only copy that
+        # outlives the next run of this target and a reboot. A loop-built solution waiting for the
+        # operator's port review is read from here (design/ports/), never from data/<target>/output,
+        # which the next run replaces. Before 2026-09-27 such trees survived only when a session
+        # moved them aside by hand.
+        for tree in artifact preserved-artifact; do
+            [ -d "$run_dir/$tree" ] && tar czf "$archive/$tree-src.tar.gz" -C "$run_dir/$tree" \
+                --exclude=./target --exclude=./.git --exclude=./node_modules . 2>/dev/null
+        done
+        [ -f "$target/meta/stuck-ledger.json" ] && cp "$target/meta/stuck-ledger.json" "$archive/" 2>/dev/null
         say "archived run to $archive ($(du -sh "$archive" 2>/dev/null | cut -f1))"
     else
         say "WARNING: could not create $archive — this run's corpus stays in /tmp only"

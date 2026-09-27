@@ -356,6 +356,31 @@ def find_dead_deps(tickets):
     return out
 
 
+# A solution the LOOP built for a ticket (a ticket-driven toy case), and where its port into Autobuilder
+# stands. One tag line per loop-built slice, in the ticket's own appends; a later line for the same
+# target and run supersedes an earlier one (append, never rewrite). The operator reviews every port
+# (2026-09-27: "the review stage should be done by me ... followed by the decision if the porting goes
+# through or not"), from the packet in design/ports/<target>/.
+#   LOOP-BUILT: <target> run <run-id>, yardstick <n/m>, ... -- PORT: <state> [details]
+# states: awaiting-review | ported-unreviewed (ported before the review stage existed) |
+#         approved (review passed, port pending) | ported (reviewed and in src/) | declined
+LOOP_BUILT = re.compile(r"LOOP-BUILT: (\S+) run (\S+?),.*?PORT: ([a-z-]+)(.*)$")
+PORT_OPEN = {"awaiting-review": "waiting for the operator's review",
+             "ported-unreviewed": "in src/ WITHOUT the operator's review -- review it, or revert the port",
+             "approved": "approved -- the port itself is pending"}
+
+
+def loop_built(tickets):
+    latest = {}
+    for t in tickets:
+        for line in t["body"]:
+            m = LOOP_BUILT.search(line)
+            if m:
+                latest[(m.group(1), m.group(2))] = {"id": t["id"], "target": m.group(1), "run": m.group(2),
+                                                    "state": m.group(3), "rest": m.group(4).strip()}
+    return list(latest.values())
+
+
 def digest(tickets, args, out):
     write = out.write
     counts = {m: sum(1 for t in tickets if t["marker"] == m) for m in MARKER_NAMES}
@@ -396,6 +421,15 @@ def digest(tickets, args, out):
     for d in deps:
         write("  [%s] %s -> %s [%s]\n      %s\n" % (d["kind"], d["id"], d["depends_on"],
                                                     d["dep_marker"], d["line"]))
+
+    built = loop_built(tickets)
+    waiting = [b for b in built if b["state"] in PORT_OPEN]
+    write("\nLOOP-BUILT: WAITING FOR THE OPERATOR (%d of %d loop-built slice(s))\n" % (len(waiting), len(built)))
+    if not waiting:
+        write("  none\n")
+    for b in waiting:
+        write("  %s -- %s run %s: %s %s\n      packet: design/ports/%s/\n"
+              % (b["id"], b["target"], b["run"], PORT_OPEN[b["state"]], b["rest"][:120], b["target"]))
 
     live = [t for t in tickets if t["marker"] in LIVE_MARKERS]
     if args.tier:

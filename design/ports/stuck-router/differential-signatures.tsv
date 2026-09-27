@@ -43,3 +43,9 @@ probe	none	the build fails: Plasma has no getHeat()
 probe	shadow	the build fails: Clock.java: cannot find symbol method stop() in record component t of type Timer
 probe	shadow	the build fails: Timer has no stop()
 probe	shadow	the build fails: Clock.java: cannot find symbol method decode(String) in record component code of type Base64
+# Probe added 2026-09-27 with the proposed type authority: the same ambiguous name, in a project that imports java.util.List.
+probe	imports-util	the build fails: List has no getFirstItem()
+# Probes added 2026-09-27 from the independent assessment of the proposed version.
+probe	imports-foreign	the build fails: Module has no configure()
+probe	imports-foreign	the build fails: Base64 has no decodeBase64(String)
+probe	none	the build fails: Quill.java: cannot find symbol method indexOf(Quill) in variable active of type java.util.Map<java.lang.String,org.ink.Quill>

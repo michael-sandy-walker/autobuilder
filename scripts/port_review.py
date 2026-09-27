@@ -11,6 +11,8 @@ assessment is a separate section, written by an independent comparer, and the de
   reference  an independent implementation by a writer that saw neither of the others
              (scripts/blind_reference_workspace.sh)
   port       what is (or would be) in Autobuilder's src/ (a commit, or a proposed file)
+  proposed   optional: a change proposed after review, not in src/ (--proposed-file, with any other
+             file it needs in the module copy via --proposed-extra <source>:<path in the module>)
 
 Usage: scripts/port_review.py --target T --run RUN --reference DIR [--port-commit C | --port-file F]
                               [--differential SCRIPT] [--state STATE]
@@ -71,17 +73,22 @@ def metrics(origin, text):
             added += j2 - j1
     removed_comments = sum(1 for tag, i1, i2, _, _ in sm.get_opcodes() if tag in ('replace', 'delete')
                            for l in o[i1:i2] if l.strip().startswith(('//', '*', '/**')))
-    methods = lambda s: set(re.findall(r'^\s*(?:public|private|protected|static|\s)+[\w<>\[\], ?]+\s+(\w+)\s*\(', s, re.M))
+    keywords = {'return', 'new', 'if', 'for', 'while', 'switch', 'catch', 'throw', 'else', 'case'}
+    methods = lambda s: {m for m in re.findall(r'^\s*(?:(?:public|private|protected|static|final|default)\s+)+[\w<>\[\], ?]+\s+(\w+)\s*\(', s, re.M)
+                         if m not in keywords}
     tables = len(re.findall(r'\{\s*(?:"[^"]*"\s*,\s*){2,}"[^"]*"', text)) - len(re.findall(r'\{\s*(?:"[^"]*"\s*,\s*){2,}"[^"]*"', origin))
     return {'lines': len(n), 'added': added, 'removed': removed, 'removed_comment_lines': removed_comments,
             'new_methods': sorted(methods(text) - methods(origin)), 'new_literal_tables': max(0, tables)}
 
 
-def run_suite(target, rel, text, spec, differential, out_tsv):
+def run_suite(target, rel, text, spec, differential, out_tsv, extra=None):
     d = tempfile.mkdtemp(prefix='port-review-')
     mod = os.path.join(d, 'm')
     sh([os.path.join(ROOT, 'scripts', 'prepare_module_change.sh'), target, mod])
     open(os.path.join(mod, rel), 'w').write(text)
+    for dest, content in (extra or {}).items():
+        os.makedirs(os.path.dirname(os.path.join(mod, dest)), exist_ok=True)
+        open(os.path.join(mod, dest), 'w').write(content)
     env = dict(os.environ, MAVEN_OPTS='-Xmx768m')
     subprocess.run(['mvn', '-o', '-q', 'test'], cwd=mod, capture_output=True, text=True, env=env)
     total = fail = 0
@@ -127,6 +134,8 @@ def main():
     ap.add_argument('--reference', required=True, help='the blind workspace directory')
     ap.add_argument('--port-commit')
     ap.add_argument('--port-file')
+    ap.add_argument('--proposed-file')
+    ap.add_argument('--proposed-extra', action='append', default=[])
     ap.add_argument('--differential')
     ap.add_argument('--state', default='awaiting-review')
     a = ap.parse_args()
@@ -141,6 +150,12 @@ def main():
         versions['port'] = sh(['git', 'show', a.port_commit + ':' + rel.replace('src/main/', 'src/main/')])
     elif a.port_file:
         versions['port'] = open(a.port_file).read()
+    extras = {}
+    if a.proposed_file:
+        versions['proposed'] = open(a.proposed_file).read()
+        for spec_ in a.proposed_extra:
+            src, dest = spec_.split(':', 1)
+            extras[dest] = open(src).read()
 
     out_dir = os.path.join(ROOT, 'design', 'ports', a.target)
     os.makedirs(out_dir, exist_ok=True)
@@ -154,7 +169,7 @@ def main():
     results, diffs = {}, {}
     for k, v in versions.items():
         tsv = os.path.join(out_dir, k, 'differential.tsv')
-        results[k] = run_suite(a.target, rel, v, spec, a.differential, tsv)
+        results[k] = run_suite(a.target, rel, v, spec, a.differential, tsv, extras if k == 'proposed' else None)
         results[k].update(metrics(versions['origin'], v))
         diffs[k] = answers(tsv)
 
@@ -198,6 +213,11 @@ def main():
     if 'port' in versions:
         w.write('### loop -> port (what the port review changed in the loop\'s code)\n\n')
         w.write(diff_block(versions['loop'], versions['port'], 'loop/' + change + '.java', 'port/' + change + '.java'))
+    if 'proposed' in versions and 'port' in versions:
+        w.write('### port -> proposed (the change proposed after this review)\n\n')
+        w.write(diff_block(versions['port'], versions['proposed'], 'port/' + change + '.java', 'proposed/' + change + '.java'))
+        for dest in extras:
+            w.write('\nThe proposed version also needs `%s` in the module (not shown here).\n' % dest)
     w.write('\n## Assessment: better / worse\n\n'
             'In `ASSESSMENT.md` beside this file, written by an independent comparer (a fresh agent) that had no hand '
             'in the loop\'s code, the reference or the port. An opinion, kept apart from the measurements above.\n')

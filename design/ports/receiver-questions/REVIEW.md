@@ -16,33 +16,62 @@ The four versions are in `origin/`, `loop/`, `reference/`, `port/` beside this f
 | loop | 48 run, 0 failed | 13/13 | 454 | +117 / -21 | 15 | answerJdkReceiver, findJdkClass, findMethodDeclarationInSources, jdkPublicMethods | 1 |
 | reference | 48 run, 0 failed | 13/13 | 400 | +47 / -5 | 1 | jdkReceiver, jdkTypes | 0 |
 | port | 48 run, 0 failed | 13/13 | 405 | +47 / -0 | 0 | answerJdkReceiver | 0 |
+| proposed | 48 run, 0 failed | 13/13 | 489 | +145 / -14 | 4 | importedOnDemand, load, platform, receiverAnswer, resolveAgainst | 0 |
 
 ### Behaviour beyond the specification
 
-Every input of `design/ports/stuck-router/differential.sh`, answered by each version. Listed: the inputs where the versions do NOT all agree (40 inputs in all).
+Every input of `design/ports/stuck-router/differential.sh`, answered by each version. Listed: the inputs where the versions do NOT all agree (44 inputs in all).
 
 Not listed: 10 input(s) where loop, reference and port agree with each other but differ from origin (the change itself); their answers are in `<version>/differential.tsv`.
 
+- `the build fails: Base64 has no decodeBase64(String)` (tree `imports-foreign`)
+  - origin: `(no answer)`
+  - loop: `MEMBERS | Base64 | decodeBase64 | meant=null | [equals(Object), getClass(), getDecoder(), getEncoder(), getMimeDecoder(), getMimeEncoder(), getMimeEncoder(int, byte[]), getUrlDecoder(), getUrlEncoder(), hashCode(), notif`
+  - reference: `MEMBERS | Base64 | decodeBase64 | meant=null | [equals(Object), getClass(), getDecoder(), getEncoder(), getMimeDecoder(), getMimeEncoder(), getMimeEncoder(int, byte[]), getUrlDecoder(), getUrlEncoder(), hashCode(), notif`
+  - port: `MEMBERS | Base64 | decodeBase64 | meant=null | [equals(Object), getClass(), getDecoder(), getEncoder(), getMimeDecoder(), getMimeEncoder(), getMimeEncoder(int, byte[]), getUrlDecoder(), getUrlEncoder(), hashCode(), notif`
+  - proposed: `(no answer)`
+- `the build fails: Module has no configure()` (tree `imports-foreign`)
+  - origin: `(no answer)`
+  - loop: `MEMBERS | Module | configure | meant=null | [addExports(String, Module), addOpens(String, Module), addReads(Module), addUses(Class), canRead(Module), canUse(Class), equals(Object), getAnnotation(Class), getAnnotations(),`
+  - reference: `MEMBERS | Module | configure | meant=null | [addExports(String, Module), addOpens(String, Module), addReads(Module), addUses(Class), canRead(Module), canUse(Class), equals(Object), getAnnotation(Class), getAnnotations(),`
+  - port: `MEMBERS | Module | configure | meant=null | [addExports(String, Module), addOpens(String, Module), addReads(Module), addUses(Class), canRead(Module), canUse(Class), equals(Object), getAnnotation(Class), getAnnotations(),`
+  - proposed: `(no answer)`
+- `the build fails: List has no getFirstItem()` (tree `imports-util`)
+  - origin: `(no answer)`
+  - loop: `MEMBERS | List | getFirstItem | meant=null | [add(Object), add(int, Object), addAll(Collection), addAll(int, Collection), addFirst(Object), addLast(Object), clear(), contains(Object), containsAll(Collection), copyOf(Coll`
+  - reference: `MEMBERS | List | getFirstItem | meant=null | [action(Event, Object), add(Object), add(PopupMenu), add(String), add(String, int), add(int, Object), addActionListener(ActionListener), addAll(Collection), addAll(int, Collec`
+  - port: `(no answer)`
+  - proposed: `MEMBERS | List | getFirstItem | meant=null | [add(Object), add(int, Object), addAll(Collection), addAll(int, Collection), addFirst(Object), addLast(Object), clear(), contains(Object), containsAll(Collection), copyOf(Coll`
 - `the build fails: List has no getFirstItem()` (tree `none`)
   - origin: `(no answer)`
   - loop: `MEMBERS | List | getFirstItem | meant=null | [add(Object), add(int, Object), addAll(Collection), addAll(int, Collection), addFirst(Object), addLast(Object), clear(), contains(Object), containsAll(Collection), copyOf(Coll`
   - reference: `MEMBERS | List | getFirstItem | meant=null | [action(Event, Object), add(Object), add(PopupMenu), add(String), add(String, int), add(int, Object), addActionListener(ActionListener), addAll(Collection), addAll(int, Collec`
   - port: `(no answer)`
+  - proposed: `(no answer)`
+- `the build fails: Quill.java: cannot find symbol method indexOf(Quill) in variable active of type java.util.Map<java.lang.String,org.ink.Quill>` (tree `none`)
+  - origin: `(no answer)`
+  - loop: `(no answer)`
+  - reference: `MEMBERS | Map | indexOf | meant=null | [clear(), compute(Object, BiFunction), computeIfAbsent(Object, Function), computeIfPresent(Object, BiFunction), containsKey(Object), containsValue(Object), copyOf(Map), entry(Object`
+  - port: `(no answer)`
+  - proposed: `MEMBERS | Map | indexOf | meant=null | [clear(), compute(Object, BiFunction), computeIfAbsent(Object, Function), computeIfPresent(Object, BiFunction), containsKey(Object), containsValue(Object), copyOf(Map), entry(Object`
 - `the build fails: String has no getLength()` (tree `none`)
   - origin: `(no answer)`
   - loop: `MEMBERS | String | getLength | meant=null | [charAt(int), chars(), codePointAt(int), codePointBefore(int), codePointCount(int, int), codePoints(), compareTo(Object), compareTo(String), compareToIgnoreCase(String), concat`
   - reference: `MEMBERS | String | getLength | meant=null | [charAt(int), chars(), codePointAt(int), codePointBefore(int), codePointCount(int, int), codePoints(), compareTo(String), compareToIgnoreCase(String), concat(String), contains(`
   - port: `MEMBERS | String | getLength | meant=null | [charAt(int), chars(), codePointAt(int), codePointBefore(int), codePointCount(int, int), codePoints(), compareTo(Object), compareTo(String), compareToIgnoreCase(String), concat`
+  - proposed: `MEMBERS | String | getLength | meant=null | [charAt(int), chars(), codePointAt(int), codePointBefore(int), codePointCount(int, int), codePoints(), compareTo(String), compareToIgnoreCase(String), concat(String), contains(`
 - `the build fails: Clock.java: cannot find symbol method decode(String) in record component code of type Base64` (tree `shadow`)
   - origin: `(no answer)`
   - loop: `MEMBERS | Base64 | decode | meant=null | [equals(Object), getClass(), getDecoder(), getEncoder(), getMimeDecoder(), getMimeEncoder(), getMimeEncoder(int, byte[]), getUrlDecoder(), getUrlEncoder(), hashCode(), notify(), n`
   - reference: `(no answer)`
   - port: `MEMBERS | Base64 | decode | meant=null | [equals(Object), getClass(), getDecoder(), getEncoder(), getMimeDecoder(), getMimeEncoder(), getMimeEncoder(int, byte[]), getUrlDecoder(), getUrlEncoder(), hashCode(), notify(), n`
+  - proposed: `(no answer)`
 - `the build fails: Clock.java: cannot find symbol method stop() in record component t of type Timer` (tree `shadow`)
   - origin: `(no answer)`
   - loop: `MEMBERS | Timer | stop | meant=null | [cancel(), equals(Object), getClass(), hashCode(), notify(), notifyAll(), purge(), schedule(TimerTask, Date), schedule(TimerTask, Date, long), schedule(TimerTask, long), schedule(Tim`
   - reference: `(no answer)`
   - port: `(no answer)`
+  - proposed: `(no answer)`
 
 ## Diffs
 
@@ -441,6 +470,203 @@ Not listed: 10 input(s) where loop, reference and port agree with each other but
      }
  
 ```
+### origin -> proposed
+
+```diff
+--- origin/StuckQuestions.java
++++ proposed/StuckQuestions.java
+@@ -69,4 +69,12 @@
+     private static final Pattern MEMBERS_PATTERN = Pattern.compile("has no (\\w+)\\(");
+     /**
++     * javac's wording for a method called on a receiver whose type it names: "in record component x of
++     * type T" or "in variable x of type T". T is kept as javac wrote it -- package and all -- because a
++     * written package leaves nothing to guess (port review 2026-09-27: dropping it made java.util.Map a bare
++     * "Map" to be looked up again).
++     */
++    private static final Pattern RECEIVER_METHOD_PATTERN = Pattern.compile(
++            "cannot find symbol method (\\w+)\\([^)]*\\) in (?:record component|variable) \\w+ of type ([\\w.$]+)");
++    /**
+      * javac's own wording ("constructor X in record a.b.X"), or the grind detector's for "no suitable
+      * constructor found" ("X has no constructor X(args)") -- the second was not recognised until slice B
+@@ -86,9 +94,26 @@
+      */
+     public static Optional<Answer> answer(String signature, Map<String, String> sources) {
++        return answer(signature, sources, TypeAuthority.platform());
++    }
++
++    /**
++     * As {@link #answer(String, Map)}, with the authority that says which class a type name in the
++     * signature denotes when the sources do not declare it -- the running JDK by default; in the loop, the
++     * project's own classpath as well ({@code ProjectTypeAuthority}).
++     */
++    public static Optional<Answer> answer(String signature, Map<String, String> sources, TypeAuthority authority) {
+         if (signature == null || sources == null || sources.isEmpty()) {
+             return Optional.empty();
+         }
+ 
+-        // Try MEMBERS pattern first
++        // A method called on a receiver whose type javac names (T4-DY, the receiver question): answered only
++        // when that type is not the project's own -- the project's answers come from its sources below.
++        Matcher receiverMatcher = RECEIVER_METHOD_PATTERN.matcher(signature);
++        if (receiverMatcher.find()) {
++            Optional<Answer> receiver = receiverAnswer(receiverMatcher.group(2), receiverMatcher.group(1), sources, authority);
++            if (receiver.isPresent()) return receiver;
++        }
++
++        // Try MEMBERS pattern (after the receiver question)
+         Matcher membersMatcher = MEMBERS_PATTERN.matcher(signature);
+         if (membersMatcher.find()) {
+@@ -103,4 +128,6 @@
+                     return Optional.of(new Answer(Kind.MEMBERS, type, memberName, declared, meant));
+                 }
++                Optional<Answer> receiver = receiverAnswer(type, memberName, sources, authority);
++                if (receiver.isPresent()) return receiver;
+             }
+         }
+@@ -145,4 +172,117 @@
+ 
+         return Optional.empty();
++    }
++
++    /**
++     * Which class a type name in a failure denotes -- one authority, asked by every question that needs it,
++     * so the router cannot answer with a class the project does not mean. Empty is "unknown or ambiguous",
++     * never a guess.
++     */
++    @FunctionalInterface
++    public interface TypeAuthority {
++
++        /** The one class {@code name} (as the failure wrote it: simple or qualified) denotes, or empty. */
++        Optional<Class<?>> resolve(String name, Map<String, String> sources);
++
++        /** The running JDK's platform classes, by {@link #resolveAgainst}. */
++        static TypeAuthority platform() {
++            return (name, sources) -> resolveAgainst(name, sources, ClassLoader.getPlatformClassLoader(),
++                    JdkPlatformTypeIndex::exportedTypes);
++        }
++    }
++
++    /**
++     * The rule every {@link TypeAuthority} applies -- Java's own order for resolving a simple type name
++     * (JLS 6.4.1 / 7.5), so the router means the class the compiler would (port review 2026-09-27: the
++     * loop's and the first port's versions answered the project's own {@code Base64} with
++     * {@code java.util.Base64}'s methods; the independent review of this rule's first draft found that an
++     * explicit import must also outrank {@code java.lang} and a unique platform name):
++     * <ol>
++     *   <li>a package the failure WROTE is exact: that class, or nothing;</li>
++     *   <li>a type the project's sources declare is the project's -- never a platform or dependency class;</li>
++     *   <li>a single-type import in the sources ({@code import a.b.Name;}) names it: that class, or nothing
++     *       when it cannot be loaded -- and nothing when the sources import two different ones;</li>
++     *   <li>{@code java.lang} -- visible everywhere without an import;</li>
++     *   <li>on-demand imports ({@code import a.b.*;}) choose among the candidates {@code bySimpleName} lists;
++     *       without one, a single candidate is the one meant -- otherwise no answer.</li>
++     * </ol>
++     */
++    public static Optional<Class<?>> resolveAgainst(String name, Map<String, String> sources, ClassLoader loader,
++                                                   java.util.function.Function<String, java.util.Set<String>> bySimpleName) {
++        if (name == null || name.isBlank()) return Optional.empty();
++        String bare = name.contains("<") ? name.substring(0, name.indexOf('<')) : name;
++        if (bare.contains(".")) return load(bare, loader);
++        if (findSourceForType(bare, sources).isPresent()) return Optional.empty();
++        java.util.Set<String> singleImports = singleTypeImports(bare, sources);
++        if (singleImports.size() > 1) return Optional.empty();
++        if (singleImports.size() == 1) return load(singleImports.iterator().next(), loader);
++        Optional<Class<?>> lang = load("java.lang." + bare, loader);
++        if (lang.isPresent()) return lang;
++        List<String> candidates = new ArrayList<>(bySimpleName.apply(bare));
++        List<String> onDemand = candidates.stream().filter(fqn -> importedOnDemand(fqn, sources)).toList();
++        if (!onDemand.isEmpty()) candidates = onDemand;
++        return candidates.size() == 1 ? load(candidates.get(0), loader) : Optional.empty();
++    }
++
++    private static Optional<Class<?>> load(String fqn, ClassLoader loader) {
++        try {
++            Class<?> c = Class.forName(fqn, false, loader);
++            return java.lang.reflect.Modifier.isPublic(c.getModifiers()) ? Optional.of(c) : Optional.empty();
++        } catch (ClassNotFoundException | LinkageError e) {
++            return Optional.empty();
++        }
++    }
++
++    /** Every {@code import a.b.Name;} of that simple name in the sources. */
++    private static java.util.Set<String> singleTypeImports(String simpleName, Map<String, String> sources) {
++        Pattern single = Pattern.compile("^\\s*import\\s+([\\w.]+\\." + Pattern.quote(simpleName) + ")\\s*;", Pattern.MULTILINE);
++        java.util.Set<String> out = new java.util.TreeSet<>();
++        for (String content : sources.values()) {
++            if (content == null) continue;
++            Matcher m = single.matcher(content);
++            while (m.find()) out.add(m.group(1));
++        }
++        return out;
++    }
++
++    private static boolean importedOnDemand(String fqn, Map<String, String> sources) {
++        String pkg = fqn.substring(0, fqn.lastIndexOf('.'));
++        Pattern onDemand = Pattern.compile("^\\s*import\\s+" + Pattern.quote(pkg) + "\\.\\*\\s*;", Pattern.MULTILINE);
++        for (String content : sources.values()) {
++            if (content != null && onDemand.matcher(content).find()) return true;
++        }
++        return false;
++    }
++
++    /**
++     * The receiver question: {@code type} is not the project's, and the authority names the one class it
++     * is. The answer is what that class declares -- its public methods, own and inherited, as
++     * {@code name(ParameterSimpleType, ...)}, sorted, compiler-generated bridge and synthetic methods left
++     * out -- and, as {@code meant}, where the sources declare the called method
++     * ({@code Type.name(ParameterTypes)}): a receiver typed Object usually lost its element type.
++     */
++    private static Optional<Answer> receiverAnswer(String type, String memberName, Map<String, String> sources,
++                                                   TypeAuthority authority) {
++        Optional<Class<?>> resolved = authority.resolve(type, sources);
++        if (resolved.isEmpty()) return Optional.empty();
++        java.util.TreeSet<String> declared = new java.util.TreeSet<>();
++        try {
++            for (java.lang.reflect.Method m : resolved.get().getMethods()) {
++                if (m.isBridge() || m.isSynthetic()) continue;
++                declared.add(m.getName() + "(" + java.util.Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
++                        .collect(Collectors.joining(", ")) + ")");
++            }
++        } catch (LinkageError | TypeNotPresentException e) {
++            // a dependency class whose own dependencies are missing: no answer rather than a broken prompt
++            return Optional.empty();
++        }
++        String meant = null;
++        for (String d : declarationsInSources(memberName, sources)) {
++            if (d.endsWith("method)")) {
++                meant = d.substring(0, d.lastIndexOf(" ("));
++                break;
++            }
++        }
++        return Optional.of(new Answer(Kind.MEMBERS, resolved.get().getSimpleName(), memberName, new ArrayList<>(declared), meant));
+     }
+ 
+@@ -210,20 +350,11 @@
+ 
+     /**
+-     * Public classes of that simple name in the running JDK's own modules, discovered rather than
+-     * listed: every package a {@code java.*} module exports, asked whether it holds the name.
++     * Public classes of that simple name in the running JDK, from the platform index discovery also reads
++     * ({@link JdkPlatformTypeIndex}) -- one scan of the runtime image, not two.
+      */
+     private static List<String> jdkClasses(String simpleName) {
+         java.util.TreeSet<String> found = new java.util.TreeSet<>();
+-        for (Module module : ModuleLayer.boot().modules()) {
+-            if (!module.getName().startsWith("java.")) continue;
+-            for (String pkg : module.getPackages()) {
+-                if (!module.isExported(pkg)) continue;
+-                try {
+-                    Class<?> c = Class.forName(pkg + "." + simpleName, false, ClassLoader.getPlatformClassLoader());
+-                    if (java.lang.reflect.Modifier.isPublic(c.getModifiers())) found.add(c.getName() + " (JDK class)");
+-                } catch (ClassNotFoundException | LinkageError ignored) {
+-                    // not in this package
+-                }
+-            }
++        for (String fqn : JdkPlatformTypeIndex.exportedTypes(simpleName)) {
++            if (load(fqn, ClassLoader.getPlatformClassLoader()).isPresent()) found.add(fqn + " (JDK class)");
+         }
+         return new ArrayList<>(found);
+```
 ### loop -> port (what the port review changed in the loop's code)
 
 ```diff
@@ -693,6 +919,227 @@ Not listed: 10 input(s) where loop, reference and port agree with each other but
      }
 -}+}
 ```
+### port -> proposed (the change proposed after this review)
+
+```diff
+--- port/StuckQuestions.java
++++ proposed/StuckQuestions.java
+@@ -68,7 +68,12 @@
+ 
+     private static final Pattern MEMBERS_PATTERN = Pattern.compile("has no (\\w+)\\(");
+-    /** javac's wording for a method called on a record component whose type the sources do not declare. */
++    /**
++     * javac's wording for a method called on a receiver whose type it names: "in record component x of
++     * type T" or "in variable x of type T". T is kept as javac wrote it -- package and all -- because a
++     * written package leaves nothing to guess (port review 2026-09-27: dropping it made java.util.Map a bare
++     * "Map" to be looked up again).
++     */
+     private static final Pattern RECEIVER_METHOD_PATTERN = Pattern.compile(
+-            "cannot find symbol method (\\w+)\\([^)]*\\) in record component \\w+ of type ([\\w.$]+(?:<[^>]*>)?)");
++            "cannot find symbol method (\\w+)\\([^)]*\\) in (?:record component|variable) \\w+ of type ([\\w.$]+)");
+     /**
+      * javac's own wording ("constructor X in record a.b.X"), or the grind detector's for "no suitable
+@@ -89,19 +94,26 @@
+      */
+     public static Optional<Answer> answer(String signature, Map<String, String> sources) {
++        return answer(signature, sources, TypeAuthority.platform());
++    }
++
++    /**
++     * As {@link #answer(String, Map)}, with the authority that says which class a type name in the
++     * signature denotes when the sources do not declare it -- the running JDK by default; in the loop, the
++     * project's own classpath as well ({@code ProjectTypeAuthority}).
++     */
++    public static Optional<Answer> answer(String signature, Map<String, String> sources, TypeAuthority authority) {
+         if (signature == null || sources == null || sources.isEmpty()) {
+             return Optional.empty();
+         }
+ 
+-        // A method called on a record component whose type is not the project's (T4-DY, the receiver question)
++        // A method called on a receiver whose type javac names (T4-DY, the receiver question): answered only
++        // when that type is not the project's own -- the project's answers come from its sources below.
+         Matcher receiverMatcher = RECEIVER_METHOD_PATTERN.matcher(signature);
+         if (receiverMatcher.find()) {
+-            String rawType = receiverMatcher.group(2);
+-            String type = rawType.contains("<") ? rawType.substring(0, rawType.indexOf('<')) : rawType;
+-            type = type.substring(type.lastIndexOf('.') + 1);
+-            Optional<Answer> jdk = answerJdkReceiver(type, receiverMatcher.group(1), sources);
+-            if (jdk.isPresent()) return jdk;
+-        }
+-
+-        // Try MEMBERS pattern first
++            Optional<Answer> receiver = receiverAnswer(receiverMatcher.group(2), receiverMatcher.group(1), sources, authority);
++            if (receiver.isPresent()) return receiver;
++        }
++
++        // Try MEMBERS pattern (after the receiver question)
+         Matcher membersMatcher = MEMBERS_PATTERN.matcher(signature);
+         if (membersMatcher.find()) {
+@@ -116,6 +128,6 @@
+                     return Optional.of(new Answer(Kind.MEMBERS, type, memberName, declared, meant));
+                 }
+-                Optional<Answer> jdk = answerJdkReceiver(type, memberName, sources);
+-                if (jdk.isPresent()) return jdk;
++                Optional<Answer> receiver = receiverAnswer(type, memberName, sources, authority);
++                if (receiver.isPresent()) return receiver;
+             }
+         }
+@@ -163,24 +175,105 @@
+ 
+     /**
+-     * The receiver question (T4-DY, built by the loop in the receiver-questions toy case, ported with review
+-     * fixes): a type the sources do not declare but the running JDK does, uniquely by that simple name. The
+-     * answer is what that JDK class declares -- its public methods, own and inherited, as
+-     * {@code name(ParameterSimpleType, ...)}, sorted -- and, as {@code meant}, where the sources declare the
+-     * called method ({@code Type.name(ParameterTypes)}): a receiver typed Object usually lost its element type.
+-     * Empty when the JDK has no such class, or more than one.
+-     */
+-    private static Optional<Answer> answerJdkReceiver(String type, String memberName, Map<String, String> sources) {
+-        List<String> candidates = jdkClasses(type);
+-        if (candidates.size() != 1) return Optional.empty();
+-        Class<?> jdkClass;
++     * Which class a type name in a failure denotes -- one authority, asked by every question that needs it,
++     * so the router cannot answer with a class the project does not mean. Empty is "unknown or ambiguous",
++     * never a guess.
++     */
++    @FunctionalInterface
++    public interface TypeAuthority {
++
++        /** The one class {@code name} (as the failure wrote it: simple or qualified) denotes, or empty. */
++        Optional<Class<?>> resolve(String name, Map<String, String> sources);
++
++        /** The running JDK's platform classes, by {@link #resolveAgainst}. */
++        static TypeAuthority platform() {
++            return (name, sources) -> resolveAgainst(name, sources, ClassLoader.getPlatformClassLoader(),
++                    JdkPlatformTypeIndex::exportedTypes);
++        }
++    }
++
++    /**
++     * The rule every {@link TypeAuthority} applies -- Java's own order for resolving a simple type name
++     * (JLS 6.4.1 / 7.5), so the router means the class the compiler would (port review 2026-09-27: the
++     * loop's and the first port's versions answered the project's own {@code Base64} with
++     * {@code java.util.Base64}'s methods; the independent review of this rule's first draft found that an
++     * explicit import must also outrank {@code java.lang} and a unique platform name):
++     * <ol>
++     *   <li>a package the failure WROTE is exact: that class, or nothing;</li>
++     *   <li>a type the project's sources declare is the project's -- never a platform or dependency class;</li>
++     *   <li>a single-type import in the sources ({@code import a.b.Name;}) names it: that class, or nothing
++     *       when it cannot be loaded -- and nothing when the sources import two different ones;</li>
++     *   <li>{@code java.lang} -- visible everywhere without an import;</li>
++     *   <li>on-demand imports ({@code import a.b.*;}) choose among the candidates {@code bySimpleName} lists;
++     *       without one, a single candidate is the one meant -- otherwise no answer.</li>
++     * </ol>
++     */
++    public static Optional<Class<?>> resolveAgainst(String name, Map<String, String> sources, ClassLoader loader,
++                                                   java.util.function.Function<String, java.util.Set<String>> bySimpleName) {
++        if (name == null || name.isBlank()) return Optional.empty();
++        String bare = name.contains("<") ? name.substring(0, name.indexOf('<')) : name;
++        if (bare.contains(".")) return load(bare, loader);
++        if (findSourceForType(bare, sources).isPresent()) return Optional.empty();
++        java.util.Set<String> singleImports = singleTypeImports(bare, sources);
++        if (singleImports.size() > 1) return Optional.empty();
++        if (singleImports.size() == 1) return load(singleImports.iterator().next(), loader);
++        Optional<Class<?>> lang = load("java.lang." + bare, loader);
++        if (lang.isPresent()) return lang;
++        List<String> candidates = new ArrayList<>(bySimpleName.apply(bare));
++        List<String> onDemand = candidates.stream().filter(fqn -> importedOnDemand(fqn, sources)).toList();
++        if (!onDemand.isEmpty()) candidates = onDemand;
++        return candidates.size() == 1 ? load(candidates.get(0), loader) : Optional.empty();
++    }
++
++    private static Optional<Class<?>> load(String fqn, ClassLoader loader) {
+         try {
+-            jdkClass = Class.forName(candidates.get(0).replace(" (JDK class)", ""), false, ClassLoader.getPlatformClassLoader());
++            Class<?> c = Class.forName(fqn, false, loader);
++            return java.lang.reflect.Modifier.isPublic(c.getModifiers()) ? Optional.of(c) : Optional.empty();
+         } catch (ClassNotFoundException | LinkageError e) {
+             return Optional.empty();
+         }
++    }
++
++    /** Every {@code import a.b.Name;} of that simple name in the sources. */
++    private static java.util.Set<String> singleTypeImports(String simpleName, Map<String, String> sources) {
++        Pattern single = Pattern.compile("^\\s*import\\s+([\\w.]+\\." + Pattern.quote(simpleName) + ")\\s*;", Pattern.MULTILINE);
++        java.util.Set<String> out = new java.util.TreeSet<>();
++        for (String content : sources.values()) {
++            if (content == null) continue;
++            Matcher m = single.matcher(content);
++            while (m.find()) out.add(m.group(1));
++        }
++        return out;
++    }
++
++    private static boolean importedOnDemand(String fqn, Map<String, String> sources) {
++        String pkg = fqn.substring(0, fqn.lastIndexOf('.'));
++        Pattern onDemand = Pattern.compile("^\\s*import\\s+" + Pattern.quote(pkg) + "\\.\\*\\s*;", Pattern.MULTILINE);
++        for (String content : sources.values()) {
++            if (content != null && onDemand.matcher(content).find()) return true;
++        }
++        return false;
++    }
++
++    /**
++     * The receiver question: {@code type} is not the project's, and the authority names the one class it
++     * is. The answer is what that class declares -- its public methods, own and inherited, as
++     * {@code name(ParameterSimpleType, ...)}, sorted, compiler-generated bridge and synthetic methods left
++     * out -- and, as {@code meant}, where the sources declare the called method
++     * ({@code Type.name(ParameterTypes)}): a receiver typed Object usually lost its element type.
++     */
++    private static Optional<Answer> receiverAnswer(String type, String memberName, Map<String, String> sources,
++                                                   TypeAuthority authority) {
++        Optional<Class<?>> resolved = authority.resolve(type, sources);
++        if (resolved.isEmpty()) return Optional.empty();
+         java.util.TreeSet<String> declared = new java.util.TreeSet<>();
+-        for (java.lang.reflect.Method m : jdkClass.getMethods()) {
+-            declared.add(m.getName() + "(" + java.util.Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
+-                    .collect(Collectors.joining(", ")) + ")");
++        try {
++            for (java.lang.reflect.Method m : resolved.get().getMethods()) {
++                if (m.isBridge() || m.isSynthetic()) continue;
++                declared.add(m.getName() + "(" + java.util.Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
++                        .collect(Collectors.joining(", ")) + ")");
++            }
++        } catch (LinkageError | TypeNotPresentException e) {
++            // a dependency class whose own dependencies are missing: no answer rather than a broken prompt
++            return Optional.empty();
+         }
+         String meant = null;
+@@ -191,5 +284,5 @@
+             }
+         }
+-        return Optional.of(new Answer(Kind.MEMBERS, type, memberName, new ArrayList<>(declared), meant));
++        return Optional.of(new Answer(Kind.MEMBERS, resolved.get().getSimpleName(), memberName, new ArrayList<>(declared), meant));
+     }
+ 
+@@ -257,20 +350,11 @@
+ 
+     /**
+-     * Public classes of that simple name in the running JDK's own modules, discovered rather than
+-     * listed: every package a {@code java.*} module exports, asked whether it holds the name.
++     * Public classes of that simple name in the running JDK, from the platform index discovery also reads
++     * ({@link JdkPlatformTypeIndex}) -- one scan of the runtime image, not two.
+      */
+     private static List<String> jdkClasses(String simpleName) {
+         java.util.TreeSet<String> found = new java.util.TreeSet<>();
+-        for (Module module : ModuleLayer.boot().modules()) {
+-            if (!module.getName().startsWith("java.")) continue;
+-            for (String pkg : module.getPackages()) {
+-                if (!module.isExported(pkg)) continue;
+-                try {
+-                    Class<?> c = Class.forName(pkg + "." + simpleName, false, ClassLoader.getPlatformClassLoader());
+-                    if (java.lang.reflect.Modifier.isPublic(c.getModifiers())) found.add(c.getName() + " (JDK class)");
+-                } catch (ClassNotFoundException | LinkageError ignored) {
+-                    // not in this package
+-                }
+-            }
++        for (String fqn : JdkPlatformTypeIndex.exportedTypes(simpleName)) {
++            if (load(fqn, ClassLoader.getPlatformClassLoader()).isPresent()) found.add(fqn + " (JDK class)");
+         }
+         return new ArrayList<>(found);
+```
+
+The proposed version also needs `src/main/java/com/walpro/autobuilder/core/build/JdkPlatformTypeIndex.java` in the module (not shown here).
 
 ## Assessment: better / worse
 

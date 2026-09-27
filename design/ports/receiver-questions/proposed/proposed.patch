@@ -1,0 +1,640 @@
+diff --git a/src/main/java/com/walpro/autobuilder/core/build/inject/JdkPlatformTypeIndex.java b/src/main/java/com/walpro/autobuilder/core/build/JdkPlatformTypeIndex.java
+similarity index 83%
+rename from src/main/java/com/walpro/autobuilder/core/build/inject/JdkPlatformTypeIndex.java
+rename to src/main/java/com/walpro/autobuilder/core/build/JdkPlatformTypeIndex.java
+index 06bdc4b6..36f84084 100644
+--- a/src/main/java/com/walpro/autobuilder/core/build/inject/JdkPlatformTypeIndex.java
++++ b/src/main/java/com/walpro/autobuilder/core/build/JdkPlatformTypeIndex.java
+@@ -1,6 +1,4 @@
+-package com.walpro.autobuilder.core.build.inject;
+-
+-import lombok.extern.slf4j.Slf4j;
++package com.walpro.autobuilder.core.build;
+ 
+ import java.io.IOException;
+ import java.lang.module.ModuleDescriptor;
+@@ -19,7 +17,7 @@ import java.util.stream.Collectors;
+  * used to resolve to whatever jar happened to republish the simple name (field-observed 2026-07-08/09:
+  * {@code org.apache.el.stream.Optional} from a transitive {@code tomcat-embed-el}, injected across
+  * six files plus a pom dependency, churning until an unrelated rewrite dropped it). This index makes
+- * the platform's own vocabulary visible to {@link PackageDiscoveryService} the same way the resolved
++ * the platform's own vocabulary visible to {@code PackageDiscoveryService} the same way the resolved
+  * classpath is: discovered live from the running JDK ({@link ModuleFinder#ofSystem()}), never a
+  * hardcoded package list.
+  *
+@@ -28,9 +26,14 @@ import java.util.stream.Collectors;
+  * module every Java program requires implicitly (JPMS: all modules read {@code java.base}) — its
+  * names are the language's core vocabulary, which is what makes a unique {@code java.base} match
+  * strong enough to act on while other modules' names only participate as an ambiguity observation.
++ *
++ * <p>2026-09-27: moved from {@code core.build.inject} and made public, so the stuck router's type
++ * authority ({@link StuckQuestions.TypeAuthority}) reads the SAME index instead of its own second scan of
++ * the runtime image. Logging through {@link System.Logger}, so the class has no dependency beyond the JDK.
+  */
+-@Slf4j
+-final class JdkPlatformTypeIndex {
++public final class JdkPlatformTypeIndex {
++
++    private static final System.Logger LOG = System.getLogger(JdkPlatformTypeIndex.class.getName());
+ 
+     private record Index(Map<String, Set<String>> all, Map<String, Set<String>> base,
+                          Map<String, Set<String>> byPackage) {}
+@@ -40,13 +43,13 @@ final class JdkPlatformTypeIndex {
+     private JdkPlatformTypeIndex() {}
+ 
+     /** FQNs of exported top-level platform types with this simple name, across all system modules. */
+-    static Set<String> exportedTypes(String simpleName) {
++    public static Set<String> exportedTypes(String simpleName) {
+         if (simpleName == null || simpleName.isBlank()) return Set.of();
+         return index().all().getOrDefault(simpleName, Set.of());
+     }
+ 
+     /** The {@code java.base} subset of {@link #exportedTypes(String)}. */
+-    static Set<String> javaBaseTypes(String simpleName) {
++    public static Set<String> javaBaseTypes(String simpleName) {
+         if (simpleName == null || simpleName.isBlank()) return Set.of();
+         return index().base().getOrDefault(simpleName, Set.of());
+     }
+@@ -56,7 +59,7 @@ final class JdkPlatformTypeIndex {
+      * lookup needs the package's whole membership, which the simple-name maps cannot answer;
+      * it comes from the same module walk rather than a second pass over the runtime image.
+      */
+-    static Set<String> typesInPackage(String packageName) {
++    public static Set<String> typesInPackage(String packageName) {
+         if (packageName == null || packageName.isBlank()) return Set.of();
+         return index().byPackage().getOrDefault(packageName, Set.of());
+     }
+@@ -106,13 +109,13 @@ final class JdkPlatformTypeIndex {
+                     }
+                 });
+             } catch (IOException e) {
+-                log.debug("T4-BM: unreadable system module {} — {}", descriptor.name(), e.getMessage());
++                LOG.log(System.Logger.Level.DEBUG, "T4-BM: unreadable system module {0} -- {1}", descriptor.name(), e.getMessage());
+             }
+         }
+         all.replaceAll((k, v) -> Set.copyOf(v));
+         base.replaceAll((k, v) -> Set.copyOf(v));
+         byPackage.replaceAll((k, v) -> Set.copyOf(v));
+-        log.info("T4-BM: JDK platform type index built ({} simple names, {} in java.base, {}ms)",
++        LOG.log(System.Logger.Level.INFO, "T4-BM: JDK platform type index built ({0} simple names, {1} in java.base, {2}ms)",
+                 all.size(), base.size(), System.currentTimeMillis() - start);
+         return new Index(Map.copyOf(all), Map.copyOf(base), Map.copyOf(byPackage));
+     }
+diff --git a/src/main/java/com/walpro/autobuilder/core/build/StuckQuestions.java b/src/main/java/com/walpro/autobuilder/core/build/StuckQuestions.java
+index 5f5e7706..c8229a2c 100644
+--- a/src/main/java/com/walpro/autobuilder/core/build/StuckQuestions.java
++++ b/src/main/java/com/walpro/autobuilder/core/build/StuckQuestions.java
+@@ -67,9 +67,14 @@ public final class StuckQuestions {
+     }
+ 
+     private static final Pattern MEMBERS_PATTERN = Pattern.compile("has no (\\w+)\\(");
+-    /** javac's wording for a method called on a record component whose type the sources do not declare. */
++    /**
++     * javac's wording for a method called on a receiver whose type it names: "in record component x of
++     * type T" or "in variable x of type T". T is kept as javac wrote it -- package and all -- because a
++     * written package leaves nothing to guess (port review 2026-09-27: dropping it made java.util.Map a bare
++     * "Map" to be looked up again).
++     */
+     private static final Pattern RECEIVER_METHOD_PATTERN = Pattern.compile(
+-            "cannot find symbol method (\\w+)\\([^)]*\\) in record component \\w+ of type ([\\w.$]+(?:<[^>]*>)?)");
++            "cannot find symbol method (\\w+)\\([^)]*\\) in (?:record component|variable) \\w+ of type ([\\w.$]+)");
+     /**
+      * javac's own wording ("constructor X in record a.b.X"), or the grind detector's for "no suitable
+      * constructor found" ("X has no constructor X(args)") -- the second was not recognised until slice B
+@@ -88,21 +93,28 @@ public final class StuckQuestions {
+      * @param sources   the project's source files, path relative to the project root -> content
+      */
+     public static Optional<Answer> answer(String signature, Map<String, String> sources) {
++        return answer(signature, sources, TypeAuthority.platform());
++    }
++
++    /**
++     * As {@link #answer(String, Map)}, with the authority that says which class a type name in the
++     * signature denotes when the sources do not declare it -- the running JDK by default; in the loop, the
++     * project's own classpath as well ({@code ProjectTypeAuthority}).
++     */
++    public static Optional<Answer> answer(String signature, Map<String, String> sources, TypeAuthority authority) {
+         if (signature == null || sources == null || sources.isEmpty()) {
+             return Optional.empty();
+         }
+ 
+-        // A method called on a record component whose type is not the project's (T4-DY, the receiver question)
++        // A method called on a receiver whose type javac names (T4-DY, the receiver question): answered only
++        // when that type is not the project's own -- the project's answers come from its sources below.
+         Matcher receiverMatcher = RECEIVER_METHOD_PATTERN.matcher(signature);
+         if (receiverMatcher.find()) {
+-            String rawType = receiverMatcher.group(2);
+-            String type = rawType.contains("<") ? rawType.substring(0, rawType.indexOf('<')) : rawType;
+-            type = type.substring(type.lastIndexOf('.') + 1);
+-            Optional<Answer> jdk = answerJdkReceiver(type, receiverMatcher.group(1), sources);
+-            if (jdk.isPresent()) return jdk;
++            Optional<Answer> receiver = receiverAnswer(receiverMatcher.group(2), receiverMatcher.group(1), sources, authority);
++            if (receiver.isPresent()) return receiver;
+         }
+ 
+-        // Try MEMBERS pattern first
++        // Try MEMBERS pattern (after the receiver question)
+         Matcher membersMatcher = MEMBERS_PATTERN.matcher(signature);
+         if (membersMatcher.find()) {
+             String memberName = membersMatcher.group(1);
+@@ -115,8 +127,8 @@ public final class StuckQuestions {
+                     String meant = DeclaredMembers.meantBy(memberName, declared);
+                     return Optional.of(new Answer(Kind.MEMBERS, type, memberName, declared, meant));
+                 }
+-                Optional<Answer> jdk = answerJdkReceiver(type, memberName, sources);
+-                if (jdk.isPresent()) return jdk;
++                Optional<Answer> receiver = receiverAnswer(type, memberName, sources, authority);
++                if (receiver.isPresent()) return receiver;
+             }
+         }
+ 
+@@ -162,26 +174,107 @@ public final class StuckQuestions {
+     }
+ 
+     /**
+-     * The receiver question (T4-DY, built by the loop in the receiver-questions toy case, ported with review
+-     * fixes): a type the sources do not declare but the running JDK does, uniquely by that simple name. The
+-     * answer is what that JDK class declares -- its public methods, own and inherited, as
+-     * {@code name(ParameterSimpleType, ...)}, sorted -- and, as {@code meant}, where the sources declare the
+-     * called method ({@code Type.name(ParameterTypes)}): a receiver typed Object usually lost its element type.
+-     * Empty when the JDK has no such class, or more than one.
++     * Which class a type name in a failure denotes -- one authority, asked by every question that needs it,
++     * so the router cannot answer with a class the project does not mean. Empty is "unknown or ambiguous",
++     * never a guess.
++     */
++    @FunctionalInterface
++    public interface TypeAuthority {
++
++        /** The one class {@code name} (as the failure wrote it: simple or qualified) denotes, or empty. */
++        Optional<Class<?>> resolve(String name, Map<String, String> sources);
++
++        /** The running JDK's platform classes, by {@link #resolveAgainst}. */
++        static TypeAuthority platform() {
++            return (name, sources) -> resolveAgainst(name, sources, ClassLoader.getPlatformClassLoader(),
++                    JdkPlatformTypeIndex::exportedTypes);
++        }
++    }
++
++    /**
++     * The rule every {@link TypeAuthority} applies -- Java's own order for resolving a simple type name
++     * (JLS 6.4.1 / 7.5), so the router means the class the compiler would (port review 2026-09-27: the
++     * loop's and the first port's versions answered the project's own {@code Base64} with
++     * {@code java.util.Base64}'s methods; the independent review of this rule's first draft found that an
++     * explicit import must also outrank {@code java.lang} and a unique platform name):
++     * <ol>
++     *   <li>a package the failure WROTE is exact: that class, or nothing;</li>
++     *   <li>a type the project's sources declare is the project's -- never a platform or dependency class;</li>
++     *   <li>a single-type import in the sources ({@code import a.b.Name;}) names it: that class, or nothing
++     *       when it cannot be loaded -- and nothing when the sources import two different ones;</li>
++     *   <li>{@code java.lang} -- visible everywhere without an import;</li>
++     *   <li>on-demand imports ({@code import a.b.*;}) choose among the candidates {@code bySimpleName} lists;
++     *       without one, a single candidate is the one meant -- otherwise no answer.</li>
++     * </ol>
+      */
+-    private static Optional<Answer> answerJdkReceiver(String type, String memberName, Map<String, String> sources) {
+-        List<String> candidates = jdkClasses(type);
+-        if (candidates.size() != 1) return Optional.empty();
+-        Class<?> jdkClass;
++    public static Optional<Class<?>> resolveAgainst(String name, Map<String, String> sources, ClassLoader loader,
++                                                   java.util.function.Function<String, java.util.Set<String>> bySimpleName) {
++        if (name == null || name.isBlank()) return Optional.empty();
++        String bare = name.contains("<") ? name.substring(0, name.indexOf('<')) : name;
++        if (bare.contains(".")) return load(bare, loader);
++        if (findSourceForType(bare, sources).isPresent()) return Optional.empty();
++        java.util.Set<String> singleImports = singleTypeImports(bare, sources);
++        if (singleImports.size() > 1) return Optional.empty();
++        if (singleImports.size() == 1) return load(singleImports.iterator().next(), loader);
++        Optional<Class<?>> lang = load("java.lang." + bare, loader);
++        if (lang.isPresent()) return lang;
++        List<String> candidates = new ArrayList<>(bySimpleName.apply(bare));
++        List<String> onDemand = candidates.stream().filter(fqn -> importedOnDemand(fqn, sources)).toList();
++        if (!onDemand.isEmpty()) candidates = onDemand;
++        return candidates.size() == 1 ? load(candidates.get(0), loader) : Optional.empty();
++    }
++
++    private static Optional<Class<?>> load(String fqn, ClassLoader loader) {
+         try {
+-            jdkClass = Class.forName(candidates.get(0).replace(" (JDK class)", ""), false, ClassLoader.getPlatformClassLoader());
++            Class<?> c = Class.forName(fqn, false, loader);
++            return java.lang.reflect.Modifier.isPublic(c.getModifiers()) ? Optional.of(c) : Optional.empty();
+         } catch (ClassNotFoundException | LinkageError e) {
+             return Optional.empty();
+         }
++    }
++
++    /** Every {@code import a.b.Name;} of that simple name in the sources. */
++    private static java.util.Set<String> singleTypeImports(String simpleName, Map<String, String> sources) {
++        Pattern single = Pattern.compile("^\\s*import\\s+([\\w.]+\\." + Pattern.quote(simpleName) + ")\\s*;", Pattern.MULTILINE);
++        java.util.Set<String> out = new java.util.TreeSet<>();
++        for (String content : sources.values()) {
++            if (content == null) continue;
++            Matcher m = single.matcher(content);
++            while (m.find()) out.add(m.group(1));
++        }
++        return out;
++    }
++
++    private static boolean importedOnDemand(String fqn, Map<String, String> sources) {
++        String pkg = fqn.substring(0, fqn.lastIndexOf('.'));
++        Pattern onDemand = Pattern.compile("^\\s*import\\s+" + Pattern.quote(pkg) + "\\.\\*\\s*;", Pattern.MULTILINE);
++        for (String content : sources.values()) {
++            if (content != null && onDemand.matcher(content).find()) return true;
++        }
++        return false;
++    }
++
++    /**
++     * The receiver question: {@code type} is not the project's, and the authority names the one class it
++     * is. The answer is what that class declares -- its public methods, own and inherited, as
++     * {@code name(ParameterSimpleType, ...)}, sorted, compiler-generated bridge and synthetic methods left
++     * out -- and, as {@code meant}, where the sources declare the called method
++     * ({@code Type.name(ParameterTypes)}): a receiver typed Object usually lost its element type.
++     */
++    private static Optional<Answer> receiverAnswer(String type, String memberName, Map<String, String> sources,
++                                                   TypeAuthority authority) {
++        Optional<Class<?>> resolved = authority.resolve(type, sources);
++        if (resolved.isEmpty()) return Optional.empty();
+         java.util.TreeSet<String> declared = new java.util.TreeSet<>();
+-        for (java.lang.reflect.Method m : jdkClass.getMethods()) {
+-            declared.add(m.getName() + "(" + java.util.Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
+-                    .collect(Collectors.joining(", ")) + ")");
++        try {
++            for (java.lang.reflect.Method m : resolved.get().getMethods()) {
++                if (m.isBridge() || m.isSynthetic()) continue;
++                declared.add(m.getName() + "(" + java.util.Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
++                        .collect(Collectors.joining(", ")) + ")");
++            }
++        } catch (LinkageError | TypeNotPresentException e) {
++            // a dependency class whose own dependencies are missing: no answer rather than a broken prompt
++            return Optional.empty();
+         }
+         String meant = null;
+         for (String d : declarationsInSources(memberName, sources)) {
+@@ -190,7 +283,7 @@ public final class StuckQuestions {
+                 break;
+             }
+         }
+-        return Optional.of(new Answer(Kind.MEMBERS, type, memberName, new ArrayList<>(declared), meant));
++        return Optional.of(new Answer(Kind.MEMBERS, resolved.get().getSimpleName(), memberName, new ArrayList<>(declared), meant));
+     }
+ 
+     /** Every declaration of {@code name} in the sources: types (nested ones as Outer.Name), record components, fields, methods. */
+@@ -256,22 +349,13 @@ public final class StuckQuestions {
+     }
+ 
+     /**
+-     * Public classes of that simple name in the running JDK's own modules, discovered rather than
+-     * listed: every package a {@code java.*} module exports, asked whether it holds the name.
++     * Public classes of that simple name in the running JDK, from the platform index discovery also reads
++     * ({@link JdkPlatformTypeIndex}) -- one scan of the runtime image, not two.
+      */
+     private static List<String> jdkClasses(String simpleName) {
+         java.util.TreeSet<String> found = new java.util.TreeSet<>();
+-        for (Module module : ModuleLayer.boot().modules()) {
+-            if (!module.getName().startsWith("java.")) continue;
+-            for (String pkg : module.getPackages()) {
+-                if (!module.isExported(pkg)) continue;
+-                try {
+-                    Class<?> c = Class.forName(pkg + "." + simpleName, false, ClassLoader.getPlatformClassLoader());
+-                    if (java.lang.reflect.Modifier.isPublic(c.getModifiers())) found.add(c.getName() + " (JDK class)");
+-                } catch (ClassNotFoundException | LinkageError ignored) {
+-                    // not in this package
+-                }
+-            }
++        for (String fqn : JdkPlatformTypeIndex.exportedTypes(simpleName)) {
++            if (load(fqn, ClassLoader.getPlatformClassLoader()).isPresent()) found.add(fqn + " (JDK class)");
+         }
+         return new ArrayList<>(found);
+     }
+diff --git a/src/main/java/com/walpro/autobuilder/core/build/inject/ClasspathMemberDeclarationService.java b/src/main/java/com/walpro/autobuilder/core/build/inject/ClasspathMemberDeclarationService.java
+index 375e7e10..aa36fa01 100644
+--- a/src/main/java/com/walpro/autobuilder/core/build/inject/ClasspathMemberDeclarationService.java
++++ b/src/main/java/com/walpro/autobuilder/core/build/inject/ClasspathMemberDeclarationService.java
+@@ -1,5 +1,7 @@
+ package com.walpro.autobuilder.core.build.inject;
+ 
++import com.walpro.autobuilder.core.build.JdkPlatformTypeIndex;
++
+ import com.walpro.autobuilder.core.build.ProjectClasspathService;
+ import lombok.RequiredArgsConstructor;
+ import lombok.extern.slf4j.Slf4j;
+diff --git a/src/main/java/com/walpro/autobuilder/core/build/inject/PackageDiscoveryService.java b/src/main/java/com/walpro/autobuilder/core/build/inject/PackageDiscoveryService.java
+index cac95cf5..cac82e37 100644
+--- a/src/main/java/com/walpro/autobuilder/core/build/inject/PackageDiscoveryService.java
++++ b/src/main/java/com/walpro/autobuilder/core/build/inject/PackageDiscoveryService.java
+@@ -1,5 +1,7 @@
+ package com.walpro.autobuilder.core.build.inject;
+ 
++import com.walpro.autobuilder.core.build.JdkPlatformTypeIndex;
++
+ import com.walpro.autobuilder.core.build.ProjectClasspathService;
+ import com.walpro.autobuilder.core.build.inject.SymbolImportLookupService.Resolution;
+ import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
+@@ -342,8 +344,11 @@ public class PackageDiscoveryService {
+         return jars;
+     }
+ 
+-    /** FQN → providing-jar-path for every top-level class named {@code simpleName} on the classpath. */
+-    private static Map<String, String> scanJarsForType(List<String> jars, String simpleName) {
++    /**
++     * FQN → providing-jar-path for every top-level class named {@code simpleName} on the classpath. Public:
++     * the stuck router's project type authority reads the classpath through this same scan (2026-09-27).
++     */
++    public static Map<String, String> scanJarsForType(List<String> jars, String simpleName) {
+         String needle = "/" + simpleName + ".class";
+         String rootNeedle = simpleName + ".class";
+         Map<String, String> hits = new LinkedHashMap<>();
+diff --git a/src/main/java/com/walpro/autobuilder/core/stuck/ProjectTypeAuthority.java b/src/main/java/com/walpro/autobuilder/core/stuck/ProjectTypeAuthority.java
+new file mode 100644
+index 00000000..28b01493
+--- /dev/null
++++ b/src/main/java/com/walpro/autobuilder/core/stuck/ProjectTypeAuthority.java
+@@ -0,0 +1,105 @@
++package com.walpro.autobuilder.core.stuck;
++
++import com.walpro.autobuilder.core.build.JdkPlatformTypeIndex;
++import com.walpro.autobuilder.core.build.ProjectClasspathService;
++import com.walpro.autobuilder.core.build.StuckQuestions;
++import com.walpro.autobuilder.core.build.inject.PackageDiscoveryService;
++import lombok.extern.slf4j.Slf4j;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.stereotype.Component;
++
++import java.io.File;
++import java.net.MalformedURLException;
++import java.net.URL;
++import java.net.URLClassLoader;
++import java.nio.file.Path;
++import java.util.ArrayList;
++import java.util.LinkedHashSet;
++import java.util.List;
++import java.util.Set;
++
++/**
++ * The stuck router's type authority in the loop: the running JDK AND the project's own resolved
++ * dependency classpath, under the one rule {@link StuckQuestions#resolveAgainst} states (a written package
++ * is exact; the project's own types win; java.lang; otherwise the one candidate, or the one the project's
++ * imports name).
++ *
++ * <p>Port review 2026-09-27: the terminal agent was asked three times about JavaParser types
++ * ("RecordDeclaration has no getComponents()"), a fact that lives in a dependency jar no structural
++ * question could read. The classpath comes from {@link ProjectClasspathService} -- the same resolved
++ * classpath the compile probe and package discovery read -- and the jar scan is discovery's own
++ * ({@link PackageDiscoveryService#scanJarsForType}), so there is one answer to "what is on this project's
++ * classpath" in the loop, not three.
++ */
++@Slf4j
++@Component
++@com.walpro.autobuilder.core.checkpoint.StateHolder(value = com.walpro.autobuilder.core.checkpoint.StateBucket.DERIVED_DO_NOT_RESTORE,
++        note = "a class loader over the resolved classpath; a restored tree re-resolves it")
++public class ProjectTypeAuthority {
++
++    private static final long CLASSPATH_TIMEOUT_MS = 30_000L;
++
++    @Autowired(required = false)
++    private ProjectClasspathService classpathService;
++
++    private String cachedClasspath;
++    private URLClassLoader cachedLoader;
++    private List<String> cachedJars = List.of();
++
++    /** The authority for the project at {@code projectRoot}; the JDK alone when its classpath cannot be resolved. */
++    public StuckQuestions.TypeAuthority forProject(Path projectRoot) {
++        if (classpathService == null || projectRoot == null) return StuckQuestions.TypeAuthority.platform();
++        String classpath;
++        try {
++            classpath = classpathService.resolveClasspath(projectRoot, CLASSPATH_TIMEOUT_MS);
++        } catch (RuntimeException e) {
++            log.debug("T4-DY: classpath unresolvable for the type authority: {}", e.getMessage());
++            return StuckQuestions.TypeAuthority.platform();
++        }
++        if (classpath == null || classpath.isBlank()) return StuckQuestions.TypeAuthority.platform();
++        URLClassLoader loader;
++        List<String> jars;
++        synchronized (this) {
++            if (!classpath.equals(cachedClasspath)) {
++                if (cachedLoader != null) {
++                    try {
++                        cachedLoader.close();
++                    } catch (java.io.IOException ignored) {
++                        // the jars are only read; a failed close leaks nothing that matters
++                    }
++                }
++                cachedJars = jars(classpath);
++                cachedLoader = loader(cachedJars);
++                cachedClasspath = classpath;
++            }
++            loader = cachedLoader;
++            jars = cachedJars;
++        }
++        return (name, sources) -> StuckQuestions.resolveAgainst(name, sources, loader, simple -> {
++            Set<String> candidates = new LinkedHashSet<>(JdkPlatformTypeIndex.exportedTypes(simple));
++            candidates.addAll(PackageDiscoveryService.scanJarsForType(jars, simple).keySet());
++            return candidates;
++        });
++    }
++
++    private static List<String> jars(String classpath) {
++        List<String> out = new ArrayList<>();
++        for (String entry : classpath.split(File.pathSeparator)) {
++            if (!entry.isBlank() && entry.endsWith(".jar")) out.add(entry);
++        }
++        return out;
++    }
++
++    /** Platform parent: the project's dependencies resolve against its own classpath, never Autobuilder's. */
++    private static URLClassLoader loader(List<String> jars) {
++        List<URL> urls = new ArrayList<>();
++        for (String jar : jars) {
++            try {
++                urls.add(new File(jar).toURI().toURL());
++            } catch (MalformedURLException e) {
++                // an unusable entry is skipped
++            }
++        }
++        return new URLClassLoader(urls.toArray(new URL[0]), ClassLoader.getPlatformClassLoader());
++    }
++}
+diff --git a/src/main/java/com/walpro/autobuilder/core/stuck/StuckDiagnosis.java b/src/main/java/com/walpro/autobuilder/core/stuck/StuckDiagnosis.java
+index dc43def8..f6e685e2 100644
+--- a/src/main/java/com/walpro/autobuilder/core/stuck/StuckDiagnosis.java
++++ b/src/main/java/com/walpro/autobuilder/core/stuck/StuckDiagnosis.java
+@@ -47,14 +47,20 @@ public final class StuckDiagnosis {
+      * structural question for a signature was asked and the signature came back; null when there is none.
+      */
+     public record Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed,
+-                              Observer observer) {
++                              Observer observer, StuckQuestions.TypeAuthority types) {
+         public Authorities {
+             currentSources = currentSources == null ? Map.of() : currentSources;
+             adoptedSources = adoptedSources == null ? Map.of() : adoptedSources;
++            types = types == null ? StuckQuestions.TypeAuthority.platform() : types;
+         }
+ 
+         public Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed) {
+-            this(currentSources, adoptedSources, seed, null);
++            this(currentSources, adoptedSources, seed, null, null);
++        }
++
++        public Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed,
++                           Observer observer) {
++            this(currentSources, adoptedSources, seed, observer, null);
+         }
+     }
+ 
+@@ -98,8 +104,8 @@ public final class StuckDiagnosis {
+     static Asked declared(String signature, Authorities a) {
+         String question = "What does the code declare for the name this failure is about?";
+         String authority = "structure: the current tree and the adopted original";
+-        Optional<StuckQuestions.Answer> now = StuckQuestions.answer(signature, a.currentSources());
+-        Optional<StuckQuestions.Answer> adopted = StuckQuestions.answer(signature, a.adoptedSources());
++        Optional<StuckQuestions.Answer> now = StuckQuestions.answer(signature, a.currentSources(), a.types());
++        Optional<StuckQuestions.Answer> adopted = StuckQuestions.answer(signature, a.adoptedSources(), a.types());
+         if (now.isEmpty() && adopted.isEmpty()) return new Asked(question, authority, null, false);
+         StringBuilder sb = new StringBuilder();
+         String meant = meantByImports(signature, now.or(() -> adopted).get(), a);
+diff --git a/src/main/java/com/walpro/autobuilder/core/stuck/StuckLayer.java b/src/main/java/com/walpro/autobuilder/core/stuck/StuckLayer.java
+index c91cdd7c..09a639b9 100644
+--- a/src/main/java/com/walpro/autobuilder/core/stuck/StuckLayer.java
++++ b/src/main/java/com/walpro/autobuilder/core/stuck/StuckLayer.java
+@@ -1,6 +1,7 @@
+ package com.walpro.autobuilder.core.stuck;
+ 
+ import com.walpro.autobuilder.core.build.ProtectedPaths;
++import com.walpro.autobuilder.core.build.StuckQuestions;
+ import com.walpro.autobuilder.core.checkpoint.StateBucket;
+ import com.walpro.autobuilder.core.checkpoint.StateHolder;
+ import com.walpro.autobuilder.core.lifecycle.CycleContextData;
+@@ -52,6 +53,10 @@ public class StuckLayer {
+     @Autowired(required = false)
+     private FileService fileService;
+ 
++    /** Which class a type name denotes: the JDK and the project's own classpath; optional (JDK only without it). */
++    @Autowired(required = false)
++    private ProjectTypeAuthority projectTypeAuthority;
++
+     /** T4-DZ: the observation authority, asked after structure; optional. */
+     @Autowired(required = false)
+     private TerminalAgent terminalAgent;
+@@ -152,7 +157,10 @@ public class StuckLayer {
+                     if (terminalAgentRecorder != null) terminalAgentRecorder.attribute(context);
+                     return terminalAgent.ask(signature, evidence, live, lastChange.getOrDefault(signature, Map.of()), cycle);
+                 };
+-        StuckDiagnosis.Authorities authorities = new StuckDiagnosis.Authorities(live, adoptedSources(), seed(), observer);
++        StuckQuestions.TypeAuthority types = projectTypeAuthority == null || context == null || context.outputPath() == null
++                ? StuckQuestions.TypeAuthority.platform()
++                : projectTypeAuthority.forProject(java.nio.file.Path.of(context.outputPath()));
++        StuckDiagnosis.Authorities authorities = new StuckDiagnosis.Authorities(live, adoptedSources(), seed(), observer, types);
+         boolean changed = false;
+         for (StuckLedger.Entry e : ledger.pending()) {
+             changed = true;
+diff --git a/src/test/java/com/walpro/autobuilder/core/build/inject/JdkPlatformTypeIndexTest.java b/src/test/java/com/walpro/autobuilder/core/build/JdkPlatformTypeIndexTest.java
+similarity index 97%
+rename from src/test/java/com/walpro/autobuilder/core/build/inject/JdkPlatformTypeIndexTest.java
+rename to src/test/java/com/walpro/autobuilder/core/build/JdkPlatformTypeIndexTest.java
+index 9c551984..c69ce872 100644
+--- a/src/test/java/com/walpro/autobuilder/core/build/inject/JdkPlatformTypeIndexTest.java
++++ b/src/test/java/com/walpro/autobuilder/core/build/JdkPlatformTypeIndexTest.java
+@@ -1,4 +1,4 @@
+-package com.walpro.autobuilder.core.build.inject;
++package com.walpro.autobuilder.core.build;
+ 
+ import org.junit.jupiter.api.Test;
+ 
+diff --git a/src/test/java/com/walpro/autobuilder/core/build/TypeAuthorityTest.java b/src/test/java/com/walpro/autobuilder/core/build/TypeAuthorityTest.java
+new file mode 100644
+index 00000000..6d44d338
+--- /dev/null
++++ b/src/test/java/com/walpro/autobuilder/core/build/TypeAuthorityTest.java
+@@ -0,0 +1,91 @@
++package com.walpro.autobuilder.core.build;
++
++import com.walpro.autobuilder.core.build.StuckQuestions.Answer;
++import com.walpro.autobuilder.core.build.inject.PackageDiscoveryService;
++import org.junit.jupiter.api.Test;
++
++import java.io.File;
++import java.net.URL;
++import java.net.URLClassLoader;
++import java.util.LinkedHashSet;
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++
++import static org.assertj.core.api.Assertions.assertThat;
++
++/**
++ * The stuck router's type authority (port review 2026-09-27): which class a type name in a failure denotes.
++ * Invented projects; the probes are the review packet's (Base64, Timer, List, String) plus a dependency type.
++ */
++class TypeAuthorityTest {
++
++    private static final Map<String, String> SHADOW = Map.of(
++            "src/main/java/org/ink/Base64.java", "package org.ink;\npublic class Base64 {\n  public String encode(String s) { return s; }\n}\n",
++            "src/main/java/org/ink/Timer.java", "package org.ink;\npublic class Timer {\n  public void fire() {}\n}\n",
++            "src/main/java/org/ink/Clock.java", "package org.ink;\npublic record Clock(Timer t, Base64 code) {}\n");
++    private static final Map<String, String> PLAIN = Map.of("src/main/java/org/ink/Quill.java", "package org.ink;\npublic record Quill(String nib) {}\n");
++
++    @Test
++    void theProjectsOwnTypeIsNeverAnsweredWithAPlatformClassOfTheSameName() {
++        assertThat(StuckQuestions.answer("the build fails: Clock.java: cannot find symbol method decode(String) in record component code of type Base64", SHADOW))
++                .as("java.util.Base64 is unique in the JDK, and still not the project's Base64").isEmpty();
++        assertThat(StuckQuestions.answer("the build fails: Clock.java: cannot find symbol method stop() in record component t of type Timer", SHADOW)).isEmpty();
++    }
++
++    @Test
++    void aWrittenPackageIsExactAndJavaLangNeedsNoImport() {
++        Answer map = StuckQuestions.answer("the build fails: Quill.java: cannot find symbol method indexOf(Quill) in variable active of type java.util.Map<java.lang.String,org.ink.Quill>", PLAIN).orElseThrow();
++        assertThat(map.type()).isEqualTo("Map");
++        assertThat(map.declared()).contains("get(Object)").noneMatch(d -> d.startsWith("indexOf("));
++        Answer string = StuckQuestions.answer("the build fails: String has no getLength()", PLAIN).orElseThrow();
++        assertThat(string.declared()).contains("length()").doesNotContain("compareTo(Object)");
++    }
++
++    @Test
++    void anAmbiguousNameIsSettledByTheProjectsImportsOrNotAtAll() {
++        assertThat(StuckQuestions.answer("the build fails: List has no getFirstItem()", PLAIN)).as("java.util and java.awt; no import").isEmpty();
++        Map<String, String> importsUtil = Map.of("src/main/java/org/ink/Well.java",
++                "package org.ink;\nimport java.util.List;\npublic class Well { List<String> drops; }\n");
++        Answer list = StuckQuestions.answer("the build fails: List has no getFirstItem()", importsUtil).orElseThrow();
++        assertThat(list.declared()).contains("add(Object)").noneMatch(d -> d.startsWith("addActionListener("));
++    }
++
++    @Test
++    void aDependencyTypeIsAnsweredFromTheProjectsOwnClasspath() throws Exception {
++        String jar = System.getProperty("user.home")
++                + "/.m2/repository/com/github/javaparser/javaparser-core/3.25.7/javaparser-core-3.25.7.jar";
++        org.junit.jupiter.api.Assumptions.assumeTrue(new File(jar).isFile(), "javaparser-core 3.25.7 in the local repository");
++        List<String> jars = List.of(jar);
++        URLClassLoader loader = new URLClassLoader(new URL[]{new File(jar).toURI().toURL()}, ClassLoader.getPlatformClassLoader());
++        StuckQuestions.TypeAuthority project = (name, sources) -> StuckQuestions.resolveAgainst(name, sources, loader, simple -> {
++            Set<String> c = new LinkedHashSet<>(JdkPlatformTypeIndex.exportedTypes(simple));
++            c.addAll(PackageDiscoveryService.scanJarsForType(jars, simple).keySet());
++            return c;
++        });
++
++        Answer a = StuckQuestions.answer("the build fails: RecordDeclaration has no getComponents()", PLAIN, project).orElseThrow();
++
++        assertThat(a.type()).isEqualTo("RecordDeclaration");
++        assertThat(a.declared()).contains("getParameters()").noneMatch(d -> d.startsWith("getComponents("));
++        assertThat(StuckQuestions.answer("the build fails: RecordDeclaration has no getComponents()", PLAIN))
++                .as("the JDK alone does not know a dependency type").isEmpty();
++    }
++
++    /** The independent review of the first draft: an explicit import outranks java.lang and a unique platform name. */
++    @Test
++    void anExplicitImportOutranksJavaLangAndAUniquePlatformName() {
++        Map<String, String> guice = Map.of("src/main/java/org/ink/Wiring.java",
++                "package org.ink;\nimport com.google.inject.Module;\npublic class Wiring { Module m; }\n");
++        assertThat(StuckQuestions.answer("the build fails: Module has no configure()", guice))
++                .as("com.google.inject.Module is meant, and the JDK alone cannot load it").isEmpty();
++        Map<String, String> codec = Map.of("src/main/java/org/ink/Seal.java",
++                "package org.ink;\nimport org.apache.commons.codec.binary.Base64;\npublic class Seal { Base64 b; }\n");
++        assertThat(StuckQuestions.answer("the build fails: Base64 has no decodeBase64(String)", codec)).isEmpty();
++        Map<String, String> twoLists = Map.of(
++                "src/main/java/org/ink/A.java", "package org.ink;\nimport java.util.List;\nclass A {}\n",
++                "src/main/java/org/ink/B.java", "package org.ink;\nimport java.awt.List;\nclass B {}\n");
++        assertThat(StuckQuestions.answer("the build fails: List has no getFirstItem()", twoLists))
++                .as("two files import two different Lists: no answer").isEmpty();
++    }
++}

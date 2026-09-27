@@ -22,6 +22,12 @@ class DifferentialDumpTest {
 
     private static Map<String, String> tree(String project) throws Exception {
         if (project.equals("none")) return Map.of("src/main/java/org/ink/Quill.java", "package org.ink;\npublic record Quill(String nib) {}\n");
+        // A project that imports java.util.List: the import is what says which List it means.
+        if (project.equals("imports-util")) return Map.of(
+                "src/main/java/org/ink/Well.java", "package org.ink;\nimport java.util.List;\npublic class Well { List<String> drops; }\n");
+        // A project importing dependency classes whose simple names java.lang / the JDK also declare.
+        if (project.equals("imports-foreign")) return Map.of(
+                "src/main/java/org/ink/Wiring.java", "package org.ink;\nimport com.google.inject.Module;\nimport org.apache.commons.codec.binary.Base64;\npublic class Wiring { Module m; Base64 b; }\n");
         // A project class whose simple name the JDK also declares (java.util.Timer): the project's own answers first.
         if (project.equals("shadow")) return Map.of(
                 "src/main/java/org/ink/Timer.java", "package org.ink;\npublic class Timer {\n  public void fire() {}\n  public int ticks() { return 0; }\n}\n",

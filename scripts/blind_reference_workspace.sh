@@ -14,7 +14,10 @@ TGT="${1:?usage: blind_reference_workspace.sh <target> [dest-dir]}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="${2:-$HOME/.autobuilder/blind/$TGT-$(date +%Y-%m-%d_%H-%M-%S)}"
 B="$ROOT/data/$TGT/bootstrap"
-"$ROOT/scripts/prepare_module_change.sh" "$TGT" "$DEST" > /dev/null
+# A toy case described as data (bootstrap/module/) is prepared generically; an older one by its own script.
+PREPARE="$ROOT/scripts/prepare_module_change.sh"
+[ -d "$B/module" ] || PREPARE="$ROOT/scripts/prepare_${TGT//-/_}_change.sh"
+"$PREPARE" "$TGT" "$DEST" > /dev/null
 cp "$B/seed.txt" "$DEST/SEED.txt"
 CHANGE=$(grep -o 'The one class to change is [A-Za-z0-9_]*' "$B/seed.txt" | head -1 | awk '{print $NF}')
 SPEC=$(grep -o 'The specification is [A-Za-z0-9_]*' "$B/seed.txt" | head -1 | awk '{print $NF}')

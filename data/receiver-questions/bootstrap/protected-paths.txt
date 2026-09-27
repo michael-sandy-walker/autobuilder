@@ -3,7 +3,7 @@
 src/test/**
 # The module's other class stays exactly as it was.
 src/main/java/com/walpro/autobuilder/core/build/DeclaredMembers.java
-# StuckQuestions is NOT member-protected: the ticket extends what its existing entry point answers, and
-# `members:` restores every existing declaration as adopted -- run 1 (2026-09-26_20-45-54) had its change to
-# answer() undone three times and could only add helpers nothing called. Existing behaviour is held by the
-# module's own tests (StuckQuestionsSpecTest, StuckQuestionsSymbolTest, StuckQuestionsPortReviewTest).
+# StuckQuestions keeps every declaration it was adopted with EXCEPT answer(), the entry point this ticket
+# extends. Run 1 (2026-09-26_20-45-54) had a plain members: guard and its change to answer() was undone three
+# times; runs 2-5 had no guard at all, and run 5 rewrote declarations the old tests depend on.
+members: src/main/java/com/walpro/autobuilder/core/build/StuckQuestions.java except answer

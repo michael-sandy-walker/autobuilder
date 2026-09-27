@@ -44,12 +44,28 @@ def seed_names(target):
     return change, spec
 
 
+def prepare_script(target):
+    """A toy case described as data (bootstrap/module/) is prepared generically; an older one by its own script."""
+    if os.path.isdir(os.path.join(ROOT, 'data', target, 'bootstrap', 'module')):
+        return os.path.join(ROOT, 'scripts', 'prepare_module_change.sh')
+    return os.path.join(ROOT, 'scripts', 'prepare_%s_change.sh' % target.replace('-', '_'))
+
+
 def class_path(target, change):
-    for line in open(os.path.join(ROOT, 'data', target, 'bootstrap', 'module', 'files.txt')):
-        line = line.strip()
-        if line.endswith('/' + change + '.java') and line.startswith('src/main/'):
-            return line
-    raise SystemExit('the module lists no ' + change + '.java')
+    files = os.path.join(ROOT, 'data', target, 'bootstrap', 'module', 'files.txt')
+    if os.path.exists(files):
+        for line in open(files):
+            line = line.strip()
+            if line.endswith('/' + change + '.java') and line.startswith('src/main/'):
+                return line
+    d = tempfile.mkdtemp(prefix='port-review-path-')
+    sh([prepare_script(target), target, os.path.join(d, 'm')])
+    for base, _, fs in os.walk(os.path.join(d, 'm', 'src', 'main')):
+        if change + '.java' in fs:
+            rel = os.path.relpath(os.path.join(base, change + '.java'), os.path.join(d, 'm'))
+            shutil.rmtree(d, ignore_errors=True)
+            return rel
+    raise SystemExit('the module has no ' + change + '.java')
 
 
 def from_tarball(run, rel):
@@ -84,7 +100,7 @@ def metrics(origin, text):
 def run_suite(target, rel, text, spec, differential, out_tsv, extra=None):
     d = tempfile.mkdtemp(prefix='port-review-')
     mod = os.path.join(d, 'm')
-    sh([os.path.join(ROOT, 'scripts', 'prepare_module_change.sh'), target, mod])
+    sh([prepare_script(target), target, mod])
     open(os.path.join(mod, rel), 'w').write(text)
     for dest, content in (extra or {}).items():
         os.makedirs(os.path.dirname(os.path.join(mod, dest)), exist_ok=True)

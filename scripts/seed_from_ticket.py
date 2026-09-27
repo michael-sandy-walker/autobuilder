@@ -99,6 +99,8 @@ def main():
     ap.add_argument('--lines', help='line ranges of the source to quote, e.g. 43-54,80-83')
     ap.add_argument('--before', help='drop dated appends on or after this date (YYYY-MM-DD)')
     ap.add_argument('--out')
+    ap.add_argument('--open', default='',
+                    help='with --grow: the members the change may rewrite (comma-separated); every other declaration stays')
     ap.add_argument('--grow', action='store_true',
                     help='the class to change already works as its comment says and grows (default: a stub to implement)')
     ap.add_argument('--obligations-out', help='also write bootstrap/seed.obligations.txt for this seed')
@@ -110,8 +112,11 @@ def main():
     readme = ' '.join(l for l in readme if not l.startswith('#')).strip()
     # --grow: the class already works and must answer more. Its existing tests hold what it does now, so the
     # seed does not ask to keep its declarations untouched -- extending an entry point means changing one.
+    opened = [n.strip() for n in a.open.split(',') if n.strip()]
+    keep = ('' if not opened else '\n  Keep every declaration it has exactly as it is, except ' + ' and '.join(n + '()' for n in opened)
+            + ', which the change extends; add new declarations beside them.')
     change_line = (f'''  The one class to change is {a.change}. It already works as its class comment says, and its
-  existing tests must keep passing; extend it so that it also answers what the ticket asks.''' if a.grow else
+  existing tests must keep passing; extend it so that it also answers what the ticket asks.''' + keep if a.grow else
                    f'''  The one class to change is {a.change}. Its signature and the meaning of what it returns are in its
   class comment; its method is not implemented yet.''')
     seed = f'''  An existing project, adopted, and now asked to grow. It was written by someone else and it

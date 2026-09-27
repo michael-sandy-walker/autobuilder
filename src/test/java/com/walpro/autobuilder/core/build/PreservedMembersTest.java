@@ -118,4 +118,28 @@ class PreservedMembersTest {
 
         assertThat(PreservedMembers.restore(ADOPTED, broken).content()).isSameAs(broken);
     }
+
+    /**
+     * An open member (the operator's "members: <glob> except answer"): the writer's change to it lands, in
+     * place of the adopted one; a change to any other member is still restored (receiver-questions run
+     * 2026-09-26_20-45-54 had its change to answer() undone three times).
+     */
+    @Test
+    void anOpenMembersChangeLandsAndEveryOtherMemberIsStillKept() {
+        String adopted = "package org.ink;\n\npublic final class Router {\n\n"
+                + "    public static String answer(String s) {\n        return null;\n    }\n\n"
+                + "    static int weight() {\n        return 1;\n    }\n}\n";
+        String candidate = "package org.ink;\n\npublic final class Router {\n\n"
+                + "    public static String answer(String s) {\n        return helper(s);\n    }\n\n"
+                + "    static int weight() {\n        return 2;\n    }\n\n"
+                + "    static String helper(String s) {\n        return s;\n    }\n}\n";
+
+        PreservedMembers.Result r = PreservedMembers.restore(adopted, candidate, java.util.Set.of("answer"));
+
+        org.assertj.core.api.Assertions.assertThat(r.content()).contains("return helper(s);")
+                .contains("static String helper(String s)").contains("return 1;").doesNotContain("return 2;");
+        org.assertj.core.api.Assertions.assertThat(r.restored()).containsExactly("Router.weight() (changed)");
+        org.assertj.core.api.Assertions.assertThat(PreservedMembers.restore(adopted, candidate).content())
+                .as("without the exception answer() is restored as before").contains("return null;");
+    }
 }

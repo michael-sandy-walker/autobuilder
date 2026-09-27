@@ -50,6 +50,12 @@ import java.util.stream.Collectors;
  * parameter types, a field by its variable names, a record's compact constructor, a nested type by
  * name, recursively), each in the candidate's own text. What the candidate changed or removed is
  * reported. A candidate that cannot be parsed is returned unchanged: it will not compile either.
+ *
+ * <p><b>Open members (2026-09-27).</b> A ticket may EXTEND an existing entry point: receiver-questions
+ * run 2026-09-26_20-45-54 had its change to {@code StuckQuestions.answer} restored as adopted three times,
+ * so only helpers nothing called could land. The operator names such members after {@code except} on the
+ * {@code members:} line; a member of that name (every overload) is taken as the candidate wrote it, in
+ * place of the adopted one. Everything else is kept as before.
  */
 public final class PreservedMembers {
 
@@ -61,6 +67,12 @@ public final class PreservedMembers {
     }
 
     public static Result restore(String baseline, String candidate) {
+        return restore(baseline, candidate, Set.of());
+    }
+
+    /** As {@link #restore(String, String)}, with {@code open}: the members (by simple name) the candidate may change. */
+    public static Result restore(String baseline, String candidate, Set<String> open) {
+        Set<String> opened = open == null ? Set.of() : open;
         if (baseline == null || candidate == null || baseline.equals(candidate)) return new Result(candidate, List.of());
         JavaParser parser = new JavaParser(new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17));
         // A tree recovered from a syntax error is not the candidate's meaning: leave such a file for the
@@ -77,14 +89,14 @@ public final class PreservedMembers {
         for (TypeDeclaration<?> bt : b.getTypes()) {
             Optional<TypeDeclaration<?>> ct = byName(c.getTypes(), bt.getNameAsString());
             if (ct.isEmpty()) restored.add(bt.getNameAsString() + " (removed)");
-            else differences(bt, ct.get(), bt.getNameAsString(), restored);
+            else differences(bt, ct.get(), bt.getNameAsString(), restored, opened);
         }
         if (restored.isEmpty()) return new Result(candidate, List.of());
 
         List<int[]> at = new ArrayList<>();
         List<String> text = new ArrayList<>();
         for (TypeDeclaration<?> bt : b.getTypes()) {
-            byName(c.getTypes(), bt.getNameAsString()).ifPresent(ct -> additions(bt, ct, baseline, candidate, at, text));
+            byName(c.getTypes(), bt.getNameAsString()).ifPresent(ct -> additions(bt, ct, baseline, candidate, at, text, opened));
         }
         for (TypeDeclaration<?> ct : c.getTypes()) {                   // a whole new top-level type
             if (byName(b.getTypes(), ct.getNameAsString()).isEmpty()) {
@@ -116,7 +128,8 @@ public final class PreservedMembers {
     }
 
     /** What the candidate changed of the adopted type: its header, and each member it changed or dropped. */
-    private static void differences(TypeDeclaration<?> bt, TypeDeclaration<?> ct, String owner, List<String> out) {
+    private static void differences(TypeDeclaration<?> bt, TypeDeclaration<?> ct, String owner, List<String> out,
+                                    Set<String> open) {
         if (!normalised(header(bt)).equals(normalised(header(ct)))) out.add(owner + " declaration (changed)");
         Map<String, BodyDeclaration<?>> cm = members(ct);
         for (Map.Entry<String, BodyDeclaration<?>> e : members(bt).entrySet()) {
@@ -124,7 +137,9 @@ public final class PreservedMembers {
             if (c == null) {
                 out.add(owner + "." + e.getKey() + " (removed)");
             } else if (e.getValue() instanceof TypeDeclaration<?> bn && c instanceof TypeDeclaration<?> cn) {
-                differences(bn, cn, owner + "." + bn.getNameAsString(), out);
+                differences(bn, cn, owner + "." + bn.getNameAsString(), out, open);
+            } else if (open.contains(simpleName(e.getKey()))) {
+                // an open member: the candidate's version is taken, not a restoration
             } else if (!normalised(e.getValue()).equals(normalised(c))) {
                 out.add(owner + "." + e.getKey() + " (changed)");
             }
@@ -133,7 +148,7 @@ public final class PreservedMembers {
 
     /** The candidate's members the adopted type lacks, inserted before the adopted type's closing brace. */
     private static void additions(TypeDeclaration<?> bt, TypeDeclaration<?> ct, String bsrc, String csrc,
-                                  List<int[]> at, List<String> text) {
+                                  List<int[]> at, List<String> text, Set<String> open) {
         Map<String, BodyDeclaration<?>> bm = members(bt);
         StringBuilder added = new StringBuilder();
         for (Map.Entry<String, BodyDeclaration<?>> e : members(ct).entrySet()) {
@@ -141,7 +156,15 @@ public final class PreservedMembers {
             if (b == null) {
                 text(e.getValue(), csrc).ifPresent(t -> added.append("\n    ").append(t).append("\n"));
             } else if (b instanceof TypeDeclaration<?> bn && e.getValue() instanceof TypeDeclaration<?> cn) {
-                additions(bn, cn, bsrc, csrc, at, text);
+                additions(bn, cn, bsrc, csrc, at, text, open);
+            } else if (open.contains(simpleName(e.getKey())) && !normalised(b).equals(normalised(e.getValue()))) {
+                // an open member the candidate changed: its text replaces the adopted one, in place
+                Optional<int[]> where = span(b, bsrc);
+                Optional<String> t = text(e.getValue(), csrc);
+                if (where.isPresent() && t.isPresent()) {
+                    at.add(where.get());
+                    text.add(t.get());
+                }
             }
         }
         if (added.isEmpty()) return;
@@ -149,6 +172,18 @@ public final class PreservedMembers {
         if (pos < 0) return;
         at.add(new int[]{pos, pos});
         text.add(added.toString());
+    }
+
+    /** The simple name a member key names: {@code answer(String,Map)} -> answer, {@code field a,b} -> a. */
+    static String simpleName(String key) {
+        String k = key.startsWith("field ") ? key.substring(6).split(",")[0]
+                : key.startsWith("type ") ? key.substring(5) : key;
+        int cut = k.length();
+        for (char ch : new char[]{'(', '{'}) {
+            int i = k.indexOf(ch);
+            if (i >= 0) cut = Math.min(cut, i);
+        }
+        return k.substring(0, cut).strip();
     }
 
     /** A type declaration without its members: name, modifiers, annotations, type parameters, supertypes, components. */

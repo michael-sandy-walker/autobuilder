@@ -119,4 +119,13 @@ class ProtectedPathsTest {
         Files.createDirectories(f.getParent());
         Files.writeString(f, text);
     }
+
+    @Test
+    void anExceptListOpensThoseMembersOfTheMatchingFilesOnly() throws Exception {
+        declare("members: src/main/java/**/Router.java except answer, route\nmembers: src/main/**\n");
+
+        assertThat(paths.preservesMembers("src/main/java/zeta/Router.java")).isTrue();
+        assertThat(paths.openMembers("src/main/java/zeta/Router.java")).containsExactlyInAnyOrder("answer", "route");
+        assertThat(paths.openMembers("src/main/java/zeta/Quill.java")).isEmpty();
+    }
 }

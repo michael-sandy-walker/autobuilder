@@ -5,7 +5,7 @@
 # Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
 # takes the test run's verdict instead of asking a model to read the source.
 # Written by scripts/seed_from_ticket.py: the ticket guides (rule:), the tests decide (gate: tests).
-# seed-sha256: 3b1a21e031d74ab76b2ba01fbf4d47714e3380f192db5e4603181c4634b0fc46
+# seed-sha256: 09871670321f89149cfaef0ef59e62828c26494c26a39e5203d9517040edbc9e
 # body-sha256: a7fbd057e9bf692ae6264b9c8535666f14e43b247135738ca3649762ecd12eae
 rule: - 2026-09-26 night: THE RECEIVER QUESTION -- the next structural rule, read from what the terminal agent had to answer.
 rule: A method called on a receiver whose type is a JDK type is a question the router cannot ask today: "the build fails: Object has no getBookId()" and "cannot find symbol method indexOf(ParticipationWindow) in record component active of type Map<String,ParticipationWindow>" name a type the project's sources do not declare, so no answer comes back.

@@ -5659,6 +5659,30 @@
    "start_tree": "FOREIGN",
    "terminal": "operator-stop",
    "total_cycles": "20"
+  },
+  "2026-09-27_19-00-13": {
+   "clauses_closed_vs_control": "1",
+   "cost_readout": "build=43270ms/14 package-gate=2679ms/1 sms-commit=942ms/4 sms-batch-build=934ms/4 boot-gate=265ms/1 sms-lineage-stamp=59ms/4 sms-cycle-merge=43ms/4 sms-cycle-link=37ms/3",
+   "criteria_authored": "7",
+   "criteria_elaboration": "1",
+   "criteria_executable_count": "6",
+   "criteria_executable_pct": "86",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "44",
+   "merges": "5",
+   "peaked_at_cycle": "cycle-1790529209332 (5/5)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-09-27",
+   "run_duration_min": "13.1",
+   "score_delta": "n/a (boot-failed vs boot-failed)",
+   "smoke": "boot-failed",
+   "smoke_preserved": "boot-failed",
+   "start_cleared_tree": "yes",
+   "start_mode": "NEW_PROJECT",
+   "start_tree": "LOOP_AUTHORED",
+   "terminal": "operator-stop",
+   "total_cycles": "5"
   }
  },
  "updated": "2026-09-27"

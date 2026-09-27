@@ -1,0 +1,44 @@
+structdiff	the build fails: ParsedElement has no getType()	MEMBERS | ParsedElement | getType | meant=type() | [id(), type(), content(), metadata(), children()]
+structdiff	the build fails: ParsedElement has no getId()	MEMBERS | ParsedElement | getId | meant=id() | [id(), type(), content(), metadata(), children()]
+structdiff	the build fails: ParsedElement has no getChildren()	MEMBERS | ParsedElement | getChildren | meant=children() | [id(), type(), content(), metadata(), children()]
+structdiff	the build fails: StructuralDiffNode has no getChildren()	MEMBERS | StructuralDiffNode | getChildren | meant=children() | [oldElement(), newElement(), children(), isAdded(), isDeleted(), isModified(), isUnchanged(), getType(), getId()]
+structdiff	the build fails: StructuralJavaDiffBuilderTest.java: method diffJavaFile in class com.walpro.autobuilder.analysis.diff.builder.StructuralJavaDiffBuilder cannot be applied to given types;	OVERLOADS | StructuralJavaDiffBuilder | diffJavaFile | meant=null | [diffJavaFile(String relPath, String oldContent, String newContent)]
+structdiff	the build fails: StructuralDiffUtilsTest.java: cannot find symbol variable ChangeKind in class StructuralDiffNode	(no answer)
+structdiff	the build fails: StructuralDiffTest.java: method diffJavaFile in class com.walpro.autobuilder.analysis.diff.builder.StructuralJavaDiffBuilder cannot be applied to given types;	OVERLOADS | StructuralJavaDiffBuilder | diffJavaFile | meant=null | [diffJavaFile(String relPath, String oldContent, String newContent)]
+structdiff	the build fails: StructuralDiffNode has no addChild(com.walpro.autobuilder.analysis.diff.model.StructuralDiffNode)	MEMBERS | StructuralDiffNode | addChild | meant=null | [oldElement(), newElement(), children(), isAdded(), isDeleted(), isModified(), isUnchanged(), getType(), getId()]
+structdiff	the build fails: StructuralDiffUtilsFlattenTest.java: error: constructor ElementDescriptor in record com.walpro.autobuilder.analysis.diff.model.ElementDescriptor cannot be applied to given types;	CONSTRUCTOR | ElementDescriptor | null | meant=null | [ElementDescriptor(String id, ElementType type, String content, Map<String,Object> metadata)]
+structdiff	the build fails: StructuralDiffNode has no createChild(com.walpro.autobuilder.analysis.diff.model.ElementType,java.lang.String,<nulltype>,<nulltype>,<nulltype>)	MEMBERS | StructuralDiffNode | createChild | meant=null | [oldElement(), newElement(), children(), isAdded(), isDeleted(), isModified(), isUnchanged(), getType(), getId()]
+participation	the build fails: ParticipationWindows.java: cannot find symbol method indexOf(ParticipationWindow) in record component active of type Map<String,ParticipationWindow>	(no answer)
+participation	the build fails: ParticipationWindows.java: incompatible types: no instance(s) of type variable(s) E exist so that java.util.List<E> conforms to int	(no answer)
+participation	the build fails: ParticipationWindows.java: cannot find symbol variable Collections in class ParticipationWindows	(no answer)
+participation	the build fails: ParticipationWindows.java: cannot find symbol variable List in class ParticipationWindows	(no answer)
+participation	the build fails: ParticipationWindows.java: cannot find symbol class List in class ParticipationWindows	(no answer)
+participation	the build fails: ParticipationWindows.java: cannot find symbol class ArrayList in class ParticipationWindows	(no answer)
+participation	the build fails: ParticipationWindows.java: cannot find symbol class LinkedHashMap in class ParticipationWindows	(no answer)
+participation	the build fails: ParticipationWindows.java: incompatible types: inference variable E has incompatible bounds	(no answer)
+participation	the build fails: ChannelRequest.java: constructor ChannelRequest in record com.walpro.autobuilder.core.lifecycle.ChannelRequest cannot be applied to given types;	CONSTRUCTOR | ChannelRequest | null | meant=null | [ChannelRequest(SignalType kind, double urgency, String source, String subGoalId, int age, Integer validForCycles, Map<String,Object> meta)]
+participation	the build fails: ChannelRequest.java: cannot find symbol class HashMap in class ChannelRequest	(no answer)
+participation	the build fails: ChannelRequest.java: cannot find symbol variable subGoalId in class ChannelRequest	(no answer)
+participation	the build fails: ChannelRequest.java: cannot find symbol variable subGoalId in variable other of type ChannelRequest	(no answer)
+participation	the build fails: ChannelRequest.java: cannot find symbol class List in class ChannelRequest	(no answer)
+participation	write to src/test/java/com/walpro/autobuilder/core/lifecycle/ChannelRequestTest.java refused: protected	(no answer)
+none	the build fails: BufferStrategy has no next()	(no answer)
+none	the build fails: GraphicsConfiguration has no createGraphics()	(no answer)
+none	the build fails: Object has no getBookId()	(no answer)
+none	the build fails: Object has no getEmail()	(no answer)
+structdiff	the build fails: Object has no getId()	(no answer)
+structdiff	the build fails: Object has no getType()	(no answer)
+structdiff	the build fails: Object has no isModified()	(no answer)
+none	the build fails: Object has no isReturned()	(no answer)
+none	the build fails: Object has no setReturned(boolean)	(no answer)
+none	the build fails: List has no getFirstItem()	(no answer)
+none	the build fails: String has no getLength()	(no answer)
+none	the build fails: Quill.java: method max in class java.lang.Math cannot be applied to given types;	(no answer)
+none	the build fails: Plasma has no getHeat()	(no answer)
+shadow	the build fails: Clock.java: cannot find symbol method stop() in record component t of type Timer	(no answer)
+shadow	the build fails: Timer has no stop()	MEMBERS | Timer | stop | meant=null | [fire(), ticks()]
+shadow	the build fails: Clock.java: cannot find symbol method decode(String) in record component code of type Base64	(no answer)
+imports-util	the build fails: List has no getFirstItem()	(no answer)
+imports-foreign	the build fails: Module has no configure()	(no answer)
+imports-foreign	the build fails: Base64 has no decodeBase64(String)	(no answer)
+none	the build fails: Quill.java: cannot find symbol method indexOf(Quill) in variable active of type java.util.Map<java.lang.String,org.ink.Quill>	(no answer)

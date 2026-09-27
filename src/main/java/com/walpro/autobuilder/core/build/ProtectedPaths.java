@@ -48,6 +48,8 @@ public class ProtectedPaths {
     private List<PathMatcher> cachedMatchers = List.of();
     private List<PathMatcher> cachedMemberMatchers = List.of();
     private List<String> cachedMemberGlobs = List.of();
+    /** Per member glob (same order as {@link #cachedMemberMatchers}): the members its {@code except} list opens. */
+    private List<java.util.Set<String>> cachedMemberExceptions = List.of();
 
     public ProtectedPaths(FileService fileService) {
         this.fileService = fileService;
@@ -129,7 +131,8 @@ public class ProtectedPaths {
         String rel = normalise(pathUnderOutput);
         try {
             if (!fileService.exists(BASELINE_DIR + "/" + rel)) return content;
-            PreservedMembers.Result r = PreservedMembers.restore(fileService.readString(BASELINE_DIR + "/" + rel), content);
+            PreservedMembers.Result r = PreservedMembers.restore(fileService.readString(BASELINE_DIR + "/" + rel), content,
+                    openMembers(rel));
             if (r.restored().isEmpty()) return content;
             log.warn("T4-CQ: {} rewrote {} existing declaration(s) of {} -- restored as adopted: {}",
                     writer, r.restored().size(), rel, String.join(", ", r.restored()));
@@ -141,6 +144,17 @@ public class ProtectedPaths {
             log.warn("T4-CQ: could not check {} against its adopted text: {}", rel, e.getMessage());
             return content;
         }
+    }
+
+    /** The members the {@code except} lists of the globs matching {@code rel} leave open to writers. */
+    synchronized java.util.Set<String> openMembers(String rel) {
+        matchers();
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        Path p = Path.of(normalise(rel));
+        for (int i = 0; i < cachedMemberMatchers.size(); i++) {
+            if (cachedMemberMatchers.get(i).matches(p)) out.addAll(cachedMemberExceptions.get(i));
+        }
+        return out;
     }
 
     /** True for a member-protected file that existed at adoption: deleting it would remove every declaration. */
@@ -242,14 +256,23 @@ public class ProtectedPaths {
         List<PathMatcher> out = new ArrayList<>();
         List<PathMatcher> members = new ArrayList<>();
         List<String> memberGlobs = new ArrayList<>();
+        List<java.util.Set<String>> exceptions = new ArrayList<>();
         for (String line : text.split("\\R")) {
             String g = line.strip();
             if (g.isEmpty() || g.startsWith("#")) continue;
             if (g.startsWith(MEMBERS_MARKER)) {
-                String glob = g.substring(MEMBERS_MARKER.length()).strip();
+                String rule = g.substring(MEMBERS_MARKER.length()).strip();
+                // "members: <glob> except a, b": a and b may be changed by a writer (an entry point the ticket extends)
+                String[] parts = rule.split("\\s+except\\s+", 2);
+                String glob = parts[0].strip();
                 if (glob.isEmpty()) continue;
                 members.add(FileSystems.getDefault().getPathMatcher("glob:" + glob));
-                memberGlobs.add(glob);
+                memberGlobs.add(rule);
+                java.util.Set<String> open = new java.util.LinkedHashSet<>();
+                if (parts.length > 1) {
+                    for (String n : parts[1].split("[,\\s]+")) if (!n.isBlank()) open.add(n.strip());
+                }
+                exceptions.add(java.util.Set.copyOf(open));
                 continue;
             }
             out.add(FileSystems.getDefault().getPathMatcher("glob:" + g));
@@ -258,6 +281,7 @@ public class ProtectedPaths {
         cachedMatchers = List.copyOf(out);
         cachedMemberMatchers = List.copyOf(members);
         cachedMemberGlobs = List.copyOf(memberGlobs);
+        cachedMemberExceptions = List.copyOf(exceptions);
         return cachedMatchers;
     }
 }

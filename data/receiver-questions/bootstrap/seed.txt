@@ -10,6 +10,7 @@
 
   The one class to change is StuckQuestions. It already works as its class comment says, and its
   existing tests must keep passing; extend it so that it also answers what the ticket asks.
+  Keep every declaration it has exactly as it is, except answer(), which the change extends; add new declarations beside them.
 
   The specification is ReceiverQuestionsSpecTest in src/test/java: its tests say exactly what the method must return,
   using real data from the test resources, and they fail until the code provides it.

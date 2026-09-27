@@ -55,6 +55,10 @@ public class EvolutionLLMAdapter {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.ObservedBehaviour observedBehaviour;
 
+    /** T4-EA: the target's briefing, when it carries one; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.briefing.BriefingSource briefingSource;
+
     /** T4-DY slice B's replay switch: the subgoal source block, on unless a replay takes it away. */
     @org.springframework.beans.factory.annotation.Value("${autobuilder.evolution.subgoal-source-block:true}")
     void setSubgoalSourceBlock(boolean on) {
@@ -93,6 +97,13 @@ public class EvolutionLLMAdapter {
             String answers = stuckLayer.promptBlock(refreshed, Math.max(0, promptTokenBudget.promptHeadroomTokens()
                     - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(userPrompt)) / 2);
             if (answers != null) userPrompt = userPrompt + "\n\n" + answers;
+        }
+        // T4-EA: the parts of the target's briefing this subgoal is about -- background, not requirements.
+        if (briefingSource != null) {
+            String briefing = briefingSource.block(com.walpro.autobuilder.core.briefing.BriefingSource.aboutOf(refreshed),
+                    Math.max(0, promptTokenBudget.promptHeadroomTokens()
+                            - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(userPrompt)));
+            if (briefing != null) userPrompt = userPrompt + "\n\n" + briefing;
         }
         // T4-CQ: what the code was seen to return, for as long as that code is unchanged.
         if (observedBehaviour != null && refreshed.outputPath() != null) {

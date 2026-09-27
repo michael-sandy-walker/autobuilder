@@ -35,6 +35,13 @@ public class PlannerLLMAdapter {
 
     private final PlannerResponseParser parser = new PlannerResponseParser(); // not injected
 
+    /** T4-EA: the target's briefing, when it carries one; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.briefing.BriefingSource briefingSource;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.protocol.PromptTokenBudget promptTokenBudget;
+
     public PlannerOutcome plan(CycleContextData input) {
         // Refresh [UNDEFINED]/[NOT YET PRESENT] markers in goal descriptions against current
         // output state before rendering the prompt. Markers are baked into the description at
@@ -45,6 +52,14 @@ public class PlannerLLMAdapter {
         String systemPrompt = PlannerProtocolContract.getSystemPrompt(depthFirst)
                 + "\n\n" + capabilityManifest.render();
         String userPrompt = PlannerProtocolContract.getUserPrompt(refreshed, depthFirst);
+        // T4-EA: what a developer would read before splitting this goal -- the reasons, the design, the code
+        // around it -- selected for this goal, as background.
+        if (briefingSource != null) {
+            int headroom = promptTokenBudget == null ? 8000 : Math.max(0, promptTokenBudget.promptHeadroomTokens()
+                    - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(systemPrompt + userPrompt));
+            String briefing = briefingSource.block(com.walpro.autobuilder.core.briefing.BriefingSource.aboutOf(refreshed), headroom);
+            if (briefing != null) userPrompt = userPrompt + "\n\n" + briefing;
+        }
 
         LLMResponseResult<PlannerOutcome> result = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,

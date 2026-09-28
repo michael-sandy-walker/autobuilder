@@ -83,6 +83,13 @@ public class TestRunGate {
     private static final int MAX_ROOT_CAUSES = 3;
     private static final int MAX_CAUSE_LENGTH = 300;
 
+    /**
+     * T4-EA: the row a failing parameterized invocation ran with is bounded apart from its message.
+     * Under one shared cap the row filled it: field run 2026-09-28_15-38-46 showed the row and cut
+     * the message -- what the code returned -- off entirely.
+     */
+    private static final int MAX_INPUT_LENGTH = 400;
+
     private final boolean enabled;
     private final String testCommand;
     private final BuildExecutor buildExecutor;
@@ -228,12 +235,9 @@ public class TestRunGate {
                         }
                         String reportName = report.getFileName().toString();
                         String testClass = reportName.substring(0, reportName.length() - ".txt".length());
-                        List<String> found = deepest != null ? List.of(deepest)
+                        List<String> found = deepest != null ? List.of(crop(deepest, MAX_CAUSE_LENGTH))
                                 : failureLines(lines, Path.of(fileBasePath, "output"), testClass);
                         for (String cause : found) {
-                            if (cause.length() > MAX_CAUSE_LENGTH) {
-                                cause = cause.substring(0, MAX_CAUSE_LENGTH) + "…";
-                            }
                             if (!causes.contains(cause)) {
                                 causes.add(cause);
                             }
@@ -271,11 +275,18 @@ public class TestRunGate {
             // ran with is the fact a repair needs, so it replaces the parameter types in the name.
             Optional<String> input = ParameterizedCaseInput.of(projectRoot, testClass, test);
             if (input.isPresent()) {
-                test = test.replaceFirst("\\(.*\\)(?=\\[\\d+]$)", "") + " (ran with: " + input.get() + ")";
+                test = test.replaceFirst("\\(.*\\)(?=\\[\\d+]$)", "")
+                        + " (ran with: " + crop(input.get(), MAX_INPUT_LENGTH) + ")";
             }
-            out.add(test.isEmpty() ? message : test + ": " + message);
+            String line = test.isEmpty() ? message : test + ": " + message;
+            int bound = MAX_CAUSE_LENGTH + (input.isPresent() ? Math.min(input.get().length(), MAX_INPUT_LENGTH) : 0);
+            out.add(crop(line, bound));
         }
         return out;
+    }
+
+    private static String crop(String s, int max) {
+        return s.length() > max ? s.substring(0, max) + "…" : s;
     }
 
     /**

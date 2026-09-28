@@ -156,15 +156,15 @@ class TestRunGateTest {
         java.nio.file.Files.writeString(test, """
                 package org.sample.quill;
                 class InkTest {
-                    @ParameterizedTest @CsvSource({"blue, Nib", "green, Map<String,Nib>"})
-                    void dries(String colour, String type) {}
+                    @ParameterizedTest @CsvSource({"blue, Nib", "green, Map<String,Nib>, %s"})
+                    void dries(String colour, String type, String note) {}
                 }
-                """);
+                """.formatted("a long note ".repeat(30)));
         java.nio.file.Path reports = base.resolve("output/target/surefire-reports");
         java.nio.file.Files.createDirectories(reports);
         java.nio.file.Files.writeString(reports.resolve("org.sample.quill.InkTest.txt"), """
                 Tests run: 2, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.1 s <<< FAILURE! -- in org.sample.quill.InkTest
-                org.sample.quill.InkTest.dries(String, String)[2] -- Time elapsed: 0.02 s <<< FAILURE!
+                org.sample.quill.InkTest.dries(String, String, String)[2] -- Time elapsed: 0.02 s <<< FAILURE!
                 java.lang.AssertionError: Expecting Optional to contain a value but it was empty.
                 """);
         when(buildExecutor.isEnabled()).thenReturn(true);
@@ -176,7 +176,9 @@ class TestRunGateTest {
 
         String blocker = g.verifyTestsPass("c").orElseThrow();
 
-        assertThat(blocker).contains("dries[2] (ran with: green, Map<String,Nib>): java.lang.AssertionError: Expecting Optional");
+        assertThat(blocker).contains("dries[2] (ran with: green, Map<String,Nib>, a long note")
+                .as("a long row does not crowd out what the code returned (field run 2026-09-28_15-38-46)")
+                .contains("): java.lang.AssertionError: Expecting Optional to contain a value but it was empty.");
     }
 
     @Test

@@ -64,6 +64,32 @@ public class StuckLayer {
     @Autowired(required = false)
     private TerminalAgentRecorder terminalAgentRecorder;
 
+    /** T4-DY dossier: the model's move when no question is left; optional (no decider, no move). */
+    @Autowired(required = false)
+    private DossierDecider dossierDecider;
+
+    /** T4-CI phase 3: the run's shape so far against healthy runs, one of the dossier's facts; optional. */
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.health.RunHealth runHealth;
+
+    /** The last test run's per-test report, for the dossier's failing tests; optional. */
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
+
+    /** Criteria status and the DIVIDE actuator. A provider: the planner service reports into this layer. */
+    @Autowired(required = false)
+    private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.goal.GoalPlannerService> goalPlannerService;
+
+    /** A diagnosis request waiting for the dossier: decided at the next cycle, where the context is at hand. */
+    private StuckLedger.Entry pendingDossier;
+    private String pendingWhy;
+
+    /** The moves the dossier chose, per signature, each with what followed -- what the next dossier is shown. */
+    private final Map<String, List<String>> movesBySignature = new LinkedHashMap<>();
+
+    /** A HINT (or a REPLAN's reason) per subgoal: shown to the next change's prompt as the model's reading. */
+    private final Map<String, String> hintBySubGoal = new LinkedHashMap<>();
+
     /** The last failed change per signature -- rolled back in the tree, needed by the observer's copy. Memory only. */
     private final Map<String, Map<String, String>> lastChange = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -108,7 +134,7 @@ public class StuckLayer {
         if (StuckDiagnosis.questionsFor(o.source()) == 0) {
             for (StuckLedger.Entry e : ledger.pending()) {
                 if (e.source() == o.source() && e.signature().equals(o.signature()) && ledger.noQuestionLeft(e)) {
-                    requestDiagnosis(e, "no authority in the loop answers this kind of stuck");
+                    requestDiagnosis(e, "no authority in the loop answers this kind of stuck", true);
                 }
             }
         }
@@ -167,7 +193,7 @@ public class StuckLayer {
             while (e.status() == StuckLedger.Status.PENDING) {
                 var asked = StuckDiagnosis.ask(e.source(), e.signature(), e.detail(), e.rung(), authorities);
                 if (asked.isEmpty()) {
-                    if (ledger.noQuestionLeft(e)) requestDiagnosis(e, "every question was asked; none ended it");
+                    if (ledger.noQuestionLeft(e)) requestDiagnosis(e, "every question was asked; none ended it", true);
                     break;
                 }
                 boolean operator = ledger.recordAsked(e, asked.get(), cycle, subGoal);
@@ -181,9 +207,10 @@ public class StuckLayer {
                             asked.get().question(), asked.get().authority(), e.signature(), subGoal);
                 }
                 if (operator) {
+                    // A requirement only the operator may bind is not the model's to route around.
                     requestDiagnosis(e, asked.get().answered()
                             ? "the answer names a requirement only the operator may bind or release"
-                            : "every question was asked; none ended it");
+                            : "every question was asked; none ended it", !asked.get().answered());
                 }
             }
         }
@@ -194,7 +221,8 @@ public class StuckLayer {
                 .filter(e -> e.source() == StuckObservation.Source.BUILD || e.subGoalId() == null
                         || e.subGoalId().equals(subGoal))
                 .toList();
-        if (standing.isEmpty()) return null;
+        String hint = hintBlock(subGoal);
+        if (standing.isEmpty()) return hint;
         StringBuilder sb = new StringBuilder("--- ANSWERS TO WHAT KEPT FAILING (read from the sources, not advice) ---\n")
                 .append("These failures repeated, so the loop looked up what the code and the specification actually say."
                         + " Write against these facts:\n");
@@ -221,10 +249,125 @@ public class StuckLayer {
             sb.append(one);
         }
         if (left > 0) sb.append("  (").append(left).append(" more answer(s) left out: no room in this prompt)\n");
-        return sb.toString().stripTrailing();
+        return hint == null ? sb.toString().stripTrailing() : sb.toString().stripTrailing() + "\n\n" + hint;
     }
 
-    private void requestDiagnosis(StuckLedger.Entry e, String why) {
+    private synchronized String hintBlock(String subGoal) {
+        String hint = subGoal == null ? null : hintBySubGoal.get(subGoal);
+        if (hint == null) return null;
+        return "--- A READING OF WHERE THE LOOP IS STUCK (a model's reading of the facts the loop gathered, not a verified fact) ---\n"
+                + "  " + hint.replace("\n", "\n  ");
+    }
+
+    /**
+     * T4-DY dossier: when a diagnosis request is waiting, gathers the facts the loop holds about it, lets
+     * the model choose one move from the menu, and carries it out. Called at the start of a cycle, where
+     * the context and the actuators are at hand. Returns the context, with a replan request when that was
+     * the move.
+     */
+    public CycleContextData consultDossier(CycleContextData context) {
+        StuckLedger.Entry e;
+        String why;
+        synchronized (this) {
+            e = pendingDossier;
+            why = pendingWhy;
+            pendingDossier = null;
+            pendingWhy = null;
+        }
+        if (e == null || context == null || dossierDecider == null || !dossierDecider.available()) return context;
+        String subGoalId = context.currentSubGoalId();
+        StuckDossier dossier = dossierFor(e, why, context);
+        DossierDecision d = dossierDecider.decide(dossier, context.cycleName());
+        boolean applied = false;
+        String outcome;
+        CycleContextData out = context;
+        switch (d.move()) {
+            case HINT -> {
+                synchronized (this) { hintBySubGoal.put(subGoalId, d.hint()); }
+                applied = subGoalId != null;
+                outcome = applied ? "the hint goes to the next change's prompt" : "no current subgoal to give it to";
+            }
+            case REPLAN -> {
+                out = context.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                        com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED, 1.0, "stuck-dossier",
+                        com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.2)));
+                if (d.hint() != null && subGoalId != null) {
+                    synchronized (this) { hintBySubGoal.put(subGoalId, d.hint()); }
+                }
+                applied = true;
+                outcome = "replan requested";
+            }
+            case DIVIDE -> {
+                List<String> unmet = new ArrayList<>();
+                dossier.criteria().forEach((c, met) -> { if (!met) unmet.add(c); });
+                var gps = goalPlannerService == null ? null : goalPlannerService.getIfAvailable();
+                if (gps == null || subGoalId == null || unmet.size() < 2) {
+                    outcome = "not divided: " + (unmet.size() < 2 ? "fewer than two unmet criteria" : "no planner at hand");
+                } else {
+                    List<String> children = gps.divideExhaustedSubGoal(subGoalId, unmet);
+                    applied = !children.isEmpty();
+                    outcome = applied ? "divided into " + children.size() + " work item(s)" : "the planner did not divide it";
+                }
+            }
+            default -> outcome = "no move; the diagnosis request stands";
+        }
+        synchronized (this) {
+            movesBySignature.computeIfAbsent(e.signature(), k -> new ArrayList<>())
+                    .add(d.move() + " at " + context.cycleName() + " (" + outcome + ")"
+                            + (d.because() == null ? "" : " because: " + d.because()));
+        }
+        log.warn("T4-DY: dossier move for '{}': {} -- {}", e.signature(), d.move(), outcome);
+        if (behaviourLogger != null) {
+            behaviourLogger.dossierDecision(context.cycleName(), e.source().name(), e.signature(), d.move().name(),
+                    d.because(), d.hint(), applied, outcome, dossier.factSummary());
+        }
+        return out;
+    }
+
+    /** The facts, gathered. Every source is optional; a missing one is an empty section, never a guess. */
+    StuckDossier dossierFor(StuckLedger.Entry e, String why, CycleContextData context) {
+        List<String> asked = new ArrayList<>();
+        for (StuckLedger.Question q : e.asked()) {
+            asked.add(q.question() + " -> " + (q.answer() == null ? "no answer from " + q.authority()
+                    : "answered by " + q.authority() + ": " + crop(q.answer(), 600)));
+        }
+        List<String> others = new ArrayList<>();
+        for (StuckLedger.Entry o : ledger.entries()) {
+            if (o == e || o.status() == StuckLedger.Status.ENDED) continue;
+            others.add(o.source() + ": " + o.signature() + " (" + o.occurrences() + " time(s), " + o.status() + ")");
+        }
+        List<String> health = new ArrayList<>();
+        if (runHealth != null) runHealth.deviations().forEach(dv -> health.add(dv.describe()));
+        Map<String, Boolean> criteria = new LinkedHashMap<>();
+        var gps = goalPlannerService == null ? null : goalPlannerService.getIfAvailable();
+        if (gps != null && context.currentSubGoalId() != null) criteria.putAll(gps.criteriaStatus(context.currentSubGoalId()));
+        List<String> rejections = context.rejectionFeedback() == null ? List.of()
+                : context.rejectionFeedback().stream().filter(r -> r != null && !r.isBlank()).map(r -> crop(r, 600)).toList();
+        List<String> failing = new ArrayList<>();
+        if (testRunGate != null) {
+            testRunGate.freshReport().ifPresent(r -> r.failing().stream().limit(8).forEach(f -> failing.add(
+                    f.className().substring(f.className().lastIndexOf('.') + 1) + "." + f.method()
+                            + (f.input() == null ? "" : " -- ran with: " + crop(f.input(), 300))
+                            + " -- " + crop(f.message(), 300))));
+        }
+        List<String> earlier;
+        synchronized (this) { earlier = List.copyOf(movesBySignature.getOrDefault(e.signature(), List.of())); }
+        return new StuckDossier(e.source().name(), e.signature(), why, e.occurrences(), asked, others, health,
+                context.currentSubGoalDescription(), criteria, rejections, failing, earlier);
+    }
+
+    private static String crop(String s, int max) {
+        if (s == null) return "";
+        return s.length() > max ? s.substring(0, max) + "..." : s;
+    }
+
+    private void requestDiagnosis(StuckLedger.Entry e, String why, boolean forDossier) {
+        if (forDossier && dossierDecider != null && dossierDecider.available()) {
+            synchronized (this) {
+                pendingDossier = e;
+                pendingWhy = why;
+            }
+        }
         List<String> asked = new ArrayList<>();
         for (StuckLedger.Question q : e.asked()) {
             asked.add(q.question() + " -> " + (q.answer() == null ? "no answer from " + q.authority()
@@ -238,7 +381,7 @@ public class StuckLayer {
         writeLedger();
     }
 
-    private StuckLedger.Entry find(StuckObservation o) {
+    StuckLedger.Entry find(StuckObservation o) {
         for (StuckLedger.Entry e : ledger.entries()) {
             if (e.source() == o.source() && e.signature().equals(o.signature())) return e;
         }

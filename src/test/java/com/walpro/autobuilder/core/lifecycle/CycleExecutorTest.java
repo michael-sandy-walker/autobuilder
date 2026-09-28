@@ -1162,6 +1162,22 @@ class CycleExecutorTest {
     }
 
     @Test
+    void theStuckDossierIsConsultedOnAnOrdinaryCycle() {
+        // T4-DY dossier: reachability. A diagnosis request is decided where the context is at hand --
+        // at the start of the next cycle -- so an ordinary cycle must ask for it, with nothing else
+        // having to go right first; the dossier's own tests own what it decides.
+        stubGoalSync("goal-root", "Root goal", "sub-1", "Sub goal 1");
+        stubIdentityPipeline();
+        com.walpro.autobuilder.core.stuck.StuckLayer stuck = org.mockito.Mockito.mock(com.walpro.autobuilder.core.stuck.StuckLayer.class);
+        when(stuck.consultDossier(any(CycleContextData.class))).thenAnswer(inv -> inv.getArgument(0, CycleContextData.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(cycleExecutor, "stuckLayer", stuck);
+
+        cycleExecutor.runCycle(baseContext("cycle-1"));
+
+        verify(stuck).consultDossier(any(CycleContextData.class));
+    }
+
+    @Test
     void theDeterministicPackagingRepairRunsEveryCycle() {
         // T2-FK: reachability, which is the whole point of the change and the thing every
         // previous attempt at this repair got wrong. T4-DO's repair was first written at the

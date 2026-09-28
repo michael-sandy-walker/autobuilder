@@ -61,6 +61,10 @@ public class BehaviourLogger {
      * the publisher bean (mirrors the {@code @Autowired(required = false)} pattern used
      * by {@link com.walpro.autobuilder.core.lifecycle.CycleExecutor} for the goal publisher).
      */
+    /** T4-CI phase 3: the live run's shape, fed from here because every event passes here. Optional. */
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.health.RunHealth runHealth;
+
     @Autowired
     public BehaviourLogger(ObjectMapper mapper, BehaviourEventPublisher publisher) {
         this.mapper = mapper;
@@ -72,6 +76,11 @@ public class BehaviourLogger {
         try {
             recordSessionStats(event);
             Map<String, Object> envelope = wrap(event);
+            if (runHealth != null) {
+                @SuppressWarnings("unchecked")
+                Map<String, ?> payload = (Map<String, ?>) envelope.get("payload");
+                runHealth.observe(event.event(), event.cycleId(), payload);
+            }
             String line = mapper.writeValueAsString(envelope);
             BEHAVIOUR.info(line);
             if (publisher != null) {
@@ -409,6 +418,12 @@ public class BehaviourLogger {
                                  String why, java.util.List<String> asked, java.util.List<String> detail) {
         emit(new BehaviourEvent.DiagnosisRequest(Instant.now(), cycleId, source, signature, occurrences, firstCycleId,
                 why, asked, detail));
+    }
+
+    public void dossierDecision(String cycleId, String source, String signature, String move, String because,
+                                String hint, boolean applied, String outcome, java.util.List<String> facts) {
+        emit(new BehaviourEvent.DossierDecision(Instant.now(), cycleId, source, signature, move, because, hint,
+                applied, outcome, facts));
     }
 
     public void llmResponseDiscarded(String cycleId, String role, String reason, String firstLine, int consecutive) {

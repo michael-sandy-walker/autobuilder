@@ -179,7 +179,12 @@ public class CycleExecutor implements CheckpointableState {
         context = syncContextFromGoals(context);
 
         if (grindDetector != null) grindDetector.beginCycle(context.cycleName());
-        if (stuckLayer != null) stuckLayer.beginCycle(context.cycleName(), context.currentSubGoalId());
+        if (stuckLayer != null) {
+            stuckLayer.beginCycle(context.cycleName(), context.currentSubGoalId());
+            // T4-DY dossier: a diagnosis request left by the previous cycle is decided here, where the
+            // context and the actuators are at hand.
+            context = stuckLayer.consultDossier(context);
+        }
 
         if (behaviourLogger != null) {
             behaviourLogger.cycleStart(context.cycleName(), context.currentGoalId(), context.currentSubGoalId(),

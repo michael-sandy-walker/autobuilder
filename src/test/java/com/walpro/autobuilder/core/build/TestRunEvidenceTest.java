@@ -147,4 +147,28 @@ class TestRunEvidenceTest {
 
         assertThat(gate.freshReport()).as("the report describes code that has since changed").isEmpty();
     }
+
+    /** T4-EA: a failing invocation of a parameterized test is shown with the row it ran with. */
+    @Test
+    void aFailingParameterizedInvocationIsShownWithItsRow() throws Exception {
+        long start = System.currentTimeMillis();
+        Path project = tmp.resolve("project");
+        Path test = project.resolve("src/test/java/org/sample/QuillTest.java");
+        Files.createDirectories(test.getParent());
+        Files.writeString(test, "package org.sample;\nclass QuillTest {\n"
+                + "  @ParameterizedTest @ValueSource(strings = {\"fine\", \"broad\"}) void nibs(String n) {}\n}\n");
+        Path reports = project.resolve("target/surefire-reports");
+        Files.createDirectories(reports);
+        Files.writeString(reports.resolve("TEST-org.sample.QuillTest.xml"), report("org.sample.QuillTest",
+                "<testcase classname=\"org.sample.QuillTest\" name=\"nibs(String)[1]\"/>",
+                "<testcase classname=\"org.sample.QuillTest\" name=\"nibs(String)[2]\"><failure message=\"expected: 2\"/></testcase>"));
+
+        TestRunReport r = SurefireReports.read(reports, start - 1_000, project).orElseThrow();
+
+        assertThat(r.failing()).extracting(TestRunReport.Failure::input).containsExactly("broad");
+        assertThat(TestRunPromptBlock.render(r, List.of(), 4_000))
+                .contains("QuillTest.nibs(String)[2] -- ran with: broad -- failed: expected: 2");
+        assertThat(SurefireReports.read(reports, start - 1_000).orElseThrow().failing().get(0).input())
+                .as("no project root, no row").isNull();
+    }
 }

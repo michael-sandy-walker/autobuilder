@@ -147,6 +147,39 @@ class TestRunGateTest {
     }
 
     @Test
+    void failingSuite_aParameterizedInvocation_carriesTheRowItRanWith(@org.junit.jupiter.api.io.TempDir java.nio.file.Path base)
+            throws java.io.IOException {
+        // T4-EA receiver-questions A/B: "[10] failed: Expecting Optional to contain a value" reached
+        // every prompt, and the row [10] ran with -- the fact the fix turned on -- reached none.
+        java.nio.file.Path test = base.resolve("output/src/test/java/org/sample/quill/InkTest.java");
+        java.nio.file.Files.createDirectories(test.getParent());
+        java.nio.file.Files.writeString(test, """
+                package org.sample.quill;
+                class InkTest {
+                    @ParameterizedTest @CsvSource({"blue, Nib", "green, Map<String,Nib>"})
+                    void dries(String colour, String type) {}
+                }
+                """);
+        java.nio.file.Path reports = base.resolve("output/target/surefire-reports");
+        java.nio.file.Files.createDirectories(reports);
+        java.nio.file.Files.writeString(reports.resolve("org.sample.quill.InkTest.txt"), """
+                Tests run: 2, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.1 s <<< FAILURE! -- in org.sample.quill.InkTest
+                org.sample.quill.InkTest.dries(String, String)[2] -- Time elapsed: 0.02 s <<< FAILURE!
+                java.lang.AssertionError: Expecting Optional to contain a value but it was empty.
+                """);
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(eq(base.toString()), any(), eq("mvn test")))
+                .thenReturn(new BuildOutcome(BuildResult.COMPILE_ERROR,
+                        "[ERROR] Tests run: 2, Failures: 1, Errors: 0, Skipped: 0", 2000L, "mvn test", "c"));
+        TestRunGate g = new TestRunGate(true, "mvn test", buildExecutor);
+        g.setFileBasePath(base.toString());
+
+        String blocker = g.verifyTestsPass("c").orElseThrow();
+
+        assertThat(blocker).contains("dries[2] (ran with: green, Map<String,Nib>): java.lang.AssertionError: Expecting Optional");
+    }
+
+    @Test
     void passingSuite_returnsEmpty() {
         stubOutcome(BuildResult.COMPILE_OK, "Tests run: 7, Failures: 0, Errors: 0, Skipped: 0");
         assertThat(gate(true).verifyTestsPass("c")).isEmpty();

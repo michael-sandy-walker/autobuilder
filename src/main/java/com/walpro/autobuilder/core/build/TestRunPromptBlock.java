@@ -13,7 +13,8 @@ import java.util.List;
  * <p><b>Bounded by the prompt, not by the suite.</b> A suite of thousands must not become thousands
  * of lines, so the block spends a character budget the caller derives from its own file budget, in
  * order of what a reader needs: the totals (always, one line -- enough on their own to answer
- * whether the suite passes); then each failing test with its message (all of it, on one line, cropped at 400 characters); then the
+ * whether the suite passes); then each failing test with the row it ran with when it is one
+ * invocation of a parameterized test, and its message (all of it, on one line, cropped at 400 characters); then the
  * per-test outcomes of the test classes whose SOURCE is already in the prompt, so a reader looking
  * at a test can see whether it ran and passed. Every other class is covered by the totals. Whatever
  * the budget cuts is counted, never dropped silently.
@@ -34,7 +35,8 @@ public final class TestRunPromptBlock {
             sb.append("  Failing:\n");
             int shown = 0;
             for (TestRunReport.Failure f : r.failing()) {
-                String line = "    " + simple(f.className()) + "." + f.method() + " -- "
+                String line = "    " + simple(f.className()) + "." + f.method()
+                        + (f.input() != null ? " -- ran with: " + crop(f.input()) : "") + " -- "
                         + (f.outcome() == TestRunReport.Outcome.ERROR ? "error: " : "failed: ")
                         + crop(f.message()) + "\n";
                 if (line.length() > budget) break;

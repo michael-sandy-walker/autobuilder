@@ -126,7 +126,7 @@ public class TestRunGate {
             return Optional.empty();
         }
         for (String dir : TEST_REPORT_DIRS) {
-            Optional<TestRunReport> r = SurefireReports.read(out.resolve(dir), since);
+            Optional<TestRunReport> r = SurefireReports.read(out.resolve(dir), since, out);
             if (r.isPresent()) return r;
         }
         return Optional.empty();
@@ -226,7 +226,10 @@ public class TestRunGate {
                                 deepest = t.substring("Caused by:".length()).strip();
                             }
                         }
-                        List<String> found = deepest != null ? List.of(deepest) : failureLines(lines);
+                        String reportName = report.getFileName().toString();
+                        String testClass = reportName.substring(0, reportName.length() - ".txt".length());
+                        List<String> found = deepest != null ? List.of(deepest)
+                                : failureLines(lines, Path.of(fileBasePath, "output"), testClass);
                         for (String cause : found) {
                             if (cause.length() > MAX_CAUSE_LENGTH) {
                                 cause = cause.substring(0, MAX_CAUSE_LENGTH) + "…";
@@ -254,7 +257,7 @@ public class TestRunGate {
      * showed that line: the repair item named the tests and nothing else. One line per failing
      * test, led by its method name.
      */
-    private static List<String> failureLines(List<String> lines) {
+    private static List<String> failureLines(List<String> lines, Path projectRoot, String testClass) {
         List<String> out = new ArrayList<>();
         for (int i = 0; i + 1 < lines.size(); i++) {
             String header = lines.get(i);
@@ -264,6 +267,12 @@ public class TestRunGate {
             if (message.isEmpty() || message.startsWith("at ")) continue;
             String test = header.split("\\s+--\\s+|\\s+Time elapsed", 2)[0].strip();
             test = test.substring(test.lastIndexOf('.') + 1);
+            // T4-EA: one invocation of a parameterized test is named by its index alone; the row it
+            // ran with is the fact a repair needs, so it replaces the parameter types in the name.
+            Optional<String> input = ParameterizedCaseInput.of(projectRoot, testClass, test);
+            if (input.isPresent()) {
+                test = test.replaceFirst("\\(.*\\)(?=\\[\\d+]$)", "") + " (ran with: " + input.get() + ")";
+            }
             out.add(test.isEmpty() ? message : test + ": " + message);
         }
         return out;

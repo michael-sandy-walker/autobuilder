@@ -42,6 +42,28 @@ public final class TestAssertionVocabulary {
     public static final Set<String> TEST_ANNOTATIONS = Set.of("Test", "ParameterizedTest", "RepeatedTest");
 
     /**
+     * Annotations that supply a parameterized test's invocations whose rows are written inline as
+     * literals, one row per invocation in order ({@link ParameterizedCaseInput}).
+     */
+    public static final Set<String> LITERAL_ROW_SOURCES = Set.of("CsvSource", "ValueSource");
+
+    /** Any annotation named like this supplies invocations; two on one test make the index ambiguous. */
+    public static final String ARGUMENT_SOURCE_SUFFIX = "Source";
+
+    /** The attribute of an inline row source that holds its rows as one text block, one row per line. */
+    public static final String TEXT_BLOCK_ROWS = "textBlock";
+
+    /** A text-block row starting with this is a comment, not an invocation. */
+    public static final String TEXT_BLOCK_COMMENT = "#";
+
+    /** An attribute that makes the first row a header, shifting every index by one. */
+    public static final String HEADER_ROW_ATTRIBUTE = "useHeadersInDisplayName";
+
+    /** Attributes of an inline row source that configure parsing and carry no rows. */
+    public static final Set<String> NON_ROW_ATTRIBUTES = Set.of("delimiter", "delimiterString",
+            "quoteCharacter", "emptyValue", "nullValues", "ignoreLeadingAndTrailingWhitespace", "maxCharsPerColumn");
+
+    /**
      * The one assertion call the value-observation probe writes ({@link ValueObservationProbe}), and the
      * import that says a source can compile it. $SENTINEL and $VALUE are filled in by the probe.
      */

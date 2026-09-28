@@ -16,6 +16,8 @@ metadata:
 - **Head: see `git log`; nothing pushed.** No run is live. The box rebooted after the A/B, so /tmp is empty (the old session's scratch results and early_stop logs are gone; the archives are complete).
 - **T4-EA A/B (6 runs, `2026-09-27_20-07-22` .. `23-29-06`, full table on T4-EA):** no true completion in either arm; B 14/15/14 vs A 13/14/14; run 6 (B) cut by LLM network failures under memory pressure. **Probe check fails in all 6 runs identically:** `imports-foreign` answers a dependency's `Module`/`Base64` with JDK members. Final trees: `~/.autobuilder/rq-ab/<n+1>-<arm>/output`, run 6's in `data/receiver-questions/output`. Next question on the ticket: is the loop starved of the import fact or given it and ignoring it.
 - **T2-FK closed (`ce4fc2cf`):** decoupling built; trigger half declined -- its one population came from an abstention reading a rolled-back candidate, fixed by `361757a2`.
+- **T2-ET closed (`569bd919`):** 35 checked closures since the build, none followed by its own defect; refusal branch unexercised, watch kept.
+- **T4-EA's next question answered and built:** the failing row [10] was on the page (spec source in 6 prompts) but never joined to "[10]". `ParameterizedCaseInput` now reads a failing invocation's row from the test source; it reaches the evaluator's test block and the repair item (`ran with:`). Suite 3742/0. Not yet seen in the field: check `ran with:` in the next receiver-questions run. The probe failure was the bar outrunning the toy case's spec, not the loop's miss.
 - **Next:** the roadmap queue directly (`scripts/next_work.py`).
 
 ## 2026-09-27 EVENING (Opus 5.5, session 7 continued) — DIRECTION CHANGED: TICKETS DIRECT, THE LOOP TESTED ON VERSIONED TOY CASES

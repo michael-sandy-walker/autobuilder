@@ -16,7 +16,15 @@ public record TestRunReport(int run, int failures, int errors, int skipped,
 
     public record Case(String method, Outcome outcome) {}
 
-    public record Failure(String className, String method, Outcome outcome, String message) {}
+    /**
+     * @param input the row a failing parameterized invocation ran with, as its test source writes it
+     *              ({@link ParameterizedCaseInput}); null when the test is not one or the row is not literal
+     */
+    public record Failure(String className, String method, Outcome outcome, String message, String input) {
+        public Failure(String className, String method, Outcome outcome, String message) {
+            this(className, method, outcome, message, null);
+        }
+    }
 
     public boolean passes() {
         return run > 0 && failures == 0 && errors == 0;

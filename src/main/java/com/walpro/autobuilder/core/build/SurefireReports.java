@@ -33,6 +33,14 @@ public final class SurefireReports {
 
     /** Empty when no report of this run exists (the run failed before any test ran, or none exist). */
     public static Optional<TestRunReport> read(Path reportDir, long runStartedAtMillis) {
+        return read(reportDir, runStartedAtMillis, null);
+    }
+
+    /**
+     * As {@link #read(Path, long)}, and a failing parameterized invocation carries the row it ran with,
+     * read from the test source under {@code projectRoot} (null: no rows are read).
+     */
+    public static Optional<TestRunReport> read(Path reportDir, long runStartedAtMillis, Path projectRoot) {
         if (reportDir == null || !Files.isDirectory(reportDir)) return Optional.empty();
         int run = 0, failures = 0, errors = 0, skipped = 0, files = 0;
         List<TestRunReport.Failure> failing = new ArrayList<>();
@@ -85,7 +93,8 @@ public final class SurefireReports {
                     }
                     byClass.computeIfAbsent(cls, k -> new ArrayList<>()).add(new TestRunReport.Case(method, outcome));
                     if (outcome == TestRunReport.Outcome.FAILED || outcome == TestRunReport.Outcome.ERROR) {
-                        failing.add(new TestRunReport.Failure(cls, method, outcome, message));
+                        String input = ParameterizedCaseInput.of(projectRoot, cls, method).orElse(null);
+                        failing.add(new TestRunReport.Failure(cls, method, outcome, message, input));
                     }
                 }
             } catch (Exception e) {

@@ -51,3 +51,8 @@ for unversioned evidence is 4 of 28 runs. A copy also sits in
 the missing source mover. Standing lesson, same as [[feedback-verify-at-decision-timestamp]]: a
 terminal label is a CLAIM about the seed, and this run shows the label can be manufactured by
 plan surgery alone.
+
+**2026-09-28, audited and `T4-DK` closed.** 60 `GOAL_FULFILLED` runs from 2026-08-28 15:19 on:
+54 at a full yardstick, and each of the other 6 is a separately diagnosed mechanism, none a
+ledger dissolution. The population after the build is no longer tainted by THIS mechanism; a
+`GOAL_FULFILLED` label is still a claim to check against the yardstick, never a result.

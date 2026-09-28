@@ -391,7 +391,7 @@
 - [~] `T4-CS` — Code-layer merge across lineages (code-side sibling of T4-CM; slices 1-2 built 2026-09-25: test layers (different-seed child 20/20 vs best parent 16/20) and a three-way declaration-level library merge (child of two change lineages meets both specs); a real conflict not yet seen in the field)
 - [ ] `T4-CF` — Self-hosting **2026-09-26: first run whose goal came from a real ticket (criterion-status, T3-CB) -- true completion.**
 - [ ] `T4-CG` — The system builds an autobuilder from spec
-- [ ] `T4-CI` — Organic run-health baseline — phases 1+2 done; phase-3 gate MEASURED 2026-07-25 and passes (after fixing T6-C), but phase 3 = in-framework consultation, a direction choice, not started
+- [x] `T4-CI` — Organic run-health baseline — phases 1+2 done; phase-3 gate MEASURED 2026-07-25 and passes (after fixing T6-C), but phase 3 = in-framework consultation, a direction choice, not started CLOSED 2026-09-28 on the DoD: envelope refreshed with current-era completions (n=18); held-out fulfilled runs read 0-1 flags, failed runs 4-6. Phase 3 is the user's choice; its gate is met.
 - [ ] `T4-CJ` — Graph run/lineage identity
 - [ ] `T4-CL` — End of the per-run-disposable graph contract
 - [>] `T4-CM` — Knowledge-base merge workbench (cross-run/seed graph merging)

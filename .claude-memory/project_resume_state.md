@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-09-27 EVENING (Opus 5.5, session 7 continued) — DIRECTION CHANGED: TICKETS DIRECT, THE LOOP TESTED ON VERSIONED TOY CASES — START HERE
+## 2026-09-28 (Opus 5.5, session 8) — T4-EA A/B MEASURED: BAR FAILED, 0/3 vs 0/3; T2-FK CLOSED — START HERE
+
+- **Head: see `git log`; nothing pushed.** No run is live. The box rebooted after the A/B, so /tmp is empty (the old session's scratch results and early_stop logs are gone; the archives are complete).
+- **T4-EA A/B (6 runs, `2026-09-27_20-07-22` .. `23-29-06`, full table on T4-EA):** no true completion in either arm; B 14/15/14 vs A 13/14/14; run 6 (B) cut by LLM network failures under memory pressure. **Probe check fails in all 6 runs identically:** `imports-foreign` answers a dependency's `Module`/`Base64` with JDK members. Final trees: `~/.autobuilder/rq-ab/<n+1>-<arm>/output`, run 6's in `data/receiver-questions/output`. Next question on the ticket: is the loop starved of the import fact or given it and ignoring it.
+- **T2-FK closed (`ce4fc2cf`):** decoupling built; trigger half declined -- its one population came from an abstention reading a rolled-back candidate, fixed by `361757a2`.
+- **Next:** the roadmap queue directly (`scripts/next_work.py`).
+
+## 2026-09-27 EVENING (Opus 5.5, session 7 continued) — DIRECTION CHANGED: TICKETS DIRECT, THE LOOP TESTED ON VERSIONED TOY CASES
 
 - **Head: see `git log`; nothing pushed. Suite 3725/0.** No run is live.
 - **The user's decisions today, all recorded:** the receiver-questions proposed port APPROVED and ported (`e4c92306`: one type authority in Java's resolution order; JDK index shared with discovery; the project's dependency classpath in the loop). Process work lives apart from the product (`process/`, `meta_process.md` M-E; memory `feedback_process_apart_from_product`). The loop is information-starved ("b") -> **T4-EA built** (`63ed8499`: a target may carry `bootstrap/briefing/`, selected per prompt; `scripts/briefing_from_ticket.py` from git at origin-rev) -- its A/B NOT yet run. **M-F: roadmap tickets are developed directly; the loop is tested separately on toy cases, output measured not ported** (memory `feedback_tickets_direct_loop_as_toy_cases`). **Toy cases are versioned** (`99375c14`, `scripts/toycase_version.py`; history reconstructed from git; preflight records `toycase=<t> v<N>`).

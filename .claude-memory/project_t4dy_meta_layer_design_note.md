@@ -153,3 +153,36 @@ yes in substance; #2 (diagnosis channel) and #3 (self-initiated halt) still open
   the failing line -> the declaring file whole -> the terminal agent (model proposes, read-only commands answer,
   graph-recorded) -> diagnosis request. Every fact in the six open archived questions was structural; the agent is
   for what no rule covers yet, and its graph records are where the next structural rule should be read from.
+
+## Next capability (user decision 2026-09-28, "2b" + T4-CI "1a"): the DOSSIER -- facts gathered, the model decides the next move
+
+**Why the design moves here.** Point 7 above kept the layer's control flow deterministic. The user
+chose to give the model a decision: "several facts are gathered and sent to the LLM, which helps with
+the decision". The place with no decision today is the diagnosis request: when no structural question
+is left (FLAT_ROOT, EXHAUSTION, or a recurrence after every question) the layer emits an event and
+nothing in the loop acts. The 3 archived FLAT_ROOT cases (receiver-questions `2026-09-27_21-16-03`,
+`21-52-09`, `2026-09-28_15-38-46`) were all then cut from outside by `early_stop.sh`.
+
+**The dossier (deterministic, assembled at the request):** the stuck entry (source, signature,
+occurrences, cycles, questions asked and answers delivered, recurrences); the other open ledger
+entries; the run's HEALTH deviations so far (T4-CI phase 3: the 11 run-profile features against the
+frozen healthy envelope, only the features outside it, with value and p90); the current subgoal and its
+criteria, met or not; the last rejection reasons; the last test run's failures (with `ran with:` rows);
+and the moves the dossier already chose for this signature, each with whether the stuck state ended
+after it -- the ticket's original complaint, "no memory of which it tried". NOT in it: the yardstick
+(ours, never the loop's -- T6-L).
+
+**The decision: one move from a fixed menu, with the fact it relies on.** HINT (a reading of the
+situation delivered to the next evolution prompt, labelled as the model's), REPLAN (REPLAN_REQUESTED with
+the reason relayed to the planner), DIVIDE (split the current subgoal on its unmet criteria), REWIND (to
+the last good checkpoint before the stall), NONE. Parsed strictly; anything else is NONE. Never on the
+menu (point 6): change the seed, unbind a requirement, declare a goal met, halt the run.
+
+**Instruments and DoD, stated before building.**
+- Deterministic: the health features in Java equal `run_profile.py`'s on an archived behaviour stream
+  (parity test); the dossier renders every fact above from a fixed fixture; each move reaches its
+  actuator (a test per move that fails when the call is removed).
+- Field, the claim: on receiver-questions v4 (the flat-prone toy case), in runs where FLAT_ROOT fires,
+  **the root moves (a subgoal completes, or a merge lands) within the flat window after the move in at
+  least 2 of 3 such runs**, against 0 of 3 in the three archived runs where the request went unanswered.
+  n is small and says so; a miss means the dossier is not what the flat root lacked.

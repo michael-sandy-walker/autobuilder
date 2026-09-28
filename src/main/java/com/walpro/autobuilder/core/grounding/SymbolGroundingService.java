@@ -175,6 +175,81 @@ public class SymbolGroundingService {
         return defined;
     }
 
+    /**
+     * Names the project's sources mention ONLY inside string literals -- never declared, never used as
+     * code. Such a name is data the code or its tests talk about (an input row, a message), not a type the
+     * project must contain, so grounding never asks for it to be created. receiver-questions runs
+     * 2026-09-27_21-52-09 and 2026-09-28_19-06-24 / 19-20-50: the specification test's input row names
+     * {@code ParticipationWindow} inside a string, subgoals citing that example ("e.g. Map<String,
+     * ParticipationWindow>") were given "Create ParticipationWindow.java", which their own "all other
+     * classes remain unchanged" forbade -- they could never complete and were pruned as superseded, so
+     * runs whose work landed showed 0 subgoals done. A name that appears nowhere yet (a type a new
+     * project still has to write) is not affected: it is not in any literal either.
+     */
+    public Set<String> namesOnlyAsData() {
+        Set<String> inLiterals = new LinkedHashSet<>();
+        Set<String> inCode = new LinkedHashSet<>();
+        Path outputRoot;
+        try {
+            outputRoot = fileService.resolveSecurePath(OUTPUT_DIR);
+        } catch (IOException | SecurityException e) {
+            return inLiterals;
+        }
+        if (!Files.isDirectory(outputRoot)) return inLiterals;
+        try (Stream<Path> stream = Files.walk(outputRoot)) {
+            stream.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().endsWith(".java"))
+                    .forEach(p -> {
+                        try {
+                            splitNames(Files.readString(p), inLiterals, inCode);
+                        } catch (IOException e) {
+                            log.debug("namesOnlyAsData: {} unreadable: {}", p, e.getMessage());
+                        }
+                    });
+        } catch (IOException e) {
+            log.debug("namesOnlyAsData walk failed: {}", e.getMessage());
+        }
+        inLiterals.removeAll(inCode);
+        return inLiterals;
+    }
+
+    /** PascalCase names of one source, sorted into those inside string literals and those outside. */
+    static void splitNames(String source, Set<String> inLiterals, Set<String> inCode) {
+        StringBuilder code = new StringBuilder(source.length());
+        StringBuilder lit = new StringBuilder();
+        int i = 0;
+        int n = source.length();
+        while (i < n) {
+            if (source.startsWith("\"\"\"", i)) {                       // text block
+                int end = source.indexOf("\"\"\"", i + 3);
+                if (end < 0) end = n;
+                lit.append(source, i + 3, end).append(' ');
+                code.append(' ');
+                i = Math.min(n, end + 3);
+            } else if (source.charAt(i) == '"') {                          // string literal
+                int j = i + 1;
+                while (j < n && source.charAt(j) != '"' && source.charAt(j) != '\n') {
+                    if (source.charAt(j) == '\\') j++;
+                    j++;
+                }
+                lit.append(source, i + 1, Math.min(j, n)).append(' ');
+                code.append(' ');
+                i = Math.min(n, j + 1);
+            } else if (source.charAt(i) == '\'') {                        // char literal
+                int j = source.indexOf('\'', i + (i + 1 < n && source.charAt(i + 1) == '\\' ? 3 : 2));
+                code.append(' ');
+                i = j < 0 ? i + 1 : j + 1;
+            } else {
+                code.append(source.charAt(i));
+                i++;
+            }
+        }
+        Matcher m = PASCAL_CASE_IDENT.matcher(lit);
+        while (m.find()) inLiterals.add(m.group(1));
+        m = PASCAL_CASE_IDENT.matcher(code);
+        while (m.find()) inCode.add(m.group(1));
+    }
+
     /** True when {@code name} is a JDK / framework symbol that should never be flagged undefined. */
     public boolean symbolAllowlisted(String name) {
         if (name == null || name.isEmpty()) return false;
@@ -203,6 +278,7 @@ public class SymbolGroundingService {
             return text;
         }
         Set<String> defined = definedSymbolsInOutput();
+        defined.addAll(namesOnlyAsData());
         Set<String> undefinedHere = new LinkedHashSet<>();
         Matcher m = PASCAL_CASE_IDENT.matcher(text);
         StringBuilder sb = new StringBuilder();
@@ -243,6 +319,7 @@ public class SymbolGroundingService {
     public void collectUndefinedSymbols(String text, Set<String> sink) {
         if (text == null || text.isEmpty()) return;
         Set<String> defined = definedSymbolsInOutput();
+        defined.addAll(namesOnlyAsData());
         Matcher m = PASCAL_CASE_IDENT.matcher(text);
         while (m.find()) {
             String ident = m.group(1);

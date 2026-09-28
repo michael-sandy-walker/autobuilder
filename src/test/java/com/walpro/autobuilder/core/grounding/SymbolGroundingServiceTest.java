@@ -391,4 +391,32 @@ class SymbolGroundingServiceTest {
         assertThat(service.groundPath("")).isEqualTo("");
         assertThat(service.groundPath("   ")).isEqualTo("   ");
     }
+
+    /**
+     * A name the project's sources carry only inside a string literal (a test's input row) is data:
+     * grounding does not ask for it to be created, as it did in run 2026-09-28_19-06-24 for
+     * "e.g. Map<String,ParticipationWindow>". A name used as code, or one appearing nowhere, is grounded as before.
+     */
+    @Test
+    void aNameTheSourcesCarryOnlyAsDataIsNeverATypeToCreate() throws IOException {
+        Files.createDirectories(outputDir.resolve("src/test/java/org/ink"));
+        Files.writeString(outputDir.resolve("src/test/java/org/ink/QuillTest.java"), """
+                package org.ink;
+                class QuillTest {
+                    @CsvSource({"cannot find symbol method dry(InkWell) in Map<String,InkWell> | NibHolder"})
+                    void dries(String row) { NibHolder h = null; }
+                    String block = \"""
+                        PenCase stays in the text block
+                        \""";
+                }
+                """);
+
+        var grounded = SymbolGroundingService.groundProposedGoals(service,
+                java.util.List.of("Parse generic receivers (e.g., Map<String,InkWell>) with PenCase and NibHolder and a new QuillReader"),
+                java.util.Map.of());
+
+        assertThat(service.namesOnlyAsData()).containsExactlyInAnyOrder("InkWell", "PenCase");
+        assertThat(grounded.undefined()).as("NibHolder is used as code; QuillReader appears nowhere")
+                .containsExactlyInAnyOrder("NibHolder", "QuillReader");
+    }
 }

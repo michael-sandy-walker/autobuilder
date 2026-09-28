@@ -9,6 +9,13 @@
 # minutes, the loop is paused (POST /autobuilder/pause) and preflight records terminal=operator-stop,
 # then scores and archives the run as usual. A closure refusal with new content restarts the patience clock.
 #
+# The patience is the run's own, not only the constant (user, 2026-09-28: "let's make that timespan
+# more dynamic"): <patience> is the floor, and a run that has improved in slow steps waits 1.5x its
+# longest gap between improvements so far. And the loop acting on its own stall -- a dossier move it
+# carried out, or a rewind -- restarts the clock, so the move gets a window of its own: on 2026-09-28
+# the flat-root signal fired ~25 minutes in and a flat run was cut at ~31, which left a dossier move 5-10
+# minutes before the outside cut. The run's budget stays the hard end.
+#
 # A copy, because the yardstick runs the project's build: in the live tree its test reports would
 # be read by the loop's own test gate as fresh evidence. The script never writes to the live tree.
 # Exits when the run it was started beside is gone, so it can be started beside every run and forgotten.
@@ -39,7 +46,7 @@ alive() {
     [ "$head" = "$RUNMARK" ]
 }
 
-start=$SECONDS; best=-1; best_at=$SECONDS
+start=$SECONDS; best=-1; best_at=$SECONDS; longest_gap=0
 while alive; do
     sleep "$INTERVAL"
     alive || break
@@ -72,7 +79,10 @@ while alive; do
     fi
     score=$(echo "$line" | sed -E 's/^SMOKE: ([0-9]+)\/.*/\1/'); score=${score:-0}
     age=$(( (SECONDS - start) / 60 ))
-    if [ "$score" -gt "$best" ]; then best=$score; best_at=$SECONDS; fi
+    if [ "$score" -gt "$best" ]; then
+        [ "$best" -ge 0 ] && [ $((SECONDS - best_at)) -gt "$longest_gap" ] && longest_gap=$((SECONDS - best_at))
+        best=$score; best_at=$SECONDS
+    fi
     # A closure refusal hands the loop new, precise work that no yardstick score can show yet, so a
     # refusal saying something NEW restarts the patience clock (run 2026-09-25_05-14-55 was stopped 10
     # minutes after one). The same refusal repeated is no new work: run 2026-09-25_06-26-20 refused the
@@ -83,8 +93,19 @@ while alive; do
         [ -n "${seen_refusal:-}" ] && { best_at=$SECONDS; echo "early_stop: a new closure refusal since the last check -- patience restarted"; }
         seen_refusal=$last_refusal
     fi
+    # The loop's own reaction to a stall -- a dossier move it carried out (not NONE), or a rewind -- is
+    # new work no score shows yet: the clock restarts once per distinct reaction, never on a repeat.
+    last_reaction=$(grep -E "T4-DY: dossier move for .*: (HINT|REPLAN|DIVIDE) -- |T4-DQ: REWOUND to " "$LOG" 2>/dev/null \
+        | grep -v -- '-- not divided\|-- no current subgoal\|did not divide' | tail -1 | md5sum | cut -c1-12)
+    if [ "$last_reaction" != "d41d8cd98f00" ] && [ "$last_reaction" != "${seen_reaction:-d41d8cd98f00}" ]; then
+        best_at=$SECONDS; seen_reaction=$last_reaction
+        echo "early_stop: the loop acted on its stall (dossier move or rewind) -- patience restarted"
+    fi
+    # The run's own pace: at least the stated patience, and 1.5x the longest wait between improvements so far.
+    patience_now=$PATIENCE
+    [ $(( longest_gap * 3 / 2 )) -gt "$patience_now" ] && patience_now=$(( longest_gap * 3 / 2 ))
     stale=$(( (SECONDS - best_at) / 60 ))
-    echo "early_stop: ${age}m ${line:-SMOKE: ?} best=$best unchanged ${stale}m"
+    echo "early_stop: ${age}m ${line:-SMOKE: ?} best=$best unchanged ${stale}m patience $((patience_now / 60))m"
     # At the maximum the score cannot improve, and the only progress left is the loop closing: a
     # flat maximum is not a stall, and stopping it would throw away the closure (firestarter run
     # 2026-09-25_21-44-42's tree was at 23/23 when a flat reading cut it). The budget ends such a run.
@@ -93,7 +114,7 @@ while alive; do
         [ -z "${said_max:-}" ] && { echo "early_stop: at the maximum ($best/$max) -- not stopping; the budget ends this run"; said_max=1; }
         continue
     fi
-    if [ $((SECONDS - start)) -ge "$MINRUN" ] && [ $((SECONDS - best_at)) -ge "$PATIENCE" ]; then
+    if [ $((SECONDS - start)) -ge "$MINRUN" ] && [ $((SECONDS - best_at)) -ge "$patience_now" ]; then
         echo "early_stop: STOP -- best $best unchanged for ${stale}m at ${age}m; pausing the loop"
         curl -s -X POST "http://localhost:$PORT/autobuilder/pause"; echo
         exit 0

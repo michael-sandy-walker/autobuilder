@@ -131,6 +131,24 @@ class StuckDossierTest {
     }
 
     @Test
+    void twoRequestsInOneCycleEachGetADossierAndBothHintsStand() {
+        // Field run 2026-09-28_18-29-08: two build signatures exhausted their questions in one cycle and
+        // the single pending slot kept only the second.
+        StuckLayer layer = layer();
+        layer.beginCycle("c7", "sg-ink");
+        layer.report(StuckObservation.Source.FLAT_ROOT, "the root has not moved for half its window", List.of());
+        layer.report(StuckObservation.Source.EXHAUSTION, "the subgoal ran out of attempts", List.of());
+        when(decider.decide(any(), any()))
+                .thenReturn(new DossierDecision(DossierDecision.Move.HINT, "a", "Dry the ink first."))
+                .thenReturn(new DossierDecision(DossierDecision.Move.HINT, "b", "Refuse an empty well."));
+
+        layer.consultDossier(cycle("c8"));
+
+        verify(decider, org.mockito.Mockito.times(2)).decide(any(), eq("c8"));
+        assertThat(layer.promptBlock(cycle("c9"))).contains("Dry the ink first.", "Refuse an empty well.");
+    }
+
+    @Test
     void withNoPendingRequestNothingIsAsked() {
         StuckLayer layer = layer();
         CycleContextData ctx = cycle("c1");

@@ -80,9 +80,12 @@ public class StuckLayer {
     @Autowired(required = false)
     private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.goal.GoalPlannerService> goalPlannerService;
 
-    /** A diagnosis request waiting for the dossier: decided at the next cycle, where the context is at hand. */
-    private StuckLedger.Entry pendingDossier;
-    private String pendingWhy;
+    /**
+     * Diagnosis requests waiting for the dossier, each with why no question was left: decided at the next
+     * cycle, where the context is at hand. Every request gets its own dossier -- one slot let the second of
+     * two signatures exhausted in one cycle overwrite the first (field run 2026-09-28_18-29-08).
+     */
+    private final Map<StuckLedger.Entry, String> pendingDossiers = new LinkedHashMap<>();
 
     /** The moves the dossier chose, per signature, each with what followed -- what the next dossier is shown. */
     private final Map<String, List<String>> movesBySignature = new LinkedHashMap<>();
@@ -252,6 +255,11 @@ public class StuckLayer {
         return hint == null ? sb.toString().stripTrailing() : sb.toString().stripTrailing() + "\n\n" + hint;
     }
 
+    /** A second reading for the same subgoal joins the first; neither replaces the other. */
+    private synchronized void addHint(String subGoalId, String hint) {
+        hintBySubGoal.merge(subGoalId, hint, (a, b) -> a.contains(b) ? a : a + "\n" + b);
+    }
+
     private synchronized String hintBlock(String subGoal) {
         String hint = subGoal == null ? null : hintBySubGoal.get(subGoal);
         if (hint == null) return null;
@@ -266,15 +274,20 @@ public class StuckLayer {
      * the move.
      */
     public CycleContextData consultDossier(CycleContextData context) {
-        StuckLedger.Entry e;
-        String why;
+        Map<StuckLedger.Entry, String> due;
         synchronized (this) {
-            e = pendingDossier;
-            why = pendingWhy;
-            pendingDossier = null;
-            pendingWhy = null;
+            due = new LinkedHashMap<>(pendingDossiers);
+            pendingDossiers.clear();
         }
-        if (e == null || context == null || dossierDecider == null || !dossierDecider.available()) return context;
+        if (due.isEmpty() || context == null || dossierDecider == null || !dossierDecider.available()) return context;
+        CycleContextData out = context;
+        for (Map.Entry<StuckLedger.Entry, String> d : due.entrySet()) {
+            out = consultDossier(d.getKey(), d.getValue(), out);
+        }
+        return out;
+    }
+
+    private CycleContextData consultDossier(StuckLedger.Entry e, String why, CycleContextData context) {
         String subGoalId = context.currentSubGoalId();
         StuckDossier dossier = dossierFor(e, why, context);
         DossierDecision d = dossierDecider.decide(dossier, context.cycleName());
@@ -283,7 +296,7 @@ public class StuckLayer {
         CycleContextData out = context;
         switch (d.move()) {
             case HINT -> {
-                synchronized (this) { hintBySubGoal.put(subGoalId, d.hint()); }
+                synchronized (this) { addHint(subGoalId, d.hint()); }
                 applied = subGoalId != null;
                 outcome = applied ? "the hint goes to the next change's prompt" : "no current subgoal to give it to";
             }
@@ -292,7 +305,7 @@ public class StuckLayer {
                         com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED, 1.0, "stuck-dossier",
                         com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.2)));
                 if (d.hint() != null && subGoalId != null) {
-                    synchronized (this) { hintBySubGoal.put(subGoalId, d.hint()); }
+                    synchronized (this) { addHint(subGoalId, d.hint()); }
                 }
                 applied = true;
                 outcome = "replan requested";
@@ -364,8 +377,7 @@ public class StuckLayer {
     private void requestDiagnosis(StuckLedger.Entry e, String why, boolean forDossier) {
         if (forDossier && dossierDecider != null && dossierDecider.available()) {
             synchronized (this) {
-                pendingDossier = e;
-                pendingWhy = why;
+                pendingDossiers.putIfAbsent(e, why);
             }
         }
         List<String> asked = new ArrayList<>();

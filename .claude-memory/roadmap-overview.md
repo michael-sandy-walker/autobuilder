@@ -513,7 +513,7 @@
 - [x] `T5-BA` — `CyclePersistenceService.persistSnapshot()` creates empty mutation folders for evaluation…
 - [x] `T5-BB` — Signal and criteria editing in graph browser
 - [x] `T5-BC` — `ProjectDiffService` crashes on syntactically invalid Java
-- [~] `T5-BD` — Graph-fidelity stage fixtures — CAPTURE half shipped 2026-07-07 (`scripts/dump_graph.sh`, field-verified 2026-07-14 across every preflight corpus); REOPENED 2026-09-07 by the QUEUE-02 audit because the title's promise is the RESTORE half (levels 1-2: reload a captured graph into a fresh Neo4j for reproduction) and it has never been built. Graduates from note-level to a dependency if T4-CD slice 1 is picked up
+- [x] `T5-BD` — Graph-fidelity stage fixtures — CAPTURE half shipped 2026-07-07 (`scripts/dump_graph.sh`, field-verified 2026-07-14 across every preflight corpus); REOPENED 2026-09-07 by the QUEUE-02 audit because the title's promise is the RESTORE half (levels 1-2: reload a captured graph into a fresh Neo4j for reproduction) and it has never been built. Graduates from note-level to a dependency if T4-CD slice 1 is picked up CLOSED 2026-09-28: restore half retired -- no defect needed it in 2.5 months, T4-CD closed without it, and Neo4j keeps cross-run history itself.
 - [x] `T5-BG` — Orchestration-graph explorer (full persisted graph, provenance-filtered)
 - [x] `T5-BF` — Mission-control cockpit tells the run's story
 - [x] `T5-P2` — Unify cycle reference field name across artifact types

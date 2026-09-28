@@ -67,6 +67,11 @@ public class LLMClient {
     @Value("${llm.api.reasoning-effort:}")
     private String reasoningEffort;
 
+    // Sampling temperature. Blank = send nothing, for models that reject the field (Anthropic's
+    // newer models answer a 400 "`temperature` is deprecated for this model").
+    @Value("${llm.api.temperature:0.0}")
+    private String temperature;
+
     // T1-FP: escalate the read timeout across retry attempts so a slow-but-progressing local
     // generation (large prompt / cold model reload) gets a genuine chance to finish on a later
     // attempt instead of timing out at the base on every try and tripping the circuit breaker
@@ -123,7 +128,8 @@ public class LLMClient {
             }
         }
 
-        ChatRequest request = new ChatRequest(model, conversation, 0.0,
+        ChatRequest request = new ChatRequest(model, conversation,
+                temperature == null || temperature.isBlank() ? null : Double.valueOf(temperature.trim()),
                 reasoningEffort == null || reasoningEffort.isBlank() ? null : reasoningEffort.trim());
 
         log.debug("Sending request to LLM (core={}):", model);

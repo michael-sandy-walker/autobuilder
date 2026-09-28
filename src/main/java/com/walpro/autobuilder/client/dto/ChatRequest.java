@@ -14,7 +14,13 @@ import java.util.List;
 public class ChatRequest {
     private String model;
     private List<Message> messages;
-    private double temperature = 0.0;
+
+    /**
+     * Sampling temperature. Left off the wire when null: some hosted models (Anthropic's newer
+     * ones on the OpenAI-compatible endpoint) reject the field outright with a 400.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Double temperature = 0.0;
 
     /**
      * Optional reasoning budget for models that generate hidden reasoning before their answer

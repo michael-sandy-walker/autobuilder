@@ -493,6 +493,9 @@ llm:
         # with reasoning suppressed and 0.83 / 1.00 with it at the model's default, so the hidden
         # tokens bought a false alarm and a ~10x slower call. Blank it to restore the default.
         reasoning-effort: none
+        # Sampling temperature. Blank = omit the field; Anthropic's newer models (e.g. Sonnet 5.5)
+        # reject any temperature with a 400. Override with LLM_API_TEMPERATURE= for those.
+        temperature: 0.0
         read-timeout-ms: 120000  # generous for local models; override per-environment
         # T1-FP: escalate the read timeout on retries so a slow-but-progressing local generation
         # (large prompt / cold model reload) can finish on a later attempt instead of timing out

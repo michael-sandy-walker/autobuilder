@@ -393,7 +393,7 @@
 - [ ] `T4-CG` — The system builds an autobuilder from spec
 - [x] `T4-CI` — Organic run-health baseline — phases 1+2 done; phase-3 gate MEASURED 2026-07-25 and passes (after fixing T6-C), but phase 3 = in-framework consultation, a direction choice, not started CLOSED 2026-09-28 on the DoD: envelope refreshed with current-era completions (n=18); held-out fulfilled runs read 0-1 flags, failed runs 4-6. Phase 3 is the user's choice; its gate is met.
 - [ ] `T4-CJ` — Graph run/lineage identity
-- [ ] `T4-CL` — End of the per-run-disposable graph contract
+- [x] `T4-CL` — End of the per-run-disposable graph contract CLOSED 2026-09-28: both halves shipped long ago (20e91e3 + canary proof); the audit is T4-CJ slice 2.
 - [>] `T4-CM` — Knowledge-base merge workbench (cross-run/seed graph merging)
 - [>] `T4-CN` — Cross-graph node-compatibility model (cross-run/seed)
 - [~] `T4-BA` — Package-fragmentation detection

@@ -5793,6 +5793,32 @@
    "start_tree": "LOOP_AUTHORED",
    "terminal": "deadline",
    "total_cycles": "18"
+  },
+  "2026-09-28_19-59-41": {
+   "clauses_closed_vs_control": "0",
+   "cost_readout": "build=51342ms/20 package-gate=9143ms/4 sms-batch-build=1730ms/18 boot-gate=1039ms/4 sms-commit=243ms/18 sms-lineage-stamp=125ms/18 sms-cycle-merge=97ms/18 sms-cycle-link=77ms/17",
+   "criteria_authored": "152",
+   "criteria_elaboration": "86",
+   "criteria_executable_count": "0",
+   "criteria_executable_pct": "0",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "n/a",
+   "median_cycle_seconds": "37",
+   "merges": "4",
+   "peaked_at_cycle": "cycle-1790626089029-after-stale-loop-copy (not-in-run-log)",
+   "preserved_source": "reconstructed:cycle-1790626089029-after-stale-loop-copy",
+   "recorded": "2026-09-28",
+   "repeat_proposals": "0",
+   "repeats_refused": "0",
+   "run_duration_min": "8.9",
+   "score_delta": "n/a (boot-failed vs boot-failed)",
+   "smoke": "boot-failed",
+   "smoke_preserved": "boot-failed",
+   "start_cleared_tree": "no",
+   "start_mode": "CONTINUE_LINEAGE",
+   "start_tree": "LOOP_AUTHORED",
+   "terminal": "deadline",
+   "total_cycles": "18"
   }
  },
  "updated": "2026-09-28"

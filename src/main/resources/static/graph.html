@@ -399,6 +399,7 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.4/dist/3d-force-graph.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three-spritetext@1.8.2/dist/three-spritetext.min.js"></script>
+<script src="speakable.js"></script>
 </head>
 <body>
 
@@ -1140,7 +1141,13 @@ const TTS = (function () {
   function setEnabled(v) {
     enabled = !!v;
     try { localStorage.setItem('autobuilder.tts.enabled', enabled ? '1' : '0'); } catch (e) {}
-    if (!enabled) cancel();
+    if (!enabled) { cancel(); hideBanner(); return; }
+    // T5-BO: say at once that the browser holds the voice, not at the first message minutes later.
+    if (supported) {
+      ensureCtx();
+      if (ctx.state !== 'running') showBanner();
+      ctx.onstatechange = () => { if (ctx.state === 'running') hideBanner(); };
+    }
   }
   function restore() {
     try { return localStorage.getItem('autobuilder.tts.enabled') === '1'; } catch (e) { return false; }
@@ -1196,7 +1203,9 @@ const TTS = (function () {
 
   function speak(text, opts) {
     if (!enabled || !supported || !text) return;
-    const clean = String(text).replace(/\s+/g, ' ').trim();
+    // T5-BI: said for a listener -- no paths, parameter lists, ids or markers (speakable.js).
+    const said = window.Speakable ? window.Speakable.sayable(text) : String(text);
+    const clean = said.replace(/\s+/g, ' ').trim();
     if (!clean) return;
 
     const now = Date.now();
@@ -1288,15 +1297,37 @@ const TTS = (function () {
   }
   // The autoplay rule is lifted only by a user gesture on the page, so every gesture tries to
   // resume, and a visible tab does too. One hint per suspension, not per utterance.
+  //
+  // T5-BO: a toast was easy to miss, so after a reload the voice seemed simply off. The banner stays
+  // until the voice is actually running. No page code can skip the gesture; a browser setting can
+  // (Firefox: site permissions -> Autoplay -> Allow audio and video; Chromium: start it with
+  // --autoplay-policy=no-user-gesture-required), and then this banner never appears.
   let gestureHinted = false;
+  let banner = null;
+  function showBanner() {
+    if (banner || typeof document === 'undefined' || !document.body) return;
+    banner = document.createElement('div');
+    banner.id = 'voice-banner';
+    banner.textContent = 'Voice paused by the browser -- click here (or anywhere) to turn it on';
+    banner.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9999;'
+        + 'background:#b45309;color:#fff;padding:6px 14px;border-radius:6px;font:13px sans-serif;'
+        + 'cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+    banner.addEventListener('click', () => { ensureCtx(); unlock(); });
+    document.body.appendChild(banner);
+  }
+  function hideBanner() {
+    if (banner) { banner.remove(); banner = null; }
+  }
   function needGesture() {
-    if (gestureHinted || !enabled) return;
+    if (!enabled) return;
+    showBanner();
+    if (gestureHinted) return;
     gestureHinted = true;
-    if (typeof toast === 'function') toast('Voice is paused by the browser. Click anywhere on the page to enable it.');
   }
   function unlock() {
-    if (!ctx || ctx.state === 'running') return;
-    ctx.resume().then(() => { if (ctx.state === 'running') gestureHinted = false; }).catch(() => {});
+    if (!ctx) return;
+    if (ctx.state === 'running') { hideBanner(); return; }
+    ctx.resume().then(() => { if (ctx.state === 'running') { gestureHinted = false; hideBanner(); } }).catch(() => {});
   }
   ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
       document.addEventListener(ev, () => { if (enabled) { ensureCtx(); unlock(); } }, { capture: true }));

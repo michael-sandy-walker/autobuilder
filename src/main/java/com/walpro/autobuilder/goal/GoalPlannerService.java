@@ -727,6 +727,36 @@ public class GoalPlannerService {
     }
 
     /**
+     * T4-DY: before the planner retires a subgoal as superseded, asks whether its work is DONE -- its
+     * criteria banked, or verified against the code as it stands now (the same check T2-EH's
+     * verify-before-pause makes). If so the subgoal is fulfilled, and true is returned: the planner must
+     * not prune it. Rewriting a plan cannot un-observe a success any more than a failure.
+     *
+     * <p>receiver-questions run 2026-09-29_12-49-16: the main work item's changes merged at 12:52 and
+     * 12:55, the run ended at 16/16, and at 12:58:46 the planner pruned that item as "superseded by
+     * replanning" -- the root closed on "1 subsumed", and the interface showed the finished work as not done.
+     */
+    public boolean fulfilledInsteadOfPruned(String subGoalId, CycleContextData context) {
+        GoalEntity sg = subGoalId == null ? null : goalMap.get(subGoalId);
+        if (sg == null || sg.getStatus() != GoalStatus.ACTIVE || !hasNoActiveDescendants(subGoalId)) return false;
+        if (allCriteriaDefinedAndBanked(subGoalId)) {
+            applyGoalProgress(subGoalId, GoalProgressState.FULFILLED,
+                    "criteria already banked -- fulfilled instead of superseded by replanning");
+            return true;
+        }
+        List<String> criteria = acceptanceCriteriaOf(sg);
+        if (criteriaVerificationService == null || context == null || criteria.isEmpty()) return false;
+        Map<Integer, Boolean> passMap = criteriaVerificationService.verifyAndRecord(
+                context, subGoalId, criteria, sg.getDescription());
+        if (passMap.size() == criteria.size() && passMap.values().stream().allMatch(Boolean::booleanValue)) {
+            applyGoalProgress(subGoalId, GoalProgressState.FULFILLED,
+                    "acceptance criteria verified against current code -- fulfilled instead of superseded by replanning");
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * T4-DY dossier: a goal's acceptance criteria in order, each with whether it is banked as met.
      * Empty for an unknown goal or one without criteria.
      */

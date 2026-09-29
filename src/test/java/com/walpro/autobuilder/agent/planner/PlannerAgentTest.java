@@ -158,6 +158,37 @@ class PlannerAgentTest {
     }
 
     @Test
+    void aSubgoalWhoseWorkIsDoneIsNotPrunedAsSuperseded() {
+        // T4-DY, run 2026-09-29_12-49-16: the main work item merged twice, the run ended at 16/16, and the
+        // planner pruned it as "superseded by replanning". Asked first, the planner service fulfils it.
+        GoalEntity done = goalWith(GoalStatus.ACTIVE, "Extend Quill.answer() to dry the ink");
+        lenient().when(done.getId()).thenReturn("g-done");
+        when(goalPlannerService.fulfilledInsteadOfPruned(eq("g-done"), any())).thenReturn(true);
+        CycleContextData ctx = CycleContextData.builder()
+                .currentGoalId("root-1").currentGoalDescription("root desc").build();
+        PlannerOutcome outcome = mock(PlannerOutcome.class);
+        lenient().when(outcome.updated()).thenReturn(true);
+        lenient().when(outcome.newGoals()).thenReturn(List.of());
+        lenient().when(outcome.goalsToRemove()).thenReturn(List.of("g-done"));
+        lenient().when(outcome.message()).thenReturn("m");
+        lenient().when(outcome.goalCriteria()).thenReturn(Map.of());
+        when(plannerAdapter.plan(any(CycleContextData.class))).thenReturn(outcome);
+        lenient().when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of());
+        lenient().when(goalPlannerService.getAllGoals()).thenReturn(List.of(done));
+        lenient().when(goalPlannerService.getRemainingGoals()).thenReturn(List.of(done));
+        lenient().when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
+        GoalEntity root = mock(GoalEntity.class);
+        lenient().when(root.getId()).thenReturn("root-1");
+        lenient().when(root.getDescription()).thenReturn("root desc");
+        lenient().when(goalPlannerService.getRootGoal()).thenReturn(root);
+
+        agent.execute(ctx);
+
+        verify(goalPlannerService).fulfilledInsteadOfPruned(eq("g-done"), any());
+        verify(goalPlannerService, never()).transitionGoal(eq("g-done"), any(), any(), any());
+    }
+
+    @Test
     void aGoalRetiredInAnEARLIERResponseStillBlocks() {
         // Field regression 2026-07-28: the first cut excluded EVERY SUBSUMED description, which
         // cannot distinguish "the goal I retired moments ago, whose replacement I am proposing"

@@ -583,6 +583,13 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
                                             g.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY));
                                     return;
                                 }
+                                // T4-DY: a subgoal whose work is done is fulfilled, not superseded:
+                                // replanning away finished work hid it ("0 done") and made a merging
+                                // run look stuck to the flat-root signal.
+                                if (goalPlannerService.fulfilledInsteadOfPruned(g.getId(), context)) {
+                                    log.info("Planner asked to prune subgoal [{}], but its criteria hold -- fulfilled instead", g.getId());
+                                    return;
+                                }
                                 // Planner removal IS supersession — replacement work carries
                                 // the obligation, so the retired goal becomes SUBSUMED (not
                                 // GIVEN_UP), which T2-DR's closure rule treats as a

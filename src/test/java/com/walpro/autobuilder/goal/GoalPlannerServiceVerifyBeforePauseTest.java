@@ -176,4 +176,40 @@ class GoalPlannerServiceVerifyBeforePauseTest {
         assertThat(result.rootCompleted()).isTrue();
         verifyNoInteractions(criteriaVerificationService);
     }
+
+    /**
+     * T4-DY: the planner asked to prune a subgoal whose work is done (run 2026-09-29_12-49-16: merged
+     * twice, run at 16/16, pruned as "superseded by replanning"). Verified against the current code, it is
+     * fulfilled instead, and the planner is told not to prune it.
+     */
+    @Test
+    void aSubgoalWhoseCriteriaHoldIsFulfilledInsteadOfPruned() {
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = subgoalWithCriteria("A", "G", "Every test in QuillSpecTest passes");
+        GoalEntity notDone = subgoalWithCriteria("B", "G", "An empty well is refused");
+        installTree(root, done, notDone);
+        when(criteriaVerificationService.verifyAndRecord(any(), eq("A"), any(), any())).thenReturn(Map.of(1, true));
+        when(criteriaVerificationService.verifyAndRecord(any(), eq("B"), any(), any())).thenReturn(Map.of(1, false));
+
+        assertThat(service.fulfilledInsteadOfPruned("A", ctx())).isTrue();
+        assertThat(service.getGoalById("A").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+
+        assertThat(service.fulfilledInsteadOfPruned("B", ctx())).as("not done: the planner may prune it").isFalse();
+        assertThat(service.getGoalById("B").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void noObservationMeansThePlannerMayPrune() {
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity leaf = subgoalWithCriteria("A", "G", "Every test in QuillSpecTest passes");
+        installTree(root, leaf);
+        when(criteriaVerificationService.verifyAndRecord(any(), eq("A"), any(), any())).thenReturn(Map.of());
+
+        assertThat(service.fulfilledInsteadOfPruned("A", ctx())).isFalse();
+        assertThat(service.fulfilledInsteadOfPruned("absent", ctx())).isFalse();
+        assertThat(service.getGoalById("A").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
 }

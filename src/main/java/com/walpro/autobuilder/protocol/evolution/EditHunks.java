@@ -1,0 +1,124 @@
+package com.walpro.autobuilder.protocol.evolution;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * T4-EB: a change to an existing file written as EDITS -- a piece of the file as it is now, and what
+ * replaces it -- applied exactly, instead of the whole file written out again.
+ *
+ * <p>A file could only be changed by re-emitting all of it, and a local model re-emitting 430 lines to
+ * change one drifts: receiver-questions run 2026-09-29_18-09-05's rejected attempts changed 200-303
+ * lines of a 433-line file in 7-18 places, for a fix of about one line that the dossier had named -- and
+ * the drift (invented enum constants, a duplicated method) is what broke the build.
+ *
+ * <p>An edit block:
+ * <pre>
+ * ```edit [src/main/java/org/ink/Quill.java]
+ * &lt;&lt;&lt;&lt;&lt;&lt;&lt; SEARCH
+ * the lines as they are now
+ * =======
+ * the lines that replace them
+ * &gt;&gt;&gt;&gt;&gt;&gt;&gt; REPLACE
+ * ```
+ * </pre>
+ * Several hunks may follow one another in a block; each applies to the file as the hunks before it
+ * left it. A SEARCH text must occur EXACTLY ONCE, matched as written; zero or several matches is a
+ * refusal with the reason, never a guess about which place was meant, and nothing outside the matched
+ * text is touched. An edit names an existing file; a new file is a whole-file block.
+ */
+public final class EditHunks {
+
+    /** The language tag of an edit block. */
+    public static final String TAG = "edit";
+
+    private static final Pattern BLOCK = Pattern.compile("(?s)```" + TAG + " \\[([^\\]\\n]+)\\][ \\t]*\\r?\\n(.*?)\\n?```");
+    private static final Pattern HUNK = Pattern.compile(
+            "(?s)<<<<<<< SEARCH\\r?\\n(.*?)\\r?\\n?=======\\r?\\n(.*?)\\r?\\n?>>>>>>> REPLACE");
+
+    private EditHunks() {
+    }
+
+    /** One edit block: the file it names and its hunks, in order. */
+    public record Edit(String path, List<Hunk> hunks) {}
+
+    public record Hunk(String search, String replace) {}
+
+    /** What applying a response's edits to the tree gives: the new contents, and every refusal with its reason. */
+    public record Applied(Map<String, String> files, List<String> problems) {}
+
+    /** The edit blocks of a response, in order. */
+    public static List<Edit> parse(String response) {
+        List<Edit> out = new ArrayList<>();
+        if (response == null) return out;
+        Matcher b = BLOCK.matcher(response);
+        while (b.find()) {
+            List<Hunk> hunks = new ArrayList<>();
+            Matcher h = HUNK.matcher(b.group(2));
+            while (h.find()) hunks.add(new Hunk(h.group(1), h.group(2)));
+            out.add(new Edit(b.group(1).strip(), hunks));
+        }
+        return out;
+    }
+
+    /** Whether a fenced block's language tag marks it as an edit block. */
+    public static boolean isEditTag(String tag) {
+        return TAG.equalsIgnoreCase(tag == null ? "" : tag.strip());
+    }
+
+    /**
+     * Applies every edit block of {@code response} to {@code tree} (path -> current content). A file
+     * whose edits all apply is in {@link Applied#files}; any refusal is named in {@link Applied#problems}
+     * and that file is left out whole -- half an edit is not applied.
+     */
+    public static Applied apply(String response, Map<String, String> tree) {
+        Map<String, String> files = new LinkedHashMap<>();
+        List<String> problems = new ArrayList<>();
+        for (Edit e : parse(response)) {
+            String current = files.containsKey(e.path()) ? files.get(e.path()) : tree == null ? null : tree.get(e.path());
+            if (current == null) {
+                problems.add(e.path() + ": there is no such file to edit -- write a new file as a whole-file block");
+                continue;
+            }
+            if (e.hunks().isEmpty()) {
+                problems.add(e.path() + ": the edit block has no <<<<<<< SEARCH / ======= / >>>>>>> REPLACE hunk");
+                continue;
+            }
+            String content = current;
+            boolean ok = true;
+            for (int i = 0; i < e.hunks().size(); i++) {
+                Hunk h = e.hunks().get(i);
+                String next = replaceOnce(content, h);
+                if (next == null) {
+                    int n = count(content, h.search());
+                    problems.add(e.path() + ": hunk " + (i + 1) + "'s SEARCH text "
+                            + (n == 0 ? "is not in the file as it is now -- copy it exactly from the current file"
+                            : "occurs " + n + " times -- include more surrounding lines so it occurs once"));
+                    ok = false;
+                    break;
+                }
+                content = next;
+            }
+            if (ok) files.put(e.path(), content);
+        }
+        return new Applied(files, problems);
+    }
+
+    /** The content with the hunk's SEARCH replaced, or null when it does not occur exactly once. */
+    private static String replaceOnce(String content, Hunk h) {
+        if (h.search().isEmpty() || count(content, h.search()) != 1) return null;
+        int at = content.indexOf(h.search());
+        return content.substring(0, at) + h.replace() + content.substring(at + h.search().length());
+    }
+
+    private static int count(String haystack, String needle) {
+        if (needle.isEmpty()) return 0;
+        int n = 0;
+        for (int i = haystack.indexOf(needle); i >= 0; i = haystack.indexOf(needle, i + 1)) n++;
+        return n;
+    }
+}

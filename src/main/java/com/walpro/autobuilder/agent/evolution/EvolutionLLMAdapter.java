@@ -8,6 +8,7 @@ import com.walpro.autobuilder.graph.evolution.EvolutionActionRegistrar;
 import com.walpro.autobuilder.graph.evolution.EvolutionGraphFacade;
 import com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome;
 import com.walpro.autobuilder.protocol.evolution.EvolutionProtocolContract;
+import com.walpro.autobuilder.protocol.evolution.EditHunks;
 import com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser;
 import com.walpro.autobuilder.agent.shared.LLMAgentProtocolInvoker;
 import com.walpro.autobuilder.agent.shared.LLMResponseResult;
@@ -120,9 +121,16 @@ public class EvolutionLLMAdapter {
                 llmClient,
                 systemPrompt,
                 userPrompt,
-                EvolutionProtocolContract::isValidResponse,
-                parser::parse,
-                EvolutionProtocolContract::describeMismatch
+                raw -> EvolutionProtocolContract.isValidResponse(raw)
+                        && EditHunks.apply(raw, currentTree(refreshed)).problems().isEmpty(),
+                raw -> parser.parse(raw, currentTree(refreshed)),
+                raw -> {
+                    // T4-EB: an edit whose SEARCH text does not occur exactly once is asked again, with where.
+                    String format = EvolutionProtocolContract.describeMismatch(raw);
+                    if (format != null) return format;
+                    List<String> problems = EditHunks.apply(raw, currentTree(refreshed)).problems();
+                    return problems.isEmpty() ? null : "an edit could not be applied: " + String.join("; ", problems);
+                }
         );
 
         EvolutionOutcome outcome;
@@ -157,6 +165,11 @@ public class EvolutionLLMAdapter {
 
         return context
                 .withEvolutionOutcome(outcome);
+    }
+
+    /** T4-EB: the files as they are now, which an edit block's SEARCH text is matched against. */
+    private static java.util.Map<String, String> currentTree(CycleContextData ctx) {
+        return ctx == null || ctx.previousOutput() == null ? java.util.Map.of() : ctx.previousOutput();
     }
 
     private EvolutionOutcome preserveAdopted(EvolutionOutcome outcome) {

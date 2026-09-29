@@ -34,7 +34,7 @@ class SubgoalSourcePromptBlockTest {
         String block = SubgoalSourcePromptBlock.render(
                 ctx("Add Inkwell.drain(drops) returning a copy with fewer drops", List.of("The Tests pass"), files), 20_000);
 
-        assertThat(block).contains("SOURCE OF THE EXISTING FILES THIS SUBGOAL NAMES",
+        assertThat(block).contains("SOURCE OF THE EXISTING FILES THIS WORK NAMES",
                 "```java [src/main/java/zeta/Inkwell.java]", "public record Inkwell(String well, int drops, Integer spare)",
                 "return new Inkwell(well, drops + more, spare);")
                 .doesNotContain("Nib");
@@ -59,5 +59,29 @@ class SubgoalSourcePromptBlockTest {
 
         assertThat(block).contains("```java [src/main/java/zeta/Inkwell.java]",
                 "too large to show here: src/main/java/zeta/Quill.java").doesNotContain("int a;");
+    }
+
+    /**
+     * T4-EB: the file the GOAL names is shown even when the subgoal names only a test -- run
+     * 2026-09-29_16-21-43 rewrote a 502-line class it had only seen as a two-line outline -- and so is a
+     * file the rejection reasons name; the subgoal's own files come first.
+     */
+    @Test
+    void theFileTheGoalOrTheRejectionNamesIsShownToo() {
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("src/main/java/zeta/Inkwell.java", INKWELL);
+        files.put("src/main/java/zeta/Nib.java", NIB);
+        files.put("src/test/java/zeta/InkwellTest.java", "package zeta;\nclass InkwellTest {}\n");
+        CycleContextData goalNames = CycleContextData.builder().currentSubGoalDescription("Analyse InkwellTest's cases")
+                .currentGoalDescription("The one class to change is Inkwell.").previousOutput(files).build();
+
+        String block = SubgoalSourcePromptBlock.render(goalNames, 20_000);
+
+        assertThat(block).contains("[src/test/java/zeta/InkwellTest.java]", "[src/main/java/zeta/Inkwell.java]").doesNotContain("Nib");
+        assertThat(block.indexOf("InkwellTest.java]")).isLessThan(block.indexOf("zeta/Inkwell.java]"));
+
+        CycleContextData rejectionNames = CycleContextData.builder().currentSubGoalDescription("Make the drops count")
+                .rejectionFeedback(List.of("Nib.width() still returns 1")).previousOutput(files).build();
+        assertThat(SubgoalSourcePromptBlock.render(rejectionNames, 20_000)).contains("[src/main/java/zeta/Nib.java]");
     }
 }

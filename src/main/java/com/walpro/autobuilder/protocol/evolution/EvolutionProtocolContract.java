@@ -66,7 +66,7 @@ public class EvolutionProtocolContract {
     /** Shared closing directive — one home so the focused and full prompt paths stay identical. */
     private static final String RESPONSE_FORMAT_FOOTER = """
         Respond with:
-        - One or more code blocks for changed source or configuration files
+        - One or more edit blocks for files that already exist (only the parts you change), and code blocks for new files
         - Or one or more #Delete directives
         - Or `#NoDiff` on its own line (followed by a one-sentence explanation) if the current output already satisfies all criteria
 
@@ -92,6 +92,22 @@ public class EvolutionProtocolContract {
             new ContractRule("RETURN_CHANGED_FILES",
                 "Return only new or modified files in fenced code blocks. The same `[relative/path]`-in-brackets pattern works for source AND configuration files (java, xml, properties, yml, gradle, etc.) — emit each as its own fenced block with the matching language tag.",
                 "```java [src/main/java/com/example/MyClass.java]\n// modified code\n```"
+            ),
+            new ContractRule("EDIT_EXISTING_FILES",
+                "To change a file that already exists, send only the parts you change, as an edit block: each"
+                        + " SEARCH part is copied EXACTLY from the file as it is now (every character, same indentation)"
+                        + " and long enough to occur only once; the REPLACE part is what takes its place. Several hunks may"
+                        + " follow each other in one block. Leave everything you do not mean to change out of the block --"
+                        + " it stays as it is. Write a whole-file block only for a NEW file.",
+                """
+                ```edit [src/main/java/com/example/MyClass.java]
+                <<<<<<< SEARCH
+                    private static final int LIMIT = 3;
+                =======
+                    private static final int LIMIT = 5;
+                >>>>>>> REPLACE
+                ```
+                """
             ),
             new ContractRule("MARK_DELETED_FILES",
                 "Use #Delete [relative/path] to mark deleted files.",
@@ -834,8 +850,10 @@ public class EvolutionProtocolContract {
         }
 
         if (anyExisting) {
-            sb.append("For files marked [EXISTS], your code block MUST include all existing declarations ");
-            sb.append("shown above plus your new additions. Do NOT omit existing methods or handlers.\n");
+            sb.append("For files marked [EXISTS], send an edit block with only the parts you change (a");
+            sb.append(" SEARCH part copied exactly from the file, then its REPLACE). If you do write such a file whole,");
+            sb.append(" it MUST include all existing declarations shown above plus your new additions."
+                    + " Do NOT omit existing methods or handlers.\n");
         }
 
         return sb.toString().stripTrailing();

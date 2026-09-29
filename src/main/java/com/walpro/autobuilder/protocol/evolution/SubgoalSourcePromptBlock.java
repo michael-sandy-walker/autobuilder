@@ -25,9 +25,9 @@ import java.util.regex.Pattern;
  * candidates. The summary for that record lists its methods and not one of its components. The
  * authority for what the file says was the file, and the prompt cropped it to names.
  *
- * <p><b>Which files.</b> An existing file whose class name the subgoal's description or criteria
- * mention -- a name counts only when it IS a file in the tree, so no list of common words is needed.
- * First mentioned first.
+ * <p><b>Which files.</b> An existing file whose class name the subgoal's description or criteria, the
+ * goal's description, or the reasons the last change was refused mention -- a name counts only when it
+ * IS a file in the tree, so no list of common words is needed. First mentioned first.
  *
  * <p><b>How much.</b> At most half the headroom still free where the block is placed; the rest stays
  * for the blocks after it. A file that does not fit is named as left out rather than cut, because a
@@ -57,6 +57,12 @@ public final class SubgoalSourcePromptBlock {
         StringBuilder text = new StringBuilder();
         if (input.currentSubGoalDescription() != null) text.append(input.currentSubGoalDescription()).append('\n');
         if (input.currentSubGoalCriteria() != null) input.currentSubGoalCriteria().forEach(c -> text.append(c).append('\n'));
+        // T4-EB: and the files the GOAL names, and the reasons the last change was refused. Receiver-questions
+        // run 2026-09-29_16-21-43: the subgoal was to analyse a test, the goal said "the one class to change
+        // is StuckQuestions", and the model rewrote that 502-line class whole from a two-line outline -- it
+        // had never been shown it. First mentioned first, so the subgoal's own files keep the budget.
+        if (input.currentGoalDescription() != null) text.append(input.currentGoalDescription()).append('\n');
+        if (input.rejectionFeedback() != null) input.rejectionFeedback().forEach(r -> { if (r != null) text.append(r).append('\n'); });
         if (text.isEmpty()) return null;
 
         Map<String, String> byClass = new LinkedHashMap<>();
@@ -75,11 +81,12 @@ public final class SubgoalSourcePromptBlock {
         if (named.isEmpty()) return null;
 
         int budget = Math.max(0, headroomTokens) / 2;
-        StringBuilder sb = new StringBuilder("--- SOURCE OF THE EXISTING FILES THIS SUBGOAL NAMES ---\n")
-                .append("These files exist, and this is exactly what they say now. When you change one, write it whole:"
-                        + " keep every declaration shown here -- the type's header, its fields, its constructors and"
-                        + " the bodies of its methods -- as it is, unless the subgoal asks you to change that"
-                        + " declaration, and add yours beside them.\n\n");
+        StringBuilder sb = new StringBuilder("--- SOURCE OF THE EXISTING FILES THIS WORK NAMES ---\n")
+                .append("These files exist, and this is exactly what they say now. To change one, send an edit block:"
+                        + " each SEARCH part copied exactly from here, then what replaces it; everything you leave out"
+                        + " stays as it is. If you write one whole instead, keep every declaration shown here -- the"
+                        + " type's header, its fields, its constructors and the bodies of its methods -- as it is,"
+                        + " unless the work asks you to change that declaration, and add yours beside them.\n\n");
         int used = PromptTokenBudget.estimateTokens(sb);
         List<String> leftOut = new ArrayList<>();
         int shown = 0;
@@ -96,7 +103,7 @@ public final class SubgoalSourcePromptBlock {
         }
         if (shown == 0) return null;
         if (!leftOut.isEmpty()) {
-            sb.append("Also named by the subgoal but too large to show here: ").append(String.join(", ", leftOut)).append(".\n");
+            sb.append("Also named but too large to show here: ").append(String.join(", ", leftOut)).append(".\n");
         }
         return sb.toString().stripTrailing();
     }

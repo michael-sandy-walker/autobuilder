@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class EvolutionResponseParser {
 
-    private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile("(?s)```\\w+ \\[(.+?)\\](.+?)```");
+    private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile("(?s)```(\\w+) \\[(.+?)\\](.+?)```");
     private static final Pattern DELETE_PATTERN = Pattern.compile("#Delete \\[(.+?)]");
 
     // T4-BU: test sources the model writes under the MAIN source root are un-mergeable — the
@@ -50,6 +50,15 @@ public class EvolutionResponseParser {
     }
 
     public EvolutionOutcome parse(String rawContent) {
+        return parse(rawContent, java.util.Map.of());
+    }
+
+    /**
+     * As {@link #parse(String)}, with {@code tree} (path -> current content) to apply edit blocks to
+     * (T4-EB): an edit becomes the whole new file here, so everything downstream still sees files. A file
+     * whose edit is refused is left out; the validator has already relayed the refusal to the model.
+     */
+    public EvolutionOutcome parse(String rawContent, java.util.Map<String, String> tree) {
         String content = normalizeFileHeaders(rawContent);
         // T2-CC: LLM declared the implementation is already complete
         if (content != null && content.lines().anyMatch(line -> line.trim().equals("#NoDiff"))) {
@@ -62,13 +71,27 @@ public class EvolutionResponseParser {
 
         Matcher codeMatcher = CODE_BLOCK_PATTERN.matcher(content);
         while (codeMatcher.find()) {
-            String path = codeMatcher.group(1).trim();
-            String fileContent = codeMatcher.group(2).trim();
+            if (EditHunks.isEditTag(codeMatcher.group(1))) continue; // an edit, applied below
+            String path = codeMatcher.group(2).trim();
+            String fileContent = codeMatcher.group(3).trim();
             if (!looksLikeFilePath(path)) {
                 log.warn("Skipping mutation with directory-like path (no file extension): [{}]", path);
                 continue;
             }
             changedFiles.add(new FileMutation(relocateMisplacedTestSource(path, fileContent), fileContent));
+        }
+
+        // T4-EB: edits apply to the file as this response's own whole-file blocks left it, else as it is now.
+        java.util.Map<String, String> base = new java.util.LinkedHashMap<>(tree == null ? java.util.Map.of() : tree);
+        for (FileMutation f : changedFiles) base.put(f.path(), f.content());
+        EditHunks.Applied edited = EditHunks.apply(content, base);
+        for (String problem : edited.problems()) log.warn("T4-EB: edit refused -- {}", problem);
+        for (var e : edited.files().entrySet()) {
+            changedFiles.removeIf(f -> f.path().equals(e.getKey()));
+            changedFiles.add(new FileMutation(e.getKey(), e.getValue()));
+        }
+        if (!edited.files().isEmpty()) {
+            log.info("T4-EB: {} file(s) changed by edits: {}", edited.files().size(), edited.files().keySet());
         }
 
         Matcher deleteMatcher = DELETE_PATTERN.matcher(content);

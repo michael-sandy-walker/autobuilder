@@ -40,6 +40,14 @@ import java.util.regex.Pattern;
  */
 public final class ParameterizedCaseInput {
 
+    /**
+     * How a failing invocation's row is labelled wherever it is shown. It is DATA the test hands to the
+     * code under test, and must read as such: labelled "ran with:", an archived compiler message in the row
+     * was read by the model as a real error of the project, and it advised fixing a file that does not
+     * exist (receiver-questions run 2026-09-29_17-23-59).
+     */
+    public static final String LABEL = "test input given to the code under test: ";
+
     /** {@code name(Params)[N]}: the runner's report of one invocation. */
     private static final Pattern INVOCATION = Pattern.compile("^([\\w$]+)(?:\\(([^)]*)\\))?\\[(\\d+)]$");
 

@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -177,7 +178,7 @@ class TestRunGateTest {
 
         String blocker = g.verifyTestsPass("c").orElseThrow();
 
-        assertThat(blocker).contains("dries[2] (ran with: green, Map<String,Nib>, a long note")
+        assertThat(blocker).contains("dries[2] (" + ParameterizedCaseInput.LABEL + "green, Map<String,Nib>, a long note")
                 .as("a long row does not crowd out what the code returned (field run 2026-09-28_15-38-46)")
                 .contains("): java.lang.AssertionError: Expecting Optional to contain a value but it was empty.");
     }
@@ -194,6 +195,25 @@ class TestRunGateTest {
         assertThat(TestRunGate.failingSignature(a)).isEqualTo(TestRunGate.failingSignature(b))
                 .contains("the same tests keep failing: InkTest.refusesEmptyWell, QuillTest.dries[10]");
         assertThat(TestRunGate.failingSignature(new TestRunReport(3, 0, 0, 0, List.of(), Map.of()))).isEmpty();
+    }
+
+    @Test
+    void aFailingSetIsPersistentByRatiosOverTheRunNotByACount() {
+        String s = "the same tests keep failing: QuillTest.dries";
+        long start = 0;
+        // one sighting spans nothing
+        assertThat(TestRunGate.persistent(s, List.of(new TestRunGate.FailingRun(10_000, s)), start, 10_000)).isFalse();
+        // seen at minutes 4, 15, 19 of a 19-minute run: 3 of 3 since first, spanning 15/19 of it
+        List<TestRunGate.FailingRun> held = List.of(new TestRunGate.FailingRun(240_000, s),
+                new TestRunGate.FailingRun(900_000, s), new TestRunGate.FailingRun(1_140_000, s));
+        assertThat(TestRunGate.persistent(s, held, start, 1_140_000)).isTrue();
+        // the same two sightings late in a long run span too little of it
+        List<TestRunGate.FailingRun> late = List.of(new TestRunGate.FailingRun(3_300_000, s), new TestRunGate.FailingRun(3_480_000, s));
+        assertThat(TestRunGate.persistent(s, late, start, 3_480_000)).as("3 of 58 minutes").isFalse();
+        // interleaved with other outcomes more often than not: not the run's steady failure
+        List<TestRunGate.FailingRun> mixed = List.of(new TestRunGate.FailingRun(60_000, s), new TestRunGate.FailingRun(300_000, null),
+                new TestRunGate.FailingRun(500_000, "other"), new TestRunGate.FailingRun(600_000, s));
+        assertThat(TestRunGate.persistent(s, mixed, start, 600_000)).as("2 of 4 since first").isFalse();
     }
 
     @Test
@@ -220,7 +240,14 @@ class TestRunGateTest {
         org.springframework.test.util.ReflectionTestUtils.setField(g, "stuckLayer", provider);
 
         g.verifyTestsPass("c");
+        verify(layer, never()).report(any(com.walpro.autobuilder.core.stuck.StuckObservation.Source.class), anyString(), any());
 
+        // The same set, long enough over the run: reported.
+        @SuppressWarnings("unchecked")
+        List<TestRunGate.FailingRun> history = (List<TestRunGate.FailingRun>)
+                org.springframework.test.util.ReflectionTestUtils.getField(g, "failingHistory");
+        history.add(0, new TestRunGate.FailingRun(0, "the same tests keep failing: QuillTest.dries"));
+        g.verifyTestsPass("c");
         verify(layer).report(eq(com.walpro.autobuilder.core.stuck.StuckObservation.Source.TEST_FAILURES),
                 eq("the same tests keep failing: QuillTest.dries"), any());
     }

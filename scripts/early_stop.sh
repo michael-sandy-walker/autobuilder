@@ -97,9 +97,16 @@ while alive; do
     # new work no score shows yet: the clock restarts once per distinct reaction, never on a repeat.
     last_reaction=$(grep -E "T4-DY: dossier move for .*: (HINT|REPLAN|DIVIDE) -- |T4-DQ: REWOUND to " "$LOG" 2>/dev/null \
         | grep -v -- '-- not divided\|-- no current subgoal\|did not divide' | tail -1 | md5sum | cut -c1-12)
+    # At most one such restart per patience window: a stream of moves kept a flat run alive to its
+    # budget (run 2026-09-29_16-21-43, 8 moves in 40 minutes). Relative, like the patience itself.
     if [ "$last_reaction" != "d41d8cd98f00" ] && [ "$last_reaction" != "${seen_reaction:-d41d8cd98f00}" ]; then
-        best_at=$SECONDS; seen_reaction=$last_reaction
-        echo "early_stop: the loop acted on its stall (dossier move or rewind) -- patience restarted"
+        seen_reaction=$last_reaction
+        if [ $((SECONDS - ${reaction_restart_at:--999999})) -ge "${patience_now:-$PATIENCE}" ]; then
+            best_at=$SECONDS; reaction_restart_at=$SECONDS
+            echo "early_stop: the loop acted on its stall (dossier move or rewind) -- patience restarted"
+        else
+            echo "early_stop: another move within one patience window of the last restart -- not restarting"
+        fi
     fi
     # The run's own pace: at least the stated patience, and 1.5x the longest wait between improvements so far.
     patience_now=$PATIENCE

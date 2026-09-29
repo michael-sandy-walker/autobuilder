@@ -131,21 +131,24 @@ class StuckDossierTest {
     }
 
     @Test
-    void twoRequestsInOneCycleEachGetADossierAndBothHintsStand() {
-        // Field run 2026-09-28_18-29-08: two build signatures exhausted their questions in one cycle and
-        // the single pending slot kept only the second.
+    void severalRequestsInOneCycleGetOneDossierLedByTheMostTellingCase() {
+        // Run 2026-09-29_16-21-43 took 8 decisions, one per compile error out of questions. Now one per
+        // cycle: the flat root leads, the runaway stands beside it, and the move is recorded under both.
         StuckLayer layer = layer();
         layer.beginCycle("c7", "sg-ink");
-        layer.report(StuckObservation.Source.FLAT_ROOT, "the root has not moved for half its window", List.of());
         layer.report(StuckObservation.Source.EXHAUSTION, "the subgoal ran out of attempts", List.of());
-        when(decider.decide(any(), any()))
-                .thenReturn(new DossierDecision(DossierDecision.Move.HINT, "a", "Dry the ink first."))
-                .thenReturn(new DossierDecision(DossierDecision.Move.HINT, "b", "Refuse an empty well."));
+        layer.report(StuckObservation.Source.FLAT_ROOT, "the root has not moved for half its window", List.of());
+        when(decider.decide(any(), any())).thenReturn(new DossierDecision(DossierDecision.Move.HINT, "a", "Dry the ink first."));
 
         layer.consultDossier(cycle("c8"));
 
-        verify(decider, org.mockito.Mockito.times(2)).decide(any(), eq("c8"));
-        assertThat(layer.promptBlock(cycle("c9"))).contains("Dry the ink first.", "Refuse an empty well.");
+        var captor = org.mockito.ArgumentCaptor.forClass(StuckDossier.class);
+        verify(decider, org.mockito.Mockito.times(1)).decide(captor.capture(), eq("c8"));
+        assertThat(captor.getValue().source()).isEqualTo("FLAT_ROOT");
+        assertThat(captor.getValue().otherStuck()).anyMatch(o -> o.contains("the subgoal ran out of attempts"));
+        StuckLedger.Entry runaway = layer.find(new StuckObservation(StuckObservation.Source.EXHAUSTION,
+                "the subgoal ran out of attempts", "sg-ink", "c7", List.of()));
+        assertThat(layer.dossierFor(runaway, "x", cycle("c9")).earlierMoves()).singleElement().asString().startsWith("HINT at c8");
     }
 
     @Test
@@ -212,25 +215,19 @@ class StuckDossierTest {
     }
 
     @Test
-    void theSameFailingTestsInThreeCyclesGoToTheDossier() {
-        // Runs 2026-09-29_13-58-51 and 14-35-17: items completed while the same two checks failed, and the
-        // flat-root signal never fired. The failing set, seen in three cycles, is its own stuck case.
+    void persistentFailingTestsGoToTheDossierAtOnce() {
+        // The test gate reports the failing set only once it has judged it persistent (ratios over the
+        // run), so the layer asks at the first report.
         StuckLayer layer = layer();
         String sig = "the same tests keep failing: QuillTest.dries[10]";
-        for (String c : List.of("c1", "c2")) {
-            layer.beginCycle(c, "sg-ink");
-            layer.report(StuckObservation.Source.TEST_FAILURES, sig, List.of("QuillTest.dries[10] -- expected 3"));
-        }
-        when(decider.decide(any(), any())).thenReturn(DossierDecision.none("x"));
-        layer.consultDossier(cycle("c3"));
-        verify(decider, never()).decide(any(), any());
-
-        layer.beginCycle("c3", "sg-ink");
+        layer.beginCycle("c1", "sg-ink");
         layer.report(StuckObservation.Source.TEST_FAILURES, sig, List.of("QuillTest.dries[10] -- expected 3"));
-        layer.consultDossier(cycle("c4"));
+        when(decider.decide(any(), any())).thenReturn(DossierDecision.none("x"));
+
+        layer.consultDossier(cycle("c2"));
 
         var captor = org.mockito.ArgumentCaptor.forClass(StuckDossier.class);
-        verify(decider).decide(captor.capture(), eq("c4"));
+        verify(decider).decide(captor.capture(), eq("c2"));
         assertThat(captor.getValue().render()).contains("TEST_FAILURES", sig);
     }
 

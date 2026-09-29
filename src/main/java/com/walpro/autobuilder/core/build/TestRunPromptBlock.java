@@ -36,7 +36,7 @@ public final class TestRunPromptBlock {
             int shown = 0;
             for (TestRunReport.Failure f : r.failing()) {
                 String line = "    " + simple(f.className()) + "." + f.method()
-                        + (f.input() != null ? " -- ran with: " + crop(f.input()) : "") + " -- "
+                        + (f.input() != null ? " -- " + ParameterizedCaseInput.LABEL + crop(f.input()) : "") + " -- "
                         + (f.outcome() == TestRunReport.Outcome.ERROR ? "error: " : "failed: ")
                         + crop(f.message()) + "\n";
                 if (line.length() > budget) break;

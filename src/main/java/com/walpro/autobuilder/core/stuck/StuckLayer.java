@@ -280,14 +280,23 @@ public class StuckLayer {
             pendingDossiers.clear();
         }
         if (due.isEmpty() || context == null || dossierDecider == null || !dossierDecider.available()) return context;
-        CycleContextData out = context;
-        for (Map.Entry<StuckLedger.Entry, String> d : due.entrySet()) {
-            out = consultDossier(d.getKey(), d.getValue(), out);
-        }
-        return out;
+        // ONE decision per cycle: the case that says most leads, the others stand beside it in the dossier
+        // and the move is recorded under each. One per request took 8 decisions in run 2026-09-29_16-21-43,
+        // every one a HINT, one per compile error that had run out of questions.
+        StuckLedger.Entry lead = due.keySet().stream()
+                .min(java.util.Comparator.comparingInt((StuckLedger.Entry e) -> LEAD_ORDER.indexOf(e.source()))
+                        .thenComparing(java.util.Comparator.comparingInt(StuckLedger.Entry::occurrences).reversed()))
+                .orElseThrow();
+        return consultDossier(lead, due.get(lead), context, due.keySet());
     }
 
-    private CycleContextData consultDossier(StuckLedger.Entry e, String why, CycleContextData context) {
+    /** Which stuck case leads a dossier: the one that says most about where the run is circling. */
+    private static final List<StuckObservation.Source> LEAD_ORDER = List.of(StuckObservation.Source.TEST_FAILURES,
+            StuckObservation.Source.FLAT_ROOT, StuckObservation.Source.EXHAUSTION, StuckObservation.Source.CLOSURE_REFUSAL,
+            StuckObservation.Source.BUILD, StuckObservation.Source.PROTECTED_WRITE);
+
+    private CycleContextData consultDossier(StuckLedger.Entry e, String why, CycleContextData context,
+                                            java.util.Collection<StuckLedger.Entry> answered) {
         String subGoalId = context.currentSubGoalId();
         StuckDossier dossier = dossierFor(e, why, context);
         DossierDecision d = dossierDecider.decide(dossier, context.cycleName());
@@ -330,9 +339,11 @@ public class StuckLayer {
             default -> outcome = "no move; the diagnosis request stands";
         }
         synchronized (this) {
-            movesBySignature.computeIfAbsent(e.signature(), k -> new ArrayList<>())
-                    .add(d.move() + " at " + context.cycleName() + " (" + outcome + ")"
-                            + (d.because() == null ? "" : " because: " + d.because()));
+            String record = d.move() + " at " + context.cycleName() + " (" + outcome + ")"
+                    + (d.because() == null ? "" : " because: " + d.because());
+            for (StuckLedger.Entry a : answered) {
+                movesBySignature.computeIfAbsent(a.signature(), k -> new ArrayList<>()).add(record);
+            }
         }
         log.warn("T4-DY: dossier move for '{}': {} -- {}", e.signature(), d.move(), outcome);
         if (behaviourLogger != null) {
@@ -365,7 +376,7 @@ public class StuckLayer {
         if (testRunGate != null) {
             testRunGate.freshReport().ifPresent(r -> r.failing().stream().limit(8).forEach(f -> failing.add(
                     f.className().substring(f.className().lastIndexOf('.') + 1) + "." + f.method()
-                            + (f.input() == null ? "" : " -- ran with: " + crop(f.input(), 300))
+                            + (f.input() == null ? "" : " -- " + com.walpro.autobuilder.core.build.ParameterizedCaseInput.LABEL + crop(f.input(), 300))
                             + " -- " + crop(f.message(), 300))));
         }
         List<String> earlier;

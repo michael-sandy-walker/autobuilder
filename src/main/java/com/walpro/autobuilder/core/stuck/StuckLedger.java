@@ -98,8 +98,9 @@ public final class StuckLedger {
      */
     public static int noticeAt(StuckObservation.Source source) {
         return switch (source) {
-            case BUILD, PROTECTED_WRITE, CLOSURE_REFUSAL, TEST_FAILURES -> 3;
-            case FLAT_ROOT, EXHAUSTION -> 1;
+            case BUILD, PROTECTED_WRITE, CLOSURE_REFUSAL -> 3;
+            // TEST_FAILURES arrives only once the test gate has judged it persistent, by ratios over the run.
+            case FLAT_ROOT, EXHAUSTION, TEST_FAILURES -> 1;
         };
     }
 

@@ -167,7 +167,7 @@ class TestRunEvidenceTest {
 
         assertThat(r.failing()).extracting(TestRunReport.Failure::input).containsExactly("broad");
         assertThat(TestRunPromptBlock.render(r, List.of(), 4_000))
-                .contains("QuillTest.nibs(String)[2] -- ran with: broad -- failed: expected: 2");
+                .contains("QuillTest.nibs(String)[2] -- " + ParameterizedCaseInput.LABEL + "broad -- failed: expected: 2");
         assertThat(SurefireReports.read(reports, start - 1_000).orElseThrow().failing().get(0).input())
                 .as("no project root, no row").isNull();
     }

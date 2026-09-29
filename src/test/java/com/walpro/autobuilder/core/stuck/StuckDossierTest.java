@@ -212,6 +212,29 @@ class StuckDossierTest {
     }
 
     @Test
+    void theSameFailingTestsInThreeCyclesGoToTheDossier() {
+        // Runs 2026-09-29_13-58-51 and 14-35-17: items completed while the same two checks failed, and the
+        // flat-root signal never fired. The failing set, seen in three cycles, is its own stuck case.
+        StuckLayer layer = layer();
+        String sig = "the same tests keep failing: QuillTest.dries[10]";
+        for (String c : List.of("c1", "c2")) {
+            layer.beginCycle(c, "sg-ink");
+            layer.report(StuckObservation.Source.TEST_FAILURES, sig, List.of("QuillTest.dries[10] -- expected 3"));
+        }
+        when(decider.decide(any(), any())).thenReturn(DossierDecision.none("x"));
+        layer.consultDossier(cycle("c3"));
+        verify(decider, never()).decide(any(), any());
+
+        layer.beginCycle("c3", "sg-ink");
+        layer.report(StuckObservation.Source.TEST_FAILURES, sig, List.of("QuillTest.dries[10] -- expected 3"));
+        layer.consultDossier(cycle("c4"));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(StuckDossier.class);
+        verify(decider).decide(captor.capture(), eq("c4"));
+        assertThat(captor.getValue().render()).contains("TEST_FAILURES", sig);
+    }
+
+    @Test
     void withNoPendingRequestNothingIsAsked() {
         StuckLayer layer = layer();
         CycleContextData ctx = cycle("c1");

@@ -4,6 +4,7 @@ import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -179,6 +180,49 @@ class TestRunGateTest {
         assertThat(blocker).contains("dries[2] (ran with: green, Map<String,Nib>, a long note")
                 .as("a long row does not crowd out what the code returned (field run 2026-09-28_15-38-46)")
                 .contains("): java.lang.AssertionError: Expecting Optional to contain a value but it was empty.");
+    }
+
+    @Test
+    void theSameFailingSetReadsTheSameSignatureAcrossRuns() {
+        TestRunReport a = new TestRunReport(5, 2, 0, 0, List.of(
+                new TestRunReport.Failure("org.ink.QuillTest", "dries(String, Map)[10]", TestRunReport.Outcome.FAILED, "expected 3"),
+                new TestRunReport.Failure("org.ink.InkTest", "refusesEmptyWell", TestRunReport.Outcome.FAILED, "was 5")), Map.of());
+        TestRunReport b = new TestRunReport(5, 2, 0, 0, List.of(
+                new TestRunReport.Failure("org.ink.InkTest", "refusesEmptyWell", TestRunReport.Outcome.FAILED, "was 7"),
+                new TestRunReport.Failure("org.ink.QuillTest", "dries(String, Map)[10]", TestRunReport.Outcome.FAILED, "expected 4")), Map.of());
+
+        assertThat(TestRunGate.failingSignature(a)).isEqualTo(TestRunGate.failingSignature(b))
+                .contains("the same tests keep failing: InkTest.refusesEmptyWell, QuillTest.dries[10]");
+        assertThat(TestRunGate.failingSignature(new TestRunReport(3, 0, 0, 0, List.of(), Map.of()))).isEmpty();
+    }
+
+    @Test
+    void aFailingRunIsReportedToTheStuckLayer(@org.junit.jupiter.api.io.TempDir java.nio.file.Path base) throws Exception {
+        java.nio.file.Path reports = base.resolve("output/target/surefire-reports");
+        java.nio.file.Files.createDirectories(reports);
+        java.nio.file.Files.createDirectories(base.resolve("output/src/main/java"));
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(eq(base.toString()), any(), eq("mvn test"))).thenAnswer(inv -> {
+            Thread.sleep(50); // file times come from a coarse clock; a real test run takes seconds
+            java.nio.file.Files.writeString(reports.resolve("TEST-org.ink.QuillTest.xml"),
+                    "<testsuite><testcase classname=\"org.ink.QuillTest\" name=\"dries\"><failure message=\"expected 3\"/></testcase></testsuite>");
+            return new BuildOutcome(BuildResult.COMPILE_ERROR,
+                    "org.ink.QuillTest.dries -- Time elapsed: 0.1 s <<< FAILURE!\n[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0",
+                    2000L, "mvn test", "c");
+        });
+        TestRunGate g = new TestRunGate(true, "mvn test", buildExecutor);
+        g.setFileBasePath(base.toString());
+        com.walpro.autobuilder.core.stuck.StuckLayer layer = mock(com.walpro.autobuilder.core.stuck.StuckLayer.class);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.core.stuck.StuckLayer> provider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(layer);
+        org.springframework.test.util.ReflectionTestUtils.setField(g, "stuckLayer", provider);
+
+        g.verifyTestsPass("c");
+
+        verify(layer).report(eq(com.walpro.autobuilder.core.stuck.StuckObservation.Source.TEST_FAILURES),
+                eq("the same tests keep failing: QuillTest.dries"), any());
     }
 
     @Test

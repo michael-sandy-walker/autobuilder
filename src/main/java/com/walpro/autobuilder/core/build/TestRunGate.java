@@ -108,6 +108,44 @@ public class TestRunGate {
     @Autowired(required = false)
     private ObservedBehaviour observedBehaviour;
 
+    /**
+     * T4-DY: where the same failing tests are reported as stuck. A provider: the stuck layer reads this
+     * gate's report for its dossier, so it cannot be injected directly.
+     */
+    @Autowired(required = false)
+    private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.core.stuck.StuckLayer> stuckLayer;
+
+    /** At most this many failing tests name a stuck signature; the rest are counted. */
+    static final int SIGNATURE_TESTS = 5;
+
+    /**
+     * The failing set as a stable signature: each test by class, method and invocation index -- never the
+     * parameter types or the message, which vary between runs of the same failure -- sorted, so the same
+     * set always reads the same. Empty when nothing failed.
+     */
+    static Optional<String> failingSignature(TestRunReport report) {
+        if (report == null || report.failing().isEmpty()) return Optional.empty();
+        List<String> names = report.failing().stream()
+                .map(f -> f.className().substring(f.className().lastIndexOf('.') + 1) + "."
+                        + f.method().replaceFirst("\\(.*\\)(?=\\[\\d+]$|$)", ""))
+                .distinct().sorted().toList();
+        String shown = String.join(", ", names.subList(0, Math.min(SIGNATURE_TESTS, names.size())));
+        int more = names.size() - SIGNATURE_TESTS;
+        return Optional.of("the same tests keep failing: " + shown + (more > 0 ? " and " + more + " more" : ""));
+    }
+
+    /** One line per failing test: its row when it is one invocation, and its message. */
+    static List<String> failingDetail(TestRunReport report) {
+        List<String> out = new ArrayList<>();
+        for (TestRunReport.Failure f : report.failing()) {
+            String line = f.className().substring(f.className().lastIndexOf('.') + 1) + "." + f.method()
+                    + (f.input() == null ? "" : " -- ran with: " + crop(f.input(), MAX_INPUT_LENGTH))
+                    + " -- " + crop(f.message() == null ? "" : f.message(), MAX_CAUSE_LENGTH);
+            out.add(line);
+        }
+        return out;
+    }
+
     /** T4-CQ: when the last test run started; its reports are the ones written after this. */
     private volatile long lastRunStartedAt = -1L;
 
@@ -196,6 +234,15 @@ public class TestRunGate {
             return Optional.empty();
         }
         String summary = summarise(plain);
+        // T4-DY: the same failing tests, run after run, are a stuck case of their own.
+        if (stuckLayer != null) {
+            var layer = stuckLayer.getIfAvailable();
+            if (layer != null) {
+                freshReport().ifPresent(r -> failingSignature(r).ifPresent(sig ->
+                        layer.report(com.walpro.autobuilder.core.stuck.StuckObservation.Source.TEST_FAILURES, sig,
+                                failingDetail(r))));
+            }
+        }
         if (observedBehaviour != null) {
             freshReport().ifPresent(r -> observedBehaviour.observe(r.failing(),
                     ObservedBehaviour.mainDigestOnDisk(Path.of(fileBasePath, "output"))));

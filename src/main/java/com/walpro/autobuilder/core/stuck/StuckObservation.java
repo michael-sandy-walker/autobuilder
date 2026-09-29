@@ -34,6 +34,13 @@ public record StuckObservation(Source source, String signature, String subGoalId
         /** RootConvergenceTracker: the root has not moved for its whole window. */
         FLAT_ROOT,
         /** The subgoal-exhaustion backstop: subgoal after subgoal given up without a merge. */
-        EXHAUSTION
+        EXHAUSTION,
+        /**
+         * TestRunGate: the loop's own test runs show the SAME failing tests in several cycles. Work items
+         * can keep completing around a failure nothing fixes -- receiver-questions runs 2026-09-29_13-58-51
+         * and 14-35-17 finished 3 and 2 items while the same two checks failed for 20+ minutes, so the
+         * flat-root signal, which counts completions, never fired.
+         */
+        TEST_FAILURES
     }
 }

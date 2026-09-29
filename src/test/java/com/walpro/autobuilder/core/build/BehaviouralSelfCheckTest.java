@@ -318,4 +318,42 @@ class BehaviouralSelfCheckTest {
         return new BootGate.BootObservation(true, java.util.List.of(), java.util.List.of(), 0L, Optional.empty());
     }
 
+
+    /** T4-DY: what changes between launches is not part of the finding's identity; what the defect is, is. */
+    @Test
+    void aFindingsSignatureIsTheDefectNotTheLaunch() {
+        String a = "the application exits immediately instead of staying up to serve the endpoints \u2014 "
+                + "[2026-09-30 00:12:53.052] - 346510 INFO [main] --- org.ink.Application: Starting Application with PID 346510 (/tmp/x/app.jar)";
+        String b = "the application exits immediately instead of staying up to serve the endpoints \u2014 "
+                + "[2026-09-30 00:15:40.158] - 347689 INFO [main] --- org.ink.Application: Starting Application with PID 347689 (/tmp/y/app.jar)";
+        String other = "the application exits at startup (exit 1) \u2014 no main manifest attribute, in /tmp/x/app.jar";
+
+        assertThat(BehaviouralSelfCheck.bootSignature(a)).isEqualTo(BehaviouralSelfCheck.bootSignature(b))
+                .startsWith("the running artifact keeps showing: the application exits immediately");
+        assertThat(BehaviouralSelfCheck.bootSignature(other)).isNotEqualTo(BehaviouralSelfCheck.bootSignature(a))
+                .contains("no main manifest attribute");
+    }
+
+    /** T4-DY: firestarter run 2026-09-30_00-08-07 -- the same defect for 50 minutes, and nothing called it stuck. */
+    @Test
+    void theSameDefectHeldOverTheRunIsReportedAsStuck() {
+        when(packageGate.verifyPackageable(anyString())).thenReturn(Optional.empty());
+        when(bootGate.observeBootsAndServes(anyString(), any(), any(), anyBoolean()))
+                .thenReturn(refuted("the application exits immediately instead of staying up"));
+        com.walpro.autobuilder.core.stuck.StuckLayer layer = mock(com.walpro.autobuilder.core.stuck.StuckLayer.class);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.core.stuck.StuckLayer> provider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(layer);
+        org.springframework.test.util.ReflectionTestUtils.setField(check, "stuckLayer", provider);
+        // The run began long enough ago that one earlier sighting spans a quarter of it.
+        com.walpro.autobuilder.core.stuck.Recurrence run = new com.walpro.autobuilder.core.stuck.Recurrence(System.currentTimeMillis() - 60_000);
+        run.observe(BehaviouralSelfCheck.bootSignature("the application exits immediately instead of staying up"), System.currentTimeMillis() - 50_000);
+        org.springframework.test.util.ReflectionTestUtils.setField(check, "bootFindings", run);
+
+        check.observe(ctx(), SPEC, () -> REQS);
+
+        verify(layer).report(org.mockito.ArgumentMatchers.eq(com.walpro.autobuilder.core.stuck.StuckObservation.Source.BOOT),
+                org.mockito.ArgumentMatchers.startsWith("the running artifact keeps showing: the application exits immediately"), any());
+    }
 }

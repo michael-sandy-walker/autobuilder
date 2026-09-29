@@ -41,6 +41,13 @@ public record StuckObservation(Source source, String signature, String subGoalId
          * and 14-35-17 finished 3 and 2 items while the same two checks failed for 20+ minutes, so the
          * flat-root signal, which counts completions, never fired.
          */
-        TEST_FAILURES
+        TEST_FAILURES,
+        /**
+         * BehaviouralSelfCheck: the running artifact shows the SAME defect observation after observation.
+         * Firestarter run 2026-09-30_00-08-07: "the application exits immediately instead of staying up"
+         * from 00:12 to the cut at 00:61 -- merges and completions kept the root moving, the project had no
+         * tests, and nothing counted the repeated observation as stuck.
+         */
+        BOOT
     }
 }

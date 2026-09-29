@@ -292,7 +292,7 @@ public class StuckLayer {
 
     /** Which stuck case leads a dossier: the one that says most about where the run is circling. */
     private static final List<StuckObservation.Source> LEAD_ORDER = List.of(StuckObservation.Source.TEST_FAILURES,
-            StuckObservation.Source.FLAT_ROOT, StuckObservation.Source.EXHAUSTION, StuckObservation.Source.CLOSURE_REFUSAL,
+            StuckObservation.Source.BOOT, StuckObservation.Source.FLAT_ROOT, StuckObservation.Source.EXHAUSTION, StuckObservation.Source.CLOSURE_REFUSAL,
             StuckObservation.Source.BUILD, StuckObservation.Source.PROTECTED_WRITE);
 
     private CycleContextData consultDossier(StuckLedger.Entry e, String why, CycleContextData context,

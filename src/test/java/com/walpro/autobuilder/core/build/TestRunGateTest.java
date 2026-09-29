@@ -198,25 +198,6 @@ class TestRunGateTest {
     }
 
     @Test
-    void aFailingSetIsPersistentByRatiosOverTheRunNotByACount() {
-        String s = "the same tests keep failing: QuillTest.dries";
-        long start = 0;
-        // one sighting spans nothing
-        assertThat(TestRunGate.persistent(s, List.of(new TestRunGate.FailingRun(10_000, s)), start, 10_000)).isFalse();
-        // seen at minutes 4, 15, 19 of a 19-minute run: 3 of 3 since first, spanning 15/19 of it
-        List<TestRunGate.FailingRun> held = List.of(new TestRunGate.FailingRun(240_000, s),
-                new TestRunGate.FailingRun(900_000, s), new TestRunGate.FailingRun(1_140_000, s));
-        assertThat(TestRunGate.persistent(s, held, start, 1_140_000)).isTrue();
-        // the same two sightings late in a long run span too little of it
-        List<TestRunGate.FailingRun> late = List.of(new TestRunGate.FailingRun(3_300_000, s), new TestRunGate.FailingRun(3_480_000, s));
-        assertThat(TestRunGate.persistent(s, late, start, 3_480_000)).as("3 of 58 minutes").isFalse();
-        // interleaved with other outcomes more often than not: not the run's steady failure
-        List<TestRunGate.FailingRun> mixed = List.of(new TestRunGate.FailingRun(60_000, s), new TestRunGate.FailingRun(300_000, null),
-                new TestRunGate.FailingRun(500_000, "other"), new TestRunGate.FailingRun(600_000, s));
-        assertThat(TestRunGate.persistent(s, mixed, start, 600_000)).as("2 of 4 since first").isFalse();
-    }
-
-    @Test
     void aFailingRunIsReportedToTheStuckLayer(@org.junit.jupiter.api.io.TempDir java.nio.file.Path base) throws Exception {
         java.nio.file.Path reports = base.resolve("output/target/surefire-reports");
         java.nio.file.Files.createDirectories(reports);
@@ -243,10 +224,9 @@ class TestRunGateTest {
         verify(layer, never()).report(any(com.walpro.autobuilder.core.stuck.StuckObservation.Source.class), anyString(), any());
 
         // The same set, long enough over the run: reported.
-        @SuppressWarnings("unchecked")
-        List<TestRunGate.FailingRun> history = (List<TestRunGate.FailingRun>)
-                org.springframework.test.util.ReflectionTestUtils.getField(g, "failingHistory");
-        history.add(0, new TestRunGate.FailingRun(0, "the same tests keep failing: QuillTest.dries"));
+        com.walpro.autobuilder.core.stuck.Recurrence longRun = new com.walpro.autobuilder.core.stuck.Recurrence(0);
+        longRun.observe("the same tests keep failing: QuillTest.dries", 1);
+        org.springframework.test.util.ReflectionTestUtils.setField(g, "failingSets", longRun);
         g.verifyTestsPass("c");
         verify(layer).report(eq(com.walpro.autobuilder.core.stuck.StuckObservation.Source.TEST_FAILURES),
                 eq("the same tests keep failing: QuillTest.dries"), any());

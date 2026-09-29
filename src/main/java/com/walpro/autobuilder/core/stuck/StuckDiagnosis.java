@@ -76,7 +76,7 @@ public final class StuckDiagnosis {
         return switch (source) {
             case BUILD -> 4;
             case PROTECTED_WRITE, CLOSURE_REFUSAL -> 1;
-            case FLAT_ROOT, EXHAUSTION, TEST_FAILURES -> 0;
+            case FLAT_ROOT, EXHAUSTION, TEST_FAILURES, BOOT -> 0;
         };
     }
 
@@ -93,7 +93,7 @@ public final class StuckDiagnosis {
             };
             case PROTECTED_WRITE -> protectedFile(signature, authorities);
             case CLOSURE_REFUSAL -> refusedRequirement(signature, detail, authorities);
-            case FLAT_ROOT, EXHAUSTION, TEST_FAILURES -> throw new IllegalStateException("no question for " + source);
+            case FLAT_ROOT, EXHAUSTION, TEST_FAILURES, BOOT -> throw new IllegalStateException("no question for " + source);
         });
     }
 

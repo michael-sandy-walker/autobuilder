@@ -287,6 +287,14 @@ public class BehaviouralSelfCheck implements CheckpointableState {
             behaviourLogger.buildFixAttempt(cycleId, "behavioural-self-check", 0, null, null,
                     null, List.of(), finding.isPresent() ? "DEFECT" : "CLEAN", elapsed);
         }
+        // T4-DY: the same defect, observation after observation, is a stuck case -- by the one recurrence rule.
+        String signature = finding.map(BehaviouralSelfCheck::bootSignature).orElse(null);
+        if (bootFindings.observe(signature) && stuckLayer != null) {
+            var layer = stuckLayer.getIfAvailable();
+            if (layer != null) {
+                layer.report(com.walpro.autobuilder.core.stuck.StuckObservation.Source.BOOT, signature, List.of(finding.get()));
+            }
+        }
         if (finding.isEmpty()) {
             lastFinding = null;
             return new SelfCheckResult(Optional.empty(), observation);
@@ -297,6 +305,33 @@ public class BehaviouralSelfCheck implements CheckpointableState {
         }
         lastFinding = finding.get();
         return new SelfCheckResult(finding, observation);
+    }
+
+    /** T4-DY: this run's self-check findings, judged by the one recurrence rule. */
+    private final com.walpro.autobuilder.core.stuck.Recurrence bootFindings =
+            com.walpro.autobuilder.core.stuck.Recurrence.ofThisRun();
+
+    /** T4-DY: where a persistent finding is reported as stuck; a provider, like the test gate's. */
+    @Autowired(required = false)
+    private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.core.stuck.StuckLayer> stuckLayer;
+
+    /**
+     * A finding as a stable signature: the gate's own classification (before " -- "), then its detail
+     * with what changes between launches taken out -- bracketed timestamps, numbers (process ids, times)
+     * and absolute paths -- cut to one line. "No main manifest" and "a missing bean" stay apart; fifty
+     * minutes of "exits immediately" read as one case.
+     */
+    static String bootSignature(String finding) {
+        String f = finding.strip();
+        int dash = f.indexOf(" \u2014 ");
+        String kind = dash < 0 ? f : f.substring(0, dash);
+        String detail = dash < 0 ? "" : f.substring(dash + 3)
+                .replaceAll("\\[[^\\]]*\\]", "")
+                .replaceAll("(?:/[\\w.@+-]+)+", "")
+                .replaceAll("\\d+", "")
+                .replaceAll("\\s+", " ").strip();
+        if (detail.length() > 120) detail = detail.substring(0, 120);
+        return "the running artifact keeps showing: " + kind + (detail.isEmpty() ? "" : " -- " + detail);
     }
 
     /**

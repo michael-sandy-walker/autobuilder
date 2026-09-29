@@ -115,45 +115,9 @@ public class TestRunGate {
     @Autowired(required = false)
     private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.core.stuck.StuckLayer> stuckLayer;
 
-    /** One test run of this JVM's run: when, and which failing set it showed (null: none). */
-    record FailingRun(long at, String signature) {}
-
-    private final List<FailingRun> failingHistory = new java.util.concurrent.CopyOnWriteArrayList<>();
-
-    /** When this run began: the JVM is one run. */
-    private final long runStartedAt = java.lang.management.ManagementFactory.getRuntimeMXBean().getStartTime();
-
-    /**
-     * The share of test runs, since a failing set first appeared, that must show it again. Ratios, not a
-     * count (user, 2026-09-29: "don't make '3 consecutive tests failed' fixed ... use ratios").
-     */
-    static final double RECURRENCE_SHARE = 2.0 / 3.0;
-
-    /** How much of the run so far the failing set must have spanned, first sighting to now. */
-    static final double SPAN_SHARE = 0.25;
-
-    /**
-     * Whether {@code signature} has held long enough, measured against this run: it appears in at least
-     * {@link #RECURRENCE_SHARE} of the test runs since its first appearance, and those sightings span at
-     * least {@link #SPAN_SHARE} of the time the run has been going. A single sighting spans nothing, so it
-     * never qualifies; the longer the run, the longer a set must persist.
-     */
-    boolean persistent(String signature) {
-        return persistent(signature, failingHistory, runStartedAt, System.currentTimeMillis());
-    }
-
-    static boolean persistent(String signature, List<FailingRun> history, long runStart, long now) {
-        int first = -1;
-        for (int i = 0; i < history.size(); i++) {
-            if (signature.equals(history.get(i).signature())) { first = i; break; }
-        }
-        if (first < 0) return false;
-        List<FailingRun> since = history.subList(first, history.size());
-        long same = since.stream().filter(f -> signature.equals(f.signature())).count();
-        long span = now - history.get(first).at();
-        long elapsed = Math.max(1, now - runStart);
-        return same / (double) since.size() >= RECURRENCE_SHARE && span / (double) elapsed >= SPAN_SHARE;
-    }
+    /** T4-DY: the failing sets of this run's test runs, judged by the one recurrence rule. */
+    private final com.walpro.autobuilder.core.stuck.Recurrence failingSets =
+            com.walpro.autobuilder.core.stuck.Recurrence.ofThisRun();
 
     /** At most this many failing tests name a stuck signature; the rest are counted. */
     static final int SIGNATURE_TESTS = 5;
@@ -281,9 +245,10 @@ public class TestRunGate {
             if (layer != null) {
                 freshReport().ifPresent(r -> {
                     Optional<String> sig = failingSignature(r);
-                    failingHistory.add(new FailingRun(System.currentTimeMillis(), sig.orElse(null)));
-                    sig.filter(this::persistent).ifPresent(s -> layer.report(
-                            com.walpro.autobuilder.core.stuck.StuckObservation.Source.TEST_FAILURES, s, failingDetail(r)));
+                    if (failingSets.observe(sig.orElse(null))) {
+                        layer.report(com.walpro.autobuilder.core.stuck.StuckObservation.Source.TEST_FAILURES,
+                                sig.get(), failingDetail(r));
+                    }
                 });
             }
         }

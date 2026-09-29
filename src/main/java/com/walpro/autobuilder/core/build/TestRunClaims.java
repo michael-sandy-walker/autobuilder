@@ -39,7 +39,38 @@ public final class TestRunClaims {
     private static final Pattern LISTED_CLASSES = Pattern.compile(
             "\\s*\\(((?:[A-Z][A-Za-z0-9_]*Tests?)(?:\\s*,\\s*(?:and\\s+)?[A-Z][A-Za-z0-9_]*Tests?)*)\\)");
 
+    /**
+     * The shape of a claim that tests keep passing, in the words planners write for a subgoal that only
+     * guards what exists: "The existing tests in src/test/java continue to pass without modification"
+     * (receiver-questions run 2026-09-28_21-17-47). Used to RECOGNISE such a claim ({@link #isClaim}),
+     * never to prove one: the "without modification" half is a separate claim this class cannot confirm.
+     */
+    private static final Pattern CONTINUES = Pattern.compile(
+            "(?:all |every |the )?(?:the )?(?:existing |current |project'?s? )?(?:own )?(?:unit )?tests?(?: (?:in|under) \\S+)?"
+                    + " (?:continue to |still |keep |all )?pass(?:es|ing)?(?: without (?:modification|changes?|being (?:modified|changed)))?");
+
     private TestRunClaims() {
+    }
+
+    /** A guard's words: the tests are the ones that already exist, and they are to KEEP passing. */
+    private static final Pattern GUARD = Pattern.compile("\\b(?:existing|current|continue|still|keep|without)\\b");
+
+    /**
+     * Whether {@code criterion} is, as a whole, a GUARD over the tests that exist -- "the existing tests
+     * continue to pass without modification" -- a claim a test run answers and no change can satisfy by
+     * itself. A bare "every test in QuillSpecTest passes" is NOT one: while those tests fail it is the work
+     * itself (receiver-questions' own "every test in ReceiverQuestionsSpecTest passes"). Shape only.
+     */
+    public static boolean isGuardClaim(String criterion) {
+        if (criterion == null || criterion.isBlank()) return false;
+        String lower = normalise(criterion).toLowerCase(Locale.ROOT);
+        return CONTINUES.matcher(lower).matches() && GUARD.matcher(lower).find();
+    }
+
+    private static String normalise(String criterion) {
+        return LISTED_CLASSES.matcher(criterion.strip().replaceAll("`", "")).replaceAll("")
+                .replaceAll("\\s*\\([^()]*\\)\\s*$", "")
+                .replaceAll("[.\\s]+$", "");
     }
 
     /** True when {@code criterion} claims only that tests pass, and {@code report} shows exactly that. */

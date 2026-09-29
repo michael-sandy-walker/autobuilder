@@ -149,6 +149,69 @@ class StuckDossierTest {
     }
 
     @Test
+    void aCheckOnlySubgoalIsRecognisedFromItsUnmetCriteria() {
+        // The criterion run 2026-09-28_21-17-47 stuck on, word for word.
+        Map<String, Boolean> checkOnly = new LinkedHashMap<>();
+        checkOnly.put("The quill writes blue", true);
+        checkOnly.put("The existing tests in `src/test/java` continue to pass without modification.", false);
+        checkOnly.put("All other classes under src/main remain unchanged", false);
+        assertThat(StuckDossier.verifyOnly(checkOnly)).isTrue();
+
+        Map<String, Boolean> work = new LinkedHashMap<>(checkOnly);
+        work.put("The `Quill` class keeps its current behaviour while adding drying", false);
+        assertThat(StuckDossier.verifyOnly(work)).as("one unmet criterion asks for a change").isFalse();
+        assertThat(StuckDossier.verifyOnly(Map.of("All existing tests still pass", true))).as("nothing unmet").isFalse();
+        assertThat(StuckDossier.verifyOnly(Map.of("Every test in QuillSpecTest passes", false)))
+                .as("spec tests that fail are the work").isFalse();
+        assertThat(StuckDossier.verifyOnly(Map.of())).isFalse();
+    }
+
+    @Test
+    void forACheckOnlySubgoalAHintBecomesAReplanAndItsTextIsDropped() {
+        DossierDecision hint = new DossierDecision(DossierDecision.Move.HINT, "empty changes", "Make a trivial, valid change.");
+
+        DossierDecision applied = hint.forSubgoal(true);
+
+        assertThat(applied.move()).isEqualTo(DossierDecision.Move.REPLAN);
+        assertThat(applied.hint()).isNull();
+        assertThat(hint.forSubgoal(false)).isSameAs(hint);
+        DossierDecision divide = new DossierDecision(DossierDecision.Move.DIVIDE, "x", null);
+        assertThat(divide.forSubgoal(true)).isSameAs(divide);
+    }
+
+    @Test
+    void theDossierShowsACheckOnlySubgoalAsOne() {
+        StuckLayer layer = layer();
+        Map<String, Boolean> criteria = new LinkedHashMap<>();
+        criteria.put("The existing tests in src/test/java continue to pass without modification", false);
+        when(planner.criteriaStatus("sg-ink")).thenReturn(new LinkedHashMap<>(criteria));
+        flatRoot(layer);
+        when(decider.decide(any(), any())).thenReturn(DossierDecision.none("x"));
+
+        layer.consultDossier(cycle("c8"));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(StuckDossier.class);
+        verify(decider).decide(captor.capture(), eq("c8"));
+        assertThat(captor.getValue().verifyOnly()).isTrue();
+        assertThat(captor.getValue().render()).contains("NOTE ON THIS SUBGOAL", "no change of the code can satisfy it");
+    }
+
+    @Test
+    void aDivideWithNothingToSplitBecomesAReplan() {
+        StuckLayer layer = layer();
+        Map<String, Boolean> criteria = new LinkedHashMap<>();
+        criteria.put("The whole suite passes", false);
+        when(planner.criteriaStatus("sg-ink")).thenReturn(new LinkedHashMap<>(criteria));
+        flatRoot(layer);
+        when(decider.decide(any(), any())).thenReturn(new DossierDecision(DossierDecision.Move.DIVIDE, "split", null));
+
+        CycleContextData out = layer.consultDossier(cycle("c8"));
+
+        assertThat(out.hasStrongRequest(BasicSignals.REPLAN_REQUESTED, 0.5)).isTrue();
+        verify(planner, never()).divideExhaustedSubGoal(anyString(), anyList());
+    }
+
+    @Test
     void withNoPendingRequestNothingIsAsked() {
         StuckLayer layer = layer();
         CycleContextData ctx = cycle("c1");

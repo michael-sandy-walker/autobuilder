@@ -25,10 +25,29 @@ import java.util.Map;
  * @param rejections  the reasons the last change was not merged
  * @param failingTests the project's failing tests at the last test run, with the row an invocation ran with
  * @param earlierMoves moves the dossier already chose for this signature, with what followed
+ * @param verifyOnly  every criterion the subgoal still has unmet is a claim a CHECK answers (tests pass,
+ *                    nothing was changed), so no change can satisfy the subgoal by itself
  */
 public record StuckDossier(String source, String signature, String why, int occurrences, List<String> asked,
                            List<String> otherStuck, List<String> health, String subGoal, Map<String, Boolean> criteria,
-                           List<String> rejections, List<String> failingTests, List<String> earlierMoves) {
+                           List<String> rejections, List<String> failingTests, List<String> earlierMoves,
+                           boolean verifyOnly) {
+
+    /**
+     * T4-DY: the subgoal is verify-only when it has unmet criteria and every one of them is a claim the
+     * loop's own checks answer -- a guard over the existing tests ({@link com.walpro.autobuilder.core.build.TestRunClaims})
+     * or that nothing was changed ({@link com.walpro.autobuilder.core.build.UnchangedClaims}). Such a subgoal
+     * gives a change nothing to do: receiver-questions run 2026-09-28_21-17-47 stuck on "the existing tests
+     * in src/test/java continue to pass without modification", every attempt was rejected as empty, and the
+     * dossier's HINT told the loop to make "a trivial, valid change".
+     */
+    public static boolean verifyOnly(Map<String, Boolean> criteria) {
+        if (criteria == null) return false;
+        List<String> unmet = criteria.entrySet().stream().filter(e -> !e.getValue()).map(Map.Entry::getKey).toList();
+        return !unmet.isEmpty() && unmet.stream().allMatch(c ->
+                com.walpro.autobuilder.core.build.TestRunClaims.isGuardClaim(c)
+                        || com.walpro.autobuilder.core.build.UnchangedClaims.isClaim(c));
+    }
 
     /** The dossier as the model reads it. Empty sections are named as empty, so absence is a fact too. */
     public String render() {
@@ -45,6 +64,10 @@ public record StuckDossier(String source, String signature, String why, int occu
         List<String> crit = new ArrayList<>();
         if (criteria != null) criteria.forEach((c, met) -> crit.add((met ? "[met] " : "[not met] ") + c));
         section(sb, "ITS ACCEPTANCE CRITERIA", crit);
+        if (verifyOnly) {
+            sb.append("NOTE ON THIS SUBGOAL\n  Every criterion it still has unmet is a CHECK (tests pass, nothing was changed),"
+                    + " not a change to make: no change of the code can satisfy it by itself.\n");
+        }
         section(sb, "WHY THE LAST CHANGE WAS NOT MERGED", rejections);
         section(sb, "FAILING TESTS AT THE LAST TEST RUN", failingTests);
         return sb.toString().stripTrailing();
@@ -61,6 +84,7 @@ public record StuckDossier(String source, String signature, String why, int occu
                 + " notMet=" + (criteria == null ? 0 : criteria.values().stream().filter(m -> !m).count()));
         out.add("rejections=" + size(rejections));
         out.add("failingTests=" + size(failingTests));
+        out.add("verifyOnly=" + verifyOnly);
         return out;
     }
 

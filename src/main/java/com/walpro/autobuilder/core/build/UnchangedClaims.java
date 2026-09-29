@@ -55,6 +55,24 @@ public final class UnchangedClaims {
         return true;
     }
 
+    /**
+     * Whether {@code criterion} is, as a whole, a claim that something was NOT changed -- every part one
+     * of the shapes above. Shape only: says nothing about whether it holds.
+     */
+    public static boolean isClaim(String criterion) {
+        if (criterion == null || criterion.isBlank()) return false;
+        String claim = criterion.strip().replaceAll("[.\\s]+$", "");
+        for (String part : claim.split("\\s*;\\s*|,\\s+and\\s+(?=(?:no|only|all|every|the)\\b)")) {
+            String p = part.strip();
+            String lower = p.toLowerCase(Locale.ROOT).replace("`", "");
+            if (!(NONE_UNDER.matcher(lower).matches() || ONLY.matcher(p.replace("`", "")).matches()
+                    || ALL_OTHER.matcher(lower).matches() || PRESERVED.matcher(lower).matches())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static boolean partProven(String part, AdoptionManifest.Changes changes, String goal) {
         String lower = part.toLowerCase(Locale.ROOT).replace("`", "");
         Matcher none = NONE_UNDER.matcher(lower);

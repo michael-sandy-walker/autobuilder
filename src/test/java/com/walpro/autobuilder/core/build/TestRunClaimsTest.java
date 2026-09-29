@@ -55,4 +55,17 @@ class TestRunClaimsTest {
                 .as("a listed class that did not run").isFalse();
         assertThat(TestRunClaims.provenBy("Every test in CoilSpecTest passes and the coils align", GREEN)).isFalse();
     }
+
+    /** Shape only: a GUARD over the existing tests -- not a bare "X passes", which is work while X fails. */
+    @org.junit.jupiter.api.Test
+    void aGuardOverTheExistingTestsIsRecognisedWithoutAnyRun() {
+        org.assertj.core.api.Assertions.assertThat(TestRunClaims.isGuardClaim(
+                "The existing tests in `src/test/java` continue to pass without modification.")).isTrue();
+        org.assertj.core.api.Assertions.assertThat(TestRunClaims.isGuardClaim("All existing tests still pass")).isTrue();
+        org.assertj.core.api.Assertions.assertThat(TestRunClaims.isGuardClaim("Every test in QuillSpecTest passes"))
+                .as("the work itself while QuillSpecTest fails").isFalse();
+        org.assertj.core.api.Assertions.assertThat(TestRunClaims.isGuardClaim("The whole suite passes")).isFalse();
+        org.assertj.core.api.Assertions.assertThat(TestRunClaims.isGuardClaim("The quill dries and the existing tests pass")).isFalse();
+        org.assertj.core.api.Assertions.assertThat(TestRunClaims.isGuardClaim(null)).isFalse();
+    }
 }

@@ -315,7 +315,12 @@ public class StuckLayer {
                 dossier.criteria().forEach((c, met) -> { if (!met) unmet.add(c); });
                 var gps = goalPlannerService == null ? null : goalPlannerService.getIfAvailable();
                 if (gps == null || subGoalId == null || unmet.size() < 2) {
-                    outcome = "not divided: " + (unmet.size() < 2 ? "fewer than two unmet criteria" : "no planner at hand");
+                    // Nothing to split: the move's intent -- change the plan for this subgoal -- is a replan.
+                    out = context.issueRequest(com.walpro.autobuilder.core.lifecycle.ChannelRequest.of(
+                            com.walpro.autobuilder.core.lifecycle.BasicSignals.REPLAN_REQUESTED, 1.0, "stuck-dossier",
+                            com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.2)));
+                    applied = true;
+                    outcome = "replan requested instead: " + (unmet.size() < 2 ? "fewer than two unmet criteria to divide" : "no planner at hand");
                 } else {
                     List<String> children = gps.divideExhaustedSubGoal(subGoalId, unmet);
                     applied = !children.isEmpty();
@@ -366,7 +371,8 @@ public class StuckLayer {
         List<String> earlier;
         synchronized (this) { earlier = List.copyOf(movesBySignature.getOrDefault(e.signature(), List.of())); }
         return new StuckDossier(e.source().name(), e.signature(), why, e.occurrences(), asked, others, health,
-                context.currentSubGoalDescription(), criteria, rejections, failing, earlier);
+                context.currentSubGoalDescription(), criteria, rejections, failing, earlier,
+                StuckDossier.verifyOnly(criteria));
     }
 
     private static String crop(String s, int max) {

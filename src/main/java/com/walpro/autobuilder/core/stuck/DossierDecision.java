@@ -34,6 +34,18 @@ public record DossierDecision(Move move, String because, String hint) {
         return new DossierDecision(Move.NONE, because, null);
     }
 
+    /**
+     * The move as it applies to the current subgoal. For a check-only subgoal a HINT is off the menu --
+     * a hint asks for a change and none can satisfy it -- so it becomes a REPLAN, and the hint's own text
+     * is dropped: run 2026-09-28_21-17-47's hint was "make a trivial, valid change", which must not reach
+     * the next change's prompt under another name.
+     */
+    public DossierDecision forSubgoal(boolean verifyOnly) {
+        if (!verifyOnly || move != Move.HINT) return this;
+        return new DossierDecision(Move.REPLAN, "HINT is not on the menu for a check-only subgoal; replanning instead"
+                + (because == null ? "" : " (the model's reason: " + because + ")"), null);
+    }
+
     public static DossierDecision parse(String reply) {
         if (reply == null) return none("no reply");
         Matcher m = MOVE.matcher(reply);

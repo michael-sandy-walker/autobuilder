@@ -83,4 +83,13 @@ class UnchangedClaimsTest {
         assertThat(c.added()).containsExactly("src/main/java/org/ink/Nib.java");
         assertThat(c.removed()).containsExactly("src/main/java/org/ink/Well.java");
     }
+
+    /** Shape only: every part a no-change claim, whatever the changes say. */
+    @org.junit.jupiter.api.Test
+    void aClaimThatNothingChangedIsRecognisedWithoutAnyChanges() {
+        org.assertj.core.api.Assertions.assertThat(UnchangedClaims.isClaim("All other classes under src/main remain unchanged")).isTrue();
+        org.assertj.core.api.Assertions.assertThat(UnchangedClaims.isClaim("No files under src/test are modified; only Quill.java is modified")).isTrue();
+        org.assertj.core.api.Assertions.assertThat(UnchangedClaims.isClaim("No files under src/test are modified; Quill dries in three seconds")).isFalse();
+        org.assertj.core.api.Assertions.assertThat(UnchangedClaims.isClaim("")).isFalse();
+    }
 }

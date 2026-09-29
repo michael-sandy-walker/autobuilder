@@ -35,6 +35,20 @@ public class DossierDecider {
             BECAUSE: <which fact above your choice rests on, and why>
             HINT: <for HINT or REPLAN: one short paragraph the next step should act on; otherwise leave it out>""";
 
+    /**
+     * The menu for a verify-only subgoal: no HINT, because a hint asks for a change and none can satisfy
+     * the subgoal (user, 2026-09-28: "make the dossier prefer DIVIDE/REPLAN for verify-only subgoals").
+     */
+    static final String VERIFY_ONLY_MENU = """
+            This subgoal only asks for checks, so a hint for the next change cannot help it. Choose exactly one move:
+              REPLAN -- ask the planner to replace or drop this check-only subgoal (say why)
+              DIVIDE -- split it into one work item per unmet criterion
+              NONE   -- nothing on this menu would help; the operator has to look
+            Reply in exactly this form:
+            MOVE: <REPLAN|DIVIDE|NONE>
+            BECAUSE: <which fact above your choice rests on, and why>
+            HINT: <for REPLAN: one short paragraph the planner should act on; otherwise leave it out>""";
+
     @Autowired(required = false)
     private LLMClient llmClient;
 
@@ -47,7 +61,8 @@ public class DossierDecider {
 
     public DossierDecision decide(StuckDossier dossier, String cycleId) {
         if (!available()) return DossierDecision.none("the dossier decider is off");
-        String user = "Here is what the loop knows.\n\n" + dossier.render() + "\n\n" + MENU;
+        String user = "Here is what the loop knows.\n\n" + dossier.render() + "\n\n"
+                + (dossier.verifyOnly() ? VERIFY_ONLY_MENU : MENU);
         try {
             ResponseEntity<ChatResponse> response;
             try (var scope = LlmCallContext.scope("stuck-dossier", cycleId)) {
@@ -55,6 +70,7 @@ public class DossierDecider {
             }
             String reply = response == null || response.getBody() == null ? null : response.getBody().getFirstContent();
             DossierDecision d = DossierDecision.parse(reply);
+            d = d.forSubgoal(dossier.verifyOnly());
             log.warn("T4-DY: dossier for '{}' -> {} ({})", dossier.signature(), d.move(), d.because());
             return d;
         } catch (Exception e) {

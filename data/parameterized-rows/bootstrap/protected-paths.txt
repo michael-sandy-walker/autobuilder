@@ -1,0 +1,9 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# The tests are the operator's: the specification and the existing behaviour. The loop changes the code.
+src/test/**
+# Every class keeps the declarations it was adopted with EXCEPT those the ticket's change extends (the
+# reference implementation changed exactly these); new declarations are kept beside them.
+members: src/main/java/com/walpro/autobuilder/core/build/SurefireReports.java except read
+members: src/main/java/com/walpro/autobuilder/core/build/TestRunReport.java except Failure
+members: src/main/java/com/walpro/autobuilder/core/build/TestRunPromptBlock.java except render
+members: src/main/java/com/walpro/autobuilder/core/build/TestAssertionVocabulary.java

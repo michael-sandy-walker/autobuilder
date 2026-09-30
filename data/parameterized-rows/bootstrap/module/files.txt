@@ -1,0 +1,6 @@
+# The module: files read from git at bootstrap/origin-rev, one path per line.
+src/main/java/com/walpro/autobuilder/core/build/SurefireReports.java
+src/main/java/com/walpro/autobuilder/core/build/TestRunReport.java
+src/main/java/com/walpro/autobuilder/core/build/TestRunPromptBlock.java
+src/main/java/com/walpro/autobuilder/core/build/TestAssertionVocabulary.java
+# Autobuilder's own tests of these classes are in bootstrap/spec (TestRunEvidenceTest without its two cases on a class outside the module).

@@ -1,0 +1,29 @@
+  An existing project, adopted, and now asked to grow. It was written by someone else and it
+  already builds. In its own words, from its README:
+
+    "A project's own test run read as evidence, extracted from Autobuilder. SurefireReports reads the per-class XML reports a JVM test run writes into a TestRunReport -- totals, the failing tests with their messages, and each class's per-test outcomes. TestRunPromptBlock renders a report for a reader within a character budget. TestAssertionVocabulary names the test annotations and assertion calls the project recognises. Pure: files and values in, values out."
+
+  It is a library. Its existing behaviour is characterised by the tests already in src/test/java.
+  The change wanted is written in the ticket that asked for it. In the ticket's own words:
+
+    - No prompt JOINED the index to its row. The runner reports an invocation as `name(Types)[10]` and nothing of its arguments. The spec's source, rows included, was in the prompt -- so the row was on the page, as the tenth of ten `|`-delimited strings, and finding it meant counting.
+    - Built (ParameterizedCaseInput): a failing invocation's row is read from the test source on disk -- only where the rows are written literally (inline rows, a text block, literal values); empty for rows from a method, a file, several sources, a header row, or an index past the rows. The vocabulary lives in TestAssertionVocabulary. Carried as TestRunReport.Failure.input, rendered by TestRunPromptBlock (`-- ran with: <row>`).
+
+  The classes to change are SurefireReports, TestRunReport, TestRunPromptBlock and TestAssertionVocabulary.
+  They already work as their class comments say, and their existing tests must keep passing; extend them so
+  that a failing parameterized invocation carries and shows the row it ran with, as the ticket asks, and add
+  the new class ParameterizedCaseInput beside them, in package com.walpro.autobuilder.core.build. The test
+  source is Java: read it with the JavaParser library the project already depends on.
+  Keep every declaration these classes have exactly as it is, except SurefireReports.read,
+  TestRunReport.Failure and TestRunPromptBlock.render, which the change extends; add new declarations
+  beside them.
+
+  The specification is ParameterizedCaseInputSpecTest in src/test/java: its tests say exactly what
+  ParameterizedCaseInput, SurefireReports and TestRunPromptBlock must return, and they fail until the code
+  provides it.
+
+  OBJECTIVE: every test in ParameterizedCaseInputSpecTest passes, and the whole suite passes.
+
+  Change these classes and add ParameterizedCaseInput under src/main/java. DO NOT modify anything under
+  src/test: the specification and the existing tests are the operator's, and if one of them fails, the code
+  is what is wrong. Keep the project's packages, classes and naming.

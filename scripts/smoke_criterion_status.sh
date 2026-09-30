@@ -14,6 +14,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TGT="${SMOKE_TARGET:-criterion-status}"
 SPEC=$(grep -o 'The specification is [A-Za-z0-9_]*' "$ROOT/data/$TGT/bootstrap/seed.txt" | head -1 | awk '{print $NF}')
 CHANGED=$(grep -o 'The one class to change is [A-Za-z0-9_]*' "$ROOT/data/$TGT/bootstrap/seed.txt" | head -1 | awk '{print $NF}')
+# A change across several classes names them all: "The classes to change are A, B and C."
+[ -n "$CHANGED" ] || CHANGED=$(grep -o 'The classes to change are [A-Za-z0-9_, ]*' "$ROOT/data/$TGT/bootstrap/seed.txt" | head -1 \
+    | sed -e 's/The classes to change are //' -e 's/ and /,/g' | tr -d ' ')
 [ -n "$SPEC" ] && [ -n "$CHANGED" ] || { echo "the seed names no specification class or no class to change"; echo "SMOKE: 0/1"; exit 0; }
 n=0; pass=0
 chk(){ n=$((n+1)); if [ "$1" = "$2" ]; then pass=$((pass+1)); [ -n "${QUIET:-}" ] || echo "PASS [$n] $3"; \
@@ -24,7 +27,7 @@ diff -rq "$SCRATCH/orig/src/test" "$TREE/src/test" > /dev/null 2>&1 && u=untouch
 # Every source the module had, other than the one class the seed says to change, byte for byte.
 kept=kept
 while IFS= read -r f; do
-    [ "$(basename "$f")" = "$CHANGED.java" ] && continue
+    case ",$CHANGED," in *",$(basename "$f" .java),"*) continue ;; esac
     cmp -s "$SCRATCH/orig/src/main/$f" "$TREE/src/main/$f" || { kept=changed; echo "      changed: $f"; }
 done < <(cd "$SCRATCH/orig/src/main" && find . -name '*.java' | sort)
 # The suite, run in copies: grading must not write into the artifact it grades. The pristine tree
@@ -54,6 +57,11 @@ want, got = cases(orig), cases(cand)
 if not want:
     for f in glob.glob(os.path.join(src, '**', cls + '.java'), recursive=True):
         text = open(f).read()
+        # Test DATA written into the spec (a text block or a string holding a test class) is not the spec's
+        # own tests: blank text blocks, string literals and comments before looking for @Test methods.
+        text = re.sub(r'"""(?:.|\n)*?"""', '""', text)
+        text = re.sub(r'"(?:\\.|[^"\\\n])*"', '""', text)
+        text = re.sub(r'/\*(?:.|\n)*?\*/|//[^\n]*', '', text)
         for m in re.finditer(r'@(?:org\.junit\.jupiter\.api\.)?Test\b\s+(?:@\w+(?:\([^)]*\))?\s+)*void\s+(\w+)\s*\(', text):
             want[m.group(1)] = 'pass'
 for name in sorted(want) or ['(no specification cases reported by the pristine tree)']:

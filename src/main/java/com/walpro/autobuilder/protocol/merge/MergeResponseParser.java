@@ -21,7 +21,7 @@ public class MergeResponseParser {
             }
 
             int codeStart = content.indexOf("\n", filenameEnd);
-            int codeEnd = content.indexOf("```", codeStart + 1);
+            int codeEnd = com.walpro.autobuilder.protocol.FencedBlocks.closeAfter(content, codeStart + 1);
 
             if (codeStart == -1 || codeEnd == -1) {
                 return new MergeOutcome(false, null, "Malformed code block");

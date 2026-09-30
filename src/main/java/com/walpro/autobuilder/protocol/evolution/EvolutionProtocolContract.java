@@ -61,7 +61,7 @@ public class EvolutionProtocolContract {
     // ```xml [pom.xml]
     // ``` [src/...]
     private static final Pattern FILE_CODE_BLOCK =
-            Pattern.compile("(?s)```[^\\n`]*\\[[^\\]\\n]+\\]\\s*\\n.*?\\n```");
+            Pattern.compile("(?ms)```[^\\n`]*\\[[^\\]\\n]+\\]\\s*\\n.*?\\n" + com.walpro.autobuilder.protocol.FencedBlocks.CLOSING_FENCE);
 
     /** Shared closing directive — one home so the focused and full prompt paths stay identical. */
     private static final String RESPONSE_FORMAT_FOOTER = """

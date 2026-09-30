@@ -42,7 +42,8 @@ public final class EditHunks {
     /** The language tag of an edit block. */
     public static final String TAG = "edit";
 
-    private static final Pattern BLOCK = Pattern.compile("(?s)```(\\w*) \\[([^\\]\\n]+)\\][ \\t]*\\r?\\n(.*?)\\n?```");
+    private static final Pattern BLOCK = Pattern.compile("(?ms)```(\\w*) \\[([^\\]\\n]+)\\][ \\t]*\\r?\\n(.*?)\\r?\\n?"
+            + com.walpro.autobuilder.protocol.FencedBlocks.CLOSING_FENCE);
 
     private static final String SEARCH_MARKER = "<<<<<<< SEARCH";
     private static final Pattern HUNK = Pattern.compile(

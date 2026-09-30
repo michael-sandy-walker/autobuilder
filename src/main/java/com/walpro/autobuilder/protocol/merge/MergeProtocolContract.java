@@ -80,7 +80,7 @@ public class MergeProtocolContract {
         int codeStart = content.indexOf("\n", filenameEnd);
         if (codeStart < 0) return false;
 
-        int codeEnd = content.indexOf("```", codeStart + 1);
+        int codeEnd = com.walpro.autobuilder.protocol.FencedBlocks.closeAfter(content, codeStart + 1);
         if (codeEnd < 0) return false;
 
         // ensure there is at least something inside (non-whitespace)

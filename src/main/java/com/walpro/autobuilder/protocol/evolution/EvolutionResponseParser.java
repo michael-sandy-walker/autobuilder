@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class EvolutionResponseParser {
 
-    private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile("(?s)```(\\w+) \\[(.+?)\\](.+?)```");
+    private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile("(?ms)```(\\w+) \\[(.+?)\\](.+?)" + com.walpro.autobuilder.protocol.FencedBlocks.CLOSING_FENCE);
     private static final Pattern DELETE_PATTERN = Pattern.compile("#Delete \\[(.+?)]");
 
     // T4-BU: test sources the model writes under the MAIN source root are un-mergeable — the

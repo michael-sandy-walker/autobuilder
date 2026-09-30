@@ -1,0 +1,42 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 20fab4576f046dd432b637517cffb1fcf5901d31cd7064c85fb82f1f641e0ed7
+# body-sha256: f572a30ddc75c7500b652a094fd13ed191e785dd174153024728d90493de2612
+EvolutionResponseParser is modified to read edit blocks as specified.
+A new class EditHunks is added in package com.walpro.autobuilder.protocol.evolution.
+EditHunks is located under src/main/java.
+gate: tests The existing tests in src/test/java continue to pass.
+gate: tests All tests in EditHunksSpecTest pass.
+gate: tests The whole test suite passes.
+The declaration of parse in EvolutionResponseParser is extended.
+The declaration of CODE_BLOCK_PATTERN in EvolutionResponseParser is extended.
+All other declarations in EvolutionResponseParser remain exactly as they are.
+New declarations are added beside the existing ones in EvolutionResponseParser.
+EditHunks contains a method isEdit(tag, body).
+isEdit returns true if the tag is "edit".
+isEdit returns true if the body opens with the SEARCH marker.
+The SEARCH marker is "<<<<<<< SEARCH".
+The REPLACE marker is ">>>>>>> REPLACE".
+The separator marker is "=======".
+An edit block is identified by the fence tag "edit" and the path in brackets.
+Edit blocks contain hunks with SEARCH, separator, and REPLACE sections.
+Hunks are applied in order.
+Each SEARCH section must match exactly once in the current file content.
+If a SEARCH section matches zero times, the whole file's edit is refused.
+If a SEARCH section matches more than once, the whole file's edit is refused.
+Refusal includes a reason.
+The parser turns an accepted edit into the whole new file content.
+Whole-file blocks remain accepted for new files.
+Whole-file blocks remain accepted for existing files as a fallback.
+A block tagged "java" with a body opening with the SEARCH marker is treated as an edit.
+A block tagged "edit" is treated as an edit.
+The parser returns EvolutionOutcome and FileMutation.
+The parser is pure: input is the answer's text, output is values.
+rule: Do not modify anything under src/test.
+rule: Keep every other class exactly as it is.
+rule: Keep the project's packages, classes, and naming.
+rule: If a test fails, the code is what is wrong.

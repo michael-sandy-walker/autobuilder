@@ -142,4 +142,37 @@ class PreservedMembersTest {
         org.assertj.core.api.Assertions.assertThat(PreservedMembers.restore(adopted, candidate).content())
                 .as("without the exception answer() is restored as before").contains("return null;");
     }
+    /**
+     * An open NESTED type is taken whole, its header too: a record that gains a component and a compatibility
+     * constructor lands as written. Walked into member by member, the adopted header came back beside the new
+     * constructor -- a record that cannot compile (parameterized-rows pilot 2026-09-30, three times).
+     */
+    @Test
+    void anOpenNestedRecordIsTakenWholeHeaderIncluded() {
+        String adopted = """
+                package org.ink;
+                public record Report(int run) {
+                    public record Failure(String name, String message) {}
+                    public boolean passes() { return run > 0; }
+                }
+                """;
+        String candidate = """
+                package org.ink;
+                public record Report(int run) {
+                    public record Failure(String name, String message, String input) {
+                        public Failure(String name, String message) {
+                            this(name, message, null);
+                        }
+                    }
+                    public boolean passes() { return run > 1; }
+                }
+                """;
+
+        PreservedMembers.Result r = PreservedMembers.restore(adopted, candidate, java.util.Set.of("Failure"));
+
+        org.assertj.core.api.Assertions.assertThat(r.content())
+                .contains("record Failure(String name, String message, String input)", "this(name, message, null);")
+                .as("a member that is not open is still kept as adopted").contains("return run > 0;");
+        org.assertj.core.api.Assertions.assertThat(r.restored()).noneMatch(x -> x.contains("Failure"));
+    }
 }

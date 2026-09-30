@@ -136,10 +136,13 @@ public final class PreservedMembers {
             BodyDeclaration<?> c = cm.get(e.getKey());
             if (c == null) {
                 out.add(owner + "." + e.getKey() + " (removed)");
+            } else if (open.contains(simpleName(e.getKey()))) {
+                // an open member: the candidate's version is taken, not a restoration. Checked before the
+                // nested-type walk: an open nested type is taken WHOLE, its header too -- walked into, a
+                // record's components stayed as adopted (parameterized-rows pilot 2026-09-30_21-3x:
+                // TestRunReport.Failure's new component was restored three times beside its new constructor).
             } else if (e.getValue() instanceof TypeDeclaration<?> bn && c instanceof TypeDeclaration<?> cn) {
                 differences(bn, cn, owner + "." + bn.getNameAsString(), out, open);
-            } else if (open.contains(simpleName(e.getKey()))) {
-                // an open member: the candidate's version is taken, not a restoration
             } else if (!normalised(e.getValue()).equals(normalised(c))) {
                 out.add(owner + "." + e.getKey() + " (changed)");
             }
@@ -155,9 +158,8 @@ public final class PreservedMembers {
             BodyDeclaration<?> b = bm.get(e.getKey());
             if (b == null) {
                 text(e.getValue(), csrc).ifPresent(t -> added.append("\n    ").append(t).append("\n"));
-            } else if (b instanceof TypeDeclaration<?> bn && e.getValue() instanceof TypeDeclaration<?> cn) {
-                additions(bn, cn, bsrc, csrc, at, text, open);
-            } else if (open.contains(simpleName(e.getKey())) && !normalised(b).equals(normalised(e.getValue()))) {
+            } else if (open.contains(simpleName(e.getKey()))) {
+                if (normalised(b).equals(normalised(e.getValue()))) continue;
                 // an open member the candidate changed: its text replaces the adopted one, in place
                 Optional<int[]> where = span(b, bsrc);
                 Optional<String> t = text(e.getValue(), csrc);
@@ -165,6 +167,8 @@ public final class PreservedMembers {
                     at.add(where.get());
                     text.add(t.get());
                 }
+            } else if (b instanceof TypeDeclaration<?> bn && e.getValue() instanceof TypeDeclaration<?> cn) {
+                additions(bn, cn, bsrc, csrc, at, text, open);
             }
         }
         if (added.isEmpty()) return;

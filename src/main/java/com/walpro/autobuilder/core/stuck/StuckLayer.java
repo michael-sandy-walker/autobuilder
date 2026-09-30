@@ -64,6 +64,14 @@ public class StuckLayer {
     @Autowired(required = false)
     private TerminalAgentRecorder terminalAgentRecorder;
 
+    /** T4-CT: what earlier runs of the same task learned about a signature, and where this run's outcomes are kept; optional. */
+    @Autowired(required = false)
+    private StuckPriors priors;
+
+    /** T4-CT: whether earlier runs are consulted; outcomes are recorded either way (the A arm of T6-I's pairs). */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.stuck.priors.consult:true}")
+    private boolean consultPriors = true;
+
     /** T4-DY dossier: the model's move when no question is left; optional (no decider, no move). */
     @Autowired(required = false)
     private DossierDecider dossierDecider;
@@ -122,9 +130,11 @@ public class StuckLayer {
     }
 
     public void report(StuckObservation o) {
+        consultPriors(o);
         StuckLedger.Change change = ledger.observe(o);
         if (change == StuckLedger.Change.RECURRED_AFTER_DELIVERY) {
             StuckLedger.Entry e = find(o);
+            if (e != null) recordOutcome(e, StuckPriors.Outcome.RECURRED, o.cycleId());
             log.warn("T4-DY: '{}' came back after its answer was delivered ({} time(s)) -- the next question is due",
                     o.signature(), e == null ? 0 : e.recurrencesAfterDelivery());
             if (behaviourLogger != null && e != null) {
@@ -155,6 +165,7 @@ public class StuckLayer {
         for (StuckLedger.Entry e : ended) {
             log.info("T4-DY: '{}' ended after its answer was delivered in {} ({} recurrence(s) after delivery)",
                     e.signature(), e.deliveredCycle(), e.recurrencesAfterDelivery());
+            recordOutcome(e, StuckPriors.Outcome.ENDED, cycleId);
             if (behaviourLogger != null) {
                 behaviourLogger.stuckEnded(cycleId, e.source().name(), e.signature(), e.deliveredCycle(),
                         e.recurrencesAfterDelivery(), e.asked().size());
@@ -241,6 +252,7 @@ public class StuckLayer {
             StringBuilder one = new StringBuilder();
             for (StuckLedger.Entry e : a.getValue()) {
                 one.append("  - ").append(e.signature()).append(" (").append(e.occurrences()).append(" times)\n");
+                if (e.prior().seenBefore()) one.append("    ").append(provenance(e)).append('\n');
             }
             one.append("    ").append(a.getKey().replace("\n", "\n    ")).append('\n');
             if (PromptTokenBudget.estimateTokens(sb) + PromptTokenBudget.estimateTokens(one) > maxTokens) {
@@ -403,11 +415,64 @@ public class StuckLayer {
                     : "answered by " + q.authority()));
         }
         log.warn("T4-DY: DIAGNOSIS REQUEST -- '{}' ({}, {} time(s)): {}", e.signature(), e.source(), e.occurrences(), why);
+        if (e.status() == StuckLedger.Status.UNANSWERED) recordOutcome(e, StuckPriors.Outcome.UNANSWERED, e.lastCycle());
         if (behaviourLogger != null) {
             behaviourLogger.diagnosisRequest(e.lastCycle(), e.source().name(), e.signature(), e.occurrences(),
                     e.firstCycle(), why, asked, e.detail());
         }
         writeLedger();
+    }
+
+    /**
+     * T4-CT: before a signature's first observation, what earlier runs of this task recorded for it. A
+     * signature they noticed is primed: noticed at this first sighting, starting with the question that
+     * ended it there. Read once per signature per run.
+     */
+    private void consultPriors(StuckObservation o) {
+        if (!consultPriors || priors == null || o == null || o.source() == null || o.signature() == null) return;
+        if (ledger.has(o.source(), o.signature())) return;
+        String task = StuckPriors.taskKey(seed());
+        if (task == null) return;
+        StuckPriors.Prior prior = priors.priorFor(task, o.source().name(), o.signature());
+        if (!prior.seenBefore()) return;
+        ledger.prime(o.source(), o.signature(), prior);
+        StuckLedger.Entry e = find(o);
+        int rung = e == null ? 0 : e.rung();
+        log.warn("T4-CT: '{}' was noticed in {} earlier run(s) of this task (ended by an answer in {}) -- asked at"
+                + " its first sighting here, starting with question {}", o.signature(), prior.runs(), prior.endedRuns(), rung);
+        if (behaviourLogger != null) {
+            behaviourLogger.stuckPriorConsulted(o.cycleId(), o.source().name(), o.signature(), prior.runs(),
+                    prior.endedRuns(), prior.endingRung(), rung);
+        }
+    }
+
+    /** T4-CT: keeps how an entry turned out, for later runs of the task; the question is the last one asked. */
+    private void recordOutcome(StuckLedger.Entry e, StuckPriors.Outcome outcome, String cycleId) {
+        if (priors == null) return;
+        String task = StuckPriors.taskKey(seed());
+        if (task == null) return;
+        List<StuckLedger.Question> asked = e.asked();
+        StuckLedger.Question last = asked.isEmpty() ? null : asked.get(asked.size() - 1);
+        priors.record(new StuckPriors.Recorded(task, e.source().name(), e.signature(),
+                last == null ? e.rung() : last.rung(), last == null ? null : last.question(), outcome), cycleId);
+    }
+
+    /**
+     * The provenance line under an answer whose signature earlier runs of the task had seen: a count, not
+     * a verdict, and "the same question" only when the answer shown is to the question that ended it there.
+     */
+    static String provenance(StuckLedger.Entry e) {
+        StuckPriors.Prior p = e.prior();
+        List<StuckLedger.Question> asked = e.asked();
+        Integer shown = null;
+        for (int i = asked.size() - 1; i >= 0 && shown == null; i--) {
+            if (asked.get(i).answer() != null) shown = asked.get(i).rung();
+        }
+        String ended = p.endedRuns() == 0 ? "nothing the loop looked up ended it there"
+                : java.util.Objects.equals(shown, p.endingRung())
+                ? "the answer to this same question ended it in " + p.endedRuns() + " of them"
+                : "an answer the loop looked up ended it in " + p.endedRuns() + " of them";
+        return "(this failure also came up in " + p.runs() + " earlier run(s) of this same task; " + ended + ")";
     }
 
     StuckLedger.Entry find(StuckObservation o) {

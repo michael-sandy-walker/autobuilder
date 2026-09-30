@@ -56,6 +56,8 @@ public final class StuckLedger {
         /** Observation sequence at the last count and at the last delivery, so a recurrence in the delivery's own cycle is seen. */
         long lastObservedSeq;
         long deliveredSeq;
+        /** T4-CT: what earlier runs of this task recorded for the signature; NONE when nothing. */
+        StuckPriors.Prior prior = StuckPriors.Prior.NONE;
 
         Entry(StuckObservation.Source source, String signature) {
             this.source = source;
@@ -76,6 +78,7 @@ public final class StuckLedger {
         public String deliveredCycle() { return deliveredCycle; }
         public String endedCycle() { return endedCycle; }
         public boolean diagnosisRequested() { return diagnosisRequested; }
+        public StuckPriors.Prior prior() { return prior; }
 
         /** The last answer delivered, or null. */
         public String deliveredAnswer() {
@@ -110,6 +113,35 @@ public final class StuckLedger {
         };
     }
 
+    /**
+     * T4-CT: the count for this entry. A signature earlier runs of the same task already noticed is a
+     * repetition across runs, so its first sighting in this run is the question's occasion.
+     */
+    static int noticeAt(Entry e) {
+        return e.prior.seenBefore() ? 1 : noticeAt(e.source);
+    }
+
+    /** Whether the ledger has seen this signature from this source. */
+    public synchronized boolean has(StuckObservation.Source source, String signature) {
+        return entries.containsKey(key(source, signature));
+    }
+
+    /**
+     * T4-CT: starts the entry for a signature from what earlier runs of the task recorded, before its first
+     * observation here: the first question asked is the one that ended it there (when that question exists
+     * for its source). An entry already seen is left as it is.
+     */
+    public synchronized void prime(StuckObservation.Source source, String signature, StuckPriors.Prior prior) {
+        if (source == null || signature == null || prior == null || !prior.seenBefore()) return;
+        if (entries.containsKey(key(source, signature))) return;
+        Entry e = new Entry(source, signature);
+        e.prior = prior;
+        if (prior.endingRung() != null && prior.endingRung() < StuckDiagnosis.questionsFor(source)) {
+            e.rung = prior.endingRung();
+        }
+        entries.put(key(source, signature), e);
+    }
+
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private long seq;
 
@@ -131,7 +163,7 @@ public final class StuckLedger {
         e.lastCycle = o.cycleId();
         switch (e.status) {
             case WATCHING -> {
-                if (e.occurrences >= noticeAt(e.source)) {
+                if (e.occurrences >= noticeAt(e)) {
                     e.status = Status.PENDING;
                     return Change.NOW_PENDING;
                 }
@@ -234,6 +266,11 @@ public final class StuckLedger {
             m.put("deliveredCycle", e.deliveredCycle);
             m.put("endedCycle", e.endedCycle);
             m.put("diagnosisRequested", e.diagnosisRequested);
+            if (e.prior.seenBefore()) {
+                m.put("priorRuns", e.prior.runs());
+                m.put("priorEndedRuns", e.prior.endedRuns());
+                m.put("priorEndingRung", e.prior.endingRung());
+            }
             if (!e.detail.isEmpty()) m.put("detail", e.detail);
             List<Map<String, Object>> qs = new ArrayList<>();
             for (Question q : e.asked) {

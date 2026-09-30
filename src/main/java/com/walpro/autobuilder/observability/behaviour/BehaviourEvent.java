@@ -685,6 +685,23 @@ public sealed interface BehaviourEvent {
     }
 
     /**
+     * T4-CT: a signature seen for the first time in this run had been noticed in earlier runs of the same
+     * task, so it is asked about at this first sighting, starting at {@code startRung}.
+     */
+    record StuckPriorConsulted(
+            Instant timestamp,
+            String cycleId,
+            String source,
+            String signature,
+            int priorRuns,
+            int priorEndedRuns,
+            Integer priorEndingRung,
+            int startRung
+    ) implements BehaviourEvent {
+        public String event() { return "stuck_prior_consulted"; }
+    }
+
+    /**
      * T4-DY slice B: the operator's hand-off. No authority in the loop answered this stuck observation,
      * or the answer names a requirement only the operator may bind: what it is, how often, what was asked.
      */

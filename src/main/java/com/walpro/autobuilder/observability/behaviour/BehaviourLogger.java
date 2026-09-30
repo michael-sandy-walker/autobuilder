@@ -414,6 +414,12 @@ public class BehaviourLogger {
                 recurrencesAfterDelivery, questionsAsked));
     }
 
+    public void stuckPriorConsulted(String cycleId, String source, String signature, int priorRuns,
+                                    int priorEndedRuns, Integer priorEndingRung, int startRung) {
+        emit(new BehaviourEvent.StuckPriorConsulted(Instant.now(), cycleId, source, signature, priorRuns,
+                priorEndedRuns, priorEndingRung, startRung));
+    }
+
     public void diagnosisRequest(String cycleId, String source, String signature, int occurrences, String firstCycleId,
                                  String why, java.util.List<String> asked, java.util.List<String> detail) {
         emit(new BehaviourEvent.DiagnosisRequest(Instant.now(), cycleId, source, signature, occurrences, firstCycleId,

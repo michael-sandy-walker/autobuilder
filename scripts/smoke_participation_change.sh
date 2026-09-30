@@ -38,7 +38,8 @@ d, cls, m = sys.argv[1:]
 for f in glob.glob(os.path.join(d, 'TEST-*' + cls + '.xml')):
     for tc in ET.parse(f).getroot().iter('testcase'):
         if tc.get('name') == m:
-            print('fail' if list(tc) else 'pass'); sys.exit()
+            tags = {c.tag for c in tc}  # system-out/err on a passing test is not a failure
+            print('fail' if tags & {'failure', 'error'} else 'skipped' if 'skipped' in tags else 'pass'); sys.exit()
 print('absent')
 PY
 )

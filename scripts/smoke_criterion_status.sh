@@ -41,7 +41,11 @@ def cases(d):
     out = {}
     for f in glob.glob(os.path.join(d, 'TEST-*' + cls + '.xml')):
         for tc in ET.parse(f).getroot().iter('testcase'):
-            out[tc.get('name')] = 'fail' if list(tc) else 'pass'
+            # A passing test that writes to stdout or stderr gets a <system-out>/<system-err> element too:
+            # only a <failure> or <error> fails it (edit-hunks run 2026-09-30_19-04-23 scored 10/11 for a
+            # case that passed and logged a warning), and a skipped case did not pass.
+            tags = {c.tag for c in tc}
+            out[tc.get('name')] = 'fail' if tags & {'failure', 'error'} else 'skipped' if 'skipped' in tags else 'pass'
     return out
 want, got = cases(orig), cases(cand)
 # A specification that names a class the pristine tree does not have yet cannot compile there, so its run

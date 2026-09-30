@@ -1,0 +1,33 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 035ae4e1e2d52a41255e24fb75437a5b0bfb597f4f94c05cdf7e67c3c28f5c63
+# body-sha256: f51b8fefd463b740cbc78e92aac8c3fa90487b24833f7fbcacea182842216e5f
+The project builds successfully.
+gate: tests The existing tests in src/test/java pass.
+The class ParameterizedCaseInput is added in package com.walpro.autobuilder.core.build.
+The class ParameterizedCaseInput reads a failing invocation's row from the test source on disk.
+ParameterizedCaseInput returns the row only where the rows are written literally (inline rows, a text block, literal values).
+ParameterizedCaseInput returns empty for rows from a method.
+ParameterizedCaseInput returns empty for rows from a file.
+ParameterizedCaseInput returns empty for rows from several sources.
+ParameterizedCaseInput returns empty for a header row.
+ParameterizedCaseInput returns empty for an index past the rows.
+The vocabulary for parameterized cases lives in TestAssertionVocabulary.
+TestRunReport.Failure has a field or method to carry the input row.
+TestRunPromptBlock renders the input row as `-- ran with: <row>`.
+SurefireReports.read is extended to support the new functionality.
+TestRunReport.Failure is extended to support the new functionality.
+TestRunPromptBlock.render is extended to support the new functionality.
+All existing declarations in SurefireReports, TestRunReport, TestRunPromptBlock, and TestAssertionVocabulary remain unchanged except for the specified extensions.
+New declarations are added beside existing ones in SurefireReports, TestRunReport, TestRunPromptBlock, and TestAssertionVocabulary.
+The test source is read using the JavaParser library.
+gate: tests The tests in ParameterizedCaseInputSpecTest pass.
+gate: tests The whole test suite passes.
+rule: Do not modify anything under src/test.
+rule: If a test fails, the code is what is wrong.
+rule: Keep the project's packages, classes, and naming.
+gate: tests The project's own test suite passes.

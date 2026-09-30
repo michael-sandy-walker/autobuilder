@@ -156,7 +156,7 @@ Code and design constraints:
 - `feedback_no_ecosystem_jargon_in_framework_code.md`: never name a framework/version in framework code; ecosystem knowledge lives in data tables. (reviewed 2026-07-09)
 - `feedback_no_hardcoded_ecosystem_data.md`: even data tables are debt; prefer discovery (pom -> classpath -> Maven Central), and row-adds always file the discovery follow-up. (reviewed 2026-07-09)
 - `feedback_ecosystem_gated_heuristics.md`: ecosystem-specific heuristics must self-gate on the ecosystem's own markers; no opinion on marker-free projects. (reviewed 2026-07-09)
-- `feedback_relative_thresholds.md`: triggers and limits relative to the run's environment; constants only for measurable environmental facts. 2026-09-29: use `core/stuck/Recurrence` ratios, not counts. (reviewed 2026-09-30)
+- `feedback_relative_thresholds.md`: triggers and limits relative to the run's environment; constants only for measurable environmental facts. 2026-09-29: use `core/stuck/Recurrence` ratios, not counts; 2026-09-30: candidate-level failures (build, refused write/closure) keep the cycle count -- replay first. (reviewed 2026-09-30)
 - `feedback_string_consumption_path.md`: "structured, do not string-scrape" governs CODE consuming strings for control flow, NOT prose relayed into another agent's PROMPT. (reviewed 2026-07-09)
 
 Watchers:

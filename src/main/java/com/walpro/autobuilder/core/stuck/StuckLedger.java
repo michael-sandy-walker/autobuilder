@@ -95,6 +95,12 @@ public final class StuckLedger {
      * The count at which an observation becomes a question. Three for the repeated ones -- the
      * smallest count that is a repetition of a repetition, as GrindDetector always used; one for the
      * brakes, which only report once their own window is already spent.
+     *
+     * <p>Why not {@link Recurrence}'s ratios (user decision 2026-09-30): its span clause fits a failure that
+     * persists by itself, as a failing test set or a boot defect does. A build error, a refused write or a
+     * refused closure belongs to one attempt and recurs only when a new attempt makes it, so it accumulates
+     * by attempts, not time; replayed over 27 archived build notices, the ratio rule would have delayed or
+     * withheld 20 of them ({@code scripts/build_grind_ratio_replay.py}).
      */
     public static int noticeAt(StuckObservation.Source source) {
         return switch (source) {

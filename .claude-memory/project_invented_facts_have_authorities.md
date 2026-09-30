@@ -161,3 +161,4 @@ was found (`members:` protection, then its correction) -- the guard stays as a n
 showing the source (`SubgoalSourcePromptBlock`): the next run needed zero restorations. Ask of any
 summary in a prompt: can the task be done from it, or only from what it summarises?
 
+**2026-09-28, the user on a prose rule:** a rule that skipped names inside double quotes in the planner's text was written beside the structural fix (names the SOURCES carry only as string literals are data) and removed on the user's question -- "wouldn't it have potentially negative effects regarding other things being surrounded within quotes?" A rule over the planner's wording guesses; the sources are the authority. When a structural rule exists, do not add a wording rule beside it.

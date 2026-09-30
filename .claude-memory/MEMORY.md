@@ -34,8 +34,8 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-28)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-28)
+- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-30)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-30)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: live ordering is the 2026-08-23 REORDER section at the end; S1-S6 kept for reasoning only. Never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-09-28)
+- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-09-30)
 - `project_wave2_structure.md`: wave 2's five layers and gate-driven sequence; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
@@ -55,7 +55,7 @@ Design notes, read before touching their area:
 - `project_signal_consumer_map.md`: T4-J emitter/clearer/reader map over 35 signal types + `scripts/signal_boundary_report.py`. The LLM is itself both consumer and emitter. (reviewed 2026-07-09)
 - `project_signal_dispositions.md`: T4-J answer sheet — the decided disposition per signal. Open: analysis/planner tie-break, evaluation-prompt signal-blindness. (reviewed 2026-09-24)
 - `project_t4j_perturbation_lab.md`: frozen-state lab; the decision-sensitive decay constants are the ROLE-identity signals, not the census shortlist. Read before signal tuning. (reviewed 2026-09-08)
-- `project_t4dy_meta_layer_design_note.md`: T4-DY meta layer = DIAGNOSTIC layer on the informational axis; stuck signature -> question -> authority (structure, observation, model last) -> fact + ledger; slice A offline router, slice B in the loop (core/stuck, DoD met 2026-09-26). Read before building under T4-DY. (reviewed 2026-09-27)
+- `project_t4dy_meta_layer_design_note.md`: T4-DY meta layer = DIAGNOSTIC layer on the informational axis; stuck signature -> question -> authority (structure, observation, model last) -> fact + ledger; slice A offline router, slice B in the loop (core/stuck, DoD met 2026-09-26). Read before building under T4-DY. (reviewed 2026-09-30)
 - `project_t4bz_design_note.md`: T4-BZ signal re-architecture SHIPPED; family map and invariants I1-I12 are the design record. (reviewed 2026-09-08)
 - `project_t4bo_design_note.md`: T4-BO signal-decay observability — two-snapshot death attribution, causality-preserving snapshot point. Read before touching signal plumbing. (reviewed 2026-07-09)
 - `project_t4ai_design_note.md`: T4-AI — the meta lane was decorative; closed by deletion. Read before touching AdaptiveExecutionEngine/DeliberationService. (reviewed 2026-07-09)
@@ -86,7 +86,7 @@ False completions and diagnosis lenses:
 - `project_false_completion_2.md`: unbootable jar; abstain is not pass at the completion edge; a gate can be satisfied instead of its requirement. (reviewed 2026-07-09)
 - `project_false_completion_3.md`: DI-wiring defect invisible to compile gates; a correct REJECTED vote averaged away. (reviewed 2026-07-09)
 - `project_false_completion_4.md`: the first by BOOKKEEPING — the closure ledger counts dispositions, never the seed. Audited 2026-09-28: 54 of 60 later GOAL_FULFILLED at full yardstick, the rest other mechanisms. (reviewed 2026-09-28)
-- `project_invented_facts_have_authorities.md`: defects are INVENTED FACTS whose cheap authority was unconsulted, cropped, or asked the WRONG question; ask whether structure can answer before asking a model; ask of any summary in a prompt whether the task can be done from it. (reviewed 2026-09-25)
+- `project_invented_facts_have_authorities.md`: defects are INVENTED FACTS whose cheap authority was unconsulted, cropped, or asked the WRONG question; ask whether structure can answer before asking a model; ask of any summary in a prompt whether the task can be done from it. (reviewed 2026-09-30)
 - `project_capability_outruns_routing.md`: assume a missing behaviour is UNREACHED, not unbuilt; trace to the link that does not fire. (reviewed 2026-09-21)
 - `project_ticket_premises_expire.md`: a ticket's stated BLOCKER is a dated claim; grep both directions before designing. (reviewed 2026-09-21)
 - `project_detector_went_silent_as_the_fault_spread.md`: a majority rule stopped firing when the anomaly became the majority. Ask any majority rule what it does then. (reviewed 2026-09-03)
@@ -156,13 +156,15 @@ Code and design constraints:
 - `feedback_no_ecosystem_jargon_in_framework_code.md`: never name a framework/version in framework code; ecosystem knowledge lives in data tables. (reviewed 2026-07-09)
 - `feedback_no_hardcoded_ecosystem_data.md`: even data tables are debt; prefer discovery (pom -> classpath -> Maven Central), and row-adds always file the discovery follow-up. (reviewed 2026-07-09)
 - `feedback_ecosystem_gated_heuristics.md`: ecosystem-specific heuristics must self-gate on the ecosystem's own markers; no opinion on marker-free projects. (reviewed 2026-07-09)
-- `feedback_relative_thresholds.md`: triggers and limits relative to the run's environment; constants only for measurable environmental facts. (reviewed 2026-07-09)
+- `feedback_relative_thresholds.md`: triggers and limits relative to the run's environment; constants only for measurable environmental facts. 2026-09-29: use `core/stuck/Recurrence` ratios, not counts. (reviewed 2026-09-30)
 - `feedback_string_consumption_path.md`: "structured, do not string-scrape" governs CODE consuming strings for control flow, NOT prose relayed into another agent's PROMPT. (reviewed 2026-07-09)
 
 Watchers:
 - `feedback_monitor_every_terminal.md`: a monitor must match EVERY terminal state; stopping one for noise means re-arming a narrower one, never going blind. (reviewed 2026-07-27)
 - `feedback_escalate_unrecoverable_stagnation.md`: watchers must detect periodic failure patterns and inform early, not just terminal markers and silence. (reviewed 2026-07-09)
 - `feedback_waiter_fires_on_loop_terminal.md`: a run waiter fires on the LOOP's terminal line, not only preflight's final line minutes later. (reviewed 2026-09-24)
+- `feedback_fix_first_when_a_finding_changes_the_measurement.md`: when a finding changes what a running batch measures, stop and fix first (user's choice twice); never let a batch build from uncommitted code. (reviewed 2026-09-30)
+- `feedback_progress_updates_during_batches.md`: post a short update after every run of an unattended batch; arm a per-run watcher. (reviewed 2026-09-30)
 - `feedback_cut_flat_runs_short.md`: start `scripts/early_stop.sh` beside every field run; the user wants flat runs cut by a rule stated in advance, but "30 minutes is too soon" -- firestarter uses patience 30, minimum 45. (reviewed 2026-09-26)
 
 Writing:

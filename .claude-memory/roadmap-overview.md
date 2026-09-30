@@ -364,7 +364,7 @@
 - [x] `T4-DI` — The compile-fix injector bootstraps ONE ecosystem's pom into every target — a flight simulator was made a Spring Boot application by framework code CLOSED 2026-08-28: pom now derived from the sources' own base package + running JVM release + a jar main-class only when exactly one exists; adds no dependencies by design; a test had asserted spring-boot-starter-parent as REQUIRED
 - [x] `T4-DG` — A target is a directory with a seed and a yardstick — make that a convention instead of an arrangement; three targets exist and the arrangement has already failed twice — `flightsim` deliberately has NO yardstick
 - [x] `T4-DF` — A member the classpath DOES declare is unresolvable, because discovery reads jar entry NAMES and never opens a class file — CLOSED 2026-08-28: member-level discovery + a retargeting resolver; disambiguated by the receiver being a SUPERTYPE of the declaring type; 5 errors → 0 on the run's own source
-- [ ] `T4-DE` — Parts of one graph as distinct identities with their own agent, narrative and voice, communicating with each other (PARKED, very far future)
+- [>] `T4-DE` — Parts of one graph as distinct identities with their own agent, narrative and voice, communicating with each other (PARKED, very far future) **DEFERRED 2026-09-30** (stale-plumbing review).
 - [x] `T4-CZ` — The self-check computes WHY the artifact cannot package seven times a run and throws the answer away
 - [ ] `T4-DD` — Target-domain knowledge behind a seam (deferred by user until stable); the seam has never been exercised — both targets ever run are REST
 - [x] `T4-DC` — A controller catches exception types its service never throws, so the catches are dead and every domain error falls to the last resort (23/23 run had 8 matched types; 14/23 run zero overlap)
@@ -390,7 +390,7 @@
 - [x] `T4-CR` — Portable project+graph bundle: store a phase, restore it elsewhere (closed 2026-09-25: `scripts/bundle.py`, content-hash identical on a clean database, resumed by a CONTINUE_LINEAGE run; child-lineage fork not built)
 - [~] `T4-CS` — Code-layer merge across lineages (code-side sibling of T4-CM; slices 1-2 built 2026-09-25: test layers (different-seed child 20/20 vs best parent 16/20) and a three-way declaration-level library merge (child of two change lineages meets both specs); a real conflict not yet seen in the field)
 - [ ] `T4-CF` — Self-hosting **2026-09-26: first run whose goal came from a real ticket (criterion-status, T3-CB) -- true completion.**
-- [ ] `T4-CG` — The system builds an autobuilder from spec
+- [>] `T4-CG` — The system builds an autobuilder from spec **DEFERRED 2026-09-30** (stale-plumbing review).
 - [x] `T4-CI` — Organic run-health baseline — phases 1+2 done; phase-3 gate MEASURED 2026-07-25 and passes (after fixing T6-C), but phase 3 = in-framework consultation, a direction choice, not started CLOSED 2026-09-28 on the DoD: envelope refreshed with current-era completions (n=18); held-out fulfilled runs read 0-1 flags, failed runs 4-6. Phase 3 is the user's choice; its gate is met.
 - [ ] `T4-CJ` — Graph run/lineage identity
 - [x] `T4-CL` — End of the per-run-disposable graph contract CLOSED 2026-09-28: both halves shipped long ago (20e91e3 + canary proof); the audit is T4-CJ slice 2.
@@ -480,7 +480,7 @@
 - [x] `T5-BH` — Disposition pass on `analysis/pattern/` (keep/recalibrate/delete per rule); gated on T6-D, now unblocked
 - [ ] `T5-BI` — Narrate what the loop SAID (model prose) instead of event templates **Measured 2026-09-20 from the user's question: the data is NOT truncated** (descriptions to 2,115 chars, criteria complete) — both caps are on the SPEECH path (`cropForSpeech` ~240, boundary-aware; `TtsController.MAX_CHARS` 600, blunt). **The cap is not the problem:** `announceNode` speaks `detail.description`, so a work item's 240 chars go on the templated prefix and the criteria fall off the end. Speaking the criteria is the fix, not a bigger cap
 - [s] `T5-C` — SMS Phase 2 **SUBSUMED 2026-09-30** (stale-plumbing review).
-- [ ] `T5-L` — Security hardening for non-local / multi-tenant deployment posture
+- [>] `T5-L` — Security hardening for non-local / multi-tenant deployment posture **DEFERRED 2026-09-30** (stale-plumbing review).
 - [>] `T5-O` — Replace Maven-specific `summariseStderr` with classifier output
 - [>] `T5-U` — Consolidate Maven `[ERROR]` line filtering into a shared utility
 - [>] `T5-V` — Store probe `BuildOutcome` on `CycleContextData`; unify pre- and post-merge build prompt…

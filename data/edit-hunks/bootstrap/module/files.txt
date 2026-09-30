@@ -1,0 +1,5 @@
+# The module: files read from git at bootstrap/origin-rev, one path per line.
+src/main/java/com/walpro/autobuilder/protocol/evolution/EvolutionResponseParser.java
+src/main/java/com/walpro/autobuilder/agent/evolution/model/EvolutionOutcome.java
+src/main/java/com/walpro/autobuilder/agent/evolution/model/FileMutation.java
+# Autobuilder's own tests of the closure are in bootstrap/spec (EvolutionResponseParserTest, one assertion on a class outside the module removed).

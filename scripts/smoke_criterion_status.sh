@@ -34,9 +34,9 @@ cp -a "$TREE" "$SCRATCH/p" 2>/dev/null; rm -rf "${SCRATCH:?}/p/target"
 (cd "$SCRATCH/orig" && timeout 600 mvn -B -q -o test > /dev/null 2>&1)
 while IFS=$'\t' read -r verdict name; do
     chk "$verdict" pass "$SPEC $name"
-done < <(python3 - "$SCRATCH/orig/target/surefire-reports" "$SCRATCH/p/target/surefire-reports" "$SPEC" <<'PY'
-import glob, os, sys, xml.etree.ElementTree as ET
-orig, cand, cls = sys.argv[1:]
+done < <(python3 - "$SCRATCH/orig/target/surefire-reports" "$SCRATCH/p/target/surefire-reports" "$SPEC" "$SCRATCH/orig/src/test" <<'PY'
+import glob, os, re, sys, xml.etree.ElementTree as ET
+orig, cand, cls, src = sys.argv[1:]
 def cases(d):
     out = {}
     for f in glob.glob(os.path.join(d, 'TEST-*' + cls + '.xml')):
@@ -44,6 +44,14 @@ def cases(d):
             out[tc.get('name')] = 'fail' if list(tc) else 'pass'
     return out
 want, got = cases(orig), cases(cand)
+# A specification that names a class the pristine tree does not have yet cannot compile there, so its run
+# reports no cases (edit-hunks: the spec calls EditHunks, which the change creates). The cases are then the
+# spec source's own @Test methods -- plain tests only; a parameterized case is named by its run.
+if not want:
+    for f in glob.glob(os.path.join(src, '**', cls + '.java'), recursive=True):
+        text = open(f).read()
+        for m in re.finditer(r'@(?:org\.junit\.jupiter\.api\.)?Test\b\s+(?:@\w+(?:\([^)]*\))?\s+)*void\s+(\w+)\s*\(', text):
+            want[m.group(1)] = 'pass'
 for name in sorted(want) or ['(no specification cases reported by the pristine tree)']:
     print(got.get(name, 'absent') + '\t' + name[:150])
 PY

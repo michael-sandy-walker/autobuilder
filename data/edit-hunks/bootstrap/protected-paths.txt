@@ -1,0 +1,9 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# The tests are the operator's: the specification and the existing behaviour. The loop changes the code.
+src/test/**
+# The module's other classes stay exactly as they were.
+src/main/java/com/walpro/autobuilder/agent/evolution/model/**
+# The parser keeps every declaration it was adopted with EXCEPT the two the ticket's change extends
+# (the reference implementation changed exactly these: parse gains an overload with the tree, and the
+# code-block pattern captures the language tag).
+members: src/main/java/com/walpro/autobuilder/protocol/evolution/EvolutionResponseParser.java except parse, CODE_BLOCK_PATTERN

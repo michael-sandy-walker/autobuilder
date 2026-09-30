@@ -1,0 +1,27 @@
+  An existing project, adopted, and now asked to grow. It was written by someone else and it
+  already builds. In its own words, from its README:
+
+    "The parser of a code-writing model's answer, extracted from Autobuilder. EvolutionResponseParser reads the fenced code blocks of an answer -- each headed by a language tag and the file's path in brackets -- into the files the answer adds or changes, the files it deletes, and a summary; EvolutionOutcome and FileMutation are what it returns. Pure: the answer's text in, values out."
+
+  It is a library. Its existing behaviour is characterised by the tests already in src/test/java.
+  The change wanted is written in the ticket that asked for it. In the ticket's own words:
+
+    - A change to an existing file can only be written as the WHOLE file, so a one-line fix becomes a 200-line rewrite -- and the rewrite is where a known fix breaks the build.
+    - Shape: an edit form for existing files -- the model names a unique anchor span of the current file and its replacement (search/replace hunks), applied deterministically; an anchor that does not match exactly once is a refusal relayed to the model, never a guess. Whole-file blocks stay for new files.
+    - The edit block (protocol/evolution/EditHunks): ```` ```edit [path] ```` with `<<<<<<< SEARCH` / `=======` / `>>>>>>> REPLACE` hunks, applied in order, each SEARCH exactly once in the file as it is now; zero or several matches refuse the whole file's edit with the reason. The parser turns an edit into the whole new file. Whole-file blocks stay for new files and remain ACCEPTED for existing ones as a fallback (a model that was not shown a file cannot copy an anchor from it).
+    - The model sent correct SEARCH/REPLACE hunks inside a ```` ```java [path] ```` fence, so each was taken as a whole file, written with its markers, and rejected. Fix: a block is an edit by what it says -- EditHunks.isEdit(tag, body): tagged `edit`, or under any tag with a body that opens with the SEARCH marker (no source file opens with it).
+
+  The one class to change is EvolutionResponseParser. It already works as its class comment says, and its
+  existing tests must keep passing; extend it so that it also reads edit blocks as the ticket asks, and add
+  the new class EditHunks beside it, in package com.walpro.autobuilder.protocol.evolution.
+  Keep every declaration EvolutionResponseParser has exactly as it is, except parse and CODE_BLOCK_PATTERN,
+  which the change extends; add new declarations beside them.
+
+  The specification is EditHunksSpecTest in src/test/java: its tests say exactly what EditHunks and the
+  parser must return, and they fail until the code provides it.
+
+  OBJECTIVE: every test in EditHunksSpecTest passes, and the whole suite passes.
+
+  Change EvolutionResponseParser and add EditHunks under src/main/java. DO NOT modify anything under
+  src/test: the specification and the existing tests are the operator's, and if one of them fails, the code
+  is what is wrong. Keep every other class exactly as it is, and keep the project's packages, classes and naming.

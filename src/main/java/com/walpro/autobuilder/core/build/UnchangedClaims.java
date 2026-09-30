@@ -37,6 +37,20 @@ public final class UnchangedClaims {
             "(?:the )?project'?s? packages,? classes,? and naming (?:are|is) (?:preserved|kept|unchanged)");
     private static final Pattern NAMED_CLASS = Pattern.compile("\\b([A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+)\\b");
 
+    /**
+     * The claim written the way this class proves it, one per shape, with {@code <path>} and {@code <Class>}
+     * to fill in. The planner is given exactly these (PlannerProtocolContract): the patterns above were
+     * matched against free phrasing and, over the archive (2026-09-30: 10,690 criteria in 227 runs),
+     * recognised 23 of the 44 whole no-change claims -- "the diff shows that only X is modified", "X, Y and
+     * Z are not modified", "the package structure and naming conventions are preserved" all went to a
+     * reader. A template the prompt states is what makes the phrasing match; the patterns stay for the rest.
+     */
+    public static final List<String> TEMPLATES = List.of(
+            "No file under <path> is changed",
+            "Only <Class> under <path> is changed",
+            "All other classes under <path> remain unchanged",
+            "The project's packages, classes and naming are preserved");
+
     private UnchangedClaims() {
     }
 

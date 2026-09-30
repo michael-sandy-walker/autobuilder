@@ -203,7 +203,11 @@ public class PlannerProtocolContract {
                         "These may include: error handling conventions, output format requirements, data persistence strategy, " +
                         "naming or coding standards, security requirements, or any constraint explicitly stated as global. " +
                         "For each such universal constraint, add at least one criterion to every affected subgoal's Criteria block. " +
-                        "Omitting a universal constraint from criteria is a planning error — evaluators only enforce what appears as a criterion.",
+                        "Omitting a universal constraint from criteria is a planning error — evaluators only enforce what appears as a criterion. " +
+                        "A constraint that files must NOT change is checked against the files changed since the project was adopted, " +
+                        "not read from the code, when its criterion is written in exactly one of these forms (fill in the path or class): " +
+                        String.join("; ", com.walpro.autobuilder.core.build.UnchangedClaims.TEMPLATES.stream()
+                                .map(f -> "'" + f + "'").toList()) + ".",
                         """
                         Root Goal: Build a task manager. All errors must be reported with a human-readable reason. \
 Data must never be written to disk.

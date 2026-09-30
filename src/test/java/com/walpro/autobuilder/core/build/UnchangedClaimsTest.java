@@ -92,4 +92,28 @@ class UnchangedClaimsTest {
         org.assertj.core.api.Assertions.assertThat(UnchangedClaims.isClaim("No files under src/test are modified; Quill dries in three seconds")).isFalse();
         org.assertj.core.api.Assertions.assertThat(UnchangedClaims.isClaim("")).isFalse();
     }
+    /**
+     * The templates the planner is given are the shapes this class proves -- filled in, each is a claim and
+     * is proven when only the named class changed; and one that a change contradicts is not.
+     */
+    @Test
+    void everyTemplateTheCriteriaAreWrittenInIsRecognisedAndProven() {
+        for (String template : UnchangedClaims.TEMPLATES) {
+            String claim = template.replace("<path>", "src/test").replace("<Class>", "StuckQuestions");
+            if (template.startsWith("All other") || template.startsWith("Only")) {
+                claim = template.replace("<path>", "src/main/java").replace("<Class>", "StuckQuestions");
+            }
+            assertThat(UnchangedClaims.isClaim(claim)).as(claim).isTrue();
+            assertThat(UnchangedClaims.provenBy(claim, ONLY_THE_ONE, GOAL)).as(claim).isTrue();
+        }
+        AdoptionManifest.Changes testTouched = new AdoptionManifest.Changes(
+                List.of("src/test/java/com/walpro/autobuilder/core/build/StuckQuestionsTest.java"), List.of(), List.of());
+        assertThat(UnchangedClaims.provenBy("No file under src/test is changed", testTouched, GOAL)).isFalse();
+    }
+
+    @Test
+    void thePlannerIsGivenTheTemplates() {
+        String prompt = com.walpro.autobuilder.protocol.planner.PlannerProtocolContract.getSystemPrompt();
+        for (String template : UnchangedClaims.TEMPLATES) assertThat(prompt).contains("'" + template + "'");
+    }
 }

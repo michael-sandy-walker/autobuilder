@@ -30,13 +30,21 @@ import java.util.regex.Pattern;
  * left it. A SEARCH text must occur EXACTLY ONCE, matched as written; zero or several matches is a
  * refusal with the reason, never a guess about which place was meant, and nothing outside the matched
  * text is touched. An edit names an existing file; a new file is a whole-file block.
+ *
+ * <p>A block is an edit by what it SAYS, not only by its tag: one whose body opens with a SEARCH marker
+ * is an edit whatever language it is labelled with. participation-totals run 2026-09-30_12-48-02 sent
+ * both of its hunks in a {@code ```java [path]} fence -- the tag the prompt's own source listings use --
+ * and each was written as the whole file, markers and all, and rejected at the compile probe. No source
+ * file opens with that marker, so reading the body cannot mistake a file for an edit.
  */
 public final class EditHunks {
 
     /** The language tag of an edit block. */
     public static final String TAG = "edit";
 
-    private static final Pattern BLOCK = Pattern.compile("(?s)```" + TAG + " \\[([^\\]\\n]+)\\][ \\t]*\\r?\\n(.*?)\\n?```");
+    private static final Pattern BLOCK = Pattern.compile("(?s)```(\\w*) \\[([^\\]\\n]+)\\][ \\t]*\\r?\\n(.*?)\\n?```");
+
+    private static final String SEARCH_MARKER = "<<<<<<< SEARCH";
     private static final Pattern HUNK = Pattern.compile(
             "(?s)<<<<<<< SEARCH\\r?\\n(.*?)\\r?\\n?=======\\r?\\n(.*?)\\r?\\n?>>>>>>> REPLACE");
 
@@ -57,17 +65,19 @@ public final class EditHunks {
         if (response == null) return out;
         Matcher b = BLOCK.matcher(response);
         while (b.find()) {
+            if (!isEdit(b.group(1), b.group(3))) continue;
             List<Hunk> hunks = new ArrayList<>();
-            Matcher h = HUNK.matcher(b.group(2));
+            Matcher h = HUNK.matcher(b.group(3));
             while (h.find()) hunks.add(new Hunk(h.group(1), h.group(2)));
-            out.add(new Edit(b.group(1).strip(), hunks));
+            out.add(new Edit(b.group(2).strip(), hunks));
         }
         return out;
     }
 
-    /** Whether a fenced block's language tag marks it as an edit block. */
-    public static boolean isEditTag(String tag) {
-        return TAG.equalsIgnoreCase(tag == null ? "" : tag.strip());
+    /** Whether a fenced block is an edit: tagged {@code edit}, or, under any tag, its body opens with a SEARCH marker. */
+    public static boolean isEdit(String tag, String body) {
+        return TAG.equalsIgnoreCase(tag == null ? "" : tag.strip())
+                || body != null && body.stripLeading().startsWith(SEARCH_MARKER);
     }
 
     /**

@@ -71,7 +71,7 @@ public class EvolutionResponseParser {
 
         Matcher codeMatcher = CODE_BLOCK_PATTERN.matcher(content);
         while (codeMatcher.find()) {
-            if (EditHunks.isEditTag(codeMatcher.group(1))) continue; // an edit, applied below
+            if (EditHunks.isEdit(codeMatcher.group(1), codeMatcher.group(3))) continue; // an edit, applied below
             String path = codeMatcher.group(2).trim();
             String fileContent = codeMatcher.group(3).trim();
             if (!looksLikeFilePath(path)) {

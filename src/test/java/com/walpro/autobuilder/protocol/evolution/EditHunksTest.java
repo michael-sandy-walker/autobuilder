@@ -99,4 +99,31 @@ class EditHunksTest {
     void anEditBlockIsAValidResponseShape() {
         assertThat(EvolutionProtocolContract.isValidResponse(edit("int nib() { return 1; }", "x"))).isTrue();
     }
+    @Test
+    void hunksSentUnderTheSourceListingsTagAreStillAnEditNeverTheWholeFile() {
+        // participation-totals run 2026-09-30_12-48-02: both hunks came in a java fence and were written as
+        // the file, markers and all, then rejected at the compile probe.
+        String response = edit("int nib() { return 1; }", "int nib() { return 2; }").replace("```edit [", "```java [");
+
+        EvolutionOutcome outcome = new EvolutionResponseParser().parse(response, Map.of(PATH, QUILL));
+
+        assertThat(outcome.addedOrChangedFiles()).singleElement().satisfies(f -> {
+            assertThat(f.path()).isEqualTo(PATH);
+            assertThat(f.content()).isEqualTo(QUILL.replace("int nib() { return 1; }", "int nib() { return 2; }"));
+        });
+        assertThat(EditHunks.apply(response.replace("return 1; }\n=", "return 9; }\n="), Map.of(PATH, QUILL)).problems())
+                .as("a misfenced hunk is refused with the reason like any other edit").singleElement().asString()
+                .contains("not in the file");
+    }
+
+    @Test
+    void aFileThatMentionsTheMarkerBelowItsFirstLineIsStillAFile() {
+        String file = "package org.ink;\nclass Diff {\n    static final String OPEN = \"<<<<<<< SEARCH\";\n}";
+        EvolutionOutcome outcome = new EvolutionResponseParser()
+                .parse("```java [src/main/java/org/ink/Diff.java]\n" + file + "\n```\n", Map.of());
+
+        assertThat(outcome.addedOrChangedFiles()).singleElement().extracting(FileMutation::content).isEqualTo(file);
+        assertThat(EditHunks.isEdit("java", "\n" + file)).isFalse();
+        assertThat(EditHunks.isEdit("java", "\n<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE")).isTrue();
+    }
 }

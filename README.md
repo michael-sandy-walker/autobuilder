@@ -1,3 +1,16 @@
+# Autobuilder
+
+An autonomous loop that builds or changes a Java project toward a written specification, using a local language
+model for judgement and deterministic checks for everything else.
+
+- **[docs/functional.md](docs/functional.md)** -- what it does and how to use it on a project of your own
+- **[docs/technical.md](docs/technical.md)** -- how it is built
+- **[docs/configuration.md](docs/configuration.md)** -- every configuration key (generated: `python3 scripts/doc_config_reference.py`)
+
+`python3 scripts/doc_check.py` checks that the documents still name only what exists.
+
+## Quick commands
+
 Maven rebuld: mvn clean install
 docker-compose rebuild: docker-compose build --no-cache
 docker-compose run: docker-compose up

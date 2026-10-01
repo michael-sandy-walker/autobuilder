@@ -47,11 +47,16 @@ public final class StuckDiagnosis {
      * structural question for a signature was asked and the signature came back; null when there is none.
      */
     public record Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed,
-                              Observer observer, StuckQuestions.TypeAuthority types) {
+                              Observer observer, StuckQuestions.TypeAuthority types, Observer executor) {
         public Authorities {
             currentSources = currentSources == null ? Map.of() : currentSources;
             adoptedSources = adoptedSources == null ? Map.of() : adoptedSources;
             types = types == null ? StuckQuestions.TypeAuthority.platform() : types;
+        }
+
+        public Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed,
+                           Observer observer, StuckQuestions.TypeAuthority types) {
+            this(currentSources, adoptedSources, seed, observer, types, null);
         }
 
         public Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed) {
@@ -75,8 +80,8 @@ public final class StuckDiagnosis {
     public static int questionsFor(StuckObservation.Source source) {
         return switch (source) {
             case BUILD -> 4;
-            case PROTECTED_WRITE, CLOSURE_REFUSAL -> 1;
-            case FLAT_ROOT, EXHAUSTION, TEST_FAILURES, BOOT -> 0;
+            case PROTECTED_WRITE, CLOSURE_REFUSAL, TEST_FAILURES -> 1;
+            case FLAT_ROOT, EXHAUSTION, BOOT -> 0;
         };
     }
 
@@ -93,8 +98,26 @@ public final class StuckDiagnosis {
             };
             case PROTECTED_WRITE -> protectedFile(signature, authorities);
             case CLOSURE_REFUSAL -> refusedRequirement(signature, detail, authorities);
-            case FLAT_ROOT, EXHAUSTION, TEST_FAILURES, BOOT -> throw new IllegalStateException("no question for " + source);
+            case TEST_FAILURES -> executed(signature, detail, authorities);
+            case FLAT_ROOT, EXHAUSTION, BOOT -> throw new IllegalStateException("no question for " + source);
         });
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // TEST_FAILURES, rung 0: what did the failing test's call execute, and with which values?
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * The user's decision 2026-10-01 ("values too"): a test that keeps failing with a wrong value is re-run under the
+     * debugger and the calls into the project's own code are the answer -- which return each took, with which values
+     * ({@link ExecutionTrace}). Before, this source had no question at all and went straight to the operator.
+     */
+    static Asked executed(String signature, List<String> detail, Authorities a) {
+        String question = "What did the failing test's call execute, and with which values?";
+        String authority = "observation: the failing test run again under the debugger";
+        if (a.executor() == null) return new Asked(question, authority, null, false);
+        Asked seen = a.executor().observe(signature, detail);
+        return new Asked(question, authority, seen.answered() ? seen.answer() : null, false);
     }
 
     // ---------------------------------------------------------------------------------------------

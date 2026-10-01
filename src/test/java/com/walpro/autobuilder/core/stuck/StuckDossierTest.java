@@ -215,14 +215,17 @@ class StuckDossierTest {
     }
 
     @Test
-    void persistentFailingTestsGoToTheDossierAtOnce() {
+    void persistentFailingTestsGoToTheDossierOnceTheirQuestionWentUnanswered() {
         // The test gate reports the failing set only once it has judged it persistent (ratios over the
-        // run), so the layer asks at the first report.
+        // run), so the layer asks at the first report. Since 2026-10-01 the source has one question -- the
+        // failing test re-run under the debugger -- and the dossier follows when nothing answered it (here:
+        // no debugger run is available).
         StuckLayer layer = layer();
         String sig = "the same tests keep failing: QuillTest.dries[10]";
         layer.beginCycle("c1", "sg-ink");
         layer.report(StuckObservation.Source.TEST_FAILURES, sig, List.of("QuillTest.dries[10] -- expected 3"));
         when(decider.decide(any(), any())).thenReturn(DossierDecision.none("x"));
+        layer.promptBlock(cycle("c1"));
 
         layer.consultDossier(cycle("c2"));
 

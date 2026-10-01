@@ -210,7 +210,10 @@ public class StuckLayer {
         StuckQuestions.TypeAuthority types = projectTypeAuthority == null || context == null || context.outputPath() == null
                 ? StuckQuestions.TypeAuthority.platform()
                 : projectTypeAuthority.forProject(java.nio.file.Path.of(context.outputPath()));
-        StuckDiagnosis.Authorities authorities = new StuckDiagnosis.Authorities(live, adoptedSources(), seed(), observer, types);
+        StuckDiagnosis.Observer executor = !executionTrace || testRunGate == null || context == null || context.outputPath() == null
+                ? null : (signature, evidence) -> traceFailingTest(signature, java.nio.file.Path.of(context.outputPath()), live);
+        StuckDiagnosis.Authorities authorities = new StuckDiagnosis.Authorities(live, adoptedSources(), seed(), observer, types,
+                executor);
         boolean changed = false;
         for (StuckLedger.Entry e : ledger.pending()) {
             changed = true;
@@ -483,6 +486,41 @@ public class StuckLayer {
                 ? "the answer to this same question ended it in " + p.endedRuns() + " of them"
                 : "an answer the loop looked up ended it in " + p.endedRuns() + " of them";
         return "(this failure also came up in " + p.runs() + " earlier run(s) of this same task; " + ended + ")";
+    }
+
+    /** The user's decision 2026-10-01: a test that keeps failing is re-run under the debugger (ExecutionTrace). */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.stuck.execution-trace.enabled:true}")
+    private boolean executionTrace = true;
+
+    /** The time one trace may take: the build compiles first, then the one test runs under the debugger. */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.stuck.execution-trace.budget-ms:240000}")
+    private long executionTraceBudgetMs = 240_000;
+
+    /** Most trace lines one answer carries. */
+    static final int TRACE_LINES = 40;
+
+    /**
+     * The failing test the signature names (else the first failing one of the last test run), run again under the
+     * debugger in a copy of {@code project}: the calls into the project's own code, with their values.
+     */
+    private StuckDiagnosis.Asked traceFailingTest(String signature, java.nio.file.Path project, Map<String, String> live) {
+        var report = testRunGate.freshReport();
+        if (report.isEmpty() || report.get().failing().isEmpty()) return new StuckDiagnosis.Asked("", "", null, false);
+        var failing = report.get().failing();
+        var chosen = failing.stream().filter(f -> signature != null
+                        && signature.contains(f.className().substring(f.className().lastIndexOf('.') + 1) + "."
+                        + f.method().replaceAll("\\(.*$", "")))
+                .findFirst().orElse(failing.get(0));
+        String method = chosen.method().replaceAll("\\(.*$", "");
+        var calls = ExecutionTrace.trace(project, chosen.className(), method, executionTraceBudgetMs);
+        if (calls.isEmpty()) return new StuckDiagnosis.Asked("", "", null, false);
+        String test = chosen.className().substring(chosen.className().lastIndexOf('.') + 1) + "." + chosen.method();
+        String answer = "The failing test " + test + " was run again under the debugger. It failed with: "
+                + (chosen.message() == null ? "(no message)" : chosen.message().replace('\n', ' '))
+                + "\n    The calls into the project's own code, in the order they returned -- a call's own calls come before it, indented one step more:\n"
+                + ExecutionTrace.render(calls.get(), live, TRACE_LINES).replace("\n", "\n    ");
+        log.warn("T4-DY: traced {} under the debugger -- {} call(s) into the project's own code", test, calls.get().size());
+        return new StuckDiagnosis.Asked("", "", answer, false);
     }
 
     StuckLedger.Entry find(StuckObservation o) {

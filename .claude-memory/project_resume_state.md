@@ -28,7 +28,8 @@ metadata:
   - Suite 3796/0. Toy cases now: edit-hunks v2 (solved 3/3; regression yardstick), parameterized-rows v2 (hard).
 - **2026-10-01: the user asked to find the limits by trial and error; probed offline (`scripts/llm_cap_probe.py`), then the user chose the controller -- BUILT `ba343470`** (`client/OutputBounds`: AIMD cap per role, a runaway retried with a changed request -- frequency penalty, then temperature 0.4 -- keeping its cap; timeout follows the cap). Live: the two runaway prompts are rescued in 86 s and 117 s (never finished before). Suite 3803/0.
 - **2026-10-01 (later): finding 1 routed (`9ac29e13`: 'class X in package P' answered from the classpath; replay 4/4 right). Stage 1 re-check: still stuck 2/3, 0 timeouts. Stage 2 (dossier off/on x3): NULL, three ties (8/8, 3/3, 2/2) -- the dossier's value is still not shown. The loop now reaches 8/10 on parameterized-rows (was 2/10). USER DECISION: show the dependency API up front in the evolution prompt (structure-read from the project's jars, within budget), measured with the stage-2 rule.**
-- **Next:** build the dependency-API block; then measure it on parameterized-rows.
+- **Dependency-API block BUILT (`aff80605`) and measured (`field20`): rule NOT met (1 win, 2 ties), but compile rejections fell 74% -> 30% of attempts, merges 5 -> 11; spec score plateaus at 3/10 on the row-parsing logic. Block stays on. Refinement noted: read imports from main sources + the failed attempt, not tests.** Suite 3811/0. No run live.
+- **Next:** a user direction. Open threads: the dossier's value (null on two measurements); parameterized-rows' remaining gap is reasoning about the row rules; T4-DK templates still have no field reading (the planner writes member-level no-change claims on change targets).
 
 ## 2026-09-30 (Opus 5.5, session 8 continued, 2026-09-28..30) — T4-DY DOSSIER + T4-EB EDIT FORM; BOTH TOY CASES FINISH RELIABLY
 

@@ -84,12 +84,26 @@ public class LLMClient {
     @Value("${llm.api.retry.delay-ms:5000}")
     private long retryDelayMs;
 
+    // The output room the prompt budget leaves (PromptTokenBudget): the first cap of every role.
+    @Value("${llm.api.response-reserve-tokens:4096}")
+    private int responseReserveTokens;
+
+    // Whether answers are capped and runaways retried with a changed request (OutputBounds).
+    @Value("${llm.api.output-bounds.enabled:true}")
+    private boolean outputBoundsEnabled;
+
+    /** How often a clean answer cut by the cap is asked again with a larger one, per call. */
+    static final int MAX_CAP_GROWTHS = 2;
+
+    private OutputBounds outputBounds;
+
     @PostConstruct
     void init() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(CONNECT_TIMEOUT_MS);
         factory.setReadTimeout(readTimeoutMs);
         restTemplate = new RestTemplate(factory);
+        outputBounds = new OutputBounds(responseReserveTokens);
     }
 
     public ResponseEntity<ChatResponse> ask(List<Message> conversation) {
@@ -142,6 +156,61 @@ public class LLMClient {
             }
         }
 
+        if (!outputBoundsEnabled || outputBounds == null) {
+            return exchange(request, promptDigest, readTimeoutMs).response();
+        }
+        String role = LlmCallContext.currentRole();
+        int variant = -1;
+        int growths = 0;
+        Integer rescueCap = null;
+        while (true) {
+            // A runaway's rescue keeps the cap the runaway ran into: that cap says nothing about how long the
+            // rescued answer needs, and halving it first cost the live check an extra, cut call (2026-10-01).
+            // The halving applies to the role's NEXT call.
+            int capTokens = rescueCap != null ? rescueCap : outputBounds.capFor(role);
+            rescueCap = null;
+            request.setMaxTokens(capTokens);
+            Exchanged done = exchange(request, promptDigest, outputBounds.timeoutFor(capTokens, readTimeoutMs));
+            ChatResponse body = done.response().getBody();
+            String finish = body == null || body.getChoices() == null || body.getChoices().isEmpty() ? null
+                    : body.getChoices().get(0).getFinishReason();
+            String content = body == null ? null : body.getFirstContent();
+            Integer completion = body == null || body.getUsage() == null ? null : body.getUsage().getCompletionTokens();
+            OutputBounds.Verdict verdict = OutputBounds.verdict(finish, content);
+            int next = outputBounds.learn(role, verdict, completion, done.durationMs());
+            if (verdict == OutputBounds.Verdict.ENDED) return done.response();
+            boolean again = verdict == OutputBounds.Verdict.CUT_CLEAN ? growths++ < MAX_CAP_GROWTHS
+                    : variant + 1 < OutputBounds.RUNAWAY_VARIANTS.size();
+            String retry = !again ? "none left -- the answer is returned as it is"
+                    : verdict == OutputBounds.Verdict.CUT_CLEAN ? "the same request with a cap of " + next
+                    : OutputBounds.RUNAWAY_VARIANTS.get(variant + 1).name() + ", cap " + capTokens
+                            + " (the role's next call: " + next + ")";
+            log.warn("LLM answer {} at {} tokens (role {}, cap {}) -- retry: {}",
+                    verdict == OutputBounds.Verdict.RUNAWAY ? "RAN AWAY" : "was cut clean", completion, role, capTokens, retry);
+            if (behaviourLogger != null) {
+                behaviourLogger.llmOutputBounded(LlmCallContext.currentCycleId(), role, capTokens, completion,
+                        verdict.name(), variant < 0 ? null : OutputBounds.RUNAWAY_VARIANTS.get(variant).name(),
+                        next, again ? retry : null);
+            }
+            if (!again) return done.response();
+            if (verdict == OutputBounds.Verdict.RUNAWAY) {
+                // At temperature 0 a runaway repeats itself on an identical request: change the request.
+                OutputBounds.Variant v = OutputBounds.RUNAWAY_VARIANTS.get(++variant);
+                rescueCap = capTokens;
+                request.setTemperature(v.temperature() == null ? 0.0 : v.temperature());
+                request.setFrequencyPenalty(v.frequencyPenalty());
+            }
+        }
+    }
+
+    /** One answer and how long its successful attempt took. */
+    private record Exchanged(ResponseEntity<ChatResponse> response, long durationMs) {}
+
+    /**
+     * Sends {@code request} with the network retries below; {@code baseTimeoutMs} is the first attempt's
+     * read timeout (escalated on retries, T1-FP).
+     */
+    private Exchanged exchange(ChatRequest request, String promptDigest, int baseTimeoutMs) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(apiKey);
@@ -159,7 +228,8 @@ public class LLMClient {
         // remaining attempts the moment this call's own failures (or another thread's) open it.
         for (int attempt = 1; attempt <= retryMaxAttempts; attempt++) {
             int attemptTimeoutMs = readTimeoutForAttempt(
-                    readTimeoutMs, readTimeoutEscalationFactor, attempt, readTimeoutMaxMs);
+                    baseTimeoutMs, readTimeoutEscalationFactor, attempt,
+                    readTimeoutMaxMs <= 0 ? 0 : Math.max(readTimeoutMaxMs, baseTimeoutMs));
             try {
                 long callStart = System.currentTimeMillis();
                 ResponseEntity<ChatResponse> response = clientForTimeout(attemptTimeoutMs).exchange(
@@ -179,7 +249,7 @@ public class LLMClient {
                     log.warn("[LLM RESPONSE] Empty or null");
                 }
 
-                return response;
+                return new Exchanged(response, durationMs);
 
             } catch (HttpStatusCodeException e) {
                 int status = e.getStatusCode().value();

@@ -29,4 +29,18 @@ public class ChatRequest {
     @JsonProperty("reasoning_effort")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private String reasoningEffort;
+
+    /** The output cap ({@code OutputBounds}); left off the wire when null. */
+    @JsonProperty("max_tokens")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Integer maxTokens;
+
+    /** Set only on a runaway's changed retry ({@code OutputBounds#RUNAWAY_VARIANTS}); left off the wire when null. */
+    @JsonProperty("frequency_penalty")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Double frequencyPenalty;
+
+    public ChatRequest(String model, List<Message> messages, double temperature, String reasoningEffort) {
+        this(model, messages, temperature, reasoningEffort, null, null);
+    }
 }

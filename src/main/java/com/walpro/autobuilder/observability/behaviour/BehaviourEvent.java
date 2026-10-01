@@ -702,6 +702,25 @@ public sealed interface BehaviourEvent {
     }
 
     /**
+     * A model answer that the cap ended ({@code OutputBounds}): cut clean (it needed more room) or a RUNAWAY
+     * (its tail repeating itself), the cap it ran into, the variant it was asked with, the role's next cap and
+     * what was asked next (null: nothing, the answer was returned as it is).
+     */
+    record LlmOutputBounded(
+            Instant timestamp,
+            String cycleId,
+            String role,
+            int cap,
+            Integer completionTokens,
+            String verdict,
+            String variant,
+            int nextCap,
+            String retry
+    ) implements BehaviourEvent {
+        public String event() { return "llm_output_bounded"; }
+    }
+
+    /**
      * T4-DY slice B: the operator's hand-off. No authority in the loop answered this stuck observation,
      * or the answer names a requirement only the operator may bind: what it is, how often, what was asked.
      */

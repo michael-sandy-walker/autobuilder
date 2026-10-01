@@ -414,6 +414,12 @@ public class BehaviourLogger {
                 recurrencesAfterDelivery, questionsAsked));
     }
 
+    public void llmOutputBounded(String cycleId, String role, int cap, Integer completionTokens, String verdict,
+                                 String variant, int nextCap, String retry) {
+        emit(new BehaviourEvent.LlmOutputBounded(Instant.now(), cycleId, role, cap, completionTokens, verdict, variant,
+                nextCap, retry));
+    }
+
     public void stuckPriorConsulted(String cycleId, String source, String signature, int priorRuns,
                                     int priorEndedRuns, Integer priorEndingRung, int startRung) {
         emit(new BehaviourEvent.StuckPriorConsulted(Instant.now(), cycleId, source, signature, priorRuns,

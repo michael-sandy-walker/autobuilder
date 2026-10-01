@@ -370,6 +370,33 @@ public class PackageDiscoveryService {
         return hits;
     }
 
+    /**
+     * The top-level classes {@code packageName} declares across {@code jars}, fully qualified -- the
+     * package's own entries, not its subpackages'. The stuck layer's answer to "which classes does this
+     * dependency package hold?" (T4-DY, parameterized-rows 2026-09-30), from the same scan as
+     * {@link #scanJarsForType}.
+     */
+    public static java.util.Set<String> scanJarsForPackage(List<String> jars, String packageName) {
+        java.util.Set<String> out = new java.util.TreeSet<>();
+        if (packageName == null || packageName.isBlank()) return out;
+        String dir = packageName.replace('.', '/') + "/";
+        for (String jarPath : jars) {
+            try (JarFile jar = new JarFile(jarPath)) {
+                Enumeration<JarEntry> entries = jar.entries();
+                while (entries.hasMoreElements()) {
+                    String name = entries.nextElement().getName();
+                    if (!name.startsWith(dir) || !name.endsWith(".class") || name.indexOf('$') >= 0) continue;
+                    String rest = name.substring(dir.length(), name.length() - ".class".length());
+                    if (rest.contains("/") || rest.equals("package-info") || rest.equals("module-info")) continue;
+                    out.add(packageName + "." + rest);
+                }
+            } catch (IOException e) {
+                log.debug("T4-DY: unreadable classpath jar {} -- {}", jarPath, e.getMessage());
+            }
+        }
+        return out;
+    }
+
     private static boolean jarContainsPackage(String jarPath, String dirPrefix) {
         try (JarFile jar = new JarFile(jarPath)) {
             Enumeration<JarEntry> entries = jar.entries();

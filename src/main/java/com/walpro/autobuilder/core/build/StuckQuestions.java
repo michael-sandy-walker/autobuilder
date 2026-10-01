@@ -41,7 +41,17 @@ public final class StuckQuestions {
          * name also in the running JDK. Added 2026-09-26: three of the seven grinds that outlived every
          * reaction were "cannot find symbol" signatures, answerable once the detector kept the symbol.
          */
-        SYMBOL
+        SYMBOL,
+        /**
+         * A class was looked for in a named package and is not there: where IS it declared, and if nowhere,
+         * which classes does that package declare that end like it? parameterized-rows stage 1 (2026-09-30):
+         * the model imported invented JavaParser types ({@code FloatLiteralExpr}, {@code IntegerValueExpr})
+         * and a real one from the wrong package ({@code ArrayCreationLevel}); the question that asks where a
+         * name is declared read only the sources and the JDK, and its pattern did not accept "in package".
+         * {@code type} is the package, {@code member} the class, {@code declared} where it is declared or,
+         * when nowhere, the package's classes that end like it, and {@code meant} null when it was found.
+         */
+        PACKAGE_CLASS
     }
 
     /**
@@ -84,6 +94,7 @@ public final class StuckQuestions {
             "constructor (\\w+) in (?:record|class|interface|enum) ([\\w.$]+)|has no constructor (\\w+)\\(");
     /** javac names the declaring type with its package, and with its kind -- a class, record, interface or enum. */
     private static final Pattern OVERLOADS_PATTERN = Pattern.compile("method (\\w+) in (?:record|class|interface|enum) ([\\w.$]+)");
+    private static final Pattern PACKAGE_CLASS_PATTERN = Pattern.compile("cannot find symbol class (\\w+) in package ([\\w.]+)");
     private static final Pattern SYMBOL_PATTERN = Pattern.compile(
             "cannot find symbol (class|variable|method) (\\w+)(?:\\([^)]*\\))? in (?:class|interface|record|enum|variable \\w+ of type) ([\\w.$]+)");
 
@@ -154,6 +165,20 @@ public final class StuckQuestions {
             }
         }
 
+        // A class looked for in a named package: where is it, or what does that package hold that ends like it?
+        Matcher packageMatcher = PACKAGE_CLASS_PATTERN.matcher(signature);
+        if (packageMatcher.find()) {
+            String name = packageMatcher.group(1), pkg = packageMatcher.group(2);
+            List<String> where = new ArrayList<>(declarationsInSources(name, sources));
+            for (String fqn : new java.util.TreeSet<>(authority.classesNamed(name))) {
+                if (!fqn.equals(pkg + "." + name)) where.add(fqn);
+            }
+            if (!where.isEmpty()) return Optional.of(new Answer(Kind.PACKAGE_CLASS, pkg, name, where, null));
+            List<String> alike = endingLike(name, authority.classesIn(pkg));
+            return alike.isEmpty() ? Optional.empty()
+                    : Optional.of(new Answer(Kind.PACKAGE_CLASS, pkg, name, alike, "nowhere"));
+        }
+
         // A name that could not be resolved: where is it declared?
         Matcher symbolMatcher = SYMBOL_PATTERN.matcher(signature);
         if (symbolMatcher.find()) {
@@ -180,6 +205,16 @@ public final class StuckQuestions {
 
         /** The one class {@code name} (as the failure wrote it: simple or qualified) denotes, or empty. */
         Optional<Class<?>> resolve(String name, Map<String, String> sources);
+
+        /** Every class named {@code simpleName} this authority knows, fully qualified: the JDK's by default. */
+        default java.util.Set<String> classesNamed(String simpleName) {
+            return JdkPlatformTypeIndex.exportedTypes(simpleName);
+        }
+
+        /** The top-level classes {@code packageName} declares, fully qualified: the JDK's by default. */
+        default java.util.Set<String> classesIn(String packageName) {
+            return JdkPlatformTypeIndex.typesInPackage(packageName);
+        }
 
         /** The running JDK's platform classes, by {@link #resolveAgainst}. */
         static TypeAuthority platform() {
@@ -355,6 +390,39 @@ public final class StuckQuestions {
             if (load(fqn, ClassLoader.getPlatformClassLoader()).isPresent()) found.add(fqn + " (JDK class)");
         }
         return new ArrayList<>(found);
+    }
+
+    /** Most a package-class answer lists: enough to choose from, few enough to read. */
+    static final int ALIKE_LIMIT = 12;
+
+    /**
+     * The classes of {@code inPackage} that look like {@code name}: first those that begin with its first
+     * CamelCase word and end with its last (for an invented {@code DoubleValueExpr}, {@code DoubleLiteralExpr};
+     * for {@code ArrayReferenceExpr}, the {@code Array*Expr} classes), then those ending in the most trailing
+     * words it has (for {@code FloatLiteralExpr}, the {@code *LiteralExpr} classes). The ending alone, replayed
+     * on the stage-1 signatures, offered {@code LiteralStringValueExpr} for {@code DoubleValueExpr}. Empty when
+     * none shares even the last word.
+     */
+    static List<String> endingLike(String name, java.util.Collection<String> inPackage) {
+        String[] words = name.split("(?<=[a-z0-9])(?=[A-Z])");
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        if (words.length >= 2) {
+            String first = words[0], last = words[words.length - 1];
+            inPackage.stream().sorted().filter(fqn -> {
+                String simple = fqn.substring(fqn.lastIndexOf('.') + 1);
+                return !simple.equals(name) && simple.startsWith(first) && simple.endsWith(last);
+            }).forEach(out::add);
+        }
+        for (int k = words.length - 1; k >= 1; k--) {
+            String ending = String.join("", java.util.Arrays.copyOfRange(words, words.length - k, words.length));
+            List<String> hits = inPackage.stream().sorted()
+                    .filter(fqn -> fqn.substring(fqn.lastIndexOf('.') + 1).endsWith(ending)).toList();
+            if (!hits.isEmpty()) {
+                out.addAll(hits);
+                break;
+            }
+        }
+        return out.stream().limit(ALIKE_LIMIT).toList();
     }
 
     private static String extractTypeFromMembersSignature(String signature) {

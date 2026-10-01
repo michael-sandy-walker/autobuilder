@@ -257,6 +257,10 @@ public final class StuckDiagnosis {
             case CONSTRUCTOR -> ans.type() + " is constructed only as: " + list + ".";
             case OVERLOADS -> ans.type() + " declares " + ans.member() + " only as: " + list + ".";
             case SYMBOL -> "'" + ans.member() + "' is declared as: " + list + ".";
+            case PACKAGE_CLASS -> ans.meant() == null
+                    ? ans.type() + " declares no class " + ans.member() + "; it is declared as: " + list + " -- import it from there."
+                    : "No class named " + ans.member() + " exists in " + ans.type() + " or anywhere on the project's classpath."
+                    + " Classes " + ans.type() + " does declare, ending like it: " + list + ".";
         };
     }
 

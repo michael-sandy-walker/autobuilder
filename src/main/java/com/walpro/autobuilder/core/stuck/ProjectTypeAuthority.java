@@ -75,11 +75,26 @@ public class ProjectTypeAuthority {
             loader = cachedLoader;
             jars = cachedJars;
         }
-        return (name, sources) -> StuckQuestions.resolveAgainst(name, sources, loader, simple -> {
-            Set<String> candidates = new LinkedHashSet<>(JdkPlatformTypeIndex.exportedTypes(simple));
-            candidates.addAll(PackageDiscoveryService.scanJarsForType(jars, simple).keySet());
-            return candidates;
-        });
+        return new StuckQuestions.TypeAuthority() {
+            @Override
+            public java.util.Optional<Class<?>> resolve(String name, java.util.Map<String, String> sources) {
+                return StuckQuestions.resolveAgainst(name, sources, loader, this::classesNamed);
+            }
+
+            @Override
+            public Set<String> classesNamed(String simple) {
+                Set<String> candidates = new LinkedHashSet<>(JdkPlatformTypeIndex.exportedTypes(simple));
+                candidates.addAll(PackageDiscoveryService.scanJarsForType(jars, simple).keySet());
+                return candidates;
+            }
+
+            @Override
+            public Set<String> classesIn(String packageName) {
+                Set<String> classes = new java.util.TreeSet<>(JdkPlatformTypeIndex.typesInPackage(packageName));
+                classes.addAll(PackageDiscoveryService.scanJarsForPackage(jars, packageName));
+                return classes;
+            }
+        };
     }
 
     private static List<String> jars(String classpath) {

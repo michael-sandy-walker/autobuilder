@@ -211,7 +211,7 @@ public class StuckLayer {
                 ? StuckQuestions.TypeAuthority.platform()
                 : projectTypeAuthority.forProject(java.nio.file.Path.of(context.outputPath()));
         StuckDiagnosis.Observer executor = !executionTrace || testRunGate == null || context == null || context.outputPath() == null
-                ? null : (signature, evidence) -> traceFailingTest(signature, java.nio.file.Path.of(context.outputPath()), live);
+                ? null : (signature, evidence) -> traceFailingTest(signature, evidence, java.nio.file.Path.of(context.outputPath()), live);
         StuckDiagnosis.Authorities authorities = new StuckDiagnosis.Authorities(live, adoptedSources(), seed(), observer, types,
                 executor);
         boolean changed = false;
@@ -499,24 +499,47 @@ public class StuckLayer {
     /** Most trace lines one answer carries. */
     static final int TRACE_LINES = 40;
 
+    /** A failing test named by the stuck observation's evidence: {@code Class.method} and the message after " -- ". */
+    record FailingTest(String testClass, String method, String message) {}
+
     /**
-     * The failing test the signature names (else the first failing one of the last test run), run again under the
-     * debugger in a copy of {@code project}: the calls into the project's own code, with their values.
+     * The first failing test the evidence names -- {@code TestRunGate.failingDetail}'s lines, "Class.method -- ... --
+     * message" -- which stays right however the tree changed since; a FRESH report would not. The field batch of
+     * 2026-10-02 asked the question 33 ms after the observation and got nothing: the merge after the test run had
+     * made the report stale, so no trace was ever taken.
      */
-    private StuckDiagnosis.Asked traceFailingTest(String signature, java.nio.file.Path project, Map<String, String> live) {
-        var report = testRunGate.freshReport();
-        if (report.isEmpty() || report.get().failing().isEmpty()) return new StuckDiagnosis.Asked("", "", null, false);
-        var failing = report.get().failing();
-        var chosen = failing.stream().filter(f -> signature != null
-                        && signature.contains(f.className().substring(f.className().lastIndexOf('.') + 1) + "."
-                        + f.method().replaceAll("\\(.*$", "")))
-                .findFirst().orElse(failing.get(0));
-        String method = chosen.method().replaceAll("\\(.*$", "");
-        var calls = ExecutionTrace.trace(project, chosen.className(), method, executionTraceBudgetMs);
-        if (calls.isEmpty()) return new StuckDiagnosis.Asked("", "", null, false);
-        String test = chosen.className().substring(chosen.className().lastIndexOf('.') + 1) + "." + chosen.method();
+    static java.util.Optional<FailingTest> failingTestIn(List<String> evidence) {
+        if (evidence == null) return java.util.Optional.empty();
+        for (String line : evidence) {
+            String[] parts = line.split(" -- ");
+            String head = parts[0].strip();
+            int dot = head.indexOf('.');
+            if (dot <= 0) continue;
+            String cls = head.substring(0, dot), method = head.substring(dot + 1).replaceAll("[(\\[].*$", "");
+            if (!cls.matches("[A-Za-z_$][\\w$]*") || !method.matches("[A-Za-z_$][\\w$]*")) continue;
+            return java.util.Optional.of(new FailingTest(cls, method, parts.length > 1 ? parts[parts.length - 1].strip() : null));
+        }
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * The failing test the observation names, run again under the debugger in a copy of {@code project}: the calls into
+     * the project's own code, with their values.
+     */
+    private StuckDiagnosis.Asked traceFailingTest(String signature, List<String> evidence, java.nio.file.Path project,
+                                                  Map<String, String> live) {
+        var named = failingTestIn(evidence);
+        if (named.isEmpty()) return new StuckDiagnosis.Asked("", "", null, false);
+        FailingTest chosen = named.get();
+        var calls = ExecutionTrace.trace(project, chosen.testClass(), chosen.method(), executionTraceBudgetMs);
+        if (calls.isEmpty()) {
+            log.info("T4-DY: no trace of {}.{} -- the run could not be attached to, or it called none of the project's code",
+                    chosen.testClass(), chosen.method());
+            return new StuckDiagnosis.Asked("", "", null, false);
+        }
+        String test = chosen.testClass() + "." + chosen.method();
         String answer = "The failing test " + test + " was run again under the debugger. It failed with: "
-                + (chosen.message() == null ? "(no message)" : chosen.message().replace('\n', ' '))
+                + (chosen.message() == null || chosen.message().isBlank() ? "(no message)" : chosen.message().replace('\n', ' '))
                 + "\n    The calls into the project's own code, in the order they returned -- a call's own calls come before it, indented one step more:\n"
                 + ExecutionTrace.render(calls.get(), live, TRACE_LINES).replace("\n", "\n    ");
         log.warn("T4-DY: traced {} under the debugger -- {} call(s) into the project's own code", test, calls.get().size());

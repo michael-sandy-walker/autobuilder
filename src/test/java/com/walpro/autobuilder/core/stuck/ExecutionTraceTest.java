@@ -88,4 +88,17 @@ class ExecutionTraceTest {
                 .contains("Rows.find(name = \"org.ink.Quill\") -> null  [returned at line 5: return null;]  where simple = \"org.ink.Quill\"")
                 .contains("Rows.of(name = \"org.ink.Quill\") -> null");
     }
+    /** The failing test comes from the observation's own lines, which stay right however the tree changed since. */
+    @Test
+    void theFailingTestIsReadFromTheObservationsEvidence() {
+        var t = StuckLayer.failingTestIn(List.of(
+                "RowsSpecTest.dries(String, String, int)[2] -- ran with: green | Nib | 4 -- expected: \"green\" but was: null",
+                "RowsSpecTest.plain -- boom")).orElseThrow();
+        assertThat(t.testClass()).isEqualTo("RowsSpecTest");
+        assertThat(t.method()).isEqualTo("dries");
+        assertThat(t.message()).isEqualTo("expected: \"green\" but was: null");
+
+        assertThat(StuckLayer.failingTestIn(List.of("no test here", ""))).isEmpty();
+        assertThat(StuckLayer.failingTestIn(null)).isEmpty();
+    }
 }

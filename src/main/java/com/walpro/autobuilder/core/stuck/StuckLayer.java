@@ -156,8 +156,18 @@ public class StuckLayer {
 
     /** Keeps the files of the change that failed with {@code signature}, for the observer's read-only copy. */
     public void rememberChange(String signature, Map<String, String> files) {
-        if (signature != null && files != null && !files.isEmpty()) lastChange.put(signature, Map.copyOf(files));
+        if (signature != null && files != null && !files.isEmpty()) {
+            lastChange.put(signature, Map.copyOf(files));
+            lastFailedChange = Map.copyOf(files);
+        }
     }
+
+    /** The most recent change that failed to build, path -> content; empty before any. Memory only. */
+    public Map<String, String> lastFailedChange() {
+        return lastFailedChange;
+    }
+
+    private volatile Map<String, String> lastFailedChange = Map.of();
 
     /** A build compiled: the build signatures whose answer was delivered have ended. */
     public void buildSucceeded(String cycleId) {

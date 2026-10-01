@@ -70,6 +70,14 @@ public class EvolutionLLMAdapter {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.stuck.StuckLayer stuckLayer;
 
+    /** T4-DY: the project's classpath, for the dependency-API block; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.stuck.ProjectTypeAuthority projectTypeAuthority;
+
+    /** The user's decision 2026-10-01: the dependency API shown up front; off only for a measurement's other arm. */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.evolution.dependency-api-block:true}")
+    private boolean dependencyApiBlock = true;
+
     public CycleContextData evolve(CycleContextData context) throws IOException {
         return evolve(context, false);
     }
@@ -98,6 +106,21 @@ public class EvolutionLLMAdapter {
             String answers = stuckLayer.promptBlock(refreshed, Math.max(0, promptTokenBudget.promptHeadroomTokens()
                     - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(userPrompt)) / 2);
             if (answers != null) userPrompt = userPrompt + "\n\n" + answers;
+        }
+        // T4-DY: the API of the dependencies this work uses, read from the project's jars, before the model writes.
+        if (dependencyApiBlock && projectTypeAuthority != null && refreshed.outputPath() != null) {
+            var classpath = projectTypeAuthority.classpath(java.nio.file.Path.of(refreshed.outputPath()));
+            if (classpath.isPresent()) {
+                List<String> sources = new java.util.ArrayList<>(
+                        refreshed.previousOutput() == null ? List.of() : refreshed.previousOutput().values());
+                if (stuckLayer != null) sources.addAll(stuckLayer.lastFailedChange().values());
+                String api = com.walpro.autobuilder.core.build.DependencyApi.block(sources,
+                        refreshed.currentGoalDescription() + "\n" + refreshed.currentSubGoalDescription(),
+                        classpath.get().jars(), classpath.get().loader(),
+                        Math.max(0, promptTokenBudget.promptHeadroomTokens()
+                                - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(userPrompt)) / 2);
+                if (api != null) userPrompt = userPrompt + "\n\n" + api;
+            }
         }
         // T4-EA: the parts of the target's briefing this subgoal is about -- background, not requirements.
         if (briefingSource != null) {

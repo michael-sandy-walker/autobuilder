@@ -46,6 +46,21 @@ public class ProjectTypeAuthority {
     private URLClassLoader cachedLoader;
     private List<String> cachedJars = List.of();
 
+    /** The project's classpath jars and a loader over exactly them (platform parent). */
+    public record Classpath(List<String> jars, ClassLoader loader) {}
+
+    /**
+     * The project's resolved classpath, the same one {@link #forProject} answers from; empty when it cannot be
+     * resolved. The dependency-API block reads the jars' packages and classes through it (T4-DY, 2026-10-01).
+     */
+    public java.util.Optional<Classpath> classpath(Path projectRoot) {
+        if (classpathService == null || projectRoot == null) return java.util.Optional.empty();
+        forProject(projectRoot);
+        synchronized (this) {
+            return cachedLoader == null ? java.util.Optional.empty() : java.util.Optional.of(new Classpath(cachedJars, cachedLoader));
+        }
+    }
+
     /** The authority for the project at {@code projectRoot}; the JDK alone when its classpath cannot be resolved. */
     public StuckQuestions.TypeAuthority forProject(Path projectRoot) {
         if (classpathService == null || projectRoot == null) return StuckQuestions.TypeAuthority.platform();

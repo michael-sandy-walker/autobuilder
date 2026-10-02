@@ -126,4 +126,22 @@ class EditHunksTest {
         assertThat(EditHunks.isEdit("java", "\n" + file)).isFalse();
         assertThat(EditHunks.isEdit("java", "\n<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE")).isTrue();
     }
+
+    /**
+     * parameterized-rows run 2026-10-02_16-26-44: the right fix came back ending on its last REPLACE marker with no
+     * closing fence. The answer's end closes a final edit whose hunks are whole -- never a cut hunk, never a file.
+     */
+    @Test
+    void anAnswerThatEndsOnAWholeEditIsClosedByItsEnd_aCutOneOrAFileIsNot() {
+        String closed = edit("int nib() { return 1; }", "int nib() { return 2; }");
+        String unclosed = closed.substring(0, closed.lastIndexOf("```"));
+        assertThat(EvolutionProtocolContract.isValidResponse(unclosed)).isTrue();
+        assertThat(new EvolutionResponseParser().parse(unclosed, Map.of(PATH, QUILL)).addedOrChangedFiles())
+                .extracting(FileMutation::content).singleElement().asString().contains("int nib() { return 2; }");
+
+        String cut = unclosed.substring(0, unclosed.lastIndexOf(">>>>>>> REPLACE"));
+        assertThat(EvolutionProtocolContract.isValidResponse(cut)).isFalse();
+        String file = "```java [src/main/java/org/ink/Nib.java]\npackage org.ink;\nclass Nib {\n";
+        assertThat(EvolutionProtocolContract.isValidResponse(file)).isFalse();
+    }
 }

@@ -44,9 +44,37 @@ public class EvolutionResponseParser {
 
     public static String normalizeFileHeaders(String content) {
         if (content == null) return null;
-        return HEADER_ON_NEXT_LINE.matcher(content).replaceAll(m ->
+        return closeTrailingEdit(HEADER_ON_NEXT_LINE.matcher(content).replaceAll(m ->
                 java.util.regex.Matcher.quoteReplacement(
-                        "```" + (m.group(1).isEmpty() ? "text" : m.group(1)) + " [" + m.group(2) + "]\n"));
+                        "```" + (m.group(1).isEmpty() ? "text" : m.group(1)) + " [" + m.group(2) + "]\n")));
+    }
+
+    private static final Pattern LAST_OPENING = Pattern.compile("(?m)^[ \\t]*```(\\w*) \\[[^\\]\\n]+\\][ \\t]*$");
+
+    /**
+     * The answer's end closes its last block when that block is an EDIT whose every hunk is whole and the answer
+     * stops right after the last one. parameterized-rows run 2026-10-02_16-26-44: the model's one right fix (the
+     * parser's language level, read from a caught exception the trace showed) came back twice ending on
+     * {@code >>>>>>> REPLACE} with no closing fence and was refused as unclosed; the archive holds 17 such answers
+     * since 2026-09-20. A cut answer cannot pass: its last hunk would lack the REPLACE marker. A whole-file
+     * block stays strict -- an unclosed one may be a file cut short.
+     */
+    static String closeTrailingEdit(String content) {
+        Matcher open = LAST_OPENING.matcher(content);
+        int start = -1;
+        String tag = null;
+        while (open.find()) {
+            start = open.end();
+            tag = open.group(1);
+        }
+        if (start < 0 || com.walpro.autobuilder.protocol.FencedBlocks.closeAfter(content, start + 1) >= 0) return content;
+        String body = content.substring(start);
+        if (!EditHunks.isEdit(tag, body) || !body.strip().endsWith(">>>>>>> REPLACE")) return content;
+        long searches = body.lines().filter(l -> l.strip().equals("<<<<<<< SEARCH")).count();
+        long dividers = body.lines().filter(l -> l.strip().equals("=======")).count();
+        long replaces = body.lines().filter(l -> l.strip().equals(">>>>>>> REPLACE")).count();
+        if (searches == 0 || searches != dividers || searches != replaces) return content;
+        return content.stripTrailing() + "\n```\n";
     }
 
     public EvolutionOutcome parse(String rawContent) {

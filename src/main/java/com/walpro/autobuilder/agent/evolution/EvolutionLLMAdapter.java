@@ -111,9 +111,9 @@ public class EvolutionLLMAdapter {
         if (dependencyApiBlock && projectTypeAuthority != null && refreshed.outputPath() != null) {
             var classpath = projectTypeAuthority.classpath(java.nio.file.Path.of(refreshed.outputPath()));
             if (classpath.isPresent()) {
-                List<String> sources = new java.util.ArrayList<>(
-                        refreshed.previousOutput() == null ? List.of() : refreshed.previousOutput().values());
-                if (stuckLayer != null) sources.addAll(stuckLayer.lastFailedChange().values());
+                List<String> sources = com.walpro.autobuilder.core.build.DependencyApi.sourcesNeeded(
+                        refreshed.previousOutput(), stuckLayer == null ? java.util.Map.of() : stuckLayer.lastFailedChange(),
+                        isProtected);
                 String api = com.walpro.autobuilder.core.build.DependencyApi.block(sources,
                         refreshed.currentGoalDescription() + "\n" + refreshed.currentSubGoalDescription(),
                         classpath.get().jars(), classpath.get().loader(),

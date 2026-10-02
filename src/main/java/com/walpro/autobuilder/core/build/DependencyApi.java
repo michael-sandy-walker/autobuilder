@@ -124,6 +124,22 @@ public final class DependencyApi {
         return left == entries.size() ? null : sb.toString().stripTrailing();
     }
 
+    /**
+     * The files whose imports the work needs: every file of the last failed attempt (the model wrote them), and
+     * the tree's files the work may still write. A file it may not write -- a protected test, say -- is read
+     * against, never written against, so its imports would only spend the block's room (parameterized-rows:
+     * the protected tests' JUnit packages beside the parser API the change needed).
+     */
+    public static List<String> sourcesNeeded(Map<String, String> tree, Map<String, String> lastAttempt,
+                                             java.util.function.Predicate<String> isProtected) {
+        List<String> out = new ArrayList<>();
+        if (tree != null) tree.forEach((path, text) -> {
+            if (!isProtected.test(path)) out.add(text);
+        });
+        if (lastAttempt != null) out.addAll(lastAttempt.values());
+        return out;
+    }
+
     private static final Pattern CAST_FAMILY = Pattern.compile("^(?:as|if|is|to)([A-Z]\\w*)$");
 
     /**

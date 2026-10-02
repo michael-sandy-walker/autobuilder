@@ -85,4 +85,17 @@ class DependencyApiTest {
         assertThat(block).contains("package org.quillfixture.ink declares").contains("more left out: no room in this prompt")
                 .doesNotContain("width(): int");
     }
+
+    @Test
+    void aFileTheWorkMayNotWriteLendsNoImports_butTheLastAttemptAlwaysDoes() {
+        var tree = new java.util.LinkedHashMap<String, String>();
+        tree.put("src/main/java/org/sample/Pen.java", "import org.quillfixture.ink.InkNib;");
+        tree.put("src/test/java/org/sample/PenTest.java", "import org.quillfixture.ink.DryInkNib;");
+        var attempt = java.util.Map.of("src/test/java/org/sample/NibTest.java", "import org.quillfixture.ink.SoftInkNib;");
+
+        List<String> needed = DependencyApi.sourcesNeeded(tree, attempt, path -> path.startsWith("src/test/"));
+
+        assertThat(needed).containsExactly("import org.quillfixture.ink.InkNib;", "import org.quillfixture.ink.SoftInkNib;");
+        assertThat(DependencyApi.sourcesNeeded(tree, java.util.Map.of(), path -> false)).hasSize(2);
+    }
 }

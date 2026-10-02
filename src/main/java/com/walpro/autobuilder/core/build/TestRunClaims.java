@@ -18,8 +18,8 @@ import java.util.regex.Pattern;
  * <p><b>Narrow on purpose, because this can only CONFIRM.</b> Only a criterion whose entire claim is a
  * passing test class or suite matches (a trailing parenthetical and "with no regressions" are allowed);
  * anything compound -- "passes and covers every route" -- is left to the reader. A named class must be
- * in the report with every case passed; the suite claim needs the whole run green. Nothing here ever
- * marks a criterion unmet.
+ * in the report with every case passed; the suite claim needs the whole run green. {@link #answer} also
+ * says when the run CONTRADICTS such a claim (the user's decision 2026-10-02: the record answers first).
  */
 public final class TestRunClaims {
 
@@ -92,6 +92,47 @@ public final class TestRunClaims {
         Matcher m = CLASS.matcher(claim);
         if (!m.matches()) return false;
         return ranGreen(m.group(1), report);
+    }
+
+    /**
+     * The test run's answer to {@code criterion}: TRUE when it claims only that tests pass and the run shows
+     * it, FALSE when the run shows one of those tests failing (or, for the suite, any), null when it is not
+     * such a claim or names a class the run did not contain (a reading answers it).
+     */
+    public static Boolean answer(String criterion, TestRunReport report) {
+        if (criterion == null || report == null) return null;
+        String claim = criterion.strip().replaceAll("`", "");
+        Matcher listed = LISTED_CLASSES.matcher(claim);
+        List<String> named = new java.util.ArrayList<>();
+        while (listed.find()) {
+            for (String n : listed.group(1).split("\\s*,\\s*(?:and\\s+)?")) named.add(n.strip());
+        }
+        claim = LISTED_CLASSES.matcher(claim).replaceAll("")
+                .replaceAll("\\s*\\([^()]*\\)\\s*$", "")
+                .replaceAll("[.\\s]+$", "");
+        Matcher m = CLASS.matcher(claim);
+        boolean suite = SUITE.matcher(claim.toLowerCase(Locale.ROOT)).matches();
+        if (!suite && !m.matches()) return null;
+        if (!suite) named.add(m.group(1));
+        if (suite && !report.passes()) return false;
+        Boolean all = Boolean.TRUE;
+        for (String n : named) {
+            Boolean green = green(n, report);
+            if (Boolean.FALSE.equals(green)) return false;
+            if (green == null) all = null;
+        }
+        return all;
+    }
+
+    /** TRUE when the class ran with every case passed, FALSE when it ran with one not passed, null when it did not run. */
+    private static Boolean green(String simple, TestRunReport report) {
+        for (Map.Entry<String, List<TestRunReport.Case>> e : report.byClass().entrySet()) {
+            String cls = e.getKey();
+            if (!cls.equals(simple) && !cls.endsWith("." + simple)) continue;
+            if (e.getValue().isEmpty()) return null;
+            return e.getValue().stream().allMatch(c -> c.outcome() == TestRunReport.Outcome.PASSED);
+        }
+        return null;
     }
 
     private static boolean ranGreen(String simple, TestRunReport report) {

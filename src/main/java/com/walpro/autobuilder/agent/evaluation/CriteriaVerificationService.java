@@ -179,9 +179,8 @@ public class CriteriaVerificationService {
         String goalText = (context.currentGoalDescription() == null ? "" : context.currentGoalDescription())
                 + " " + (description == null ? "" : description);
         for (int i = 1; i <= criteria.size(); i++) {
-            if (!Boolean.TRUE.equals(passMap.get(i)) && structurallyProven(criteria.get(i - 1), goalText) != null) {
-                passMap.put(i, Boolean.TRUE);
-            }
+            Boolean recorded = recordAnswer(criteria.get(i - 1), goalText);
+            if (recorded != null) passMap.put(i, recorded);
         }
 
         recordToGraph(context, subGoalId, criteria, passMap);
@@ -372,7 +371,8 @@ public class CriteriaVerificationService {
             Boolean ok = cachedByKey.containsKey(CriterionResultEntity.keyOf(c))
                     ? cachedByKey.get(CriterionResultEntity.keyOf(c))
                     : freshByCriterion.get(c);
-            if ((ok == null || !ok) && structurallyProven(c, rootDescription) != null) ok = true;
+            Boolean recorded = recordAnswer(c, rootDescription);
+            if (recorded != null) ok = recorded;
             if (ok == null || !ok) unconfirmed.add(c);
         }
         if (unconfirmed.isEmpty()) {
@@ -412,24 +412,35 @@ public class CriteriaVerificationService {
     private com.walpro.autobuilder.core.build.AdoptionManifest adoptionManifest;
 
     /**
-     * One home for the claims a reading is not the authority for -- confirm-only, whole claims only:
-     * that tests pass (the test run of exactly this tree, {@code TestRunClaims}) and that nothing was
-     * changed (the changes since adoption, {@code UnchangedClaims}). Returns what proved it, or null.
+     * One home for the claims a reading is not the authority for -- whole claims only: that tests pass (the
+     * test run of exactly this tree, {@code TestRunClaims}) and that nothing was changed (the changes since
+     * adoption, {@code UnchangedClaims}). The user's decision 2026-10-02, "record first": the record's answer
+     * stands over a reading's EITHER way -- before, it could only rescue a "not met", so a reading's wrong
+     * "met" on "No file under src/test is changed" was never checked (receiver-questions, field21: the
+     * record was consulted 0 times in three runs). TRUE proven, FALSE contradicted, null no record answers.
      */
-    String structurallyProven(String criterion, String goalText) {
+    Boolean recordAnswer(String criterion, String goalText) {
         var report = testRunGate == null ? java.util.Optional.<com.walpro.autobuilder.core.build.TestRunReport>empty()
                 : testRunGate.freshReport();
-        if (report.isPresent() && com.walpro.autobuilder.core.build.TestRunClaims.provenBy(criterion, report.get())) {
-            log.info("T4-CQ: [{}] answered by the project's test run of this tree ({} run, 0 failed), not by a reading",
-                    criterion, report.get().run());
-            return "test run";
+        if (report.isPresent()) {
+            Boolean tests = com.walpro.autobuilder.core.build.TestRunClaims.answer(criterion, report.get());
+            if (tests != null) {
+                log.info("T4-CQ: [{}] {} by the project's test run of this tree ({} run, {} failed), not by a reading",
+                        criterion, tests ? "confirmed" : "contradicted", report.get().run(),
+                        report.get().failures() + report.get().errors());
+                return tests;
+            }
         }
         var changes = adoptionManifest == null ? java.util.Optional.<com.walpro.autobuilder.core.build.AdoptionManifest.Changes>empty()
                 : adoptionManifest.changes();
-        if (changes.isPresent() && com.walpro.autobuilder.core.build.UnchangedClaims.provenBy(criterion, changes.get(), goalText)) {
-            log.info("T4-DK: [{}] answered by the changes since adoption ({} modified, {} added, {} removed), not by a reading",
-                    criterion, changes.get().modified().size(), changes.get().added().size(), changes.get().removed().size());
-            return "adoption manifest";
+        if (changes.isPresent()) {
+            Boolean unchanged = com.walpro.autobuilder.core.build.UnchangedClaims.answer(criterion, changes.get(), goalText);
+            if (unchanged != null) {
+                log.info("T4-DK: [{}] {} by the changes since adoption ({} modified, {} added, {} removed), not by a reading",
+                        criterion, unchanged ? "confirmed" : "contradicted", changes.get().modified().size(),
+                        changes.get().added().size(), changes.get().removed().size());
+                return unchanged;
+            }
         }
         return null;
     }

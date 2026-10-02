@@ -11,9 +11,9 @@ import java.util.regex.Pattern;
  * adoption prove it ({@link AdoptionManifest}). The twin of {@link TestRunClaims}: a claim with an
  * authority other than a reading is answered by that authority.
  *
- * <p>Narrow on purpose, because this can only CONFIRM. The claim may be several such parts joined by
- * ";" or ", and" -- every part must be one of these shapes and proven; anything else is left to the
- * reader, and nothing here ever marks a criterion unmet:
+ * <p>Narrow on purpose, because its answer stands over a reading's either way ({@link #answer}, the user's
+ * decision 2026-10-02: the record answers first). The claim may be several such parts joined by ";" or
+ * ", and" -- every part must be one of these shapes; anything else is left to the reader:
  * <ul>
  *   <li>"no file(s)/class(es) under P is/are/has/have been modified/changed/touched"</li>
  *   <li>"only X[.java] (under P) is/was/has been modified/changed"</li>
@@ -67,6 +67,15 @@ public final class UnchangedClaims {
             if (!partProven(part.strip(), changes, goal)) return false;
         }
         return true;
+    }
+
+    /**
+     * The record's answer to {@code criterion}: TRUE when it is a no-change claim the changes prove, FALSE
+     * when it is one they contradict, null when it is not such a claim (a reading answers it).
+     */
+    public static Boolean answer(String criterion, AdoptionManifest.Changes changes, String goal) {
+        if (changes == null || !isClaim(criterion)) return null;
+        return provenBy(criterion, changes, goal);
     }
 
     /**

@@ -116,4 +116,15 @@ class UnchangedClaimsTest {
         String prompt = com.walpro.autobuilder.protocol.planner.PlannerProtocolContract.getSystemPrompt();
         for (String template : UnchangedClaims.TEMPLATES) assertThat(prompt).contains("'" + template + "'");
     }
+
+    /** The user's decision 2026-10-02, record first: the changes answer such a claim either way. */
+    @Test
+    void theChangesAnswerEitherWay_andOnlyANoChangeClaim() {
+        AdoptionManifest.Changes testTouched = new AdoptionManifest.Changes(
+                List.of("src/test/java/com/walpro/autobuilder/core/build/StuckQuestionsSpecTest.java"), List.of(), List.of());
+        assertThat(UnchangedClaims.answer("No file under src/test is changed", ONLY_THE_ONE, GOAL)).isTrue();
+        assertThat(UnchangedClaims.answer("No file under src/test is changed", testTouched, GOAL)).isFalse();
+        assertThat(UnchangedClaims.answer("StuckQuestions answers a package question", testTouched, GOAL)).isNull();
+        assertThat(UnchangedClaims.answer("No file under src/test is changed", null, GOAL)).isNull();
+    }
 }

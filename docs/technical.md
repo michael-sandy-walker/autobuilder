@@ -161,8 +161,8 @@ claim, not per cycle:
 - **the boot gate** (`BootGate`) -- the packaged artifact is started and probed the way its specification says
   (endpoints answered, commands run);
 - **criteria verification** (`CriteriaVerificationService`) -- every acceptance criterion is confirmed against the
-  current code. Criteria whose claim a structure can prove are answered by it instead of a reading: that the
-  tests pass (`TestRunClaims`, from the test run of this exact tree) and that nothing outside the intended change
+  current code. Criteria whose claim a record can answer are answered by it, and its answer stands over the
+  reading's either way -- met or not met: that the tests pass (`TestRunClaims`, from the test run of this exact tree) and that nothing outside the intended change
   was changed (`UnchangedClaims`, from the `AdoptionManifest` of an adopted project). The planner is given the
   sentence forms `UnchangedClaims` proves (`UnchangedClaims.TEMPLATES`).
 

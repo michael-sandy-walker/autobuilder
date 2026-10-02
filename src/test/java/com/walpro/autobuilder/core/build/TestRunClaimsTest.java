@@ -68,4 +68,21 @@ class TestRunClaimsTest {
         org.assertj.core.api.Assertions.assertThat(TestRunClaims.isGuardClaim("The quill dries and the existing tests pass")).isFalse();
         org.assertj.core.api.Assertions.assertThat(TestRunClaims.isGuardClaim(null)).isFalse();
     }
+
+    /** The user's decision 2026-10-02, record first: the run answers such a claim either way. */
+    @Test
+    void theRunAnswersEitherWay_andOnlyWhatItRan() {
+        TestRunReport red = new TestRunReport(3, 1, 0, 0,
+                List.of(new TestRunReport.Failure("org.warp.HarnessTest", "m", TestRunReport.Outcome.FAILED, "x")),
+                Map.of("org.warp.CoilSpecTest", List.of(OK, OK),
+                        "org.warp.HarnessTest", List.of(new TestRunReport.Case("m", TestRunReport.Outcome.FAILED))));
+        assertThat(TestRunClaims.answer("CoilSpecTest passes", GREEN)).isTrue();
+        assertThat(TestRunClaims.answer("CoilSpecTest passes", red)).as("its own cases passed").isTrue();
+        assertThat(TestRunClaims.answer("Every test in HarnessTest passes", red)).isFalse();
+        assertThat(TestRunClaims.answer("the whole suite passes", red)).isFalse();
+        assertThat(TestRunClaims.answer("The full test suite (CoilSpecTest, HarnessTest) passes", red)).isFalse();
+        assertThat(TestRunClaims.answer("PlasmaTest passes", red)).as("not run: no answer").isNull();
+        assertThat(TestRunClaims.answer("The full test suite (CoilSpecTest, PlasmaTest) passes", GREEN)).isNull();
+        assertThat(TestRunClaims.answer("The suite passes and covers every route", red)).as("compound").isNull();
+    }
 }

@@ -42,7 +42,8 @@ public class CycleContextCoordinator {
     private com.walpro.autobuilder.analysis.coverage.SeedCoverageAnalyzer seedCoverageAnalyzer;
 
     /**
-     * T4-DA: one switch, because this mechanism is unproven in BOTH directions and every other
+     * T4-DA: whether each cycle matches the whole plan against the whole specification and names the
+     * clauses no goal claims. One switch, because this mechanism is unproven in BOTH directions and every other
      * recent mechanism has one.
      *
      * <p>Its benefit is 2 clauses closed against a measured 0-of-11 baseline over two runs — real

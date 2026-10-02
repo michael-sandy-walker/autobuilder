@@ -34,6 +34,7 @@ public class RunHealth {
     private final RunHealthProfile profile = new RunHealthProfile();
     private final RunHealthEnvelope envelope;
 
+    // The file holding healthy runs' measurements, the envelope a run's health is compared with.
     public RunHealth(@Value("${autobuilder.health.baseline-path:scripts/run_health_baseline.json}") String baselinePath) {
         this.envelope = new RunHealthEnvelope(load(baselinePath));
         log.info("T4-CI: run-health envelope from {} -- {} healthy run(s){}", baselinePath, envelope.size(),

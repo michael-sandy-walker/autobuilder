@@ -21,6 +21,41 @@ def kebab(name):
     return re.sub(r'(?<=[a-z0-9])([A-Z])', r'-\1', name).lower()
 
 
+def comment_above(lines, i):
+    """The comment directly above line i (annotations skipped): a /** */ or /* */ block, or // lines; '' when none."""
+    j = i - 1
+    # annotations on the same field (@Setter, @Min) are skipped; another key's @Value line is not this key's comment
+    while j >= 0 and lines[j].strip().startswith('@') and '${' not in lines[j]:
+        j -= 1
+    if j < 0:
+        return ''
+    t = lines[j].strip()
+    out = []
+    if t.endswith('*/'):
+        while j >= 0:
+            out.insert(0, lines[j])
+            if '/*' in lines[j]:
+                break
+            j -= 1
+    elif t.startswith('//'):
+        while j >= 0 and lines[j].strip().startswith('//'):
+            out.insert(0, lines[j].strip()[2:])
+            j -= 1
+    text = ' '.join(re.sub(r'^\s*(/\*\*?|\*/?|\*)', '', l).replace('*/', '') for l in out)
+    text = re.sub(r'\{@(?:code|link|linkplain)\s+([^}]*)\}', r'`\1`', text)
+    text = re.sub(r'<[^>]+>', ' ', text)
+    return re.sub(r'\s+', ' ', text).strip()
+
+
+def describe(comment):
+    """A comment's first sentence, the way a reader of the reference needs it: no ticket tag in front."""
+    c = re.sub(r'^(?:[A-Z]\d-[A-Z]{1,3}(?:-\d+)?[\w ,/()-]*?:\s*)+', '', comment)
+    m = re.match(r'(.+?\.)(?:\s|$)', c)
+    first = (m.group(1) if m else c).strip()
+    first = first[:1].upper() + first[1:] if first else ''
+    return first.rstrip(';').replace('|', '\\|')
+
+
 def code_keys():
     keys = {}
     src = os.path.join(ROOT, 'src/main/java')
@@ -29,13 +64,20 @@ def code_keys():
             if not f.endswith('.java'):
                 continue
             text = open(os.path.join(d, f), encoding='utf-8').read()
+            lines = text.split('\n')
+            line_of = lambda pos: text.count('\n', 0, pos)
             props = PROPS.search(text)
             if props:
+                body = text.index('{', props.end())
+                depth_at = lambda pos: text.count('{', body, pos) - text.count('}', body, pos)
                 for m in FIELD.finditer(text):
+                    if depth_at(m.start()) != 1:
+                        continue   # a field of a nested class is a setting of its top field, not a key
                     k = props.group(1) + '.' + kebab(m.group(1))
                     default = m.group(2).strip().strip('"') if m.group(2) else None
-                    keys.setdefault(k, {'default': default, 'classes': set()})
+                    keys.setdefault(k, {'default': default, 'classes': set(), 'about': ''})
                     keys[k]['classes'].add(f[:-5])
+                    keys[k]['about'] = keys[k]['about'] or describe(comment_above(lines, line_of(m.start(1))))
             for m in VALUE.finditer(text):
                 k, default = m.group(1), m.group(2)
                 # "${key:" + CONSTANT + "}": the default is a constant of the same file
@@ -43,8 +85,9 @@ def code_keys():
                 if c:
                     const = re.search(r'\b' + c.group(1) + r'\s*=\s*([^;]+);', text)
                     default = const.group(1).strip().strip('"').replace('_', '') if const else c.group(1)
-                keys.setdefault(k, {'default': default, 'classes': set()})
+                keys.setdefault(k, {'default': default, 'classes': set(), 'about': ''})
                 keys[k]['classes'].add(f[:-5])
+                keys[k]['about'] = keys[k]['about'] or describe(comment_above(lines, line_of(m.start())))
                 if keys[k]['default'] is None and default is not None:
                     keys[k]['default'] = default
     return keys
@@ -87,14 +130,17 @@ def main():
              'through `@ConfigurationProperties` (nested settings of those classes are listed by their top field), its',
              'default in the code, and the value `application.yml` sets when it sets one (profile blocks aside -- see',
              '[technical.md](technical.md), section 11). Set a key on the command line (`--key=value`) or in a profile.',
+             'What a key does is the first sentence of the comment on the field that reads it, so it is written once, in',
+             'the code.',
              '', f'{len(keys)} keys.', '']
     for prefix in sorted(groups):
-        lines += [f'## `{prefix}`', '', '| Key | Default in code | application.yml | Read by |', '|---|---|---|---|']
+        lines += [f'## `{prefix}`', '', '| Key | What it does | Default in code | application.yml | Read by |',
+                  '|---|---|---|---|---|']
         for k in sorted(groups[prefix]):
             d = keys[k]['default']
             y = yml.get(k)
-            lines.append('| `{}` | {} | {} | {} |'.format(
-                k, '`' + d + '`' if d not in (None, '') else ('(empty)' if d == '' else '(required)'),
+            lines.append('| `{}` | {} | {} | {} | {} |'.format(
+                k, keys[k]['about'] or '(not described)', '`' + d + '`' if d not in (None, '') else ('(empty)' if d == '' else '(required)'),
                 '`' + (str(y).lower() if isinstance(y, bool) else str(y)) + '`' if y is not None else '',
                 ', '.join('`' + c + '`' for c in sorted(keys[k]['classes']))))
         lines.append('')

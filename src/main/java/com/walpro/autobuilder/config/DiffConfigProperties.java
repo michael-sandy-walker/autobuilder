@@ -12,6 +12,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class DiffConfigProperties {
+    /** Folders left out of diff analysis. */
     private List<String> excludeFolders;
+    /** File names left out of diff analysis. */
     private List<String> excludeFiles;
 }

@@ -10,5 +10,6 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @ConfigurationProperties(prefix = "autobuilder.parser")
 public class ParserConfigProperties {
+    /** The source root, relative to the project, that structure parsing reads. */
     private String sourceRoot;
 }

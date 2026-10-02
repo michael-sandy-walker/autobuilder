@@ -52,6 +52,7 @@ public class SmsCycleIngestor {
      */
     private static final int INGEST_QUEUE_CAPACITY = 16;
 
+    // Whether each cycle is written to the graph's memory on a background thread instead of inside the cycle.
     @org.springframework.beans.factory.annotation.Value("${autobuilder.memory.sms.async:true}")
     @lombok.Setter
     private boolean async = true;

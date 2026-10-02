@@ -71,7 +71,7 @@ public class RewindPolicy {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
-    /** One switch, in case backing out ever behaves worse in the field than dying did. */
+    /** Whether a run grinding without merges rewinds to an earlier checkpoint instead of halting. One switch, in case backing out ever behaves worse in the field than dying did. */
     @Setter
     @Value("${autobuilder.rewind.on-grind-enabled:true}")
     private boolean enabled = true;

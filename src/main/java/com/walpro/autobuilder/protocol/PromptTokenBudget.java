@@ -25,9 +25,11 @@ public class PromptTokenBudget {
     public static final int DEFAULT_PROMPT_HEADROOM_TOKENS =
             DEFAULT_CONTEXT_WINDOW_TOKENS - DEFAULT_RESPONSE_RESERVE_TOKENS;
 
+    // The context window the model is served with; every prompt budget is a share of it.
     @Value("${llm.api.context-window-tokens:" + DEFAULT_CONTEXT_WINDOW_TOKENS + "}")
     private int contextWindowTokens = DEFAULT_CONTEXT_WINDOW_TOKENS;
 
+    // The output room the prompt budget leaves; the first output cap of every role.
     @Value("${llm.api.response-reserve-tokens:" + DEFAULT_RESPONSE_RESERVE_TOKENS + "}")
     private int responseReserveTokens = DEFAULT_RESPONSE_RESERVE_TOKENS;
 

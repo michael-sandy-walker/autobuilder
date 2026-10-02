@@ -45,9 +45,11 @@ public class TtsService {
     @Value("${autobuilder.tts.cache-dir:${user.home}/.cache/autobuilder-piper}")
     private String cacheDirStr;
 
+    // The narration voice.
     @Value("${autobuilder.tts.voice:en_US-amy-medium}")
     private String voice;
 
+    // The version of the narration voice runtime.
     @Value("${autobuilder.tts.piper-version:2023.11.14-2}")
     private String piperVersion;
 
@@ -56,6 +58,7 @@ public class TtsService {
     @Value("${autobuilder.tts.voice-base-url:https://huggingface.co/rhasspy/piper-voices/resolve/main}")
     private String voiceBaseUrl;
 
+    // Where the narration voice downloads from.
     @Value("${autobuilder.tts.piper-base-url:https://github.com/rhasspy/piper/releases/download}")
     private String piperBaseUrl;
 

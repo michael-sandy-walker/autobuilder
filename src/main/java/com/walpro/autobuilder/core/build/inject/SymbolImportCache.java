@@ -68,9 +68,11 @@ public class SymbolImportCache {
 
     private final FileService fileService;
 
+    // Where the cache of symbol-to-import resolutions is kept, relative to the target directory.
     @Value("${autobuilder.build.symbol-import.cache-path:cache/symbol-imports.json}")
     private String cachePath;
 
+    // The build file whose dependencies symbol-to-import resolution reads, relative to the target directory.
     @Value("${autobuilder.build.symbol-import.pom-path:output/pom.xml}")
     private String pomPath;
 

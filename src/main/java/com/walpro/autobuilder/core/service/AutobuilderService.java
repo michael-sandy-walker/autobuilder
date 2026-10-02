@@ -274,11 +274,12 @@ public class AutobuilderService implements CheckpointableState {
      */
     private static final int MAX_SUPPRESSED_EVICTIONS = 3;
 
+    // How many subgoals in a row may be exhausted without a merge before the run ends GOAL_EXHAUSTED.
     @Value("${autobuilder.goal.max-consecutive-subgoal-exhaustions:5}")
     private int maxConsecutiveSubgoalExhaustionsWithoutMerge = 5;
 
     /**
-     * T2-EI slice 1b: earned per-leaf retry budget. A REQUIRED subgoal is otherwise given up the
+     * T2-EI slice 1b: whether a required subgoal that runs out of attempts gets fresh ones (one per unmet criterion) before it is given up. Earned per-leaf retry budget. A REQUIRED subgoal is otherwise given up the
      * first time it is declared exhausted (no per-leaf retries) — the 2026-06-27 reliability batch
      * died 3/5 when a single required subgoal exhausted and cascaded to root GIVEN_UP. When enabled,
      * a required subgoal gets fresh attempts (stagnation state reset) before give-up; EXTRA-origin

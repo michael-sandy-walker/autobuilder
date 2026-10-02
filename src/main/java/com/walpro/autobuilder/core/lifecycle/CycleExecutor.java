@@ -49,7 +49,7 @@ public class CycleExecutor implements CheckpointableState {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.PackageGate packageGate;
 
-    /** T2-FK: one switch, matching T4-CZ's, in case the per-cycle repair misbehaves in the field. */
+    /** T2-FK: whether each cycle repairs an archive that does not declare the entry point the sources name. One switch, matching T4-CZ's, in case the per-cycle repair misbehaves in the field. */
     @org.springframework.beans.factory.annotation.Value(
             "${autobuilder.build.packaging-repair-per-cycle:true}")
     private boolean packagingRepairEnabled = true;
@@ -59,17 +59,17 @@ public class CycleExecutor implements CheckpointableState {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector blockerSubgoalInjector;
 
-    /** T4-DW: one switch, matching T4-CZ's and T2-FK's, in case retirement misbehaves in the field. */
+    /** T4-DW: whether each cycle retires entry-point and packaging work items the sources already satisfy. One switch, matching T4-CZ's and T2-FK's, in case retirement misbehaves in the field. */
     @org.springframework.beans.factory.annotation.Value(
             "${autobuilder.goal.retire-boot-items-per-cycle:true}")
     private boolean bootItemRetirementEnabled = true;
 
-    /** T2-FL: one switch, matching the retirement's, in case promoting on observation misbehaves. */
+    /** T2-FL: whether each cycle completes work items whose criteria are already observed met. One switch, matching the retirement's, in case promoting on observation misbehaves. */
     @org.springframework.beans.factory.annotation.Value(
             "${autobuilder.goal.promote-observed-leaves-per-cycle:true}")
     private boolean observedLeafPromotionEnabled = true;
 
-    /** T4-CZ: one switch, in case requiring the entry point early ever misbehaves in the field. */
+    /** T4-CZ: whether each cycle requires an entry point once the specification calls for a runnable artifact and the sources name none. One switch, in case requiring the entry point early ever misbehaves in the field. */
     @org.springframework.beans.factory.annotation.Value(
             "${autobuilder.goal.entry-point-required-early:true}")
     private boolean entryPointRequirementEnabled = true;

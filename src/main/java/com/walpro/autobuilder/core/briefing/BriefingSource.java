@@ -36,13 +36,14 @@ public class BriefingSource {
     @Autowired(required = false)
     private FileService fileService;
 
-    /** Off only to MEASURE the briefing (T4-EA's A/B): the same toy case, with and without it. */
+    /** Whether the target's briefing is added to prompts as background. Off only to MEASURE the briefing (T4-EA's A/B): the same toy case, with and without it. */
     @Value("${autobuilder.briefing.enabled:true}")
     private boolean enabled = true;
 
     /** Share of the prompt's free headroom a briefing may take, and its ceiling in tokens. */
     @Value("${autobuilder.briefing.headroom-share:0.25}")
     private double headroomShare = 0.25;
+    // The most tokens a briefing block may take in a prompt, whatever headroom is left.
     @Value("${autobuilder.briefing.max-tokens:2000}")
     private int maxTokens = 2000;
 

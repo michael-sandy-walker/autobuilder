@@ -49,15 +49,19 @@ public class LLMClient {
     @lombok.Setter
     private LlmExchangeRecorder exchangeRecorder;
 
+    // The model endpoint (OpenAI-compatible chat completions).
     @Value("${llm.api.url}")
     private String apiUrl;
 
+    // The model endpoint's API key, if it asks for one.
     @Value("${llm.api.key}")
     private String apiKey;
 
+    // The model name sent with every request.
     @Value("${llm.api.model}")
     private String model;
 
+    // The longest wait for a model answer; the output controller raises it with the answer's cap.
     @Value("${llm.api.read-timeout-ms:120000}")
     private int readTimeoutMs;
 
@@ -78,9 +82,11 @@ public class LLMClient {
     @Value("${llm.api.read-timeout-max-ms:0}")
     private int readTimeoutMaxMs;
 
+    // How many times a failed model request is tried.
     @Value("${llm.api.retry.max-attempts:3}")
     private int retryMaxAttempts;
 
+    // The wait before retrying a failed model request.
     @Value("${llm.api.retry.delay-ms:5000}")
     private long retryDelayMs;
 

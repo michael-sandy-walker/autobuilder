@@ -77,6 +77,7 @@ public class GoalConsolidationService implements CheckpointableState {
     private BehaviourLogger behaviourLogger;
 
     @Setter
+    // Whether near-duplicate subgoals, and given-up ones whose work was done elsewhere, are folded onto one when the loop stagnates or the tree grows.
     @Value("${autobuilder.goal.consolidation.enabled:true}")
     private boolean enabled = true;
 

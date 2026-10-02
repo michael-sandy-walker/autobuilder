@@ -54,6 +54,7 @@ public class TerminalAgent {
     @Autowired(required = false)
     private TerminalAgentRecorder recorder;
 
+    // Whether the read-only terminal agent may answer a stuck question by running commands in a copy of the tree.
     @Value("${autobuilder.stuck.terminal-agent.enabled:true}")
     private boolean enabled = true;
 

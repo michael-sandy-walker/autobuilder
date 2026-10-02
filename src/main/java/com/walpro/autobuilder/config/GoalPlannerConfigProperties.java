@@ -8,7 +8,9 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "autobuilder.goal")
 public class GoalPlannerConfigProperties {
+    /** Whether the goal state in meta/GoalStack.json is pushed into the graph on startup. */
     private boolean migrateToGraph = false;
+    /** Whether the goal state is loaded from the graph on startup. */
     private boolean syncFromGraph = false;
 
     /**

@@ -188,7 +188,9 @@ public class TestRunGate {
 
     @Autowired
     public TestRunGate(
+            // Whether the project's own tests are run (after a merge and at the completion edge).
             @Value("${autobuilder.build.test-gate.enabled:true}") boolean enabled,
+            // The command that runs the target project's tests.
             @Value("${autobuilder.build.test-gate.command:mvn test}") String testCommand,
             BuildExecutor buildExecutor) {
         this.enabled = enabled;

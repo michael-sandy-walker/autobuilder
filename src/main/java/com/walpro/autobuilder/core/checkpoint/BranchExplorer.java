@@ -55,7 +55,7 @@ public class BranchExplorer {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
-    /** One switch, in case accumulating branches ever behaves worse than simply going back. */
+    /** Whether a rewind keeps the path it leaves as a branch, and the best explored path is chosen. One switch, in case accumulating branches ever behaves worse than simply going back. */
     @Setter
     @org.springframework.beans.factory.annotation.Value("${autobuilder.branch.enabled:true}")
     private boolean enabled = true;

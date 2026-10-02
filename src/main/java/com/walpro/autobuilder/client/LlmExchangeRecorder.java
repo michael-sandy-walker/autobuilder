@@ -76,6 +76,7 @@ public class LlmExchangeRecorder {
     private BehaviourLogger behaviourLogger;
 
     @Setter
+    // Whether model exchanges are recorded or replayed: OFF (call the model), RECORD (call it and keep what it said) or REPLAY (answer from the recording).
     @Value("${autobuilder.replay.mode:OFF}")
     private Mode mode = Mode.OFF;
 

@@ -47,14 +47,17 @@ public class CoordinateSearchClient {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int FAILURE_BUDGET = 3;
 
+    // Whether a missing dependency is looked up on the Maven Central search service.
     @Value("${autobuilder.build.discovery.search-enabled:true}")
     @Setter
     private boolean enabled = true;
 
+    // The Maven Central search endpoint dependency discovery queries.
     @Value("${autobuilder.build.discovery.search-url:https://search.maven.org/solrsearch/select}")
     @Setter
     private String searchUrl = "https://search.maven.org/solrsearch/select";
 
+    // The timeout of one Maven Central search request.
     @Value("${autobuilder.build.discovery.search-timeout-ms:2500}")
     @Setter
     private long timeoutMs = 2500;

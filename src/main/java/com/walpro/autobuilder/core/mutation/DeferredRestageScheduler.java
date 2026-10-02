@@ -56,15 +56,19 @@ public class DeferredRestageScheduler implements CheckpointableState {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    // The combined score above which a deferred mutation for another subgoal may refocus the loop onto it.
     @Value("${autobuilder.mutation.deferred.refocusThreshold:0.6}")
     private double refocusThreshold;
 
+    // Cycles to wait after a refocus before another deferred mutation may pull the loop to its subgoal.
     @Value("${autobuilder.mutation.deferred.refocusCooldownCycles:3}")
     private int refocusCooldownCycles;
 
+    // Cycles a deferred mutation is kept before it expires.
     @Value("${autobuilder.mutation.deferred.ttlCycles:50}")
     private int ttlCycles;
 
+    // The most deferred mutations kept waiting for a later restage.
     @Value("${autobuilder.mutation.deferred.maxOpen:20}")
     private int maxOpen;
 

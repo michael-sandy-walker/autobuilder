@@ -116,6 +116,7 @@ public class BootGate {
     private com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery commandSurfaceQuery =
             new com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery();
 
+    // Whether the boot gate also probes the started artifact against the criteria (endpoints, commands) after it starts.
     @Value("${autobuilder.build.boot-gate.criterion-probe-enabled:true}")
     @Setter
     private boolean criterionProbeEnabled = true;
@@ -131,10 +132,15 @@ public class BootGate {
 
     @Autowired
     public BootGate(
+            // Whether the completion edge starts the packaged artifact to check it boots.
             @Value("${autobuilder.build.boot-gate.enabled:true}") boolean enabled,
+            // The command that starts the packaged artifact; {artifact} is replaced by its path.
             @Value("${autobuilder.build.boot-gate.command:java -jar {artifact}}") String commandTemplate,
+            // The environment variable the started artifact reads its port from; empty passes none.
             @Value("${autobuilder.build.boot-gate.port-env-var:}") String portEnvVar,
+            // How long the started artifact has to become ready before the boot gate fails it.
             @Value("${autobuilder.build.boot-gate.readiness-timeout-ms:60000}") long readinessTimeoutMs,
+            // The timeout of each request the boot gate sends to the started artifact.
             @Value("${autobuilder.build.boot-gate.request-timeout-ms:5000}") long requestTimeoutMs,
             BuildExecutor buildExecutor,
             EndpointSurfaceQuery endpointSurfaceQuery) {

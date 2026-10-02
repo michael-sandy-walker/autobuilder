@@ -58,10 +58,15 @@ public class BuildExecutor {
 
     @Autowired
     public BuildExecutor(
+            // Whether the target project is compiled at all (the compile probe, the post-merge build).
             @Value("${autobuilder.build.enabled:false}") boolean enabled,
+            // The command that compiles the target project.
             @Value("${autobuilder.build.command:mvn compile}") String command,
+            // The longest one build command may run before it is stopped.
             @Value("${autobuilder.build.timeout-ms:120000}") long timeoutMs,
+            // A directory every build command runs in instead of the one asked for; empty runs each where it is asked (the target's output).
             @Value("${autobuilder.build.working-dir:}") String workingDirOverride,
+            // Which build tool runs the commands; `maven` is the only one today.
             @Value("${autobuilder.build.executor:maven}") String executorStrategy
     ) {
         this.enabled = enabled;

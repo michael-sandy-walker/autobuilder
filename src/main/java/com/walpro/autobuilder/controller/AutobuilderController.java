@@ -42,6 +42,7 @@ public class AutobuilderController {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.coldread.ColdReadVerification coldReadVerification;
 
+    // The target directory: its bootstrap/, output/, meta/ and logs/ (see the functional documentation).
     @org.springframework.beans.factory.annotation.Value("${file.base-path}")
     private String fileBasePath;
 

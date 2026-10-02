@@ -60,8 +60,11 @@ public class PackageGate {
 
     @Autowired
     public PackageGate(
+            // Whether the completion edge requires the project to package.
             @Value("${autobuilder.build.package-gate.enabled:true}") boolean enabled,
+            // The command that packages the target project at the completion edge.
             @Value("${autobuilder.build.package-gate.command:mvn package -DskipTests}") String packageCommand,
+            // Build-file markers (comma-separated) that make a project an application whose packaging must also produce a runnable artifact.
             @Value("${autobuilder.build.package-gate.application-packaging-markers:spring-boot-maven-plugin}")
             String applicationPackagingMarkers,
             BuildExecutor buildExecutor) {

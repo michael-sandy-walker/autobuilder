@@ -24,6 +24,8 @@ import org.springframework.context.annotation.Configuration;
 @Getter
 @Setter
 public class BuildClassifierConfigProperties {
+    /** Whether build errors are classified by a model call (true) or by the deterministic pattern matcher alone (false); the matcher stays the fallback. */
     private boolean adaptive = false;
+    /** Reserved: a model to use for build-error classification; logged when set, not yet applied. */
     private String model;
 }

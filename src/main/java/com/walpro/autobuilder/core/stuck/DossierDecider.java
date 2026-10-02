@@ -52,6 +52,7 @@ public class DossierDecider {
     @Autowired(required = false)
     private LLMClient llmClient;
 
+    // Whether a stuck loop with no question left gets the dossier: its facts, and one move chosen by the model.
     @Value("${autobuilder.stuck.dossier.enabled:true}")
     private boolean enabled = true;
 

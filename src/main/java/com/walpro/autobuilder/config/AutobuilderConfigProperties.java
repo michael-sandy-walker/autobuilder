@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 @Setter
 @ConfigurationProperties(prefix = "autobuilder.service")
 public class AutobuilderConfigProperties {
+    /** Whether startup resets the target when the start mode discards the tree: the lineage is severed, meta/ cleaned and the root goal re-seeded (the graph keeps earlier runs as history). */
     private boolean resetOnStart = false;
 
     /**

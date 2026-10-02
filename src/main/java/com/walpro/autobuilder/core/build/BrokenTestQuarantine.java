@@ -96,6 +96,7 @@ public class BrokenTestQuarantine implements CheckpointableState {
 
     @Autowired
     public BrokenTestQuarantine(
+            // Whether a test that blocks closure with its own compile errors is moved aside (never deleted) after one repair round.
             @Value("${autobuilder.build.quarantine-broken-tests:false}") boolean enabled,
             BuildExecutor buildExecutor) {
         this.enabled = enabled;

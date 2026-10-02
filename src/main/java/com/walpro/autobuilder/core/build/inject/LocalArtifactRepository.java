@@ -51,6 +51,7 @@ public class LocalArtifactRepository {
     @Setter
     private String root = System.getProperty("user.home") + "/.m2/repository";
 
+    // Whether a missing dependency is looked up in the local Maven repository.
     @Value("${autobuilder.build.discovery.local-enabled:true}")
     @Setter
     private boolean enabled = true;

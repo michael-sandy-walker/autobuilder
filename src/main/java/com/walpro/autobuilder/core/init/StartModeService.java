@@ -94,6 +94,7 @@ public class StartModeService {
     private final FileService fileService;
 
     @Setter
+    // How a run begins: NEW_PROJECT, ADOPT_PROJECT, CONTINUE_LINEAGE or ASK (see the functional documentation).
     @Value("${autobuilder.start.mode:NEW_PROJECT}")
     private StartMode mode = StartMode.NEW_PROJECT;
 

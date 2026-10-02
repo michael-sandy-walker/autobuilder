@@ -83,4 +83,28 @@ class StuckLedgerTest {
         assertThat(l.noQuestionLeft(e)).isTrue();
         assertThat(e.status()).isEqualTo(StuckLedger.Status.UNANSWERED);
     }
+    /** An answer to failing tests ends when the suite passes, as a build answer ends when a build compiles. */
+    @Test
+    void aPassingSuiteEndsADeliveredTestFailureAnswerAndLeavesBuildAnswersAlone() {
+        StuckLedger l = new StuckLedger();
+        StuckObservation tests = new StuckObservation(StuckObservation.Source.TEST_FAILURES,
+                "the same tests keep failing: QuillTest.dries", "sg-1", "c1", List.of("QuillTest.dries -- expected 3"));
+        l.observe(tests);
+        StuckLedger.Entry t = l.pending().get(0);
+        l.recordAsked(t, answered(), "c1", "sg-1");
+        for (String c : List.of("c1", "c2", "c3")) l.observe(build(c));
+        StuckLedger.Entry b = l.pending().get(0);
+        l.recordAsked(b, answered(), "c3", "sg-1");
+
+        assertThat(l.testsPassed("c4")).containsExactly(t);
+        assertThat(t.status()).isEqualTo(StuckLedger.Status.ENDED);
+        assertThat(b.status()).as("a build answer ends on a compiling build, not on the tests").isEqualTo(StuckLedger.Status.DELIVERED);
+    }
+
+    @Test
+    void answersAboutTheTreeStandWhateverSubgoalIsCurrent() {
+        assertThat(StuckLayer.aboutTheTree(StuckObservation.Source.BUILD)).isTrue();
+        assertThat(StuckLayer.aboutTheTree(StuckObservation.Source.TEST_FAILURES)).isTrue();
+        assertThat(StuckLayer.aboutTheTree(StuckObservation.Source.CLOSURE_REFUSAL)).isFalse();
+    }
 }

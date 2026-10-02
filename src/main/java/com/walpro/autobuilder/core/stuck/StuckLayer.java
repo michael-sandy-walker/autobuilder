@@ -154,6 +154,25 @@ public class StuckLayer {
         if (change != StuckLedger.Change.NONE && change != StuckLedger.Change.COUNTED) writeLedger();
     }
 
+    /** Whether a source's answers are about the tree -- standing whatever subgoal is current -- rather than one subgoal. */
+    static boolean aboutTheTree(StuckObservation.Source source) {
+        return source == StuckObservation.Source.BUILD || source == StuckObservation.Source.TEST_FAILURES;
+    }
+
+    /** The suite passed: the answers to tests that kept failing have ended. */
+    public void testsPassed(String cycleId) {
+        List<StuckLedger.Entry> ended = ledger.testsPassed(cycleId);
+        for (StuckLedger.Entry e : ended) {
+            log.info("T4-DY: '{}' ended -- the suite passes since its answer was delivered in {}", e.signature(), e.deliveredCycle());
+            recordOutcome(e, StuckPriors.Outcome.ENDED, cycleId);
+            if (behaviourLogger != null) {
+                behaviourLogger.stuckEnded(cycleId, e.source().name(), e.signature(), e.deliveredCycle(),
+                        e.recurrencesAfterDelivery(), e.asked().size());
+            }
+        }
+        if (!ended.isEmpty()) writeLedger();
+    }
+
     /** Keeps the files of the change that failed with {@code signature}, for the observer's read-only copy. */
     public void rememberChange(String signature, Map<String, String> files) {
         if (signature != null && files != null && !files.isEmpty()) {
@@ -242,11 +261,12 @@ public class StuckLayer {
             }
         }
         if (changed) writeLedger();
-        // A build answer is about the tree and stands until a build compiles; any other answer is bound
-        // to the subgoal it was delivered to, so it does not follow the loop into unrelated work.
+        // A build answer and an answer to failing tests are about the TREE and stand until a build compiles /
+        // the suite passes; any other answer is bound to the subgoal it was delivered to, so it does not follow
+        // the loop into unrelated work. Field batch 2026-10-02: a trace of a failing test was taken and never
+        // shown -- the subgoal had moved on between the test run and the next prompt.
         List<StuckLedger.Entry> standing = ledger.delivered().stream()
-                .filter(e -> e.source() == StuckObservation.Source.BUILD || e.subGoalId() == null
-                        || e.subGoalId().equals(subGoal))
+                .filter(e -> aboutTheTree(e.source()) || e.subGoalId() == null || e.subGoalId().equals(subGoal))
                 .toList();
         String hint = hintBlock(subGoal);
         if (standing.isEmpty()) return hint;

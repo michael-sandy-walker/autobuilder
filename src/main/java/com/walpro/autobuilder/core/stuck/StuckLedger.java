@@ -244,6 +244,25 @@ public final class StuckLedger {
         return ended;
     }
 
+    /**
+     * The test suite passed: every delivered TEST_FAILURES answer has ended -- the tests it was about pass now --
+     * and one still waiting for its question goes back to watching. Returns the entries ended.
+     */
+    public synchronized List<Entry> testsPassed(String cycleId) {
+        List<Entry> ended = new ArrayList<>();
+        for (Entry e : entries.values()) {
+            if (e.source != StuckObservation.Source.TEST_FAILURES) continue;
+            if (e.status == Status.DELIVERED) {
+                e.status = Status.ENDED;
+                e.endedCycle = cycleId;
+                ended.add(e);
+            } else if (e.status == Status.PENDING) {
+                e.status = Status.WATCHING;
+            }
+        }
+        return ended;
+    }
+
     /** Every entry, in first-seen order. */
     public synchronized List<Entry> entries() {
         return List.copyOf(entries.values());

@@ -229,6 +229,11 @@ public class TestRunGate {
                     null, List.of(), outcome.result().name(), outcome.durationMs());
         }
         if (outcome.result() != BuildResult.COMPILE_ERROR) {
+            // T4-DY: the suite passes -- an answer to tests that kept failing has done its work and ends.
+            if (stuckLayer != null) {
+                var layer = stuckLayer.getIfAvailable();
+                if (layer != null) layer.testsPassed(cycleId);
+            }
             return Optional.empty();
         }
         String plain = BuildErrorClassifier.ANSI_ESCAPE.matcher(

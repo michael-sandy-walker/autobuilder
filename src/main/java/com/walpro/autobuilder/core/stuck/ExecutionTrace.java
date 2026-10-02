@@ -61,6 +61,8 @@ public final class ExecutionTrace {
 
     /** Most calls recorded per run: enough for one failing call's path, bounded for a loop that does not end. */
     static final int CALL_LIMIT = 400;
+    /** How long past its deadline a trace's test JVM is let live before the watchdog ends it. */
+    static final long WATCHDOG_GRACE_MS = 10_000;
 
     /** One call into the project's own code, as observed. */
     public record Call(int depth, String type, String method, List<String> arguments, String result, boolean threw,
@@ -96,9 +98,24 @@ public final class ExecutionTrace {
                     "-Dmaven.surefire.debug=-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=localhost:" + port)
                     .directory(copy.toFile()).redirectErrorStream(true)
                     .redirectOutput(copy.resolve("trace-build.log").toFile()).start();
-            vm = attach(port, deadline, mvn);
-            if (vm == null) return Optional.empty();
-            return Optional.of(record(vm, mainTypes, deadline)).filter(l -> !l.isEmpty());
+            // Nothing in a trace may outlast its budget: a remote call that never returns ends when its JVM does.
+            Process watched = mvn;
+            Thread watchdog = Thread.ofVirtual().start(() -> {
+                try {
+                    Thread.sleep(Math.max(1, deadline - System.currentTimeMillis()) + WATCHDOG_GRACE_MS);
+                    watched.descendants().forEach(ProcessHandle::destroyForcibly);
+                    watched.destroyForcibly();
+                } catch (InterruptedException done) {
+                    // the trace ended in time
+                }
+            });
+            try {
+                vm = attach(port, deadline, mvn);
+                if (vm == null) return Optional.empty();
+                return Optional.of(record(vm, mainTypes, deadline)).filter(l -> !l.isEmpty());
+            } finally {
+                watchdog.interrupt();
+            }
         } catch (Exception e) {
             log.info("T4-DY: execution trace of {}#{} not taken: {}", testClass, testMethod, e.getMessage());
             return Optional.empty();
@@ -158,6 +175,16 @@ public final class ExecutionTrace {
     }
 
     private static List<Call> record(VirtualMachine vm, List<String> mainTypes, long deadline) throws InterruptedException {
+        List<Call> calls = new ArrayList<>();
+        try {
+            recordInto(calls, vm, mainTypes, deadline);
+        } catch (com.sun.jdi.VMDisconnectedException gone) {
+            // the test JVM ended, or the watchdog ended it: what was recorded stands
+        }
+        return calls;
+    }
+
+    private static void recordInto(List<Call> calls, VirtualMachine vm, List<String> mainTypes, long deadline) throws InterruptedException {
         EventRequestManager erm = vm.eventRequestManager();
         List<EventRequest> requests = new ArrayList<>();
         for (String type : mainTypes) {
@@ -176,7 +203,6 @@ public final class ExecutionTrace {
             }
         }
         vm.resume();
-        List<Call> calls = new ArrayList<>();
         Map<ThreadReference, Deque<List<String>>> pending = new HashMap<>();
         Map<ThreadReference, String> thrownBy = new HashMap<>();
         while (System.currentTimeMillis() < deadline) {
@@ -184,10 +210,10 @@ public final class ExecutionTrace {
             if (set == null) break;
             boolean over = false;
             for (Event event : set) {
-                if (event instanceof VMDeathEvent || event instanceof VMDisconnectEvent) return calls;
+                if (event instanceof VMDeathEvent || event instanceof VMDisconnectEvent) return;
                 if (event instanceof MethodEntryEvent e) {
                     if (skipped(e.method())) continue;
-                    pending.computeIfAbsent(e.thread(), t -> new ArrayDeque<>()).push(arguments(e.thread(), e.method()));
+                    pending.computeIfAbsent(e.thread(), t -> new ArrayDeque<>()).push(arguments(e.thread(), e.method(), requests));
                 } else if (event instanceof ExceptionEvent e) {
                     thrownBy.put(e.thread(), e.exception().referenceType().name() + " at line " + e.location().lineNumber());
                 } else if (event instanceof MethodExitEvent e) {
@@ -196,23 +222,23 @@ public final class ExecutionTrace {
                     List<String> args = stack.isEmpty() ? List.of() : stack.pop();
                     String threw = thrownBy.remove(e.thread());
                     boolean isVoid = "void".equals(e.method().returnTypeName());
-                    String result = threw != null ? "threw " + threw : isVoid ? "void" : value(e.returnValue(), 0, e.thread());
+                    String result = threw != null ? "threw " + threw : isVoid ? "void" : value(e.returnValue(), 0, e.thread(), requests);
                     calls.add(new Call(stack.size(), e.method().declaringType().name(), e.method().name(), args, result,
-                            threw != null, e.location().lineNumber(), locals(e.thread(), args.size())));
+                            threw != null, e.location().lineNumber(), locals(e.thread(), args.size(), requests)));
                     if (calls.size() >= CALL_LIMIT) over = true;
                 }
             }
             if (over) {
                 requests.forEach(EventRequest::disable);
                 set.resume();
-                return calls;
+                return;
             }
             set.resume();
         }
-        return calls;
+        return;
     }
 
-    private static List<String> arguments(ThreadReference thread, com.sun.jdi.Method method) {
+    private static List<String> arguments(ThreadReference thread, com.sun.jdi.Method method, List<EventRequest> quiet) {
         List<String> out = new ArrayList<>();
         try {
             StackFrame frame = thread.frame(0);
@@ -224,7 +250,7 @@ public final class ExecutionTrace {
                 names = List.of();
             }
             for (int i = 0; i < values.size(); i++) {
-                out.add((i < names.size() ? names.get(i) + " = " : "") + value(values.get(i), 0, thread));
+                out.add((i < names.size() ? names.get(i) + " = " : "") + value(values.get(i), 0, thread, quiet));
             }
         } catch (Exception e) {
             // a frame that cannot be read gives no arguments
@@ -233,13 +259,13 @@ public final class ExecutionTrace {
     }
 
     /** The values in scope where the call returned, other than its arguments. */
-    private static List<String> locals(ThreadReference thread, int argumentCount) {
+    private static List<String> locals(ThreadReference thread, int argumentCount, List<EventRequest> quiet) {
         List<String> out = new ArrayList<>();
         try {
             StackFrame frame = thread.frame(0);
             for (LocalVariable v : frame.visibleVariables()) {
                 if (v.isArgument()) continue;
-                out.add(v.name() + " = " + value(frame.getValue(v), 0, thread));
+                out.add(v.name() + " = " + value(frame.getValue(v), 0, thread, quiet));
                 if (out.size() >= 6) break;
             }
         } catch (Exception e) {
@@ -256,13 +282,23 @@ public final class ExecutionTrace {
     /**
      * A value as a reader needs it: strings quoted; a JDK object by its own {@code toString()} (a path is its
      * path, not its fields -- invoked on the suspended thread); any other object by type and up to four fields.
+     *
+     * <p>The trace's own requests are off while {@code toString()} runs ({@code quiet}): a JDK collection holding
+     * the project's objects calls THEIR {@code toString()}, a method entry the trace would suspend inside its own
+     * invocation, which then never returns (receiver-questions run 2026-10-02_14-55-46 hung there 945 s).
      */
-    static String value(Value v, int depth, ThreadReference thread) {
+    static String value(Value v, int depth, ThreadReference thread, List<EventRequest> quiet) {
         if (v instanceof ObjectReference o && !(v instanceof StringReference) && !(v instanceof ArrayReference)
                 && thread != null && isPlatform(o.referenceType().name())) {
             try {
                 com.sun.jdi.Method toString = o.referenceType().methodsByName("toString", "()Ljava/lang/String;").get(0);
-                Value s = o.invokeMethod(thread, toString, List.of(), ObjectReference.INVOKE_SINGLE_THREADED);
+                quiet.forEach(EventRequest::disable);
+                Value s;
+                try {
+                    s = o.invokeMethod(thread, toString, List.of(), ObjectReference.INVOKE_SINGLE_THREADED);
+                } finally {
+                    quiet.forEach(EventRequest::enable);
+                }
                 if (s instanceof StringReference str) return simple(o.referenceType().name()) + "(" + crop(str.value(), 120) + ")";
             } catch (Exception e) {
                 // fall through to the fields
@@ -275,7 +311,7 @@ public final class ExecutionTrace {
         return type.startsWith("java.") || type.startsWith("javax.") || type.startsWith("sun.") || type.startsWith("jdk.");
     }
 
-    /** As {@link #value(Value, int, ThreadReference)}, by fields only. */
+    /** As {@link #value(Value, int, ThreadReference, List)}, by fields only. */
     static String value(Value v, int depth) {
         if (v == null) return "null";
         if (v instanceof StringReference s) return '"' + crop(s.value(), 120) + '"';

@@ -18,6 +18,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ExecutionTraceTest {
 
+    private static final String POM = """
+                <project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+                <groupId>org.ink</groupId><artifactId>rows</artifactId><version>1</version>
+                <properties><maven.compiler.release>21</maven.compiler.release></properties>
+                <dependencies><dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId>
+                <version>5.10.2</version><scope>test</scope></dependency></dependencies>
+                <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId>
+                <version>3.12.1</version></plugin><plugin><groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId><version>3.2.5</version></plugin></plugins></build></project>""";
+
     private static final Map<String, String> SOURCES = Map.of("src/main/java/org/ink/Rows.java", String.join("\n",
             "package org.ink;", "class Rows {", "  static String find(String name) {", "    String simple = name;",
             "    return null;", "  }", "  static String of(String name) {", "    return find(name);", "  }", "}"));
@@ -64,15 +74,7 @@ class ExecutionTraceTest {
     @Test
     void aLiveFailingTestIsTracedWithItsValues(@TempDir Path project) throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("execution.trace.live"), "live: -Dexecution.trace.live=true");
-        Files.writeString(project.resolve("pom.xml"), """
-                <project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
-                <groupId>org.ink</groupId><artifactId>rows</artifactId><version>1</version>
-                <properties><maven.compiler.release>21</maven.compiler.release></properties>
-                <dependencies><dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId>
-                <version>5.10.2</version><scope>test</scope></dependency></dependencies>
-                <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId>
-                <version>3.12.1</version></plugin><plugin><groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId><version>3.2.5</version></plugin></plugins></build></project>""");
+        Files.writeString(project.resolve("pom.xml"), POM);
         Path main = Files.createDirectories(project.resolve("src/main/java/org/ink"));
         Path test = Files.createDirectories(project.resolve("src/test/java/org/ink"));
         Files.writeString(main.resolve("Rows.java"), SOURCES.get("src/main/java/org/ink/Rows.java"));
@@ -88,6 +90,35 @@ class ExecutionTraceTest {
                 .contains("Rows.find(name = \"org.ink.Quill\") -> null  [returned at line 5: return null;]  where simple = \"org.ink.Quill\"")
                 .contains("Rows.of(name = \"org.ink.Quill\") -> null");
     }
+    /**
+     * receiver-questions run 2026-10-02_14-55-46 hung 945 s: a JDK list of the project's records, rendered by its
+     * own toString(), called the records' toString() -- a method entry the trace suspended inside its own call.
+     */
+    @Test
+    void aJdkValueHoldingTheProjectsObjectsIsRenderedWithoutHanging(@TempDir Path project) throws Exception {
+        Assumptions.assumeTrue(Boolean.getBoolean("execution.trace.live"), "live: -Dexecution.trace.live=true");
+        Files.writeString(project.resolve("pom.xml"), POM);
+        Path main = Files.createDirectories(project.resolve("src/main/java/org/ink"));
+        Path test = Files.createDirectories(project.resolve("src/test/java/org/ink"));
+        Files.writeString(main.resolve("Nibs.java"), """
+                package org.ink;
+                class Nibs {
+                  record Nib(String name) {}
+                  static java.util.List<Nib> all() { return java.util.List.of(new Nib("fine"), new Nib("broad")); }
+                }""");
+        Files.writeString(test.resolve("NibsTest.java"), """
+                package org.ink;
+                class NibsTest {
+                  @org.junit.jupiter.api.Test void three() { org.junit.jupiter.api.Assertions.assertEquals(3, Nibs.all().size()); }
+                }""");
+        long t0 = System.currentTimeMillis();
+
+        var calls = ExecutionTrace.trace(project, "org.ink.NibsTest", "three", 120_000).orElseThrow();
+
+        assertThat(System.currentTimeMillis() - t0).isLessThan(120_000);
+        assertThat(ExecutionTrace.render(calls, Map.of(), 10)).contains("Nibs.all() -> ").contains("fine");
+    }
+
     /** The failing test comes from the observation's own lines, which stay right however the tree changed since. */
     @Test
     void theFailingTestIsReadFromTheObservationsEvidence() {

@@ -13,6 +13,7 @@ metadata:
 
 ## 2026-09-30 AFTERNOON (Opus 5.5, session 9) — T6-S AND T4-EB CLOSED; A MISFENCED-HUNK DEFECT FIXED; BUILD KEEPS THE CYCLE COUNT (USER) — START HERE
 
+- **2026-10-02 morning: `field24` done -- the execution trace MET its rule** (final tree ON 8/8/3 vs OFF 2/2/3; preserved 8/7/3 vs 8/-/3, so part of the margin is ON keeping a buildable tree). Recorded on T4-DY. Open with the user: T5-BS read-through; sources/javadoc retrieval for the API block; DependencyApi skipping test-source imports; UnchangedClaims structure-first design question.
 - **Head: see `git log`; nothing pushed. Suite 3784/0.** No run is live. `scripts/run_outcomes.json` is still modified and uncommitted (pre-existing, not this session's).
 - **T6-S closed** (audit re-run on the obligations files): recall total on firestarter 23/23 and clitarget 19/19; rung1's per-route checks unlicensed by a file that names no route; checks-per-obligation spread 2.2x-8.6x, so no derived denominator and no suite retired.
 - **T4-DY, user decision (a):** BUILD / PROTECTED_WRITE / CLOSURE_REFUSAL KEEP the cycle count. Replay first (`scripts/build_grind_ratio_replay.py`): of 27 archived notices, the ratio rule would have delayed or withheld 20, including a field-proven one. A candidate-level failure accumulates by attempts, not time. Reason written beside `StuckLedger.noticeAt`; the feedback memory on relative thresholds was updated.

@@ -193,18 +193,25 @@ public final class ExecutionTrace {
                 entry.addClassFilter(filter);
                 MethodExitRequest exit = erm.createMethodExitRequest();
                 exit.addClassFilter(filter);
-                ExceptionRequest thrown = erm.createExceptionRequest(null, true, true);
-                thrown.addClassFilter(filter);
-                for (EventRequest r : List.of(entry, exit, thrown)) {
+                for (EventRequest r : List.of(entry, exit)) {
                     r.setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD);
                     r.enable();
                     requests.add(r);
                 }
             }
         }
+        // Every exception, wherever thrown: one a project method CATCHES is part of that call's story even when a
+        // library threw it (parameterized-rows field24: JavaParser's "Text Block Literals are not supported ...
+        // JAVA_15", caught by the method under test and returned as empty -- the one fact the fix needed, and the
+        // trace, filtered to exceptions thrown in project code, never showed it).
+        ExceptionRequest exceptions = erm.createExceptionRequest(null, true, true);
+        exceptions.setSuspendPolicy(EventRequest.SUSPEND_NONE);
+        exceptions.enable();
+        requests.add(exceptions);
         vm.resume();
         Map<ThreadReference, Deque<List<String>>> pending = new HashMap<>();
         Map<ThreadReference, String> thrownBy = new HashMap<>();
+        Map<ThreadReference, Map<com.sun.jdi.Method, String>> caughtBy = new HashMap<>();
         while (System.currentTimeMillis() < deadline) {
             EventSet set = vm.eventQueue().remove(Math.max(1, deadline - System.currentTimeMillis()));
             if (set == null) break;
@@ -215,14 +222,27 @@ public final class ExecutionTrace {
                     if (skipped(e.method())) continue;
                     pending.computeIfAbsent(e.thread(), t -> new ArrayDeque<>()).push(arguments(e.thread(), e.method(), requests));
                 } else if (event instanceof ExceptionEvent e) {
-                    thrownBy.put(e.thread(), e.exception().referenceType().name() + " at line " + e.location().lineNumber());
+                    com.sun.jdi.Location caught = e.catchLocation();
+                    if (caught != null && isProject(caught.declaringType().name(), mainTypes)) {
+                        caughtBy.computeIfAbsent(e.thread(), t -> new HashMap<>()).put(caught.method(),
+                                "caught " + e.exception().referenceType().name() + " at line " + caught.lineNumber()
+                                        + (isProject(e.location().declaringType().name(), mainTypes) ? ""
+                                        : " (thrown in " + e.location().declaringType().name() + ")")
+                                        + message(e.exception()));
+                    } else if (isProject(e.location().declaringType().name(), mainTypes)) {
+                        thrownBy.put(e.thread(), e.exception().referenceType().name() + " at line " + e.location().lineNumber()
+                                + message(e.exception()));
+                    }
                 } else if (event instanceof MethodExitEvent e) {
                     if (skipped(e.method())) continue;
                     Deque<List<String>> stack = pending.getOrDefault(e.thread(), new ArrayDeque<>());
                     List<String> args = stack.isEmpty() ? List.of() : stack.pop();
                     String threw = thrownBy.remove(e.thread());
                     boolean isVoid = "void".equals(e.method().returnTypeName());
+                    String caught = caughtBy.getOrDefault(e.thread(), Map.of()).isEmpty() ? null
+                            : caughtBy.get(e.thread()).remove(e.method());
                     String result = threw != null ? "threw " + threw : isVoid ? "void" : value(e.returnValue(), 0, e.thread(), requests);
+                    if (caught != null && threw == null) result = result + "  after it " + caught;
                     calls.add(new Call(stack.size(), e.method().declaringType().name(), e.method().name(), args, result,
                             threw != null, e.location().lineNumber(), locals(e.thread(), args.size(), requests)));
                     if (calls.size() >= CALL_LIMIT) over = true;
@@ -236,6 +256,27 @@ public final class ExecutionTrace {
             set.resume();
         }
         return;
+    }
+
+    private static boolean isProject(String type, List<String> mainTypes) {
+        for (String t : mainTypes) if (type.equals(t) || type.startsWith(t + "$")) return true;
+        return false;
+    }
+
+    /** An exception's own message, read from its field (no call into the test JVM), or nothing. */
+    private static String message(ObjectReference exception) {
+        try {
+            Field f = exception.referenceType().fieldByName("detailMessage");
+            if (f == null) {
+                for (com.sun.jdi.ReferenceType t = exception.referenceType(); t instanceof com.sun.jdi.ClassType c && f == null; t = c.superclass()) {
+                    f = t.fieldByName("detailMessage");
+                }
+            }
+            if (f != null && exception.getValue(f) instanceof StringReference m) return ": " + crop(m.value().strip(), 300);
+        } catch (Exception e) {
+            // collected or unreadable: the type and line stand alone
+        }
+        return "";
     }
 
     private static List<String> arguments(ThreadReference thread, com.sun.jdi.Method method, List<EventRequest> quiet) {

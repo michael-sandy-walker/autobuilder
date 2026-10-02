@@ -119,6 +119,41 @@ class ExecutionTraceTest {
         assertThat(ExecutionTrace.render(calls, Map.of(), 10)).contains("Nibs.all() -> ").contains("fine");
     }
 
+    /**
+     * parameterized-rows field24: the method under test caught a library's exception and returned empty; the
+     * trace, filtered to exceptions thrown in project code, showed only the empty result. A caught exception is
+     * part of the call that caught it, wherever it was thrown -- and that call returned, it did not throw.
+     */
+    @Test
+    void anExceptionAProjectMethodCaughtIsShownOnThatCall(@TempDir Path project) throws Exception {
+        Assumptions.assumeTrue(Boolean.getBoolean("execution.trace.live"), "live: -Dexecution.trace.live=true");
+        Files.writeString(project.resolve("pom.xml"), POM);
+        Path main = Files.createDirectories(project.resolve("src/main/java/org/ink"));
+        Path test = Files.createDirectories(project.resolve("src/test/java/org/ink"));
+        Files.writeString(main.resolve("Seconds.java"), """
+                package org.ink;
+                class Seconds {
+                  static int of(String text) {
+                    try {
+                      return Integer.parseInt(text);
+                    } catch (NumberFormatException e) {
+                      return -1;
+                    }
+                  }
+                }""");
+        Files.writeString(test.resolve("SecondsTest.java"), """
+                package org.ink;
+                class SecondsTest {
+                  @org.junit.jupiter.api.Test void nine() { org.junit.jupiter.api.Assertions.assertEquals(9, Seconds.of(" 9")); }
+                }""");
+
+        var calls = ExecutionTrace.trace(project, "org.ink.SecondsTest", "nine", 120_000).orElseThrow();
+
+        assertThat(ExecutionTrace.render(calls, Map.of(), 10))
+                .contains("Seconds.of(text = \" 9\") -> -1  after it caught java.lang.NumberFormatException at line 6 (thrown in java.lang.Integer): For input string: \" 9\"")
+                .doesNotContain("threw");
+    }
+
     /** The failing test comes from the observation's own lines, which stay right however the tree changed since. */
     @Test
     void theFailingTestIsReadFromTheObservationsEvidence() {

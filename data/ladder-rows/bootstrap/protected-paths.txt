@@ -1,0 +1,3 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# The tests are the operator's: the specification and the existing behaviour. The loop changes the code.
+src/test/**

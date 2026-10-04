@@ -1,0 +1,23 @@
+  An existing project, adopted, and now asked to change. It was written by someone else and it already
+  builds; its existing behaviour is characterised by the tests in src/test/java.
+  The change wanted is written in the ticket that asked for it. In the ticket's own words:
+
+    feat(T4-EA): a failing parameterized invocation carries the row it ran with
+
+    The runner reports name(Types)[N] and no arguments. In the receiver-questions A/B, row [10]
+    failed in five of six runs; the spec source was in six prompts, but nothing joined [10] to
+    its row, and the planner asked to read the test to find it. ParameterizedCaseInput reads the
+    row from the test source (literal rows only, else empty); TestRunPromptBlock and the test
+    gate's repair item show it as 'ran with:'. Suite 3742/0.
+
+  The classes to change are SurefireReports, TestAssertionVocabulary, TestRunGate, TestRunPromptBlock and TestRunReport.
+  Add the new class ParameterizedCaseInput in package com.walpro.autobuilder.core.build.
+  They already work as their class comments say, and their existing tests must keep passing.
+
+  The specification is ParameterizedCaseInputTest, TestRunEvidenceTest and TestRunGateTest in src/test/java: their tests say exactly what the
+  code must do, and they fail until the code provides it.
+
+  OBJECTIVE: every test in ParameterizedCaseInputTest, TestRunEvidenceTest and TestRunGateTest passes, and the whole suite passes.
+
+  DO NOT modify the existing tests under src/test: they are the operator's, and if one of them fails, the
+  code is what is wrong. Keep the project's packages, classes and naming.

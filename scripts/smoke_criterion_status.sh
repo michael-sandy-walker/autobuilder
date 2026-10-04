@@ -12,7 +12,11 @@ JAR="${1:?usage: smoke_criterion_status.sh <artifact-jar>}"
 TREE="$(cd "$(dirname "$JAR")/.." && pwd)"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TGT="${SMOKE_TARGET:-criterion-status}"
-SPEC=$(grep -o 'The specification is [A-Za-z0-9_]*' "$ROOT/data/$TGT/bootstrap/seed.txt" | head -1 | awk '{print $NF}')
+# The specification is one class or several: "The specification is A, B and C in src/test/java" (a ladder case
+# from scripts/ladder_case.py carries every test class its commit shipped).
+SPECS=$(grep -o 'The specification is [A-Za-z0-9_, ]*' "$ROOT/data/$TGT/bootstrap/seed.txt" | head -1 \
+    | sed -e 's/The specification is //' -e 's/ in .*//' -e 's/ in$//' -e 's/ and /,/g' | tr -d ' ')
+SPEC=${SPECS%%,*}
 CHANGED=$(grep -o 'The one class to change is [A-Za-z0-9_]*' "$ROOT/data/$TGT/bootstrap/seed.txt" | head -1 | awk '{print $NF}')
 # A change across several classes names them all: "The classes to change are A, B and C."
 [ -n "$CHANGED" ] || CHANGED=$(grep -o 'The classes to change are [A-Za-z0-9_, ]*' "$ROOT/data/$TGT/bootstrap/seed.txt" | head -1 \
@@ -35,6 +39,7 @@ done < <(cd "$SCRATCH/orig/src/main" && find . -name '*.java' | sort)
 cp -a "$TREE" "$SCRATCH/p" 2>/dev/null; rm -rf "${SCRATCH:?}/p/target"
 (cd "$SCRATCH/p" && timeout 600 mvn -B -q -o test > "$SCRATCH/test.log" 2>&1) && suite=pass || suite=fail
 (cd "$SCRATCH/orig" && timeout 600 mvn -B -q -o test > /dev/null 2>&1)
+for SPEC in ${SPECS//,/ }; do
 while IFS=$'\t' read -r verdict name; do
     chk "$verdict" pass "$SPEC $name"
 done < <(python3 - "$SCRATCH/orig/target/surefire-reports" "$SCRATCH/p/target/surefire-reports" "$SPEC" "$SCRATCH/orig/src/test" <<'PY'
@@ -64,10 +69,16 @@ if not want:
         text = re.sub(r'/\*(?:.|\n)*?\*/|//[^\n]*', '', text)
         for m in re.finditer(r'@(?:org\.junit\.jupiter\.api\.)?Test\b\s+(?:@\w+(?:\([^)]*\))?\s+)*void\s+(\w+)\s*\(', text):
             want[m.group(1)] = 'pass'
+# A case read from the source has no parameter list; the run reports one when the method takes arguments
+# ("aCase(Path)" for a @TempDir): such a case is found by its method name (ladder-rows, 2026-10-04).
+bare = {}
+for k, v in got.items():
+    bare.setdefault(k.split('(')[0], v)
 for name in sorted(want) or ['(no specification cases reported by the pristine tree)']:
-    print(got.get(name, 'absent') + '\t' + name[:150])
+    print(got.get(name, bare.get(name, 'absent')) + '\t' + name[:150])
 PY
 )
+done
 chk "$u" untouched "src/test is unmodified"
 chk "$kept" kept "the module's existing sources are unchanged"
 chk "$suite" pass "the whole suite passes"

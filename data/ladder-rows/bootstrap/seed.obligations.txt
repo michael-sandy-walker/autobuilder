@@ -1,0 +1,23 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 6c15a2e4bab18720b67615e416db585634f38f959085b4817a5c1c78afb7d0e3
+# body-sha256: 7d12978f350825f23b3fb102c25562a5b0704a15e7a1190ac3b12300b63ab29b
+every test in ParameterizedCaseInputTest passes
+every test in TestRunEvidenceTest passes
+every test in TestRunGateTest passes
+gate: tests the whole suite passes
+rule: DO NOT modify the existing tests under src/test
+rule: if one of the existing tests fails, the code is what is wrong
+rule: Keep the project's packages, classes and naming
+Add the new class ParameterizedCaseInput in package com.walpro.autobuilder.core.build
+ParameterizedCaseInput reads the row from the test source
+ParameterizedCaseInput returns empty for non-literal rows
+TestRunPromptBlock shows the row as 'ran with:'
+TestRunGate's repair item shows the row as 'ran with:'
+SurefireReports is modified to support the new behavior
+TestAssertionVocabulary is modified to support the new behavior
+TestRunReport is modified to support the new behavior

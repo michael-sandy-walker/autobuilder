@@ -106,10 +106,9 @@ budget `PromptTokenBudget` computes (`llm.api.context-window-tokens` minus `llm.
 - the answers the stuck layer found to failures that kept repeating (section 8);
 - **the API of the dependencies the work uses** (`DependencyApi`): the classes of every dependency package the
   tree or the last failed attempt imports (an invented class is shown absent), the public members of every
-  imported class, and the packages of a library the goal names -- read from the project's own jars, switchable
-  with `autobuilder.evolution.dependency-api-block`;
+  imported class, and the packages of a library the goal names -- read from the project's own jars;
 - values the code was observed to return, and the parts of a target's briefing the subgoal is about
-  (`BriefingSource`, switchable with `autobuilder.briefing.enabled`).
+  (`BriefingSource`).
 
 ### How an answer becomes a change
 
@@ -272,7 +271,7 @@ answer). The loop itself never acts on a model's reading of a stuck case: every 
 
 **Across runs** (`StuckPriors`, `Neo4jStuckPriors`): how each signature ended is kept in the graph under the task
 (the SHA-256 of the seed); a signature that earlier runs of the same task noticed is asked about at its first
-sighting here, starting with the question that ended it there. Switch: `autobuilder.stuck.priors.consult`.
+sighting here, starting with the question that ended it there.
 
 ---
 

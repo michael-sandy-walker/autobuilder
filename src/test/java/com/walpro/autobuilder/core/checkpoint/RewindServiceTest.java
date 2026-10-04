@@ -71,7 +71,6 @@ class RewindServiceTest {
         checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner, archiveFor(fileService));
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
         ReflectionTestUtils.setField(checkpoints, "retainCheckpoints", 40);
-        ReflectionTestUtils.setField(checkpoints, "captureCache", true);
         when(planner.restoreGoalStateAsOf(any(), any(), any(), any()))
                 .thenReturn(new GoalPlannerService.RewindResult(2, 1, "s1"));
         rewind = new RewindService(fileService, mapper, checkpoints, manifest, log, planner, fingerprints, identity);
@@ -346,7 +345,6 @@ class RewindServiceTest {
      */
     private CheckpointArchive archiveFor(FileService files) {
         CheckpointArchive archive = new CheckpointArchive(files, diffConfig());
-        ReflectionTestUtils.setField(archive, "enabled", true);
         ReflectionTestUtils.setField(archive, "retain", 500);
         return archive;
     }

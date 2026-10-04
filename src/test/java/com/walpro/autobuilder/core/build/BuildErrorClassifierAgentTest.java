@@ -27,7 +27,6 @@ class BuildErrorClassifierAgentTest {
 
     private LLMClient llmClient;
     private LlmCircuitBreaker circuitBreaker;
-    private BuildClassifierConfigProperties config;
     private BuildErrorClassifierAgent agent;
 
     @BeforeEach
@@ -35,25 +34,11 @@ class BuildErrorClassifierAgentTest {
         llmClient = mock(LLMClient.class);
         circuitBreaker = mock(LlmCircuitBreaker.class);
         lenient().when(circuitBreaker.isOpen()).thenReturn(false);
-        config = new BuildClassifierConfigProperties();
-        agent = new BuildErrorClassifierAgent(llmClient, circuitBreaker, config);
-    }
-
-    @Test
-    void classify_adaptiveOff_fallsBackToPatternMatcherWithoutCallingLlm() {
-        config.setAdaptive(false);
-        String stderr = "[ERROR] symbol: class Foo";
-
-        BuildErrorClassifier.Classification out = agent.classify(stderr);
-
-        assertThat(out.kind()).isEqualTo(BuildErrorClassifier.Kind.CANNOT_FIND_SYMBOL);
-        assertThat(out.category()).isEqualTo(BuildErrorClassifier.Category.SOURCE_FIXABLE);
-        verify(llmClient, never()).ask(anyList());
+        agent = new BuildErrorClassifierAgent(llmClient, circuitBreaker);
     }
 
     @Test
     void classify_blankStderr_isFallback() {
-        config.setAdaptive(true);
         BuildErrorClassifier.Classification out = agent.classify("   ");
 
         assertThat(out.kind()).isEqualTo(BuildErrorClassifier.Kind.UNKNOWN);
@@ -62,7 +47,6 @@ class BuildErrorClassifierAgentTest {
 
     @Test
     void classify_circuitOpen_fallsBackToPatternMatcher() {
-        config.setAdaptive(true);
         when(circuitBreaker.isOpen()).thenReturn(true);
         when(circuitBreaker.pauseReason()).thenReturn("test");
 
@@ -76,7 +60,6 @@ class BuildErrorClassifierAgentTest {
 
     @Test
     void classify_adaptiveValidJson_returnsAdaptiveClassificationAndCaches() {
-        config.setAdaptive(true);
         String stderr = "[ERROR] /pom.xml release version 21 not supported";
         String body = "{\"category\":\"CONFIG_FIXABLE\"," +
                 "\"summaryLine\":\"maven-compiler-plugin 3.1 does not support the <release> element\"," +
@@ -102,7 +85,6 @@ class BuildErrorClassifierAgentTest {
 
     @Test
     void classify_adaptiveMalformedJson_fallsBackToPattern() {
-        config.setAdaptive(true);
         String stderr = "[ERROR] symbol: class Foo";
         when(llmClient.ask(anyList())).thenReturn(ResponseEntity.ok(stubChatResponse("not json at all")));
 
@@ -117,7 +99,6 @@ class BuildErrorClassifierAgentTest {
 
     @Test
     void classify_adaptiveUnknownCategoryString_fallsBackToPattern() {
-        config.setAdaptive(true);
         when(llmClient.ask(anyList())).thenReturn(ResponseEntity.ok(
                 stubChatResponse("{\"category\":\"SOMETHING_NEW\",\"summaryLine\":\"x\"}")));
 
@@ -129,7 +110,6 @@ class BuildErrorClassifierAgentTest {
 
     @Test
     void classify_adaptiveMarkdownFencedJson_isAccepted() {
-        config.setAdaptive(true);
         String body = "```json\n{\"category\":\"SOURCE_FIXABLE\",\"summaryLine\":\"missing Book\"}\n```";
         when(llmClient.ask(anyList())).thenReturn(ResponseEntity.ok(stubChatResponse(body)));
 
@@ -141,7 +121,6 @@ class BuildErrorClassifierAgentTest {
 
     @Test
     void classify_adaptiveLlmThrows_fallsBackToPattern() {
-        config.setAdaptive(true);
         when(llmClient.ask(anyList())).thenThrow(new RuntimeException("network"));
 
         BuildErrorClassifier.Classification out = agent.classify("[ERROR] symbol: class Foo");
@@ -152,7 +131,6 @@ class BuildErrorClassifierAgentTest {
 
     @Test
     void classify_adaptiveHit_emitsBehaviourEvent() {
-        config.setAdaptive(true);
         BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
         agent.setBehaviourLogger(behaviourLogger);
         String body = "{\"category\":\"SOURCE_FIXABLE\",\"summaryLine\":\"missing Book\"," +
@@ -166,7 +144,8 @@ class BuildErrorClassifierAgentTest {
 
     @Test
     void classify_fallbackPath_doesNotEmitAdaptiveHit() {
-        config.setAdaptive(false);
+        when(circuitBreaker.isOpen()).thenReturn(true);
+        when(circuitBreaker.pauseReason()).thenReturn("test");
         BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
         agent.setBehaviourLogger(behaviourLogger);
 
@@ -177,7 +156,6 @@ class BuildErrorClassifierAgentTest {
 
     @Test
     void classify_adaptive_stripsAnsiFromLlmPromptButKeepsDiagnosticText() {
-        config.setAdaptive(true);
         // Real Maven-coloured stderr: ANSI escape sequences (ESC = \u001B) around the banner and
         // the diagnostic. The [ERROR] tag and the [3,8] position are content, not ANSI.
         String esc = "\u001B";

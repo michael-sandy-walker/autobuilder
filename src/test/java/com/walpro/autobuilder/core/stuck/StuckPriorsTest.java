@@ -41,7 +41,7 @@ class StuckPriorsTest {
         return new StuckObservation(StuckObservation.Source.BUILD, SIGNATURE, "sg", cycle, List.of());
     }
 
-    private static StuckLayer layer(Store store, boolean consult) {
+    private static StuckLayer layer(Store store) {
         FileService files = Mockito.mock(FileService.class);
         try {
             Mockito.when(files.exists("bootstrap/seed.txt")).thenReturn(true);
@@ -52,7 +52,6 @@ class StuckPriorsTest {
         StuckLayer layer = new StuckLayer();
         ReflectionTestUtils.setField(layer, "fileService", files);
         ReflectionTestUtils.setField(layer, "priors", store);
-        ReflectionTestUtils.setField(layer, "consultPriors", consult);
         return layer;
     }
 
@@ -126,33 +125,26 @@ class StuckPriorsTest {
     private static String firstSighting(StuckPriors.Prior prior) {
         Store store = new Store();
         store.byTask.put(StuckPriors.taskKey(SEED), prior);
-        StuckLayer layer = layer(store, true);
+        StuckLayer layer = layer(store);
         layer.beginCycle("c1", "sg");
         layer.report(StuckObservation.Source.BUILD, SIGNATURE, List.of());
         return layer.promptBlock(cycle("c1"));
     }
 
     @Test
-    void anotherTasksPriorOrConsultationSwitchedOffChangesNothing() {
+    void anotherTasksPriorChangesNothing() {
         Store other = new Store();
         other.byTask.put(StuckPriors.taskKey("another seed entirely"), new StuckPriors.Prior(5, 5, 0));
-        StuckLayer layer = layer(other, true);
+        StuckLayer layer = layer(other);
         layer.beginCycle("c1", "sg");
         layer.report(StuckObservation.Source.BUILD, SIGNATURE, List.of());
         assertThat(layer.promptBlock(cycle("c1"))).isNull();
-
-        Store same = new Store();
-        same.byTask.put(StuckPriors.taskKey(SEED), new StuckPriors.Prior(5, 5, 0));
-        StuckLayer off = layer(same, false);
-        off.beginCycle("c1", "sg");
-        off.report(StuckObservation.Source.BUILD, SIGNATURE, List.of());
-        assertThat(off.promptBlock(cycle("c1"))).as("the A arm: recorded, not consulted").isNull();
     }
 
     @Test
-    void howAnEntryTurnedOutIsRecordedUnderTheTaskWhetherOrNotPriorsAreConsulted() {
+    void howAnEntryTurnedOutIsRecordedUnderTheTask() {
         Store store = new Store();
-        StuckLayer layer = layer(store, false);
+        StuckLayer layer = layer(store);
         for (String c : List.of("c1", "c2", "c3")) {
             layer.beginCycle(c, "sg");
             layer.report(StuckObservation.Source.BUILD, SIGNATURE, List.of());

@@ -64,7 +64,6 @@ class BranchExplorerTest {
                 new GoalTransitionLog(fileService, mapper), identity, fingerprints, planner, archiveFor(fileService));
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
         ReflectionTestUtils.setField(checkpoints, "retainCheckpoints", 40);
-        ReflectionTestUtils.setField(checkpoints, "captureCache", false);
         ledger = new BranchLedger(fileService, mapper);
         rewindService = mock(RewindService.class);
         explorer = new BranchExplorer(ledger, checkpoints, rewindService, planner);
@@ -215,7 +214,6 @@ class BranchExplorerTest {
      */
     private CheckpointArchive archiveFor(FileService files) {
         CheckpointArchive archive = new CheckpointArchive(files, diffConfig());
-        ReflectionTestUtils.setField(archive, "enabled", true);
         ReflectionTestUtils.setField(archive, "retain", 500);
         return archive;
     }

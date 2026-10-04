@@ -20,17 +20,13 @@ import java.util.Map;
  * ({@code autobuilder.build.enabled/command/...}) in {@link BuildExecutor}, so the two binding
  * styles coexist on the same prefix.
  *
- * <p>{@code diagnosticsEnabled} defaults {@code false} (the Chain-H convention: off in code, turned
- * on via yml for field validation) and the maps default empty, so an unconfigured probe is a no-op.
+ * <p>The maps default empty, so an unconfigured probe is a no-op.
  */
 @Configuration
 @ConfigurationProperties(prefix = "autobuilder.build")
 @Getter
 @Setter
 public class BuildToolProbeProperties {
-
-    /** Whether the diagnostic probe runs at all. Off by default; yml turns it on for validation. */
-    private boolean diagnosticsEnabled = false;
 
     /** {@code filename -> toolName} (e.g. {@code pom.xml -> maven}). Detection is by file presence.
      *  Insertion (yaml) order matters: the first entry is the primary ecosystem for

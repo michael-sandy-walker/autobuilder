@@ -42,7 +42,7 @@ class GiveUpEdgeScenarioTest {
     @Test
     void requiredSubgoal_retriesExhaust_thenDivisionCreatesRequiredChildren_insteadOfGiveUp() {
         ControlLoopScenarioHarness h = ControlLoopScenarioHarness.create()
-                .withRetries(true).withDivideOnExhaustion(true).withExhaustionCap(5);
+                .withExhaustionCap(5);
         h.seedTree(DESCRIPTION, CRITERIA, false);
         verifierSaysAllUnmet(h);
         h.carryContext(h.exhaustedContext(DESCRIPTION, CRITERIA));
@@ -81,12 +81,13 @@ class GiveUpEdgeScenarioTest {
     @Test
     void dividedChild_neverDividesAgain_oneDivisionLevelOnly() {
         ControlLoopScenarioHarness h = ControlLoopScenarioHarness.create()
-                .withRetries(false).withDivideOnExhaustion(true).withExhaustionCap(10);
+                .withExhaustionCap(10);
         h.seedTree(DESCRIPTION, CRITERIA, false);
         verifierSaysAllUnmet(h);
         h.carryContext(h.exhaustedContext(DESCRIPTION, CRITERIA));
         h.scriptCycleResults(CycleResultState.SUBGOAL_EXHAUSTED);
 
+        for (int i = 0; i < 3; i++) h.runCycle(); // the earned retries: one per unmet criterion
         h.runCycle(); // divides
         assertThat(h.goalPlannerService.getAllGoals().stream()
                 .filter(g -> GoalPlannerService.DIVIDED_CRITERION_ROLE.equals(g.getRole())).count())
@@ -113,12 +114,13 @@ class GiveUpEdgeScenarioTest {
         // Division + rescope count as exhaustions so a divide-give-up churn cannot run forever:
         // at the cap the give-up wins and the run escalates for review.
         ControlLoopScenarioHarness h = ControlLoopScenarioHarness.create()
-                .withRetries(false).withDivideOnExhaustion(true).withExhaustionCap(2);
+                .withExhaustionCap(2);
         h.seedTree(DESCRIPTION, CRITERIA, false);
         verifierSaysAllUnmet(h);
         h.carryContext(h.exhaustedContext(DESCRIPTION, CRITERIA));
         h.scriptCycleResults(CycleResultState.SUBGOAL_EXHAUSTED);
 
+        for (int i = 0; i < 3; i++) h.runCycle(); // the earned retries: one per unmet criterion
         h.runCycle(); // division (counts 1/2)
         h.runCycle(); // child gives up honestly — cap guard refuses further division (2/2)
         h.runCycle(); // at the cap: runaway → GOAL_EXHAUSTED + SYSTEM_PAUSED
@@ -133,7 +135,7 @@ class GiveUpEdgeScenarioTest {
         // this subgoal's own attempts look exhausted — verification against the output proves the
         // criteria hold and the ladder promotes instead of giving up (run-2 2026-07-02 field case).
         ControlLoopScenarioHarness h = ControlLoopScenarioHarness.create()
-                .withRetries(true).withDivideOnExhaustion(true).withExhaustionCap(5);
+                .withExhaustionCap(5);
         h.seedTree(DESCRIPTION, CRITERIA, false);
         when(h.verifier.verifyAndRecord(any(), eq("S")))
                 .thenReturn(Map.of(1, true, 2, true, 3, true));
@@ -152,7 +154,7 @@ class GiveUpEdgeScenarioTest {
         // T4-BP-4: some ✓ / some ✗ is a diagnosis — one follow-up subgoal carries the unmet
         // residue, the original passes the ledger as SUBSUMED, banked criteria stay banked.
         ControlLoopScenarioHarness h = ControlLoopScenarioHarness.create()
-                .withRetries(true).withDivideOnExhaustion(true).withExhaustionCap(5);
+                .withExhaustionCap(5);
         h.seedTree(DESCRIPTION, CRITERIA, false);
         when(h.verifier.verifyAndRecord(any(), eq("S")))
                 .thenReturn(Map.of(1, true, 2, true, 3, false));
@@ -181,7 +183,7 @@ class GiveUpEdgeScenarioTest {
         // EXTRA-origin subgoals are absorbed at closure anyway — spending retries or dividing
         // them would burn cycles on work the root does not require.
         ControlLoopScenarioHarness h = ControlLoopScenarioHarness.create()
-                .withRetries(true).withDivideOnExhaustion(true).withExhaustionCap(5);
+                .withExhaustionCap(5);
         h.seedTree("Add optional unit tests for the controller", CRITERIA, true);
         verifierSaysAllUnmet(h);
         h.carryContext(h.exhaustedContext("Add optional unit tests for the controller", CRITERIA));

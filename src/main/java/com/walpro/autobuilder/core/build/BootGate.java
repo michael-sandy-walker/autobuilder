@@ -116,11 +116,6 @@ public class BootGate {
     private com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery commandSurfaceQuery =
             new com.walpro.autobuilder.analysis.structure.CommandSurfaceQuery();
 
-    // Whether the boot gate also probes the started artifact against the criteria (endpoints, commands) after it starts.
-    @Value("${autobuilder.build.boot-gate.criterion-probe-enabled:true}")
-    @Setter
-    private boolean criterionProbeEnabled = true;
-
     /**
      * T2-EV: the specification's own per-endpoint response expectations. When present, they
      * outrank this gate's fixed status rules — absent (or unwired), the fixed rules apply as
@@ -644,7 +639,7 @@ public class BootGate {
                                               List<String> behaviouralCriteria,
                                               Evidence evidence) {
         List<ProbeFailure> failures = new ArrayList<>();
-        if (!criterionProbeEnabled || behaviouralCriteria == null || behaviouralCriteria.isEmpty()) {
+        if (behaviouralCriteria == null || behaviouralCriteria.isEmpty()) {
             return failures;
         }
         List<String> launchTokens = CommandCriterionParser.launchTokensOf(commandTemplate);
@@ -1201,7 +1196,7 @@ public class BootGate {
                                                   List<String> criteria, Path artifactRoot,
                                                   Evidence evidence) {
         List<ProbeFailure> failures = new ArrayList<>();
-        if (!criterionProbeEnabled || criterionProbeSynthesizer == null
+        if (criterionProbeSynthesizer == null
                 || criteria == null || criteria.isEmpty()) {
             return failures;
         }

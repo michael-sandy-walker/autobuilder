@@ -74,10 +74,6 @@ public class EvolutionLLMAdapter {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.stuck.ProjectTypeAuthority projectTypeAuthority;
 
-    /** The user's decision 2026-10-01: the dependency API shown up front; off only for a measurement's other arm. */
-    @org.springframework.beans.factory.annotation.Value("${autobuilder.evolution.dependency-api-block:true}")
-    private boolean dependencyApiBlock = true;
-
     public CycleContextData evolve(CycleContextData context) throws IOException {
         return evolve(context, false);
     }
@@ -108,7 +104,7 @@ public class EvolutionLLMAdapter {
             if (answers != null) userPrompt = userPrompt + "\n\n" + answers;
         }
         // T4-DY: the API of the dependencies this work uses, read from the project's jars, before the model writes.
-        if (dependencyApiBlock && projectTypeAuthority != null && refreshed.outputPath() != null) {
+        if (projectTypeAuthority != null && refreshed.outputPath() != null) {
             var classpath = projectTypeAuthority.classpath(java.nio.file.Path.of(refreshed.outputPath()));
             if (classpath.isPresent()) {
                 List<String> sources = com.walpro.autobuilder.core.build.DependencyApi.sourcesNeeded(

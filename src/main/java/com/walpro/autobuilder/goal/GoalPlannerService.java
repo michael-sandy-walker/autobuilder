@@ -431,8 +431,7 @@ public class GoalPlannerService {
      */
     private boolean isExtraForClosure(GoalEntity g) {
         if (g == null) return false;
-        if (goalPlannerConfig != null && goalPlannerConfig.isSpecTraceabilityEnabled()
-                && specTraceability != null) {
+        if (specTraceability != null) {
             GoalEntity root = getRootGoal();
             SpecTraceability.Binding binding = specTraceability.classify(
                     root != null ? root.getDescription() : null, g);
@@ -802,7 +801,7 @@ public class GoalPlannerService {
      * @return the number of contradicted criteria (0 = nothing structurally refutable)
      */
     public int reconcileCriteriaAgainstStructure(String goalId) {
-        if (!goalPlannerConfig.isStructureQueryEnabled() || endpointSurfaceQuery == null) return 0;
+        if (endpointSurfaceQuery == null) return 0;
         GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
         if (goal == null || goal.getMetadata() == null) return 0;
         Object raw = goal.getMetadata().get("acceptanceCriteria");
@@ -849,7 +848,7 @@ public class GoalPlannerService {
      * Abstains {@code false} on any uncertainty, keeping today's suppression behavior.
      */
     public boolean isOpenStructuralRepairLeaf(String goalId) {
-        if (!goalPlannerConfig.isStructureQueryEnabled() || endpointSurfaceQuery == null) return false;
+        if (endpointSurfaceQuery == null) return false;
         GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
         if (goal == null) return false;
         var demanded = endpointSurfaceQuery.endpointFromWorkItem(goal.getDescription());
@@ -1040,9 +1039,6 @@ public class GoalPlannerService {
             Optional<com.walpro.autobuilder.analysis.structure.Endpoint> demanded =
                     endpointWhoseExistenceIsDemanded(criterion);
             if (demanded.isPresent()) {
-                if (!goalPlannerConfig.isStructureQueryEnabled()) {
-                    return Optional.of("the structure query is disabled, so \"" + criterion + "\" cannot be decided");
-                }
                 Optional<Boolean> built = endpointSurfaceQuery.isBuilt(demanded.get(), output);
                 if (built.isEmpty()) {
                     return Optional.of("the built surface could not be read, so \"" + criterion + "\" is undecided");
@@ -1146,7 +1142,7 @@ public class GoalPlannerService {
      * surface at all — withholds the gate rather than closing it.
      */
     private boolean descriptionSurfaceIsBuilt(GoalEntity leaf, Map<String, String> output) {
-        if (!goalPlannerConfig.isStructureQueryEnabled() || endpointSurfaceQuery == null) return true;
+        if (endpointSurfaceQuery == null) return true;
         if (output == null || output.isEmpty()) return true;
         for (var endpoint : endpointSurfaceQuery.declaredInSpec(leaf.getDescription())) {
             Optional<Boolean> built = endpointSurfaceQuery.isBuilt(endpoint, output);
@@ -2194,7 +2190,7 @@ public class GoalPlannerService {
      * gate never fails open into advisory when the model is down.
      */
     private void stampCriteriaBinding(GoalEntity g, List<String> declared) {
-        if (goalPlannerConfig == null || !goalPlannerConfig.isCriteriaGroundingEnabled()) return;
+        if (goalPlannerConfig == null) return;
         boolean gateOwned = g.getMetadata() != null
                 && com.walpro.autobuilder.core.build.BlockerTypes.BUILD_FIX.equals(
                         g.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY))
@@ -4099,7 +4095,6 @@ public class GoalPlannerService {
         // run died here: a lone GIVEN_UP test leaf became the sole root blocker. Absorb EXTRA
         // failures so closure falls through to the clean branch (which the coverage/next-resource
         // path then drives); REQUIRED failures still block. See [[project-t2ei-design-note]] (P3).
-        boolean depthFirst = goalPlannerConfig != null && goalPlannerConfig.isDepthFirstDecomposition();
         // T4-BP step 3: the acceptance criteria the ledger counts as done — re-verified against the
         // actual current code below, since banked pass-status can be set optimistically.
         java.util.LinkedHashSet<String> passingCriteria = new java.util.LinkedHashSet<>();
@@ -4131,8 +4126,7 @@ public class GoalPlannerService {
                 // disk" on an endpoint goal) stays in the set — traceability, not wording, is the
                 // discriminator. Self-gated: a spec with no signal keeps today's collect-all
                 // (completion re-verification must not go vacuous on non-REST specs).
-                if (depthFirst && goalPlannerConfig != null && goalPlannerConfig.isSpecTraceabilityEnabled()
-                        && specTraceability != null && root.getDescription() != null
+                if (specTraceability != null && root.getDescription() != null
                         && specTraceability.hasTraceabilitySignal(root.getDescription())
                         && specTraceability.classify(root.getDescription(), sg) != SpecTraceability.Binding.REQUIRED) {
                     continue;
@@ -4147,7 +4141,7 @@ public class GoalPlannerService {
                         if (c != null && !isAuthoredCriterion(sg, ci + 1)) passingCriteria.add(c.toString());
                     }
                 }
-            } else if (depthFirst && isExtraForClosure(sg)) {
+            } else if (isExtraForClosure(sg)) {
                 absorbedExtra++;
                 log.info("T2-EI: absorbing EXTRA-origin closure failure for subgoal [{}] ({}) — not a root blocker",
                         sg.getId(), check.reason());
@@ -4169,7 +4163,7 @@ public class GoalPlannerService {
             // were never planned, and the LLM coverage reviewer timed out. No LLM, no paraphrase
             // minting; the query abstains when the spec names no endpoints or the built set
             // cannot be grounded (see EndpointSurfaceQuery).
-            if (goalPlannerConfig.isStructureQueryEnabled() && endpointSurfaceQuery != null) {
+            if (endpointSurfaceQuery != null) {
                 Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
                 // T4-CV: an artifact that cannot START cannot serve any endpoint the spec names,
                 // so the entry-point gap is raised in the SAME pass and listed first. Six recorded
@@ -5291,7 +5285,7 @@ public class GoalPlannerService {
                 // endpoint was absent (runs 7/9: the D2 gate then contradicted the completion at
                 // the next closure visit — 262-reopen oscillation). Same abstain rules as the
                 // closure-edge query: no output or ungroundable mappings = no opinion, proceed.
-                if (goalPlannerConfig.isStructureQueryEnabled() && endpointSurfaceQuery != null) {
+                if (endpointSurfaceQuery != null) {
                     // T2-EL: the criteria are subject to the same structural arbiter as the
                     // description — a criterion naming an endpoint the output provably does not
                     // serve cannot be banked MET, whichever route (criteria checker, blanket

@@ -229,7 +229,6 @@ class AutobuilderServiceTest {
         // retries are enabled — it gets a fresh attempt (stagnation reset) instead. The
         // 2026-06-27 reliability batch died 3/5 because a single required subgoal exhausted once
         // and cascaded to root GIVEN_UP. Budget is relative: one attempt per unmet criterion.
-        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryEnabled", true);
         when(goalPlannerService.countUnmetCriteria("sub-1")).thenReturn(1);
         // isExtraOriginSubgoal defaults to false on the mock → "sub-1" is treated as REQUIRED.
         CycleContextData exhaustedCtx = contextWithResultAndGoals(
@@ -256,7 +255,6 @@ class AutobuilderServiceTest {
     void runAutobuilderCycle_whenSubgoalExhausted_requiredOverRetryBudget_givesUp() {
         // T2-EI slice 1b: once the per-leaf retry budget (= unmet criteria, here 1) is spent,
         // the subgoal is given up as before.
-        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryEnabled", true);
         when(goalPlannerService.countUnmetCriteria("sub-1")).thenReturn(1);
         // Pre-seed one used retry so this exhaustion (used=2) exceeds the budget of 1.
         @SuppressWarnings("unchecked")
@@ -283,7 +281,6 @@ class AutobuilderServiceTest {
     void runAutobuilderCycle_retryBudgetScalesWithUnmetCriteria() {
         // The budget is relative ([[feedback-relative-thresholds]]): a subgoal with 3 unmet
         // criteria gets a 3rd fresh attempt where a 1-criterion subgoal would already give up.
-        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryEnabled", true);
         when(goalPlannerService.countUnmetCriteria("sub-1")).thenReturn(3);
         @SuppressWarnings("unchecked")
         java.util.Map<String, Integer> retryMap = (java.util.Map<String, Integer>)
@@ -310,7 +307,6 @@ class AutobuilderServiceTest {
     void runAutobuilderCycle_whenSubgoalExhausted_extraOriginIgnoresRetryBudget_givesUp() {
         // T2-EI slice 1b: EXTRA-origin subgoals skip the retry budget — they are absorbed at closure
         // (slice 1a), so spending retries on them is wasted; keep the eager give-up.
-        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "subgoalRetryEnabled", true);
         when(goalPlannerService.isExtraOriginSubgoal("sub-1")).thenReturn(true);
 
         CycleContextData exhaustedCtx = contextWithResultAndGoals(
@@ -333,7 +329,6 @@ class AutobuilderServiceTest {
     void runAutobuilderCycle_whenSubgoalExhausted_divideOnExhaustion_dividesInsteadOfGivingUp() {
         // T2-EJ: retries spent + verification graded all criteria unmet (the 0-pass case) →
         // divide into per-criterion subgoals instead of giving up; exhaustion signal cleared.
-        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "divideOnExhaustion", true);
         when(criteriaVerificationService.verifyAndRecord(any(), eq("sub-1")))
                 .thenReturn(java.util.Map.of(1, false, 2, false));
         when(goalPlannerService.divideExhaustedSubGoal(eq("sub-1"), anyList()))
@@ -371,7 +366,6 @@ class AutobuilderServiceTest {
     void runAutobuilderCycle_whenSubgoalExhausted_divideOnExhaustion_declinedDivision_givesUp() {
         // T2-EJ: the division mechanism declining (e.g. < 2 distinct criteria, already divided)
         // means the normal give-up proceeds.
-        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "divideOnExhaustion", true);
         when(criteriaVerificationService.verifyAndRecord(any(), eq("sub-1")))
                 .thenReturn(java.util.Map.of(1, false));
         when(goalPlannerService.divideExhaustedSubGoal(eq("sub-1"), anyList()))
@@ -401,7 +395,6 @@ class AutobuilderServiceTest {
     void runAutobuilderCycle_whenSubgoalExhausted_divideOnExhaustion_atRunawayCap_givesUp() {
         // T2-EJ: division counts toward the exhaustion runaway brake like the residue path —
         // at the cap the give-up wins and division is not even attempted.
-        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "divideOnExhaustion", true);
         org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService,
                 "consecutiveSubgoalExhaustionsWithoutMerge", 4); // max default 5 → 4+1 not < 5
 

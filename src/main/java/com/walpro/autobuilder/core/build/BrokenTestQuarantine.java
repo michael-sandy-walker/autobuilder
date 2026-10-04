@@ -60,7 +60,6 @@ public class BrokenTestQuarantine implements CheckpointableState {
     /** A source path under src/test as it appears in build diagnostics (absolute or relative). */
     private static final Pattern TEST_SOURCE_PATH = Pattern.compile("(\\S*?src[/\\\\]test[/\\\\]\\S+?\\.java)");
 
-    private final boolean enabled;
     private final BuildExecutor buildExecutor;
 
     @Value("${file.base-path}")
@@ -96,15 +95,8 @@ public class BrokenTestQuarantine implements CheckpointableState {
 
     @Autowired
     public BrokenTestQuarantine(
-            // Whether a test that blocks closure with its own compile errors is moved aside (never deleted) after one repair round.
-            @Value("${autobuilder.build.quarantine-broken-tests:false}") boolean enabled,
             BuildExecutor buildExecutor) {
-        this.enabled = enabled;
         this.buildExecutor = buildExecutor;
-    }
-
-    public boolean isEnabled() {
-        return enabled;
     }
 
     /**
@@ -114,7 +106,7 @@ public class BrokenTestQuarantine implements CheckpointableState {
      * repair-round visit, when disabled, or when nothing named in the failure still exists).
      */
     public List<String> recordBlockedVisit(String rootId, String failureText, String cycleId) {
-        if (!enabled || rootId == null) {
+        if (rootId == null) {
             return List.of();
         }
         int visits = blockedVisitsByRoot.merge(rootId, 1, Integer::sum);

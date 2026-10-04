@@ -89,7 +89,6 @@ class TestDependencyEnsurerTest {
         var fs = new com.walpro.autobuilder.core.service.FileService(
                 base.toString(), new com.fasterxml.jackson.databind.ObjectMapper());
         TestDependencyEnsurer ensurer = new TestDependencyEnsurer(fs);
-        org.springframework.test.util.ReflectionTestUtils.setField(ensurer, "enabled", true);
 
         assertThat(ensurer.ensure()).isTrue();
         String pom = java.nio.file.Files.readString(base.resolve("output/pom.xml"));
@@ -99,16 +98,4 @@ class TestDependencyEnsurerTest {
         assertThat(ensurer.ensure()).isFalse();
     }
 
-    @Test
-    void component_disabled_doesNothing(@org.junit.jupiter.api.io.TempDir java.nio.file.Path base) throws Exception {
-        java.nio.file.Files.createDirectories(base.resolve("output"));
-        java.nio.file.Files.writeString(base.resolve("output/pom.xml"), SB_POM);
-        var fs = new com.walpro.autobuilder.core.service.FileService(
-                base.toString(), new com.fasterxml.jackson.databind.ObjectMapper());
-        TestDependencyEnsurer ensurer = new TestDependencyEnsurer(fs); // enabled defaults false
-
-        assertThat(ensurer.ensure()).isFalse();
-        assertThat(java.nio.file.Files.readString(base.resolve("output/pom.xml")))
-                .doesNotContain("spring-boot-starter-test");
-    }
 }

@@ -7,13 +7,7 @@ default in the code, and the value `application.yml` sets when it sets one (prof
 What a key does is the first sentence of the comment on the field that reads it, so it is written once, in
 the code.
 
-144 keys.
-
-## `autobuilder.analysis`
-
-| Key | What it does | Default in code | application.yml | Read by |
-|---|---|---|---|---|
-| `autobuilder.analysis.seed-coverage.enabled` | Whether each cycle matches the whole plan against the whole specification and names the clauses no goal claims. | `true` |  | `CycleContextCoordinator` |
+112 keys.
 
 ## `autobuilder.bootstrap`
 
@@ -22,17 +16,10 @@ the code.
 | `autobuilder.bootstrap.build-system` | `auto` = try explicit skeleton first (bootstrap/build/); `none` = skip entirely. | `auto` | `auto` | `BuildSystemBootstrap` |
 | `autobuilder.bootstrap.enabled` | Controls whether the Autobuilder bootstrap cycle is executed on startup. | `true` | `false` | `AutobuilderService` |
 
-## `autobuilder.branch`
-
-| Key | What it does | Default in code | application.yml | Read by |
-|---|---|---|---|---|
-| `autobuilder.branch.enabled` | Whether a rewind keeps the path it leaves as a branch, and the best explored path is chosen. | `true` | `true` | `BranchExplorer` |
-
 ## `autobuilder.briefing`
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `autobuilder.briefing.enabled` | Whether the target's briefing is added to prompts as background. | `true` |  | `BriefingSource` |
 | `autobuilder.briefing.headroom-share` | Share of the prompt's free headroom a briefing may take, and its ceiling in tokens. | `0.25` |  | `BriefingSource` |
 | `autobuilder.briefing.max-tokens` | The most tokens a briefing block may take in a prompt, whatever headroom is left. | `2000` |  | `BriefingSource` |
 
@@ -40,44 +27,33 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `autobuilder.build.boot-gate.criterion-probe-enabled` | Whether the boot gate also probes the started artifact against the criteria (endpoints, commands) after it starts. | `true` |  | `BootGate` |
 | `autobuilder.build.boot-gate.enabled` | Whether the completion edge starts the packaged artifact to check it boots. | `true` | `true` | `BootGate` |
 | `autobuilder.build.boot-gate.port-env-var` | The environment variable the started artifact reads its port from; empty passes none. | (empty) | `SERVER_PORT` | `BootGate` |
 | `autobuilder.build.boot-gate.readiness-timeout-ms` | How long the started artifact has to become ready before the boot gate fails it. | `60000` | `60000` | `BootGate` |
 | `autobuilder.build.boot-gate.request-timeout-ms` | The timeout of each request the boot gate sends to the started artifact. | `5000` | `5000` | `BootGate` |
-| `autobuilder.build.classifier.adaptive` | Whether build errors are classified by a model call (true) or by the deterministic pattern matcher alone (false); the matcher stays the fallback. | `false` | `true` | `BuildClassifierConfigProperties` |
-| `autobuilder.build.classifier.model` | Reserved: a model to use for build-error classification; logged when set, not yet applied. | (required) |  | `BuildClassifierConfigProperties` |
 | `autobuilder.build.command` | The command that compiles the target project. | `mvn compile` | `mvn compile` | `BuildExecutor` |
 | `autobuilder.build.criterion-probe.llm-fallback-enabled` | Whether a criterion the deterministic path cannot construct may fall back to a model call. | `false` |  | `CriterionProbeSynthesizer` |
 | `autobuilder.build.diagnostic-line-cap` | Trailing-line cap on the concatenated diagnostic block — bounds prompt cost. | `60` | `60` | `BuildToolProbeProperties` |
 | `autobuilder.build.diagnostic-timeout-ms` | Per-command timeout. | `30_000L` | `30000` | `BuildToolProbeProperties` |
 | `autobuilder.build.diagnostics` | `toolName -> ordered diagnostic command list` (each command is a whitespace-tokenised line). | `new LinkedHashMap<>()` |  | `BuildToolProbeProperties` |
-| `autobuilder.build.diagnostics-enabled` | Whether the diagnostic probe runs at all. | `false` | `true` | `BuildToolProbeProperties` |
 | `autobuilder.build.discovery.local-enabled` | Whether a missing dependency is looked up in the local Maven repository. | `true` |  | `LocalArtifactRepository` |
 | `autobuilder.build.discovery.search-enabled` | Whether a missing dependency is looked up on the Maven Central search service. | `true` | `true` | `CoordinateSearchClient` |
 | `autobuilder.build.discovery.search-timeout-ms` | The timeout of one Maven Central search request. | `2500` | `2500` | `CoordinateSearchClient` |
 | `autobuilder.build.discovery.search-url` | The Maven Central search endpoint dependency discovery queries. | `https://search.maven.org/solrsearch/select` | `https://search.maven.org/solrsearch/select` | `CoordinateSearchClient` |
 | `autobuilder.build.enabled` | Whether the target project is compiled at all (the compile probe, the post-merge build). | `false` | `true` | `BuildExecutor` |
-| `autobuilder.build.ensure-test-deps` | Off in code; enabled via application.yml for the next-run validation (idempotent + harmless). | `false` | `true` | `TestDependencyEnsurer` |
 | `autobuilder.build.executor` | Which build tool runs the commands; `maven` is the only one today. | `maven` | `maven` | `BuildExecutor` |
 | `autobuilder.build.include-test-compile` | Also compile `src/test/java` each probe. | `true` | `false` | `JavacDirectProbe` |
-| `autobuilder.build.inner-fix-loop.enabled` | Enables chaining deterministic fixes within one compile probe. | `false` | `true` | `CompileProbeService` |
 | `autobuilder.build.output-directories` | `toolName -> generated-output directory names` (root-segment match). | `new LinkedHashMap<>()` |  | `BuildToolProbeProperties` |
 | `autobuilder.build.package-gate.application-packaging-markers` | Build-file markers (comma-separated) that make a project an application whose packaging must also produce a runnable artifact. | `spring-boot-maven-plugin` | `spring-boot-maven-plugin` | `PackageGate` |
 | `autobuilder.build.package-gate.command` | The command that packages the target project at the completion edge. | `mvn package -DskipTests` | `mvn package -DskipTests` | `PackageGate` |
 | `autobuilder.build.package-gate.enabled` | Whether the completion edge requires the project to package. | `true` | `true` | `PackageGate` |
-| `autobuilder.build.packaging-repair-per-cycle` | Whether each cycle repairs an archive that does not declare the entry point the sources name. | `true` |  | `CycleExecutor` |
-| `autobuilder.build.preserve-cleared-injector-files.enabled` | Keep an injector-created file through the chain-stopped rollback when its own compile diagnostic cleared. | `true` | `true` | `CompileProbeService` |
-| `autobuilder.build.quarantine-broken-tests` | Whether a test that blocks closure with its own compile errors is moved aside (never deleted) after one repair round. | `false` | `true` | `BrokenTestQuarantine` |
 | `autobuilder.build.resource-directories` | `toolName -> resource directory markers` (path-segment prefix match). | `new LinkedHashMap<>()` |  | `BuildToolProbeProperties` |
-| `autobuilder.build.self-check.enabled` | Switched OFF 2026-07-29 on cost, and back ON the same day once that cost was removed. | `true` |  | `BehaviouralSelfCheck` |
 | `autobuilder.build.self-check.interval-cycles` | Cycles between observations. | `4` |  | `BehaviouralSelfCheck` |
 | `autobuilder.build.self-check.requirement-budget-ms` | The bound on an observation is a TIME IT MAY SPEND, charged against the cost this run has actually measured — not a count of requirements. | `20000` |  | `BehaviouralSelfCheck` |
 | `autobuilder.build.skeletons.default-base-package` | Fallback base package when `establishedBasePackage` is not known yet. | `com.example.demo` | `com.example.demo` | `IdiomSkeletonConfigProperties` |
 | `autobuilder.build.skeletons.idioms` | Ordered list of idiom registrations. | `defaultIdioms()` | `[{'rule': 'skeleton-repository', 'pattern': '\\w+Repository', 'sub-package': 'repository', 'description': 'Created {className} skeleton (JpaRepository<Object, Long>)', 'template': 'package {packageDecl};\n\nimport org.springframework.data.jpa.repository.JpaRepository;\n\npublic interface {className} extends JpaRepository<Object, Long> {\n}\n'}, {'rule': 'skeleton-exception', 'pattern': '\\w+Exception', 'sub-package': 'exception', 'description': 'Created {className} skeleton (extends RuntimeException)', 'template': 'package {packageDecl};\n\npublic class {className} extends RuntimeException {\n    public {className}(String message) {\n        super(message);\n    }\n}\n'}, {'rule': 'skeleton-service', 'pattern': '\\w+Service', 'sub-package': 'service', 'description': 'Created {className} skeleton (@Service)', 'template': 'package {packageDecl};\n\nimport org.springframework.stereotype.Service;\n\n@Service\npublic class {className} {\n}\n'}, {'rule': 'skeleton-controller', 'pattern': '\\w+Controller', 'sub-package': 'controller', 'description': 'Created {className} skeleton (@RestController)', 'template': 'package {packageDecl};\n\nimport org.springframework.web.bind.annotation.RestController;\n\n@RestController\npublic class {className} {\n}\n'}]` | `IdiomSkeletonConfigProperties` |
 | `autobuilder.build.skeletons.resolver-order` | Resolver registration order. | `50` | `50` | `IdiomSkeletonConfigProperties` |
 | `autobuilder.build.skeletons.similarity-abort-threshold` | Levenshtein cutoff for the similarity-abort guard. | `2` | `2` | `IdiomSkeletonConfigProperties` |
-| `autobuilder.build.skip-unrequested-tests` | Keep test sources out of the artifact on goals whose spec never asked for tests. | `true` |  | `MergeAgent` |
 | `autobuilder.build.source-extensions` | Extensions that mark a compilable source file. | `List.of()` | `['.java']` | `BuildToolProbeProperties` |
 | `autobuilder.build.symbol-import.cache-path` | Where the cache of symbol-to-import resolutions is kept, relative to the target directory. | `cache/symbol-imports.json` |  | `SymbolImportCache` |
 | `autobuilder.build.symbol-import.pom-path` | The build file whose dependencies symbol-to-import resolution reads, relative to the target directory. | `output/pom.xml` |  | `SymbolImportCache` |
@@ -93,9 +69,7 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `autobuilder.checkpoint.archive-enabled` | Off keeps the pre-existing behaviour exactly: checkpoints stay inside their own run. | `true` | `true` | `CheckpointArchive` |
 | `autobuilder.checkpoint.archive-retain` | How many archived trees to keep, across all runs. | `2000` | `2000` | `CheckpointArchive` |
-| `autobuilder.checkpoint.capture-cache` | Copy `cache/` into each checkpoint so a FAITHFUL rewind has something to restore. | `true` | `true` | `CheckpointService` |
 | `autobuilder.checkpoint.enabled` | Off by default is the wrong default for a safety net; on by default, one switch to disable. | `true` | `true` | `CheckpointService` |
 | `autobuilder.checkpoint.retain` | How many checkpoint directories to keep. | `40` | `40` | `CheckpointService` |
 
@@ -131,36 +105,22 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `autobuilder.evolution.dependency-api-block` | The user's decision 2026-10-01: the dependency API shown up front; off only for a measurement's other arm. | `true` |  | `EvolutionLLMAdapter` |
-| `autobuilder.evolution.package-consolidation.enabled` | Off by default; enabled via `application.yml` so the next real run validates it. | `false` | `true` | `PackageConsolidationService` |
 | `autobuilder.evolution.subgoal-source-block` | T4-DY slice B's replay switch: the subgoal source block, on unless a replay takes it away. | `true` |  | `EvolutionLLMAdapter` |
 
 ## `autobuilder.goal`
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `autobuilder.goal.admission-cap` | Maximum number of active subgoal LEAVES that may be surfaced as the workable set at any time. | `0` | `0` | `GoalPlannerConfigProperties` |
+| `autobuilder.goal.admission-cap` | Maximum number of active subgoal LEAVES that may be surfaced as the workable set at any time. | `6` | `6` | `GoalPlannerConfigProperties` |
 | `autobuilder.goal.closure-probe-model-fallback` | Whether a criterion the DETERMINISTIC synthesizer cannot build a probe for may fall back to the model at this edge. | `true` | `true` | `BehaviouralClosureVerifier` |
 | `autobuilder.goal.consolidation.active-leaf-threshold` | ACTIVE-leaf count above which a pass is attempted regardless of stagnation. | `10` | `10` | `GoalConsolidationService` |
-| `autobuilder.goal.consolidation.enabled` | Whether near-duplicate subgoals, and given-up ones whose work was done elsewhere, are folded onto one when the loop stagnates or the tree grows. | `true` | `true` | `GoalConsolidationService` |
 | `autobuilder.goal.consolidation.max-reviewer-calls` | Reviewer LLM call budget per pass. | `5` | `5` | `GoalConsolidationService` |
 | `autobuilder.goal.consolidation.similarity-floor` | Similarity floor below which a pair is not worth a reviewer call. | `0.5` | `0.5` | `GoalConsolidationService` |
 | `autobuilder.goal.consolidation.stagnation-streak` | Consecutive STAGNATING/ROLLED_BACK cycles before a pass is attempted. | `3` | `3` | `GoalConsolidationService` |
-| `autobuilder.goal.criteria-grounding-enabled` | Spec-grounding of acceptance criteria (run 19, 2026-07-07). | `false` | `true` | `GoalPlannerConfigProperties` |
-| `autobuilder.goal.depth-first-decomposition` | Depth-first per-resource decomposition (experiment). | `false` | `false` | `GoalPlannerConfigProperties` |
-| `autobuilder.goal.divide-on-exhaustion` | Divide-and-conquer fallback at the give-up edge. | `false` | `false` | `AutobuilderService` |
-| `autobuilder.goal.entry-point-required-early` | Whether each cycle requires an entry point once the specification calls for a runnable artifact and the sources name none. | `true` |  | `CycleExecutor` |
 | `autobuilder.goal.max-consecutive-subgoal-exhaustions` | How many subgoals in a row may be exhausted without a merge before the run ends GOAL_EXHAUSTED. | `5` | `5` | `AutobuilderService` |
 | `autobuilder.goal.migrate-to-graph` | Whether the goal state in meta/GoalStack.json is pushed into the graph on startup. | `false` | `false` | `GoalPlannerConfigProperties` |
 | `autobuilder.goal.min-exhausted-children-floor` | Minimum GIVEN_UP children required before per-parent exhaustion fires (floor for the majority rule). | `5` | `5` | `AutobuilderService` |
-| `autobuilder.goal.promote-observed-leaves-per-cycle` | Whether each cycle completes work items whose criteria are already observed met. | `true` |  | `CycleExecutor` |
-| `autobuilder.goal.retire-boot-items-per-cycle` | Whether each cycle retires entry-point and packaging work items the sources already satisfy. | `true` |  | `CycleExecutor` |
-| `autobuilder.goal.scope-thrash-rescue` | Route the thrash result to the SUBGOAL_EXHAUSTED handler instead of applying GIVEN_UP directly. | `true` | `true` | `ScopeThrashSignalAnalyzer` |
-| `autobuilder.goal.spec-traceability-enabled` | Criteria-traceability refinement of the required/extra origin stamp. | `true` | `true` | `GoalPlannerConfigProperties` |
-| `autobuilder.goal.structure-query-enabled` | Deterministic endpoint-surface check at the completion edge. | `false` | `false` | `GoalPlannerConfigProperties` |
-| `autobuilder.goal.subgoal-retry-enabled` | Whether a required subgoal that runs out of attempts gets fresh ones (one per unmet criterion) before it is given up. | `false` | `false` | `AutobuilderService` |
 | `autobuilder.goal.sync-from-graph` | Whether the goal state is loaded from the graph on startup. | `false` | `true` | `GoalPlannerConfigProperties` |
-| `autobuilder.goal.verify-closure-claims` | The check only ever refutes, so switching it off can only restore false closures — but a switch is what let T4-DA's unconfirmed cost be settled by measurement instead of argument, and every mechanism this project ships now carries one. | `true` |  | `BehaviouralClosureVerifier` |
 
 ## `autobuilder.heuristic`
 
@@ -223,7 +183,6 @@ the code.
 | `autobuilder.rewind.cache-mode` | Whether the resolution cache comes back with the state. | `FAITHFUL` | `FAITHFUL` | `RewindPolicy` |
 | `autobuilder.rewind.max-per-run` | How many times one run may back out. | `2` | `2` | `RewindPolicy` |
 | `autobuilder.rewind.mid-run-window-factor` | How much wider the mid-run grind window is than the brake's own. | `1.5` |  | `RootConvergenceTracker` |
-| `autobuilder.rewind.on-grind-enabled` | Whether a run grinding without merges rewinds to an earlier checkpoint instead of halting. | `true` | `true` | `RewindPolicy` |
 
 ## `autobuilder.run`
 
@@ -257,7 +216,6 @@ the code.
 |---|---|---|---|---|
 | `autobuilder.stuck.execution-trace.budget-ms` | The time one trace may take: the build compiles first, then the one test runs under the debugger. | `240000` |  | `StuckLayer` |
 | `autobuilder.stuck.execution-trace.enabled` | The user's decision 2026-10-01: a test that keeps failing is re-run under the debugger (ExecutionTrace). | `true` |  | `StuckLayer` |
-| `autobuilder.stuck.priors.consult` | Whether earlier runs are consulted; outcomes are recorded either way (the A arm of T6-I's pairs). | `true` |  | `StuckLayer` |
 | `autobuilder.stuck.terminal-agent.enabled` | Whether the read-only terminal agent may answer a stuck question by running commands in a copy of the tree. | `true` |  | `TerminalAgent` |
 
 ## `autobuilder.tts`

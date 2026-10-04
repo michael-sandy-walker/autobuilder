@@ -49,30 +49,11 @@ public class CycleExecutor implements CheckpointableState {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.PackageGate packageGate;
 
-    /** T2-FK: whether each cycle repairs an archive that does not declare the entry point the sources name. One switch, matching T4-CZ's, in case the per-cycle repair misbehaves in the field. */
-    @org.springframework.beans.factory.annotation.Value(
-            "${autobuilder.build.packaging-repair-per-cycle:true}")
-    private boolean packagingRepairEnabled = true;
-
     /** T4-DW: the retiring direction of the gate observations — optional, like its siblings. */
     @lombok.Setter
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.blocker.BlockerSubgoalInjector blockerSubgoalInjector;
 
-    /** T4-DW: whether each cycle retires entry-point and packaging work items the sources already satisfy. One switch, matching T4-CZ's and T2-FK's, in case retirement misbehaves in the field. */
-    @org.springframework.beans.factory.annotation.Value(
-            "${autobuilder.goal.retire-boot-items-per-cycle:true}")
-    private boolean bootItemRetirementEnabled = true;
-
-    /** T2-FL: whether each cycle completes work items whose criteria are already observed met. One switch, matching the retirement's, in case promoting on observation misbehaves. */
-    @org.springframework.beans.factory.annotation.Value(
-            "${autobuilder.goal.promote-observed-leaves-per-cycle:true}")
-    private boolean observedLeafPromotionEnabled = true;
-
-    /** T4-CZ: whether each cycle requires an entry point once the specification calls for a runnable artifact and the sources name none. One switch, in case requiring the entry point early ever misbehaves in the field. */
-    @org.springframework.beans.factory.annotation.Value(
-            "${autobuilder.goal.entry-point-required-early:true}")
-    private boolean entryPointRequirementEnabled = true;
     private final SubGoalFulfillmentHeuristic subGoalFulfillmentHeuristic;
     private final InterpretationService interpretationService;
     private final CycleScoreRecorder cycleScoreRecorder;
@@ -294,17 +275,15 @@ public class CycleExecutor implements CheckpointableState {
         // the sources already in memory (no build, no boot) and injects the SAME requirement T4-CV
         // owns, just earlier. Idempotent and self-gating: silent unless the specification calls for
         // a runnable artifact and no entry point exists.
-        if (entryPointRequirementEnabled) {
-            goalPlannerService.requireEntryPointNow(context.previousOutput());
-            // T4-DW: the same scan in the retiring direction, on the same cycle and the same
-            // inputs. An entry-point requirement that the sources now satisfy is not work; it is
-            // an ACTIVE leaf, and one of those is enough to make autoCompleteRootIfSatisfied
-            // early-return for the rest of the run. Asking both directions here keeps the raise
-            // and the retirement in one place, so neither can be routed to an edge the other
-            // never reaches.
-            if (bootItemRetirementEnabled && blockerSubgoalInjector != null) {
-                blockerSubgoalInjector.clearEntryPointBuildFixSubgoals(context.previousOutput());
-            }
+        goalPlannerService.requireEntryPointNow(context.previousOutput());
+        // T4-DW: the same scan in the retiring direction, on the same cycle and the same
+        // inputs. An entry-point requirement that the sources now satisfy is not work; it is
+        // an ACTIVE leaf, and one of those is enough to make autoCompleteRootIfSatisfied
+        // early-return for the rest of the run. Asking both directions here keeps the raise
+        // and the retirement in one place, so neither can be routed to an edge the other
+        // never reaches.
+        if (blockerSubgoalInjector != null) {
+            blockerSubgoalInjector.clearEntryPointBuildFixSubgoals(context.previousOutput());
         }
 
         // T2-FK: the same routing problem as T4-CZ above, one step later in the artifact's life.
@@ -324,7 +303,7 @@ public class CycleExecutor implements CheckpointableState {
         // Costs a directory listing and a manifest read when it abstains (T2-FK reordered the
         // source-tree read to sit behind that check), and it is idempotent, so a cycle that
         // changed nothing writes nothing.
-        if (packagingRepairEnabled && packageGate != null) {
+        if (packageGate != null) {
             packageGate.declareEntryPointIfArchiveCannotRun();
         }
         // T4-DW: the retiring direction of the repair just above, on the same cycle. An item saying
@@ -333,7 +312,7 @@ public class CycleExecutor implements CheckpointableState {
         // waiting for something a tree that no longer compiles, or a target that serves nothing,
         // never produces. When one is retired, the self-check may raise the defect again if it
         // comes back — its suppression assumes the item is still open.
-        if (bootItemRetirementEnabled && blockerSubgoalInjector != null && packageGate != null) {
+        if (blockerSubgoalInjector != null && packageGate != null) {
             int retired = blockerSubgoalInjector.clearArchiveEntryPointSubgoals(
                     packageGate::archiveEntryPointDeclared);
             if (retired > 0 && behaviouralSelfCheck != null) {
@@ -359,7 +338,7 @@ public class CycleExecutor implements CheckpointableState {
             // boot-gate item can be retired, because it is the only per-cycle caller that runs the
             // gate against the tree on disk — the evaluation agent's re-run judges a STAGED
             // candidate, which must never retire an item about the merged tree.
-            if (bootItemRetirementEnabled && blockerSubgoalInjector != null) {
+            if (blockerSubgoalInjector != null) {
                 blockerSubgoalInjector.clearBootBuildFixSubgoals(selfCheck.observation());
             }
             // T2-FL: the same observation asked the remaining question. T4-DW retires the items a
@@ -369,9 +348,7 @@ public class CycleExecutor implements CheckpointableState {
             // it sits here for the reason the retirement does: this is the only per-cycle caller
             // that runs the gate against the tree ON DISK, and a staged candidate's answer must
             // never promote a leaf about the merged tree.
-            if (observedLeafPromotionEnabled) {
-                goalPlannerService.promoteSatisfiedLeaves(selfCheck.observation());
-            }
+            goalPlannerService.promoteSatisfiedLeaves(selfCheck.observation());
         }
 
         // T5-R: attribute interpretation's LLM call to the "interpretation" role.

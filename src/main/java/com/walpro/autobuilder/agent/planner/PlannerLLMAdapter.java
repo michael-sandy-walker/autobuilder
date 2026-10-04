@@ -48,10 +48,9 @@ public class PlannerLLMAdapter {
         // creation time; without this refresh, a subgoal targeting a class that has since been
         // created still shows [UNDEFINED] and the planner LLM re-proposes the same build-fix work.
         CycleContextData refreshed = groundingService.refreshGoalAnnotations(input);
-        boolean depthFirst = goalPlannerConfig.isDepthFirstDecomposition();
-        String systemPrompt = PlannerProtocolContract.getSystemPrompt(depthFirst)
+        String systemPrompt = PlannerProtocolContract.getSystemPrompt()
                 + "\n\n" + capabilityManifest.render();
-        String userPrompt = PlannerProtocolContract.getUserPrompt(refreshed, depthFirst);
+        String userPrompt = PlannerProtocolContract.getUserPrompt(refreshed);
         // T4-EA: what a developer would read before splitting this goal -- the reasons, the design, the code
         // around it -- selected for this goal, as background.
         if (briefingSource != null) {

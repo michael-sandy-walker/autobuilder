@@ -14,22 +14,10 @@ autobuilder:
     # Points kept on disk, pruned oldest-first. The JSON is small; the bound is there because an
     # unbounded per-cycle directory is how snapshots/ reached hundreds of megabytes.
     retain: 40
-    # Copy cache/ into each checkpoint (a few kilobytes) so a FAITHFUL rewind has one to restore.
-    capture-cache: true
-    # T4-DQ: keep a SOURCE-ONLY copy of each cycle's tree in checkpoint-archive/, which reset and
-    # resume do not clear, so a point stays reachable after the run that took it has ended. A
-    # lineage spans runs (a T4-CD resume continues one), so "time travel within a lineage" has
-    # always meant across runs; only the storage stood in the way. Measured: a snapshot is ~120 KB
-    # of which ~56 KB is target/ build output that regenerates — dropping it leaves ~16 KB of
-    # source, so a point plus its restorable tree costs roughly 36 KB.
-    archive-enabled: true
     # Archived trees kept in total, across runs, pruned oldest-first. 2000 is roughly fifty runs
     # at forty cycles each — bounded by count rather than by the run boundary.
     archive-retain: 2000
   rewind:
-    # Back out to the last point that landed work instead of halting, when the convergence brake
-    # judges the run to be grinding. One switch, in case dying turns out to be better.
-    on-grind-enabled: true
     # Two: a run that has ground twice from two different points is saying something a third
     # rewind will not fix, and each one discards wall clock the budget still charges for.
     max-per-run: 2
@@ -46,15 +34,6 @@ autobuilder:
     # looking at the runs rather than for a grind detector. The operator rewind is unaffected and
     # still offers every restorable point, marked with the run it belongs to.
     auto-cross-run-enabled: false
-  branch:
-    # T4-DQ slice 4. Each rewind seals the path being left and opens a branch from the fork point,
-    # so the run accumulates a record of what it has TRIED rather than only a position: the next
-    # fork picks the newest point that landed work and has not been explored, and at the terminal
-    # the run returns to whichever branch got furthest. That last part is the point of it —
-    # T4-CA already picks the best TREE to ship, but nothing picked the best state to carry on
-    # from, so a run that backed out of a good path handed its successor the worse one.
-    # Off leaves slice 3's behaviour exactly as it was.
-    enabled: true
   replay:
     # OFF | RECORD | REPLAY. RECORD writes every LLM answer to llm-recordings/exchanges.ndjson;
     # REPLAY answers from it, which is what makes a rewind's round trip provable (an uncaptured
@@ -93,14 +72,6 @@ autobuilder:
     # hundred lines of a changed file. See CriteriaVerificationService for the same defect at the
     # closure edge, where it produced a measured false completion.
     fileContentBudgetChars: 40000
-  evolution:
-    # T4-BL (lighter fix): rewrite a fragmenting write to the package its type already lives in
-    # (path + package declaration + same-mutation cross-references) instead of letting the
-    # T4-BH gate reject it at probe time. The gate stays as backstop for the skipped cases.
-    # Code default is false; enabled here so real runs validate it (same pattern as
-    # build.classifier.adaptive).
-    package-consolidation:
-      enabled: true
   goal:
     # T4-CU residual (1): may a criterion the deterministic synthesizer cannot build a probe for
     # fall back to the model AT THE CLOSURE EDGE? BootGate reserves this for exactly this caller
@@ -121,40 +92,9 @@ autobuilder:
     sync-from-graph: true
     max-consecutive-subgoal-exhaustions: 5
     min-exhausted-children-floor: 5
-    # T2-EI experiment family (defaults preserve pre-T2-EI behaviour; the 2026-06-27 fulfilling
-    # config enabled depth-first + admission-cap 6 + retries + coverage gate together).
-    depth-first-decomposition: false
-    admission-cap: 0
-    # T2-EI slice 1b: per-leaf retries before give-up; the budget is relative (one attempt per
-    # currently-unmet criterion, floor 1). Replaces the former subgoal-retry-budget count.
-    subgoal-retry-enabled: false
-    # T2-EJ: divide an exhausted REQUIRED subgoal into per-criterion children (post-retry only).
-    divide-on-exhaustion: false
-    # T2-EK slice 1: scope-thrash declares exhaustion instead of applying give-up directly.
-    scope-thrash-rescue: true
-    # T2-EI D2: deterministic endpoint-surface check at the completion edge. Self-gating — a
-    # spec that names no verb-qualified endpoints (e.g. a non-REST/generative project) gets no
-    # opinion and is never blocked by it. Off pending field validation.
-    structure-query-enabled: false
-    # T4-BT: spec-traceability refinement of the required/extra origin stamp (observation-only
-    # narrow rules; falls back to the stamp when the spec says nothing either way).
-    spec-traceability-enabled: true
-    # Spec-grounding of acceptance criteria (run 19): criteria are stamped SPEC/AUTHORED at the
-    # write choke point; authored ones stay advisory (cannot block closure, burn retry budget,
-    # or join completion verification). Abstain keeps SPEC. Corpus eval 2026-07-07 (18 labeled
-    # fixtures from runs 12/15/17/18/19): demotion precision 1.00 (no spec criterion wrongly
-    # demoted), authored recall 0.78 (misses fail safe) — enabled on that basis.
-    #
-    # T3-CC widened what this gate controls: an AUTHORED criterion is also no longer ASSERTED
-    # against the artifact, so correct code is not recorded as contradicting an obligation
-    # nobody stated, and a claim of only authored criteria buys no package build and no boot.
-    # The loop still AUTHORS them and still works toward them — what is withheld is judgement,
-    # not permission. Turn this off and every criterion defaults to SPEC, i.e. elaboration is
-    # binding again, which is the pre-2026-07-07 behaviour.
-    criteria-grounding-enabled: true
+    admission-cap: 6
     # T4-AJ Part B: catch-up consolidation of equivalent goals (shared reviewer).
     consolidation:
-      enabled: true
       stagnation-streak: 3
       active-leaf-threshold: 10
       max-reviewer-calls: 5
@@ -246,14 +186,6 @@ autobuilder:
     working-dir: ${FILE_BASE_PATH:data/firestarter}/output
     # T4-BN-2 reverted: javac-direct probe compiles main only too (mirror of `mvn compile` above).
     include-test-compile: false
-    # T4-BN-3 (deterministic slice): on a test-only compile failure, ensure the project's test
-    # framework dependency is declared in pom.xml (the dominant real error is missing test deps —
-    # `cannot find symbol: Test/Mock/ExtendWith`). Discovery from the project's own pom: only acts on
-    # a Spring Boot project (parent/starter present) and adds the managed-version test starter; non-SB
-    # poms are left for the discovery follow-up. Idempotent. Code default false; enabled here to
-    # validate. NOTE: the spring-boot-starter-test coordinate is a last-resort fixed fallback per
-    # [[feedback-no-hardcoded-ecosystem-data]] — discovery follow-up (Maven Central fc: search) filed.
-    ensure-test-deps: true
     # T4-BM (2026-07-08): project-aware package discovery — a missing symbol/package resolves
     # from the project's OWN observations (resolved classpath -> imports -> coordinate search)
     # before any registry row or LLM lookup. The search source fires only with an exact FQN in
@@ -263,14 +195,6 @@ autobuilder:
       search-enabled: true
       search-url: https://search.maven.org/solrsearch/select
       search-timeout-ms: 2500
-    # T4-BN-3 slice 2 (2026-07-06): deterministic actuator for the completion edge's standing
-    # "removing unrequested broken tests is acceptable" resolution. When closure is blocked by
-    # compile errors confined to src/test on a goal whose spec never asks for tests, the FIRST
-    # blocked visit leaves the injected work item a repair round; from the second on, the named
-    # test files are MOVED to <base-path>/quarantine/<cycleId>/ (preserved, never deleted) and
-    # the gate re-verified. Runs 2/16/17 (July batch) all died in this trap with removal offered
-    # only as prose. Code default false; enabled here.
-    quarantine-broken-tests: true
     # T4-BN Phase 1: compile-probe strategy.
     #   maven        — shells the `command` above (default `mvn test-compile`, ~5-15s typical per probe)
     #   javac-direct — in-process javax.tools.JavaCompiler with cached classpath (~target <1.5s)
@@ -278,23 +202,6 @@ autobuilder:
     # JavaCompiler is available (JRE-only runtime). Compatible with annotation processors
     # auto-discovered from the classpath (Lombok, MapStruct, ...).
     executor: maven
-    # T4-AN-6 / T3-BV: chain deterministic fixes within one compile probe. With several
-    # independent error classes present, no single fix can turn the build green — chaining lets
-    # each pass target the next class against the fresh stderr. There is no fixed pass ceiling:
-    # the chain terminates when no resolver produces a proposal, the build goes green, or a
-    # pass fails to strictly reduce the distinct-error count (which guarantees termination).
-    # Code default is false (the original one-shot behaviour). The T2-DY fix-attempt ledger
-    # keeps known-failed proposals out of the chain.
-    inner-fix-loop:
-      enabled: true
-    # T2-EZ: when the inner fix chain stops with the build still red, keep the files the injector
-    # CREATED whose own compile diagnostic cleared, instead of discarding them with the rejected
-    # mutation. Measured over 26 field runs: 175 of 185 skeletons were discarded here and 169 of
-    # those had removed the diagnostic they targeted, so 43.6% of (rule, token) fixes were re-derived
-    # in a later cycle to be discarded again. Off is the comparison arm — it restores the behaviour
-    # where a GREEN build preserved injector files (T4-AQ) and a red one did not.
-    preserve-cleared-injector-files:
-      enabled: true
     # T4-AN-8: runnable-artifact gate. Compile-only probes never check that the artifact is a
     # startable application (an entry point is not needed to compile). One package-level build
     # at the root-closure edge; a failure blocks completion and is injected as a work item.
@@ -327,16 +234,6 @@ autobuilder:
       port-env-var: SERVER_PORT
       readiness-timeout-ms: 60000
       request-timeout-ms: 5000
-    # T4-AN-5: build-tool diagnostic probe. On COMPILE_ERROR, run the build tool's own diagnostic
-    # commands (pom-level, so valid after the probe's source rollback) and surface the output in the
-    # next cycle's evolution/planner prompt, so the LLM picks real dependency coordinates instead of
-    # guessing. Cached per cycle; command failures/timeouts fold in as text, never thrown. Off in
-    # code by default (Chain-H convention); enabled here for field validation. All ecosystem
-    # knowledge is data here — adding a build system is a yaml-only change. Only `dependency:tree`
-    # is configured: it answers "is this package/coordinate actually on the classpath?" (the live
-    # spring-data case). `versions:display-plugin-updates` and `help:effective-pom` are deliberately
-    # excluded — empirically their output is noisy/misleading for a local model (2026-06-15 check).
-    diagnostics-enabled: true
     diagnostic-line-cap: 60
     diagnostic-timeout-ms: 30000
     tool-detection:
@@ -372,9 +269,6 @@ autobuilder:
     # call fails, returns malformed JSON, or the circuit breaker is open. `model` reserves
     # a per-call model override for the follow-up that adds it to LLMClient — currently
     # logged as not yet wired through ChatRequest.
-    classifier:
-      adaptive: true
-      # model: gpt-4o-mini  # placeholder — not yet honoured; see BuildClassifierConfigProperties
     # T4-AY: deterministic skeleton-file resolver for missing-class compile errors.
     # When the probe stderr names a symbol matching one of the patterns below and no
     # similarly-named symbol already exists under output/, the resolver writes a minimal

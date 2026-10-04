@@ -33,12 +33,13 @@ class PreservedRunRegressionScenarioTest {
     @Test
     void run18_closedButUnmetBlocker_isReopenedForRework_rootSurvives() {
         // The 2026-07-06 run-18 terminal state, rewound one transition: the closure edge must
-        // reopen the contradicted COMPLETED blocker instead of giving the root up (the fix
-        // shipped in 2c0a997; before it, this exact tree produced false give-up #4).
+        // reopen a contradicted COMPLETED blocker that is REQUIRED instead of giving the root up
+        // (the fix shipped in 2c0a997; before it, this exact tree produced false give-up #4).
         ControlLoopScenarioHarness harness = ControlLoopScenarioHarness.create();
         Map<String, GoalEntity> goals = GoalStackFixtureLoader.load(harness, "endgame-closed-but-unmet-run18");
         GoalStackFixtureLoader.reactivateRoot(goals, RUN18_ROOT);
         assertThat(goals.get(RUN18_BLOCKER).getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        goals.get(RUN18_BLOCKER).getMetadata().put(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_REQUIRED);
 
         harness.goalPlannerService.autoCompleteRootIfSatisfied();
 
@@ -49,6 +50,21 @@ class PreservedRunRegressionScenarioTest {
                 .as("the contradicted completion goes back to the ladder")
                 .isEqualTo(GoalStatus.ACTIVE);
         assertThat(goals.get(RUN18_BLOCKER).getMetadata().get("closureEdgeReopens")).isEqualTo(1);
+    }
+
+    @Test
+    void run18_asRecorded_theUnmetCriterionIsOnAnExtraLeaf_andTheSpecRequirementIsMet_soTheRootCloses() {
+        // As recorded, the blocker is EXTRA-origin: its unmet "422 when member exceeds loan limit" repeats
+        // the spec requirement the REQUIRED Loans goal holds as met (its criterion 5). Depth-first closure,
+        // which every measured run used (the switch was removed 2026-10-04), absorbs an EXTRA leaf's
+        // failure, so the root closes -- correctly by the specification.
+        ControlLoopScenarioHarness harness = ControlLoopScenarioHarness.create();
+        Map<String, GoalEntity> goals = GoalStackFixtureLoader.load(harness, "endgame-closed-but-unmet-run18");
+        GoalStackFixtureLoader.reactivateRoot(goals, RUN18_ROOT);
+
+        harness.goalPlannerService.autoCompleteRootIfSatisfied();
+
+        assertThat(goals.get(RUN18_ROOT).getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
     @Test
@@ -119,7 +135,6 @@ class PreservedRunRegressionScenarioTest {
 
         var config = (com.walpro.autobuilder.config.GoalPlannerConfigProperties)
                 org.springframework.test.util.ReflectionTestUtils.getField(harness.goalPlannerService, "goalPlannerConfig");
-        org.mockito.Mockito.when(config.isStructureQueryEnabled()).thenReturn(true);
         harness.goalPlannerService.setEndpointSurfaceQuery(
                 new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
 

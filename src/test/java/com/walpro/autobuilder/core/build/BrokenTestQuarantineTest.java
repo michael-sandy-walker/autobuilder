@@ -35,7 +35,7 @@ class BrokenTestQuarantineTest {
         buildExecutor = mock(BuildExecutor.class);
         output = tmp.resolve("output");
         when(buildExecutor.resolveWorkingDir(tmp.toString())).thenReturn(output.toString());
-        quarantine = new BrokenTestQuarantine(true, buildExecutor);
+        quarantine = new BrokenTestQuarantine(buildExecutor);
         ReflectionTestUtils.setField(quarantine, "fileBasePath", tmp.toString());
         Files.createDirectories(output.resolve(BROKEN_TEST_REL).getParent());
         Files.writeString(output.resolve(BROKEN_TEST_REL), "class LoanControllerTest {}");
@@ -102,16 +102,6 @@ class BrokenTestQuarantineTest {
 
         assertThat(moved).isEmpty();
         assertThat(output.resolve(mainRel)).exists();
-    }
-
-    @Test
-    void disabledComponentMovesNothingAndCountsNothing() {
-        BrokenTestQuarantine off = new BrokenTestQuarantine(false, buildExecutor);
-        ReflectionTestUtils.setField(off, "fileBasePath", tmp.toString());
-
-        assertThat(off.recordBlockedVisit("root", failureNaming(BROKEN_TEST_REL), "c1")).isEmpty();
-        assertThat(off.recordBlockedVisit("root", failureNaming(BROKEN_TEST_REL), "c2")).isEmpty();
-        assertThat(output.resolve(BROKEN_TEST_REL)).exists();
     }
 
     @Test

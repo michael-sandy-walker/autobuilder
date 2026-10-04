@@ -41,11 +41,6 @@ public class CheckpointArchive {
     private final FileService fileService;
     private final com.walpro.autobuilder.config.DiffConfigProperties diffConfig;
 
-    /** Off keeps the pre-existing behaviour exactly: checkpoints stay inside their own run. */
-    @Setter
-    @Value("${autobuilder.checkpoint.archive-enabled:true}")
-    private boolean enabled = true;
-
     /**
      * How many archived trees to keep, across all runs. Generous because each is a few kilobytes:
      * 2000 is roughly fifty runs of history at forty cycles each.
@@ -76,7 +71,7 @@ public class CheckpointArchive {
      * @param contextSourcePath the checkpoint's own copy of the carried context, or null
      */
     public String archive(String cycleId, String snapshotPath, String contextSourcePath) {
-        if (!enabled || cycleId == null || snapshotPath == null || snapshotPath.isBlank()) return null;
+        if (cycleId == null || snapshotPath == null || snapshotPath.isBlank()) return null;
         String target = ARCHIVE_DIR + "/" + cycleId;
         try {
             if (!fileService.exists(snapshotPath)) return null;

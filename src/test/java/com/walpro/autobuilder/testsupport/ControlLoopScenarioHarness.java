@@ -208,16 +208,6 @@ public final class ControlLoopScenarioHarness {
 
     // ── config knobs (mirror the @Value fields) ───────────────────────────────
 
-    public ControlLoopScenarioHarness withRetries(boolean enabled) {
-        setField(service, "subgoalRetryEnabled", enabled);
-        return this;
-    }
-
-    public ControlLoopScenarioHarness withDivideOnExhaustion(boolean enabled) {
-        setField(service, "divideOnExhaustion", enabled);
-        return this;
-    }
-
     public ControlLoopScenarioHarness withExhaustionCap(int cap) {
         setField(service, "maxConsecutiveSubgoalExhaustionsWithoutMerge", cap);
         return this;

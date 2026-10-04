@@ -67,7 +67,6 @@ public class BuildToolProbe {
      * detected, or nothing is configured. Cached by {@code cycleId}; never throws.
      */
     public synchronized String diagnose(String workingDir, String cycleId) {
-        if (!props.isDiagnosticsEnabled()) return null;
         if (cycleId != null && cycleId.equals(cachedCycleId)) return cachedDiagnostic;
 
         String result = runDiagnostics(workingDir);

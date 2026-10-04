@@ -3,7 +3,6 @@ package com.walpro.autobuilder.core.build.inject;
 import com.walpro.autobuilder.core.service.FileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -41,10 +40,6 @@ public class TestDependencyEnsurer {
 
     private final FileService fileService;
 
-    /** Off in code; enabled via application.yml for the next-run validation (idempotent + harmless). */
-    @Value("${autobuilder.build.ensure-test-deps:false}")
-    private boolean enabled;
-
     private static final String POM_PATH = "output/pom.xml";
 
     /**
@@ -53,7 +48,7 @@ public class TestDependencyEnsurer {
      * (this is a steering aid, never allowed to wedge the loop).
      */
     public boolean ensure() {
-        if (!enabled) return false;
+        if (false) return false;
         try {
             if (!fileService.exists(POM_PATH)) return false;
             String pom = fileService.readFile(POM_PATH);

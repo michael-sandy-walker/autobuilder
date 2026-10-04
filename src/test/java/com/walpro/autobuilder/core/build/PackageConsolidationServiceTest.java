@@ -33,7 +33,6 @@ class PackageConsolidationServiceTest {
     @BeforeEach
     void setUp() throws IOException {
         service = new PackageConsolidationService(new PackageFragmentationCheck(fileService));
-        service.setEnabled(true);
         service.setBehaviourLogger(behaviourLogger);
         lenient().when(fileService.listAllRelativeFilePathsUnder(OUTPUT))
                 .thenReturn(List.of(ROOT + "/Loan.java", ROOT + "/LoanService.java"));
@@ -41,15 +40,6 @@ class PackageConsolidationServiceTest {
 
     private static EvolutionOutcome outcomeOf(FileMutation... mutations) {
         return new EvolutionOutcome(List.of(mutations), List.of(), "summary", "raw");
-    }
-
-    @Test
-    void disabled_returnsOutcomeUnchanged() {
-        service.setEnabled(false);
-        EvolutionOutcome outcome = outcomeOf(
-                new FileMutation(ROOT + "/model/Loan.java", "package com.example.demo.model;\nclass Loan {}"));
-
-        assertThat(service.consolidate(outcome, OUTPUT, "cycle-1")).isSameAs(outcome);
     }
 
     @Test

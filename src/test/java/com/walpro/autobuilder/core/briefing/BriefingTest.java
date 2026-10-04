@@ -68,7 +68,5 @@ class BriefingTest {
         Files.writeString(root.resolve(BriefingSource.DIR).resolve("conventions.md"), CONVENTIONS);
         assertThat(source.block("the inkwell refill", 8000)).contains("BRIEFING").contains("refills itself")
                 .contains("discover, do not list");
-        ReflectionTestUtils.setField(source, "enabled", false);
-        assertThat(source.block("the inkwell refill", 8000)).as("switched off for a measurement").isNull();
     }
 }

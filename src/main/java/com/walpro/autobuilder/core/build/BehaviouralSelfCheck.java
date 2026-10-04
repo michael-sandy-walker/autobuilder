@@ -66,25 +66,6 @@ public class BehaviouralSelfCheck implements CheckpointableState {
     private int intervalCycles = 4;
 
     /**
-     * Switched OFF 2026-07-29 on cost, and back ON the same day once that cost was removed.
-     *
-     * <p>The disabling was not about the mechanism, which had already found two real defects. Run
-     * {@code 2026-07-29_03-23-43} carried only 11 requirements and its two observations still took
-     * <b>19.7 and 14.9 minutes</b>, tripping the LLM circuit breaker and leaving 23 cycles / 14-23.
-     * The time was never in booting or probing: probe SYNTHESIS made model calls synchronously
-     * inside the cycle, competing with the loop's own use of the same local model, and
-     * {@code LLMClient} escalates its read timeout across retries — so a single call could block
-     * for minutes.
-     *
-     * <p>{@link DeterministicProbeSynthesizer} now builds those sequences from the artifact's own
-     * sources in milliseconds, with the model path off by default. An observation therefore costs a
-     * package gate, a boot, and a handful of HTTP requests — the budget this check was designed
-     * against and measured for before it was built.
-     */
-    @Value("${autobuilder.build.self-check.enabled:true}")
-    private boolean enabled = true;
-
-    /**
      * T2-FL: the bound on an observation is a TIME IT MAY SPEND, charged against the cost this run
      * has actually measured — not a count of requirements.
      *
@@ -193,7 +174,7 @@ public class BehaviouralSelfCheck implements CheckpointableState {
 
     public SelfCheckResult observeWithEvidence(CycleContextData context, String specText,
                                     Supplier<List<String>> requirements) {
-        if (!enabled) return SelfCheckResult.none();
+        if (false) return SelfCheckResult.none();
         if (++cyclesSinceCheck < Math.max(1, intervalCycles)) return SelfCheckResult.none();
 
         // The interval is deliberately NOT reset here. A cheap abstention below — a broken build, an
@@ -373,10 +354,6 @@ public class BehaviouralSelfCheck implements CheckpointableState {
 
     public void setIntervalCycles(int intervalCycles) {
         this.intervalCycles = intervalCycles;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
     }
 
     public void setBehaviourLogger(BehaviourLogger behaviourLogger) {

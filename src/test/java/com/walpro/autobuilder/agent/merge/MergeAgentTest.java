@@ -161,13 +161,6 @@ class MergeAgentTest {
     }
 
     @Test
-    void theFilterCanBeSwitchedOff() {
-        agent.setSkipUnrequestedTests(false);
-        assertThat(agent.isUnrequestedTestSource(
-                "src/test/java/com/example/A.java", ctxWithSpec(NO_TEST_SPEC))).isFalse();
-    }
-
-    @Test
     void windowsSeparatorsAreRecognised() {
         assertThat(agent.isUnrequestedTestSource(
                 "src\\test\\java\\com\\example\\A.java", ctxWithSpec(NO_TEST_SPEC))).isTrue();

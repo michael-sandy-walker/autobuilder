@@ -217,7 +217,6 @@ class CompileProbePreservedInjectorFilesTest {
     @Test
     void twoSkeletonsForOneTypeInOneChain_areBothDropped() throws IOException {
         String second = "src/main/java/com/example/demo/service/Loan.java";
-        ReflectionTestUtils.setField(probe, "fixChainEnabled", true);
         // Pass 1 keeps the chain alive on the shrinking error count while its own "Loan"
         // diagnostic persists; pass 2 clears it. Both skeletons are therefore preservable on the
         // final stderr, and both name the same type.
@@ -235,21 +234,6 @@ class CompileProbePreservedInjectorFilesTest {
         verify(injector).noteInjectorFileOutcome(2, 0);
         assertThat(fileService.exists("output/" + SKELETON)).isFalse();
         assertThat(fileService.exists("output/" + second)).isFalse();
-    }
-
-    /** The comparison arm: off, a red build discards injector files exactly as it did before. */
-    @Test
-    void switchedOff_theRedBuildDiscardsEverythingAgain() throws IOException {
-        ReflectionTestUtils.setField(probe, "preserveClearedInjectorFiles", false);
-        when(buildExecutor.execute(any(), any())).thenReturn(
-                new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class Loan", 1L, "mvn", "p"),
-                new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class LoanService", 1L, "mvn", "p"));
-        when(injector.inject(any(), any())).thenReturn(Optional.of(skeleton(SKELETON, "Loan")));
-
-        probe.probe(context(), true);
-
-        assertThat(fileService.exists("output/" + SKELETON)).isFalse();
-        verify(injector).noteInjectorFileOutcome(1, 0);
     }
 
     /**

@@ -42,7 +42,6 @@ class BehaviouralSelfCheckTest {
     @BeforeEach
     void setUp() {
         check = new BehaviouralSelfCheck(packageGate, bootGate);
-        check.setEnabled(true);
         check.setIntervalCycles(1);
     }
 
@@ -295,13 +294,6 @@ class BehaviouralSelfCheckTest {
     private static BootGate.BootObservation cleanCosting(long probeMs) {
         return new BootGate.BootObservation(true, java.util.List.of(), java.util.List.of(),
                 probeMs, Optional.empty());
-    }
-
-    @Test
-    void canBeSwitchedOff() {
-        check.setEnabled(false);
-        assertThat(check.observe(ctx(), SPEC, () -> REQS)).isEmpty();
-        verify(packageGate, never()).verifyPackageable(anyString());
     }
 
     /**

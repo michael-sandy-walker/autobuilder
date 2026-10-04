@@ -476,6 +476,7 @@
 ## Tier 5 — Quality / observability (47)
 
 - [x] `T5-BS` -- an elaborate documentation, one TECHNICAL and one FUNCTIONAL, that a newcomer can work from; an existence check keeps them true; where they live and who the functional one is for are the user's to decide. Filed 2026-10-01; CLOSED 2026-10-03 after the user's read-through (configuration reference now described from code comments).
+- [x] `T5-BT` -- the measured system is the default system: 31 A/B-or-just-in-case switches removed with their behaviour kept on, preflight's five launch flags and admission cap 6 made defaults, the inner fix chain bounded by repeated writes. Filed and CLOSED 2026-10-04.
 - [x] `T5-BR` — make Autobuilder modular enough that a ticket's change lands in a small extractable closure; measured by scripts/module_closures.py (baseline 17% of lines in small Spring-free closures; 145 of 478 classes with a closure > 50). Filed 2026-09-25. CLOSED 2026-09-26 (18%; first extraction = the T3-CB rule home, run as criterion-status)
 - [x] `T5-BQ` — Mission-control goals field showed only active/done; subsumed (where most status changes land) was hover-only. Now shown when non-zero. CLOSED 2026-09-23
 - [x] `T5-BH` — Disposition pass on `analysis/pattern/` (keep/recalibrate/delete per rule); gated on T6-D, now unblocked

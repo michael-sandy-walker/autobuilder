@@ -88,10 +88,6 @@ public class CheckpointService {
     @Value("${autobuilder.checkpoint.retain:40}")
     private int retainCheckpoints = 40;
 
-    /** Copy {@code cache/} into each checkpoint so a FAITHFUL rewind has something to restore. */
-    @Value("${autobuilder.checkpoint.capture-cache:true}")
-    private boolean captureCache = true;
-
     /**
      * Whether an AUTOMATIC rewind may leave the run it is in. Off: the loop backs out only to
      * points its own run took, and reaching into an earlier run of the lineage stays something a
@@ -140,7 +136,7 @@ public class CheckpointService {
             fileService.ensureFolderExists(dir);
 
             StateManifest.Capture capture = stateManifest.capture();
-            boolean cacheCopied = captureCache && copyCache(dir);
+            boolean cacheCopied = copyCache(dir);
 
             CheckpointRecord record = new CheckpointRecord(
                     context.cycleName(),

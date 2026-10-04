@@ -41,7 +41,6 @@ class GoalConsolidationServiceTest {
     @BeforeEach
     void setUp() {
         service = new GoalConsolidationService(goalPlannerService, goalAdoptionService, goalSimilarityService);
-        service.setEnabled(true);
         service.setStagnationStreakTrigger(3);
         service.setActiveLeafThreshold(10);
         service.setMaxReviewerCalls(5);
@@ -175,17 +174,6 @@ class GoalConsolidationServiceTest {
         service.maybeConsolidate(halting);
         service.maybeConsolidate(halting);
         service.maybeConsolidate(halting);
-
-        verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
-    }
-
-    @Test
-    void disabled_neverRuns() {
-        service.setEnabled(false);
-
-        service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
-        service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
-        service.maybeConsolidate(ctx(CycleResultState.STAGNATING));
 
         verify(goalAdoptionService, never()).findEquivalent(any(), anyList(), any());
     }

@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -53,11 +52,6 @@ public class PackageConsolidationService {
 
     private final PackageFragmentationCheck packageFragmentationCheck;
 
-    /** Off by default; enabled via {@code application.yml} so the next real run validates it. */
-    @Setter
-    @Value("${autobuilder.evolution.package-consolidation.enabled:false}")
-    private boolean enabled;
-
     /** Optional behaviour trace logger — emits {@code package_consolidation_applied} per moved file. */
     @Setter
     @Autowired(required = false)
@@ -70,7 +64,7 @@ public class PackageConsolidationService {
      * existing location, or the outcome unchanged when disabled or nothing fragments.
      */
     public EvolutionOutcome consolidate(EvolutionOutcome outcome, String outputPath, String cycleName) {
-        if (!enabled || outcome == null) return outcome;
+        if (outcome == null) return outcome;
         List<FileMutation> mutations = outcome.addedOrChangedFiles();
         if (mutations == null || mutations.isEmpty()) return outcome;
 

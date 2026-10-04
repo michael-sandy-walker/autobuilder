@@ -34,7 +34,7 @@ class ScopeThrashSignalAnalyzerTest {
 
     @BeforeEach
     void setUp() {
-        analyzer = new ScopeThrashSignalAnalyzer(agentGraphService, goalPlannerService);
+        analyzer = new ScopeThrashSignalAnalyzer(agentGraphService);
     }
 
     private static ScopeActionSnapshot snap(String status) {
@@ -60,20 +60,6 @@ class ScopeThrashSignalAnalyzerTest {
         assertThat(out.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isTrue();
         assertThat(out.currentSubGoalId()).isEqualTo("sub-1");
         verify(goalPlannerService, never()).applyGoalProgress(anyString(), any(), anyString());
-    }
-
-    @Test
-    void thrash_legacyFlagOff_givesUpDirectlyAndAdvancesPointer() {
-        ReflectionTestUtils.setField(analyzer, "routeToRescue", false);
-        when(agentGraphService.findRecentScopeActions(eq("sub-1"), anyInt()))
-                .thenReturn(List.of(snap("OUT_OF_SCOPE"), snap("OUT_OF_SCOPE"), snap("OUT_OF_SCOPE")));
-        when(goalPlannerService.applyGoalProgress(eq("sub-1"), eq(GoalProgressState.GIVEN_UP), anyString()))
-                .thenReturn(new GoalProgressApplicationResult("sub-1", false, "sub-1", "sub-2", false));
-
-        CycleContextData out = analyzer.analyze(ctxWithSubgoal("sub-1"));
-
-        assertThat(out.currentSubGoalId()).isEqualTo("sub-2");
-        assertThat(out.hasOpenRequest(BasicSignals.SUBGOAL_EXHAUSTED)).isFalse();
     }
 
     @Test

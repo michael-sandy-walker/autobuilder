@@ -1063,14 +1063,6 @@ class BootGateTest {
                 .verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
                         List.of("POST /carts creates a cart and returns HTTP 201")))
                 .isEmpty();
-
-        // Wired but switched off.
-        BootGate off = gateProbing(List.of(
-                new CriterionProbeSynthesizer.ProbeRequest("POST", "/carts", "{}")));
-        off.setCriterionProbeEnabled(false);
-        assertThat(off.verifyBootsAndServes("c", SPEC_ITEMS_AND_CARTS,
-                List.of("POST /carts creates a cart and returns HTTP 201")))
-                .isEmpty();
     }
 
     @Test

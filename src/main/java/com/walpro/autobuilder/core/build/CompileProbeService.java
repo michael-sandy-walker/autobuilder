@@ -60,18 +60,6 @@ public class CompileProbeService {
     private String fileBasePath;
 
     /**
-     * T4-AN-6 / T3-BV: enables chaining deterministic fixes within one compile probe. When
-     * disabled, a single injector attempt runs (the original one-shot behaviour). When enabled
-     * the chain has no fixed pass ceiling — it terminates on its three natural bounds: no
-     * resolver produces a proposal, the build goes green, or a pass fails to strictly reduce
-     * the distinct-error count (a strictly decreasing non-negative count guarantees
-     * termination in at most initial-error-count passes).
-     */
-    @Setter
-    @Value("${autobuilder.build.inner-fix-loop.enabled:false}")
-    private boolean fixChainEnabled = false;
-
-    /**
      * T4-BN-3 (scoped probe): build command used when the staged mutation ITSELF touches test
      * sources. The blanket T4-BN-2 flip (every probe compiles tests) was the bisect-confirmed
      * regression behind the 06-17→06-23 fulfillment cliff and stays reverted — but with a
@@ -85,17 +73,6 @@ public class CompileProbeService {
     @Setter
     @Value("${autobuilder.build.test-scope-command:mvn test-compile}")
     private String testScopeCommand = "mvn test-compile";
-
-    /**
-     * T2-EZ: keep an injector-created file through the chain-stopped rollback when its own compile
-     * diagnostic cleared. Off restores the pre-2026-08-01 behaviour where a red build discarded
-     * every injector file while a green one preserved them (the T4-AQ carve-out) — backwards with
-     * respect to where the partial progress is needed, and the arm to compare against if the
-     * preserved types ever turn out to cost more than the re-derivation they save.
-     */
-    @Setter
-    @Value("${autobuilder.build.preserve-cleared-injector-files.enabled:true}")
-    private boolean preserveClearedInjectorFiles = true;
 
     /** T4-BH: optional behaviour trace logger — emits {@code package_fragmentation_detected} on probe-time gate. */
     @Setter
@@ -371,7 +348,7 @@ public class CompileProbeService {
      * T4-AN-6: inner build-fix chaining loop. Asks {@link CompileFixInjector} for a deterministic
      * fix, writes it to {@code output/} and {@code mutations/<cycleId>/} (so MergeAgent and
      * persistence see it), re-runs the build — and, while the build is still red and the chain
-     * budget ({@code autobuilder.build.inner-fix-loop.max-fixes-per-probe}) allows, repeats
+     * makes progress with writes it has not made before, repeats
      * against the <i>new</i> stderr. With several independent error classes present no single
      * fix can turn the build green (observed 2026-06-10: missing BookService + missing local
      * exceptions + missing member — four classes, so every one-shot fix "failed" and was
@@ -416,10 +393,23 @@ public class CompileProbeService {
         BuildOutcome currentOutcome = firstOutcome;
         MergeRollbackPoint extendedRollback = null;
 
-        for (int pass = 0; pass == 0 || fixChainEnabled; pass++) {
+        // The writes every pass made: a pass that writes exactly what an earlier one wrote changes nothing in
+        // the tree, so its re-probe can only repeat. The termination argument below assumed the ledger
+        // keeps repeats out; this makes it hold inside the chain (2026-10-04: with the chain always on, a
+        // repeated proposal whose own diagnostic clears each pass ran 2.5 million passes in a test).
+        java.util.Set<java.util.List<String>> writesSeen = new java.util.HashSet<>();
+        for (int pass = 0; ; pass++) {
             Optional<FixProposal> proposalOpt = compileFixInjector.inject(currentOutcome.stderrTail(), context);
             if (proposalOpt.isEmpty()) break;
             FixProposal proposal = proposalOpt.get();
+            java.util.List<String> writes = proposal.mutations().stream()
+                    .filter(m -> m != null && m.path() != null && m.content() != null)
+                    .map(m -> m.path() + "\n" + m.content()).sorted().toList();
+            if (!writesSeen.add(writes)) {
+                log.info("CompileFixInjector: chain stopped -- rule={} proposed the same writes as an earlier pass",
+                        proposal.record().rule());
+                break;
+            }
             // T4-CQ: an injector fix that would write a protected path is not the loop's to make;
             // on an adopted project a missing symbol is far likelier a wrong reference than a
             // missing class, and the operator has said which paths are off-limits.
@@ -551,7 +541,7 @@ public class CompileProbeService {
                                                        Set<String> newlyAddedPaths,
                                                        BuildOutcome finalOutcome,
                                                        String outputPath) {
-        if (!preserveClearedInjectorFiles || applied == null || applied.isEmpty()) return Set.of();
+        if (applied == null || applied.isEmpty()) return Set.of();
 
         Map<String, String> candidates = new LinkedHashMap<>();
         for (FixProposal proposal : applied) {

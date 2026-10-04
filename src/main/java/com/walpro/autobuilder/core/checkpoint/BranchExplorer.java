@@ -55,27 +55,12 @@ public class BranchExplorer {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
-    /** Whether a rewind keeps the path it leaves as a branch, and the best explored path is chosen. One switch, in case accumulating branches ever behaves worse than simply going back. */
-    @Setter
-    @org.springframework.beans.factory.annotation.Value("${autobuilder.branch.enabled:true}")
-    private boolean enabled = true;
-
-    /**
-     * Whether branching is on. Callers must ask BEFORE routing a decision through this service:
-     * a disabled explorer that answered "no fork point" would look identical to "everything has
-     * been explored", and would turn the switch into a silent removal of slice 3's rewind rather
-     * than of slice 4's bookkeeping.
-     */
-    public boolean enabled() {
-        return enabled;
-    }
-
     /**
      * Seal the branch the loop is on and open a new one from {@code forkPoint}. The caller has
      * already rewound; this records what was explored so the next fork does not re-walk it.
      */
     public ExplorationBranch forkAt(CheckpointRecord forkPoint, String atCycleId, String label) {
-        if (!enabled) return null;
+        if (false) return null;
         sealCurrent(atCycleId);
         ExplorationBranch branch = new ExplorationBranch(
                 nextBranchId(), label, forkPoint.cycleId(), null, null, null, java.time.Instant.now());
@@ -93,7 +78,7 @@ public class BranchExplorer {
      * comparison that could not see it would only ever be able to choose between detours.
      */
     public Optional<ExplorationBranch> sealCurrent(String atCycleId) {
-        if (!enabled) return Optional.empty();
+        if (false) return Optional.empty();
         ExplorationBranch open = branchLedger.openBranch().orElseGet(this::openMainRetrospectively);
         if (open == null) return Optional.empty();
         ExplorationBranch sealed = open.sealedAt(atCycleId, measure(open, atCycleId));
@@ -149,7 +134,7 @@ public class BranchExplorer {
      * @return the rewind that moved the run, or empty when it is already on the most advanced path
      */
     public Optional<RewindService.Result> adoptMostAdvanced(String atCycleId) {
-        if (!enabled) return Optional.empty();
+        if (false) return Optional.empty();
         List<ExplorationBranch> sealed = branchLedger.sealedBranches();
         if (sealed.size() < 2) return Optional.empty();
         Optional<ExplorationBranch> best = mostAdvancedSealedBranch();

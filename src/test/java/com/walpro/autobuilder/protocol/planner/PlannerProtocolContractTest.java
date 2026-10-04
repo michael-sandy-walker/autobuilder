@@ -152,21 +152,21 @@ class PlannerProtocolContractTest {
     }
 
     // -------------------------------------------------------------------------
-    // T1-BJ: FULL_COVERAGE_REQUIRED rule + NOTE block rewrite
+    // T1-BJ / T2-EI: the first-decomposition rule (depth-first, one resource at a time) + NOTE block rewrite
     // -------------------------------------------------------------------------
 
     @Test
-    void rules_containsFullCoverageRequired() {
+    void rules_containTheDepthFirstRule_andNotTheBreadthFirstOne() {
         assertThat(PlannerProtocolContract.rules())
                 .extracting(r -> r.id())
-                .contains("FULL_COVERAGE_REQUIRED");
+                .contains("DEPTH_FIRST_RESOURCE").doesNotContain("FULL_COVERAGE_REQUIRED");
     }
 
     @Test
-    void systemPrompt_containsFullCoverageRequiredRule() {
+    void systemPrompt_containsTheDepthFirstRule() {
         String prompt = PlannerProtocolContract.getSystemPrompt();
-        assertThat(prompt).contains("FULL_COVERAGE_REQUIRED");
-        assertThat(prompt).contains("one subgoal per feature");
+        assertThat(prompt).contains("DEPTH_FIRST_RESOURCE");
+        assertThat(prompt).contains("Build ONE resource completely before starting the next");
     }
 
     @Test
@@ -183,7 +183,7 @@ class PlannerProtocolContractTest {
                 .currentGoalDescription("Implement a REST API with POST /tasks and GET /tasks")
                 .build();
         String prompt = PlannerProtocolContract.getUserPrompt(ctx);
-        assertThat(prompt).contains("enumerate every named feature");
+        assertThat(prompt).contains("list every named resource");
         assertThat(prompt).contains("Do NOT say");
         assertThat(prompt).doesNotContain("If the root goal is fulfilled, respond with:");
     }

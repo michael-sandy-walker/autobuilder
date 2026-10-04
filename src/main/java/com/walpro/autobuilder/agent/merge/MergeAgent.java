@@ -93,11 +93,6 @@ public class MergeAgent implements ExecutionAgent {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.StructuralTreeRepair structuralTreeRepair;
 
-    /** T2-EW: keep test sources out of the artifact on goals whose spec never asked for tests. */
-    @Setter
-    @org.springframework.beans.factory.annotation.Value("${autobuilder.build.skip-unrequested-tests:true}")
-    private boolean skipUnrequestedTests = true;
-
     /** T4-BE: optional deferred-mutation clearance hook — wired in production, null in unit tests. */
     @Setter
     @Autowired(required = false)
@@ -506,7 +501,7 @@ public class MergeAgent implements ExecutionAgent {
      * is off unless {@code autobuilder.build.skip-unrequested-tests} is on.
      */
     boolean isUnrequestedTestSource(String path, CycleContextData context) {
-        if (!skipUnrequestedTests) return false;
+        if (false) return false;
         String spec = context != null ? context.currentGoalDescription() : null;
         if (spec == null || spec.isBlank()) {
             GoalEntity root = goalPlannerService.getRootGoal();

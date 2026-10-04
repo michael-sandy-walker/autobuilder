@@ -57,7 +57,7 @@ class ClosureRefutationRepairScenarioTest {
 
     private static ControlLoopScenarioHarness armed() {
         ControlLoopScenarioHarness h = ControlLoopScenarioHarness.create()
-                .withRetries(false).withDivideOnExhaustion(false).withExhaustionCap(10);
+                .withExhaustionCap(10);
         h.seedTree(DESCRIPTION, CRITERIA, false);
         evaluatorSaysAllMet(h);
         h.carryContext(h.exhaustedContext(DESCRIPTION, CRITERIA));

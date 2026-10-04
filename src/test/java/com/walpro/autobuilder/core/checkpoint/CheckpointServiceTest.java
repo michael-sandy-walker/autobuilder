@@ -61,7 +61,6 @@ class CheckpointServiceTest {
         checkpoints = new CheckpointService(fileService, mapper, manifest, log, identity, fingerprints, planner, archiveFor(fileService));
         ReflectionTestUtils.setField(checkpoints, "enabled", true);
         ReflectionTestUtils.setField(checkpoints, "retainCheckpoints", 40);
-        ReflectionTestUtils.setField(checkpoints, "captureCache", true);
     }
 
     @Test
@@ -389,7 +388,6 @@ class CheckpointServiceTest {
      */
     private CheckpointArchive archiveFor(FileService files) {
         CheckpointArchive archive = new CheckpointArchive(files, diffConfig());
-        ReflectionTestUtils.setField(archive, "enabled", true);
         ReflectionTestUtils.setField(archive, "retain", 500);
         return archive;
     }

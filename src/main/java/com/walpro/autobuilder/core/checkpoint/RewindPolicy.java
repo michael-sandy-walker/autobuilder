@@ -71,11 +71,6 @@ public class RewindPolicy {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
-    /** Whether a run grinding without merges rewinds to an earlier checkpoint instead of halting. One switch, in case backing out ever behaves worse in the field than dying did. */
-    @Setter
-    @Value("${autobuilder.rewind.on-grind-enabled:true}")
-    private boolean enabled = true;
-
     /**
      * How many times one run may back out. Two, because a run that has ground twice from two
      * different points is telling us something a third rewind will not fix, and because each one
@@ -104,7 +99,7 @@ public class RewindPolicy {
      * @param cyclesInDrought how long the run has been stalled, for the trace
      */
     public Optional<RewindService.Result> considerRewindInsteadOfHalting(String atCycleId, int cyclesInDrought) {
-        if (!enabled) return Optional.empty();
+        if (false) return Optional.empty();
         if (rewindsUsed >= maxRewinds) {
             log.info("T4-DQ: grinding at {} but the run has already used its {} rewind(s) — exploration is over.",
                     atCycleId, rewindsUsed);
@@ -116,7 +111,7 @@ public class RewindPolicy {
         // rewind at least cannot re-walk the same stretch from the same place. The ledger version
         // is strictly better because a point can be untried and NEWER than the last fork, which
         // the positional rule would skip for no reason beyond its own arithmetic.
-        boolean branching = branchExplorer != null && branchExplorer.enabled();
+        boolean branching = branchExplorer != null;
         Optional<CheckpointRecord> target = branching
                 ? branchExplorer.nextUntriedForkPoint()
                 : rewindService.lastMergedBefore(lastTargetCycleId != null ? lastTargetCycleId : atCycleId);
@@ -169,7 +164,7 @@ public class RewindPolicy {
      * "exploration is over" cycles do not re-adopt.
      */
     private Optional<RewindService.Result> settleOnBestPath(String atCycleId) {
-        if (settledOnBestPath || branchExplorer == null || !branchExplorer.enabled()) {
+        if (settledOnBestPath || branchExplorer == null) {
             return Optional.empty();
         }
         settledOnBestPath = true;

@@ -434,7 +434,6 @@ class ObservedLeafPromotionTest {
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
-        lenient().when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setExercisableCriterionQuery(

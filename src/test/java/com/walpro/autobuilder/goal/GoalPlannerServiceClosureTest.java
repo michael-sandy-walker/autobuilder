@@ -202,7 +202,6 @@ public class GoalPlannerServiceClosureTest {
         // 19's root-blocker ("integer return values handled as strings where required") was
         // minted exactly here, from a transient compile diagnostic. No LLM involved.
         doNothing().when(fileService).writeFile(anyString(), anyString());
-        when(goalPlannerConfig.isCriteriaGroundingEnabled()).thenReturn(true);
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
 
         GoalEntity root = new GoalEntity("G", "root spec", "system", GoalType.GOAL, null);
@@ -277,7 +276,6 @@ public class GoalPlannerServiceClosureTest {
         // failure must still block. See [[project-t2ei-design-note]] (P3).
         doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
-        when(goalPlannerConfig.isDepthFirstDecomposition()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
 
@@ -319,7 +317,6 @@ public class GoalPlannerServiceClosureTest {
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
-        when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
@@ -368,7 +365,6 @@ public class GoalPlannerServiceClosureTest {
         doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).markCompleted(anyString());
-        when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
@@ -422,7 +418,6 @@ public class GoalPlannerServiceClosureTest {
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
-        lenient().when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
@@ -436,7 +431,6 @@ public class GoalPlannerServiceClosureTest {
         goalMap.put(busy.getId(), busy);
         ReflectionTestUtils.setField(service, "goalMap", goalMap);
         ReflectionTestUtils.setField(service, "rootGoalId", "G");
-
 
         assertThat(service.requireEntryPointNow(Map.of("src/main/java/a/BookService.java",
                 "package a;\npublic class BookService { }\n"))).isTrue();
@@ -459,7 +453,6 @@ public class GoalPlannerServiceClosureTest {
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
-        lenient().when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
@@ -473,7 +466,6 @@ public class GoalPlannerServiceClosureTest {
         goalMap.put(busy.getId(), busy);
         ReflectionTestUtils.setField(service, "goalMap", goalMap);
         ReflectionTestUtils.setField(service, "rootGoalId", "G");
-
 
         assertThat(service.requireEntryPointNow(Map.of("src/main/java/a/App.java",
                 "package a;\n@SpringBootApplication\npublic class App {\n"
@@ -488,7 +480,6 @@ public class GoalPlannerServiceClosureTest {
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
-        lenient().when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
@@ -503,7 +494,6 @@ public class GoalPlannerServiceClosureTest {
         ReflectionTestUtils.setField(service, "goalMap", goalMap);
         ReflectionTestUtils.setField(service, "rootGoalId", "G");
 
-
         assertThat(service.requireEntryPointNow(Map.of("src/main/java/a/Util.java",
                 "package a;\npublic class Util { }\n"))).isFalse();
     }
@@ -514,7 +504,6 @@ public class GoalPlannerServiceClosureTest {
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
-        lenient().when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
@@ -528,7 +517,6 @@ public class GoalPlannerServiceClosureTest {
         goalMap.put(busy.getId(), busy);
         ReflectionTestUtils.setField(service, "goalMap", goalMap);
         ReflectionTestUtils.setField(service, "rootGoalId", "G");
-
 
         Map<String, String> noEntryPoint = Map.of("src/main/java/a/S.java", "package a;\npublic class S { }\n");
 
@@ -555,7 +543,6 @@ public class GoalPlannerServiceClosureTest {
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
-        when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
@@ -605,7 +592,6 @@ public class GoalPlannerServiceClosureTest {
         doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).markCompleted(anyString());
-        when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
@@ -640,8 +626,6 @@ public class GoalPlannerServiceClosureTest {
         doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).markCompleted(anyString());
-        when(goalPlannerConfig.isDepthFirstDecomposition()).thenReturn(true);
-        when(goalPlannerConfig.isSpecTraceabilityEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setSpecTraceability(new SpecTraceability(
@@ -676,8 +660,6 @@ public class GoalPlannerServiceClosureTest {
         // when the origin stamp says extra (late/nested addition) — its failure must still block.
         doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
-        when(goalPlannerConfig.isDepthFirstDecomposition()).thenReturn(true);
-        when(goalPlannerConfig.isSpecTraceabilityEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setSpecTraceability(new SpecTraceability(
@@ -697,34 +679,6 @@ public class GoalPlannerServiceClosureTest {
         goalMap.put(root.getId(), root);
         goalMap.put(done.getId(), done);
         goalMap.put(loanLeaf.getId(), loanLeaf);
-        ReflectionTestUtils.setField(service, "goalMap", goalMap);
-        ReflectionTestUtils.setField(service, "rootGoalId", "G");
-
-        service.autoCompleteRootIfSatisfied();
-        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
-    }
-
-    @Test
-    void autoCompleteRoot_breadthFirst_extraOriginGivenUpLeaf_stillBlocks() throws IOException {
-        // Control: with depth-first OFF (default), origin classification is ignored and ANY
-        // GIVEN_UP blocker dooms the root — the pre-T2-EI behaviour is unchanged.
-        doNothing().when(fileService).writeFile(anyString(), anyString());
-        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
-
-        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
-
-        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
-        root.setStatus(GoalStatus.ACTIVE);
-        GoalEntity done = new GoalEntity("D", "completed required work", "planner", GoalType.SUBGOAL, "G");
-        done.setStatus(GoalStatus.COMPLETED);
-        GoalEntity extraLeaf = new GoalEntity("E", "unrequested unit test", "planner", GoalType.SUBGOAL, "D");
-        extraLeaf.setStatus(GoalStatus.GIVEN_UP);
-        extraLeaf.getMetadata().put(GoalPlannerService.SUBGOAL_ORIGIN_KEY, GoalPlannerService.SUBGOAL_ORIGIN_EXTRA);
-
-        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
-        goalMap.put(root.getId(), root);
-        goalMap.put(done.getId(), done);
-        goalMap.put(extraLeaf.getId(), extraLeaf);
         ReflectionTestUtils.setField(service, "goalMap", goalMap);
         ReflectionTestUtils.setField(service, "rootGoalId", "G");
 
@@ -1148,8 +1102,6 @@ public class GoalPlannerServiceClosureTest {
         doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).markCompleted(anyString());
-        when(goalPlannerConfig.isDepthFirstDecomposition()).thenReturn(true);
-        when(goalPlannerConfig.isSpecTraceabilityEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setSpecTraceability(new SpecTraceability(
@@ -1194,8 +1146,6 @@ public class GoalPlannerServiceClosureTest {
         doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).markCompleted(anyString());
-        when(goalPlannerConfig.isDepthFirstDecomposition()).thenReturn(true);
-        when(goalPlannerConfig.isSpecTraceabilityEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setSpecTraceability(new SpecTraceability(
@@ -1243,7 +1193,6 @@ public class GoalPlannerServiceClosureTest {
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
         lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
-        when(goalPlannerConfig.isStructureQueryEnabled()).thenReturn(true);
 
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
@@ -1312,7 +1261,6 @@ public class GoalPlannerServiceClosureTest {
         assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
-
     @Test
     void setAcceptanceCriteria_criteriaGateItem_keepsTheSpecificationsOwnWordsBinding() throws IOException {
         // T3-CC field defect, run 2026-09-09_23-39-58. The criteria gate injects a [BUILD_FIX]
@@ -1333,7 +1281,6 @@ public class GoalPlannerServiceClosureTest {
         // a test that drives the T4-BP-3 closure block end to end, which is why the residual is
         // named here rather than left for someone to assume this test covers it.
         doNothing().when(fileService).writeFile(anyString(), anyString());
-        when(goalPlannerConfig.isCriteriaGroundingEnabled()).thenReturn(true);
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
 
         GoalEntity root = new GoalEntity("G", "root spec", "system", GoalType.GOAL, null);

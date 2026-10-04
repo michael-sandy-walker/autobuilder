@@ -33,7 +33,6 @@ class RewindPolicyTest {
     void setUp() {
         rewindService = mock(RewindService.class);
         policy = new RewindPolicy(rewindService);
-        ReflectionTestUtils.setField(policy, "enabled", true);
         ReflectionTestUtils.setField(policy, "maxRewinds", 2);
         ReflectionTestUtils.setField(policy, "cacheMode", CacheMode.FAITHFUL);
     }
@@ -106,7 +105,6 @@ class RewindPolicyTest {
     @DisplayName("with branching, the fork point is the newest UNTRIED one, not merely an older one")
     void branchingChoosesByWhatHasBeenTriedNotByPosition() {
         BranchExplorer explorer = mock(BranchExplorer.class);
-        when(explorer.enabled()).thenReturn(true);
         policy.setBranchExplorer(explorer);
         // A point NEWER than the previous target is still untried — the positional rule would skip
         // it for no reason beyond its own arithmetic.
@@ -125,7 +123,6 @@ class RewindPolicyTest {
     @DisplayName("when every point that landed work has been explored, the run halts")
     void exhaustedExplorationHalts() {
         BranchExplorer explorer = mock(BranchExplorer.class);
-        when(explorer.enabled()).thenReturn(true);
         policy.setBranchExplorer(explorer);
         when(explorer.nextUntriedForkPoint()).thenReturn(Optional.empty());
 
@@ -137,7 +134,6 @@ class RewindPolicyTest {
     @DisplayName("when exploration runs out, the run is put on the best path it found — once")
     void exhaustedExplorationSettlesOnTheBestPath() {
         BranchExplorer explorer = mock(BranchExplorer.class);
-        when(explorer.enabled()).thenReturn(true);
         when(explorer.nextUntriedForkPoint()).thenReturn(Optional.empty());
         when(explorer.adoptMostAdvanced(anyString())).thenReturn(Optional.of(performed("cycle-2")));
         policy.setBranchExplorer(explorer);
@@ -152,32 +148,6 @@ class RewindPolicyTest {
         // One-shot: the "exploration is over" branch is reached on every later cycle too.
         assertThat(policy.considerRewindInsteadOfHalting("cycle-51", 43)).isEmpty();
         verify(explorer, org.mockito.Mockito.times(1)).adoptMostAdvanced(anyString());
-    }
-
-    @Test
-    @DisplayName("switching branching off falls back to the positional rule, it does not stop rewinding")
-    void disablingBranchingKeepsTheRewind() {
-        BranchExplorer explorer = mock(BranchExplorer.class);
-        when(explorer.enabled()).thenReturn(false);
-        policy.setBranchExplorer(explorer);
-        when(rewindService.lastMergedBefore(anyString())).thenReturn(Optional.of(checkpoint("cycle-5", true)));
-        when(rewindService.rewindTo(anyString(), any(), anyString(), anyString()))
-                .thenReturn(performed("cycle-5"));
-
-        assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 42))
-                .as("the branch switch removes slice 4's bookkeeping, not slice 3's rewind")
-                .isPresent();
-        verify(explorer, never()).nextUntriedForkPoint();
-        verify(explorer, never()).forkAt(any(), anyString(), anyString());
-    }
-
-    @Test
-    @DisplayName("the switch turns it off and the halt edge behaves as before")
-    void theSwitchTurnsItOff() {
-        ReflectionTestUtils.setField(policy, "enabled", false);
-
-        assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 42)).isEmpty();
-        verify(rewindService, never()).lastMergedBefore(anyString());
     }
 
     private static CheckpointRecord checkpoint(String cycleId, boolean merged) {

@@ -76,11 +76,6 @@ public class GoalConsolidationService implements CheckpointableState {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
-    @Setter
-    // Whether near-duplicate subgoals, and given-up ones whose work was done elsewhere, are folded onto one when the loop stagnates or the tree grows.
-    @Value("${autobuilder.goal.consolidation.enabled:true}")
-    private boolean enabled = true;
-
     /** Consecutive STAGNATING/ROLLED_BACK cycles before a pass is attempted. */
     @Setter
     @Value("${autobuilder.goal.consolidation.stagnation-streak:3}")
@@ -164,7 +159,7 @@ public class GoalConsolidationService implements CheckpointableState {
      * Post-cycle hook. Cheap unless a trigger fires; never throws.
      */
     public void maybeConsolidate(CycleContextData context) {
-        if (!enabled || context == null) return;
+        if (context == null) return;
         if (DerivedFacts.goalExhausted(context) || DerivedFacts.systemPaused(context)) {
             return; // halting — tree mutation now would race the terminal-state report
         }

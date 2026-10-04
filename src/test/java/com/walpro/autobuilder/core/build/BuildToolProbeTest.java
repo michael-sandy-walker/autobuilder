@@ -18,10 +18,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class BuildToolProbeTest {
 
-    private BuildToolProbe probe(boolean enabled, Map<String, String> detection,
+    private BuildToolProbe probe(Map<String, String> detection,
                                  Map<String, List<String>> diagnostics) {
         BuildToolProbeProperties props = new BuildToolProbeProperties();
-        props.setDiagnosticsEnabled(enabled);
         props.setToolDetection(detection);
         props.setDiagnostics(diagnostics);
         return new BuildToolProbe(props);
@@ -30,15 +29,14 @@ class BuildToolProbeTest {
     @Test
     void detectTools_byFilePresence(@TempDir Path dir) throws IOException {
         Files.writeString(dir.resolve("pom.xml"), "<project/>");
-        BuildToolProbe p = probe(true, Map.of("pom.xml", "maven", "build.gradle", "gradle"), Map.of());
+        BuildToolProbe p = probe(Map.of("pom.xml", "maven", "build.gradle", "gradle"), Map.of());
         assertThat(p.detectTools(dir.toString())).containsExactly("maven");
     }
 
     @Test
     void diagnose_runsConfiguredCommand_andCapturesOutput(@TempDir Path dir) throws IOException {
         Files.writeString(dir.resolve("pom.xml"), "<project/>");
-        BuildToolProbe p = probe(true,
-                Map.of("pom.xml", "maven"),
+        BuildToolProbe p = probe(Map.of("pom.xml", "maven"),
                 Map.of("maven", List.of("echo plugin-update-available")));
 
         String diag = p.diagnose(dir.toString(), "cycle-1");
@@ -49,16 +47,8 @@ class BuildToolProbeTest {
     }
 
     @Test
-    void diagnose_disabled_returnsNull(@TempDir Path dir) throws IOException {
-        Files.writeString(dir.resolve("pom.xml"), "<project/>");
-        BuildToolProbe p = probe(false, Map.of("pom.xml", "maven"),
-                Map.of("maven", List.of("echo x")));
-        assertThat(p.diagnose(dir.toString(), "cycle-1")).isNull();
-    }
-
-    @Test
     void diagnose_noToolDetected_returnsNull(@TempDir Path dir) {
-        BuildToolProbe p = probe(true, Map.of("pom.xml", "maven"),
+        BuildToolProbe p = probe(Map.of("pom.xml", "maven"),
                 Map.of("maven", List.of("echo x")));
         assertThat(p.diagnose(dir.toString(), "cycle-1")).isNull(); // empty dir → no pom → no tool
     }
@@ -66,8 +56,7 @@ class BuildToolProbeTest {
     @Test
     void diagnose_failedCommand_isInformationalNotThrown(@TempDir Path dir) throws IOException {
         Files.writeString(dir.resolve("pom.xml"), "<project/>");
-        BuildToolProbe p = probe(true,
-                Map.of("pom.xml", "maven"),
+        BuildToolProbe p = probe(Map.of("pom.xml", "maven"),
                 Map.of("maven", List.of("definitely-not-a-real-command-xyz")));
 
         String diag = p.diagnose(dir.toString(), "cycle-1");
@@ -80,7 +69,7 @@ class BuildToolProbeTest {
         // A per-run-varying command (nanosecond clock): same cycleId returns the cached output,
         // a new cycleId re-runs and yields a different timestamp.
         Files.writeString(dir.resolve("pom.xml"), "<project/>");
-        BuildToolProbe p = probe(true, Map.of("pom.xml", "maven"),
+        BuildToolProbe p = probe(Map.of("pom.xml", "maven"),
                 Map.of("maven", List.of("date +%s%N")));
 
         String a = p.diagnose(dir.toString(), "cycle-1");

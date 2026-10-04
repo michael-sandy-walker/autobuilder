@@ -40,9 +40,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * BuildClassification} node mentioned in the ticket is a follow-up — out of scope for the
  * initial ship.
  *
- * <p>This bean is safe to call when {@link BuildClassifierConfigProperties#isAdaptive()} is
- * {@code false}: it short-circuits to {@link BuildErrorClassifier#classify(String)} without
- * consulting the LLM. The pattern fallback now populates {@link BuildErrorClassifier.Category}
+ * <p>When the model cannot answer it falls back to {@link BuildErrorClassifier#classify(String)}. The
+ * pattern fallback populates {@link BuildErrorClassifier.Category}
  * from {@link BuildErrorClassifier.Kind} via {@link BuildErrorClassifier#defaultCategoryFor},
  * so downstream consumers see a usable category either way.
  */
@@ -84,7 +83,6 @@ public class BuildErrorClassifierAgent {
 
     private final LLMClient llmClient;
     private final LlmCircuitBreaker circuitBreaker;
-    private final BuildClassifierConfigProperties config;
     private final ConcurrentHashMap<String, BuildErrorClassifier.Classification> cache = new ConcurrentHashMap<>();
 
     /** T4-AN-7: optional — emits {@code build_classifier_adaptive_hit} when the LLM path produces
@@ -93,31 +91,19 @@ public class BuildErrorClassifierAgent {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
-    public BuildErrorClassifierAgent(LLMClient llmClient, LlmCircuitBreaker circuitBreaker,
-                                     BuildClassifierConfigProperties config) {
+    public BuildErrorClassifierAgent(LLMClient llmClient, LlmCircuitBreaker circuitBreaker) {
         this.llmClient = llmClient;
         this.circuitBreaker = circuitBreaker;
-        this.config = config;
-        if (config.getModel() != null && !config.getModel().isBlank()) {
-            log.info("BuildErrorClassifierAgent: model override '{}' configured but per-call model selection " +
-                    "is not yet supported by LLMClient — using the default model. File a follow-up to plumb " +
-                    "per-call model selection through ChatRequest.", config.getModel());
-        }
     }
 
     /**
-     * Classify a build failure. Returns the pattern-matcher result when adaptive mode is off,
-     * the circuit breaker is open, the input is blank, or the LLM call fails/returns malformed
+     * Classify a build failure. Returns the pattern-matcher result when the circuit breaker is open, the input is blank, or the LLM call fails/returns malformed
      * output. Otherwise returns the LLM's adaptive classification, cached by SHA-256(stderr).
      */
     public BuildErrorClassifier.Classification classify(String stderr) {
         if (stderr == null || stderr.isBlank()) {
             return BuildErrorClassifier.classify(stderr);
         }
-        if (!config.isAdaptive()) {
-            return BuildErrorClassifier.classify(stderr);
-        }
-
         String cacheKey = sha256(stderr);
         BuildErrorClassifier.Classification cached = cache.get(cacheKey);
         if (cached != null) return cached;

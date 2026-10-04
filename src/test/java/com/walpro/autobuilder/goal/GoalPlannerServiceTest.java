@@ -286,7 +286,6 @@ class GoalPlannerServiceTest {
         // endpoint provably had no mapping — the closure gate then contradicted the completion
         // (262-reopen oscillation). Promotion of an endpoint work item now consults the same
         // deterministic query: mapping absent → refuse; mapping present → promote.
-        when(config.isStructureQueryEnabled()).thenReturn(true);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
         service.resetInitialGoal("root", "Main Goal");
         String workItem = "Provide the POST /loans endpoint named in the goal specification — no request mapping for it exists in the output.";
@@ -323,7 +322,6 @@ class GoalPlannerServiceTest {
     void applyGoalProgress_fulfilledEndpointWorkItem_promotesWhenQueryAbstains() {
         // No output on the context — the query has no opinion; promotion must not be blocked
         // on a missing observation (same abstain semantics as the closure edge).
-        when(config.isStructureQueryEnabled()).thenReturn(true);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
         service.resetInitialGoal("root", "Main Goal");
         String workItem = "Provide the POST /loans endpoint named in the goal specification — no request mapping for it exists in the output.";
@@ -342,7 +340,6 @@ class GoalPlannerServiceTest {
         // ABSENT — T3-BL re-fired its early exit on the stale bank every cycle for 63 minutes.
         // The FULFILLED application now reconciles the criteria against the structural view:
         // refuse the promotion AND correct the bank so the early exit yields next cycle.
-        when(config.isStructureQueryEnabled()).thenReturn(true);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
         service.resetInitialGoal("root", "Main Goal");
         service.addSubGoal("s", "Provide loan creation in the controller layer", false, "root");
@@ -388,7 +385,6 @@ class GoalPlannerServiceTest {
     void applyGoalProgress_fulfilled_negatedEndpointCriterion_abstains() {
         // An absence requirement is satisfied by a missing endpoint — the reconciliation
         // must not read "does not expose DELETE /loans" as a contradicted claim.
-        when(config.isStructureQueryEnabled()).thenReturn(true);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
         service.resetInitialGoal("root", "Main Goal");
         service.addSubGoal("s", "Restrict the loans surface", false, "root");
@@ -414,7 +410,6 @@ class GoalPlannerServiceTest {
     void applyGoalProgress_fulfilled_endpointCriterion_promotesWhenNoOutputVisible() {
         // No output on the context — the structural query has no opinion; the promotion must
         // not be blocked on a missing observation (same abstain semantics as the closure edge).
-        when(config.isStructureQueryEnabled()).thenReturn(true);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
         service.resetInitialGoal("root", "Main Goal");
         service.addSubGoal("s", "Provide loan creation in the controller layer", false, "root");
@@ -432,7 +427,6 @@ class GoalPlannerServiceTest {
     void isOpenStructuralRepairLeaf_trueOnlyWhileTheNamedGapIsOpen() {
         // T2-EM's recognition rule: description is a D2 work item AND the demanded endpoint is
         // definitively absent. Built endpoint, non-template description, or no output → false.
-        when(config.isStructureQueryEnabled()).thenReturn(true);
         service.setEndpointSurfaceQuery(new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery());
         service.resetInitialGoal("root", "Main Goal");
         String workItem = "Provide the POST /loans endpoint named in the goal specification — no request mapping for it exists in the output.";

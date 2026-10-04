@@ -35,14 +35,6 @@ import com.walpro.autobuilder.goal.ClaimRefutation;
 public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
 
     /**
-     * The check only ever refutes, so switching it off can only restore false closures — but a
-     * switch is what let T4-DA's unconfirmed cost be settled by measurement instead of argument, and
-     * every mechanism this project ships now carries one.
-     */
-    @Value("${autobuilder.goal.verify-closure-claims:true}")
-    private boolean enabled = true;
-
-    /**
      * T4-CU residual (1): whether a criterion the DETERMINISTIC synthesizer cannot build a probe
      * for may fall back to the model at this edge.
      *
@@ -76,15 +68,13 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
         this.exercisableCriterionQuery = exercisableCriterionQuery;
     }
 
-    /** Test seam — production wires the field value. */
-    public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     /** Test seam — production wires the field value. */
     public void setModelFallbackAtClosure(boolean on) { this.modelFallbackAtClosure = on; }
 
     @Override
     public Optional<ClaimRefutation> refute(String goalId, List<String> criteria, String specText) {
-        if (!enabled || criteria == null || criteria.isEmpty()) return Optional.empty();
+        if (criteria == null || criteria.isEmpty()) return Optional.empty();
 
         // Only criteria some probe can be BUILT for are worth booting the artifact. Filtering here
         // rather than inside the gate keeps the expensive steps behind a decision made in memory:
@@ -172,7 +162,7 @@ public class BehaviouralClosureVerifier implements ClosureClaimVerifier {
     @Override
     public Optional<ClaimRefutation> refuteObservedDefect(String goalId, String observedDefect,
                                                           String specText) {
-        if (!enabled || observedDefect == null || observedDefect.isBlank()) return Optional.empty();
+        if (observedDefect == null || observedDefect.isBlank()) return Optional.empty();
         String checkId = "closure-" + goalId;
         if (packageGate.verifyPackageable(checkId).isPresent()) {
             log.info("T2-ET: cannot re-observe {} — the artifact is not packageable", goalId);

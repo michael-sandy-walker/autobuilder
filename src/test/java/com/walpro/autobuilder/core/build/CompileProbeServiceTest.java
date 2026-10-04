@@ -228,7 +228,6 @@ class CompileProbeServiceTest {
         // Two independent error classes: fix 1 removes the List error, build stays red on Foo;
         // fix 2 removes Foo and the build clears. One-shot behaviour would have stopped (and
         // failure-recorded fix 1) after the first re-probe.
-        ReflectionTestUtils.setField(probe, "fixChainEnabled", true);
         when(buildExecutor.execute(any(), any())).thenReturn(
                 new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class List", 1L, "mvn", "p"),
                 new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class Foo", 1L, "mvn", "p"),
@@ -264,7 +263,6 @@ class CompileProbeServiceTest {
         // T3-BV: no fixed pass ceiling — the chain stops because the fix's targeted diagnostic
         // ("List") persists in the re-probe stderr AND the error count did not shrink. One
         // attempt, rolled back, recorded.
-        ReflectionTestUtils.setField(probe, "fixChainEnabled", true);
         when(buildExecutor.execute(any(), any())).thenReturn(
                 new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class List", 1L, "mvn", "p"),
                 new BuildOutcome(BuildResult.COMPILE_ERROR, "symbol: class List", 1L, "mvn", "p"),
@@ -288,7 +286,6 @@ class CompileProbeServiceTest {
         // errors does not shrink the error count — progress is the failure *kind* changing.
         // Pre-fix the chain stopped after pass 1 here (observed 2026-06-11); now it continues
         // and the second pass clears the build.
-        ReflectionTestUtils.setField(probe, "fixChainEnabled", true);
         when(buildExecutor.execute(any(), any())).thenReturn(
                 new BuildOutcome(BuildResult.COMPILE_ERROR,
                         "The goal you specified requires a project to execute but there is no POM in this directory", 1L, "mvn", "p"),
@@ -454,7 +451,6 @@ class CompileProbeServiceTest {
                 </project>
                 """);
         Object ensurer = ReflectionTestUtils.getField(probe, "testDependencyEnsurer");
-        ReflectionTestUtils.setField(ensurer, "enabled", true);
 
         when(buildExecutor.execute(any(), any(), org.mockito.ArgumentMatchers.eq("mvn test-compile")))
                 .thenReturn(new BuildOutcome(BuildResult.COMPILE_ERROR,

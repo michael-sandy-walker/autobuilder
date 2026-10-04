@@ -278,37 +278,8 @@ public class AutobuilderService implements CheckpointableState {
     @Value("${autobuilder.goal.max-consecutive-subgoal-exhaustions:5}")
     private int maxConsecutiveSubgoalExhaustionsWithoutMerge = 5;
 
-    /**
-     * T2-EI slice 1b: whether a required subgoal that runs out of attempts gets fresh ones (one per unmet criterion) before it is given up. Earned per-leaf retry budget. A REQUIRED subgoal is otherwise given up the
-     * first time it is declared exhausted (no per-leaf retries) — the 2026-06-27 reliability batch
-     * died 3/5 when a single required subgoal exhausted and cascaded to root GIVEN_UP. When enabled,
-     * a required subgoal gets fresh attempts (stagnation state reset) before give-up; EXTRA-origin
-     * subgoals keep the eager give-up (absorbed at closure anyway).
-     *
-     * <p>The budget is RELATIVE, not a constant ([[feedback-relative-thresholds]]): one fresh
-     * attempt per currently-unmet acceptance criterion ({@code countUnmetCriteria}, floor 1) —
-     * attempts proportional to the work item's remaining declared scope, shrinking as criteria
-     * bank. Replaces the experiment-era fixed {@code subgoal-retry-budget} count (the old key is
-     * gone; this boolean is the switch). Counter still resets on any merged cycle (merge =
-     * progress = refreshed budget). See [[project-t2ei-design-note]] slice 1b.
-     */
-    @Value("${autobuilder.goal.subgoal-retry-enabled:false}")
-    private boolean subgoalRetryEnabled = false;
-
     /** T2-EI slice 1b: per-subgoal exhaustion-retry counter, cleared on any merged cycle. */
     private final java.util.Map<String, Integer> subgoalRetryCount = new java.util.HashMap<>();
-
-    /**
-     * T2-EJ: divide-and-conquer fallback at the give-up edge. When a REQUIRED subgoal has spent
-     * its retries (pair with {@code subgoal-retry-enabled} — the division is meant as the
-     * step AFTER retries, not instead of them) and output verification graded two or more of its
-     * criteria unmet, divide it into independently-attemptable per-criterion subgoals instead of
-     * giving up. Targets the 2026-06-27 run-2 failure: one subgoal bundling 5 behaviour rules,
-     * 0/5 passed, root GIVEN_UP. false = disabled (default, preserves prior behaviour).
-     * See [[project-t2ei-design-note]].
-     */
-    @Value("${autobuilder.goal.divide-on-exhaustion:false}")
-    private boolean divideOnExhaustion = false;
 
     /** Minimum GIVEN_UP children required before per-parent exhaustion fires (floor for the majority rule). */
     @Value("${autobuilder.goal.min-exhausted-children-floor:5}")
@@ -1166,7 +1137,7 @@ public class AutobuilderService implements CheckpointableState {
                     // fulfilling or dying on variance). The budget is one attempt per currently-
                     // unmet criterion (floor 1) — relative to the item's remaining declared scope,
                     // not a constant. EXTRA-origin subgoals skip this (absorbed at closure anyway).
-                    if (subgoalRetryEnabled && subGoalId != null
+                    if (subGoalId != null
                             && !goalPlannerService.isExtraOriginSubgoal(subGoalId)) {
                         int budget = goalPlannerService.countUnmetCriteria(subGoalId);
                         int used = subgoalRetryCount.merge(subGoalId, 1, Integer::sum);
@@ -1197,8 +1168,7 @@ public class AutobuilderService implements CheckpointableState {
                     // divides nothing. Counts toward the exhaustion runaway brake exactly like
                     // the T4-BP-4 residue path — at the cap the give-up wins. EXTRA-origin
                     // subgoals are not divided (absorbed at closure anyway).
-                    if (divideOnExhaustion
-                            && consecutiveSubgoalExhaustionsWithoutMerge + 1 < maxConsecutiveSubgoalExhaustionsWithoutMerge
+                    if (consecutiveSubgoalExhaustionsWithoutMerge + 1 < maxConsecutiveSubgoalExhaustionsWithoutMerge
                             && !goalPlannerService.isExtraOriginSubgoal(subGoalId)) {
                         java.util.List<String> unmet = unmetCriteriaTexts(context, verified);
                         java.util.List<String> childIds = goalPlannerService.divideExhaustedSubGoal(subGoalId, unmet);

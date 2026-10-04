@@ -48,7 +48,7 @@ public final class AgentPromptRenderer {
 
     public static Map<String, String> renderAll(CycleContextData ctx) {
         Map<String, String> out = new LinkedHashMap<>();
-        out.put("planner", PlannerProtocolContract.getUserPrompt(ctx, false));
+        out.put("planner", PlannerProtocolContract.getUserPrompt(ctx));
         out.put("evolution", EvolutionProtocolContract.getUserPrompt(
                 ctx, ctx.evaluationInterpretation(), useDivergent(ctx),
                 PromptTokenBudget.DEFAULT_PROMPT_HEADROOM_TOKENS));

@@ -284,18 +284,16 @@ run_live() {
         || { FAILURES+=("jar-build (log: $run_dir/build.log)"); fail_out; }
     jar=$(ls target/autobuilder-*-SNAPSHOT.jar | head -1)
 
-    say "launching capped live run (${minutes} min): proven flag family + criteria grounding${PREFLIGHT_EXTRA_FLAGS:+ + extra: $PREFLIGHT_EXTRA_FLAGS}"
-    # PREFLIGHT_EXTRA_FLAGS: space-separated extra --spring properties, appended AFTER the proven
-    # family so an A/B arm can vary ONE flag while keeping all of preflight's safety machinery
+    say "launching capped live run (${minutes} min): defaults${PREFLIGHT_EXTRA_FLAGS:+ + extra: $PREFLIGHT_EXTRA_FLAGS}"
+    # The run uses the code's defaults: the flags this used to pass (depth-first decomposition, admission
+    # cap 6, subgoal retries, divide on exhaustion, the structure query) are the defaults since
+    # 2026-10-04, so the jar alone runs what was measured.
+    # PREFLIGHT_EXTRA_FLAGS: space-separated extra --spring properties, so an A/B arm can vary ONE
+    # setting while keeping all of preflight's safety machinery
     # (model probe, watcher, run_dir capture). Recorded into the run_dir for provenance. Empty by default.
     echo "${PREFLIGHT_EXTRA_FLAGS:-(none)}" > "$run_dir/extra_flags.txt"
     FILE_BASE_PATH="$target" nohup java -jar "$jar" \
         --spring.profiles.active=dev-auto,fast \
-        --autobuilder.goal.depth-first-decomposition=true \
-        --autobuilder.goal.admission-cap=6 \
-        --autobuilder.goal.subgoal-retry-enabled=true \
-        --autobuilder.goal.divide-on-exhaustion=true \
-        --autobuilder.goal.structure-query-enabled=true \
         --autobuilder.run.budget-minutes="$minutes" \
         ${PREFLIGHT_EXTRA_FLAGS:-} \
         > "$run_dir/console.log" 2>&1 &

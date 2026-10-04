@@ -68,10 +68,6 @@ public class StuckLayer {
     @Autowired(required = false)
     private StuckPriors priors;
 
-    /** T4-CT: whether earlier runs are consulted; outcomes are recorded either way (the A arm of T6-I's pairs). */
-    @org.springframework.beans.factory.annotation.Value("${autobuilder.stuck.priors.consult:true}")
-    private boolean consultPriors = true;
-
     /** The test gate, whose failing test the execution trace re-runs; optional. */
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
@@ -296,7 +292,7 @@ public class StuckLayer {
      * ended it there. Read once per signature per run.
      */
     private void consultPriors(StuckObservation o) {
-        if (!consultPriors || priors == null || o == null || o.source() == null || o.signature() == null) return;
+        if (priors == null || o == null || o.source() == null || o.signature() == null) return;
         if (ledger.has(o.source(), o.signature())) return;
         String task = StuckPriors.taskKey(seed());
         if (task == null) return;

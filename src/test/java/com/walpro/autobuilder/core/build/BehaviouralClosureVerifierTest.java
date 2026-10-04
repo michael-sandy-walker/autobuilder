@@ -169,14 +169,6 @@ class BehaviouralClosureVerifierTest {
         assertThat(verifier.refute("goal-1", null, null)).isEmpty();
     }
 
-    @Test
-    void theSwitchRestoresTheOlderBehaviourExactly() {
-        verifier.setEnabled(false);
-
-        assertThat(verifier.refute("goal-1", List.of(EXECUTABLE), null)).isEmpty();
-        verify(packageGate, never()).verifyPackageable(anyString());
-    }
-
     // --- T2-ET: an item raised from an observation is answered by re-taking the observation ---
 
     /** Invented wording; the gate's summaries are deterministic, which is what identity relies on. */

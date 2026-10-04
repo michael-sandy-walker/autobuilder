@@ -11,10 +11,9 @@
 #
 # The patience is the run's own, not only the constant (user, 2026-09-28: "let's make that timespan
 # more dynamic"): <patience> is the floor, and a run that has improved in slow steps waits 1.5x its
-# longest gap between improvements so far. And the loop acting on its own stall -- a dossier move it
-# carried out, or a rewind -- restarts the clock, so the move gets a window of its own: on 2026-09-28
-# the flat-root signal fired ~25 minutes in and a flat run was cut at ~31, which left a dossier move 5-10
-# minutes before the outside cut. The run's budget stays the hard end.
+# longest gap between improvements so far. And the loop acting on its own stall -- a rewind -- restarts the
+# clock, so the move gets a window of its own (on 2026-09-28 a flat run was cut minutes after the loop
+# reacted). The run's budget stays the hard end.
 #
 # A copy, because the yardstick runs the project's build: in the live tree its test reports would
 # be read by the loop's own test gate as fresh evidence. The script never writes to the live tree.
@@ -93,17 +92,16 @@ while alive; do
         [ -n "${seen_refusal:-}" ] && { best_at=$SECONDS; echo "early_stop: a new closure refusal since the last check -- patience restarted"; }
         seen_refusal=$last_refusal
     fi
-    # The loop's own reaction to a stall -- a dossier move it carried out (not NONE), or a rewind -- is
-    # new work no score shows yet: the clock restarts once per distinct reaction, never on a repeat.
-    last_reaction=$(grep -E "T4-DY: dossier move for .*: (HINT|REPLAN|DIVIDE) -- |T4-DQ: REWOUND to " "$LOG" 2>/dev/null \
-        | grep -v -- '-- not divided\|-- no current subgoal\|did not divide' | tail -1 | md5sum | cut -c1-12)
+    # The loop's own reaction to a stall -- a rewind -- is new work no score shows yet: the clock
+    # restarts once per distinct reaction, never on a repeat.
+    last_reaction=$(grep -E "T4-DQ: REWOUND to " "$LOG" 2>/dev/null | tail -1 | md5sum | cut -c1-12)
     # At most one such restart per patience window: a stream of moves kept a flat run alive to its
     # budget (run 2026-09-29_16-21-43, 8 moves in 40 minutes). Relative, like the patience itself.
     if [ "$last_reaction" != "d41d8cd98f00" ] && [ "$last_reaction" != "${seen_reaction:-d41d8cd98f00}" ]; then
         seen_reaction=$last_reaction
         if [ $((SECONDS - ${reaction_restart_at:--999999})) -ge "${patience_now:-$PATIENCE}" ]; then
             best_at=$SECONDS; reaction_restart_at=$SECONDS
-            echo "early_stop: the loop acted on its stall (dossier move or rewind) -- patience restarted"
+            echo "early_stop: the loop acted on its stall (a rewind) -- patience restarted"
         else
             echo "early_stop: another move within one patience window of the last restart -- not restarting"
         fi

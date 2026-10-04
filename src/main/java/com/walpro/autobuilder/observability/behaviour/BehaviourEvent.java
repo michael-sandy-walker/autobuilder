@@ -738,25 +738,6 @@ public sealed interface BehaviourEvent {
         public String event() { return "diagnosis_request"; }
     }
 
-    /**
-     * T4-DY dossier: the facts the loop held about a stuck case went to the model, and this is the move
-     * it chose -- HINT, REPLAN, DIVIDE or NONE -- with the reason it gave and whether the move was carried out.
-     */
-    record DossierDecision(
-            Instant timestamp,
-            String cycleId,
-            String source,
-            String signature,
-            String move,
-            String because,
-            String hint,
-            boolean applied,
-            String outcome,
-            java.util.List<String> facts
-    ) implements BehaviourEvent {
-        public String event() { return "dossier_decision"; }
-    }
-
     /** TTL or LRU cap evicted the deferred mutation. */
     record DeferredMutationEvicted(
             Instant timestamp,

@@ -757,23 +757,6 @@ public class GoalPlannerService {
     }
 
     /**
-     * T4-DY dossier: a goal's acceptance criteria in order, each with whether it is banked as met.
-     * Empty for an unknown goal or one without criteria.
-     */
-    public java.util.LinkedHashMap<String, Boolean> criteriaStatus(String goalId) {
-        java.util.LinkedHashMap<String, Boolean> out = new java.util.LinkedHashMap<>();
-        GoalEntity goal = goalId != null ? goalMap.get(goalId) : null;
-        if (goal == null) return out;
-        Object raw = goal.getMetadata().get("acceptanceCriteria");
-        if (!(raw instanceof List<?> l)) return out;
-        Map<Integer, Boolean> passStatus = getCriteriaPassStatus(goal);
-        for (int i = 0; i < l.size(); i++) {
-            out.putIfAbsent(String.valueOf(l.get(i)), Boolean.TRUE.equals(passStatus.get(i + 1)));
-        }
-        return out;
-    }
-
-    /**
      * T3-BL: Returns true when the subgoal has a non-empty acceptance-criteria list AND every
      * criterion index is recorded as {@code true} in the persisted pass-status map.
      * Criteria-less subgoals always return false (handled by T2-CD instead).

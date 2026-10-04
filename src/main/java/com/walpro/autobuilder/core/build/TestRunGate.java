@@ -110,7 +110,7 @@ public class TestRunGate {
 
     /**
      * T4-DY: where the same failing tests are reported as stuck. A provider: the stuck layer reads this
-     * gate's report for its dossier, so it cannot be injected directly.
+     * gate for the failing test its execution trace re-runs, so it cannot be injected directly.
      */
     @Autowired(required = false)
     private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.core.stuck.StuckLayer> stuckLayer;

@@ -267,8 +267,8 @@ The questions, each answered by an authority, structure first:
 - **PROTECTED_WRITE**, **CLOSURE_REFUSAL**: what the protected file says; which requirement keeps closure refused.
 
 A signature that comes back after its answer moves to the next question. When no question is left, the layer
-asks for a **diagnosis**: the **dossier** (`DossierDecider`) gathers the facts the loop holds and lets the model
-choose one move -- a hint for the next change, a replan, a division of the subgoal, or nothing.
+asks the operator for a **diagnosis** (a `diagnosis_request` event and log line, with every question asked and its
+answer). The loop itself never acts on a model's reading of a stuck case: every move it takes comes from a fact.
 
 **Across runs** (`StuckPriors`, `Neo4jStuckPriors`): how each signature ended is kept in the graph under the task
 (the SHA-256 of the seed); a signature that earlier runs of the same task noticed is asked about at its first
@@ -286,7 +286,7 @@ an undeclared read.
 
 `BehaviourLogger` writes every behaviour event (`BehaviourEvent`, one record type per event) to
 `logs/behaviour.ndjson` and streams it on `GET /events/behaviour`. `RunEndReportService` writes the end-of-run
-report; `RunHealth` compares a run's shape with healthy runs from a curated baseline.
+report; `scripts/run_profile.py` compares a finished run's shape with healthy runs from a curated baseline.
 
 `CheckpointArchive` keeps a source-only copy of the tree at each checkpoint, so `POST /autobuilder/rewind` can
 return to an earlier state.

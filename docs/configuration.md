@@ -7,7 +7,7 @@ default in the code, and the value `application.yml` sets when it sets one (prof
 What a key does is the first sentence of the comment on the field that reads it, so it is written once, in
 the code.
 
-146 keys.
+144 keys.
 
 ## `autobuilder.analysis`
 
@@ -162,12 +162,6 @@ the code.
 | `autobuilder.goal.sync-from-graph` | Whether the goal state is loaded from the graph on startup. | `false` | `true` | `GoalPlannerConfigProperties` |
 | `autobuilder.goal.verify-closure-claims` | The check only ever refutes, so switching it off can only restore false closures — but a switch is what let T4-DA's unconfirmed cost be settled by measurement instead of argument, and every mechanism this project ships now carries one. | `true` |  | `BehaviouralClosureVerifier` |
 
-## `autobuilder.health`
-
-| Key | What it does | Default in code | application.yml | Read by |
-|---|---|---|---|---|
-| `autobuilder.health.baseline-path` | The file holding healthy runs' measurements, the envelope a run's health is compared with. | `scripts/run_health_baseline.json` |  | `RunHealth` |
-
 ## `autobuilder.heuristic`
 
 | Key | What it does | Default in code | application.yml | Read by |
@@ -261,7 +255,6 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `autobuilder.stuck.dossier.enabled` | Whether a stuck loop with no question left gets the dossier: its facts, and one move chosen by the model. | `true` |  | `DossierDecider` |
 | `autobuilder.stuck.execution-trace.budget-ms` | The time one trace may take: the build compiles first, then the one test runs under the debugger. | `240000` |  | `StuckLayer` |
 | `autobuilder.stuck.execution-trace.enabled` | The user's decision 2026-10-01: a test that keeps failing is re-run under the debugger (ExecutionTrace). | `true` |  | `StuckLayer` |
 | `autobuilder.stuck.priors.consult` | Whether earlier runs are consulted; outcomes are recorded either way (the A arm of T6-I's pairs). | `true` |  | `StuckLayer` |

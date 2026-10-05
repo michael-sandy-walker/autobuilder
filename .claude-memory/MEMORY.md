@@ -115,7 +115,7 @@ How to work:
 - `feedback_tickets_direct_loop_as_toy_cases.md`: implement tickets directly; the loop is tested separately on VERSIONED toy cases, output measured not ported. (reviewed 2026-09-27)
 - `feedback_local_means_no_call_cost.md`: local model -- LLM call/token cost is no constraint; wall-clock time, context size and box memory still are. (reviewed 2026-09-27)
 - `feedback_never_edit_a_running_script.md`: never edit preflight.sh (or what it reads) mid-run, and a git merge/rebase/checkout counts as an edit — bash reads scripts incrementally, so edits land half-applied and silently. (reviewed 2026-09-24)
-- `feedback_no_heavy_mvn_beside_a_live_run.md`: a full suite beside a live run starves the box and kills the run via Neo4j timeouts; in a batch, scoring the last run's tree or targeted tests count too (2026-10-02). (reviewed 2026-10-02)
+- `feedback_no_heavy_mvn_beside_a_live_run.md`: a full suite beside a live run starves the box and kills the run via Neo4j timeouts; in a batch, scoring the last run's tree or targeted tests count too (2026-10-02); a per-run notification is not the batch ending -- pgrep the driver before any edit or mvn (2026-10-06). (reviewed 2026-10-06)
 - `feedback_flag_ceremony_cost_early.md`: when process costs more than the task, say so BEFORE running it. (reviewed 2026-09-08)
 - `feedback_sonnet_for_batch_tickets.md`: batch/mechanical tickets go to a Sonnet subagent (Agent tool model override); design and validation stay on the main model. (reviewed 2026-07-14)
 - `feedback_roadmap_is_the_queue.md`: work comes from the roadmap ONLY; direction notes are rationale, never a parallel queue. (reviewed 2026-09-10)

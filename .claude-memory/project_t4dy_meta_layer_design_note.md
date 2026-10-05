@@ -186,3 +186,5 @@ menu (point 6): change the seed, unbind a requirement, declare a goal met, halt 
   **the root moves (a subgoal completes, or a merge lands) within the flat window after the move in at
   least 2 of 3 such runs**, against 0 of 3 in the three archived runs where the request went unanswered.
   n is small and says so; a miss means the dossier is not what the flat root lacked.
+
+**2026-10-04, the dossier REMOVED (user decision after the evaluation); T4-DY CLOSED.** Measured three times with no effect while every gain came from a fact (the API block, the execution trace with values and caught exceptions). The layer now never acts on a model's reading of a stuck case: when no question is left it asks the OPERATOR (`diagnosis_request` event + log line). The in-loop run-health comparison went with it (its only consumer); `scripts/run_profile.py` keeps the offline half. Anything in this note about the dossier's moves (HINT / REPLAN / DIVIDE) is history.

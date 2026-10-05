@@ -34,8 +34,8 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-09-30)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-09-30)
+- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-10-05)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-10-05)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: live ordering is the 2026-08-23 REORDER section at the end; S1-S6 kept for reasoning only. Never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-09-30)
+- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-10-05)
 - `project_wave2_structure.md`: wave 2's five layers and gate-driven sequence; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
@@ -55,7 +55,7 @@ Design notes, read before touching their area:
 - `project_signal_consumer_map.md`: T4-J emitter/clearer/reader map over 35 signal types + `scripts/signal_boundary_report.py`. The LLM is itself both consumer and emitter. (reviewed 2026-07-09)
 - `project_signal_dispositions.md`: T4-J answer sheet — the decided disposition per signal. Open: analysis/planner tie-break, evaluation-prompt signal-blindness. (reviewed 2026-09-24)
 - `project_t4j_perturbation_lab.md`: frozen-state lab; the decision-sensitive decay constants are the ROLE-identity signals, not the census shortlist. Read before signal tuning. (reviewed 2026-09-08)
-- `project_t4dy_meta_layer_design_note.md`: T4-DY meta layer = DIAGNOSTIC layer on the informational axis; stuck signature -> question -> authority (structure, observation, model last) -> fact + ledger; slice A offline router, slice B in the loop (core/stuck, DoD met 2026-09-26). Read before building under T4-DY. (reviewed 2026-09-30)
+- `project_t4dy_meta_layer_design_note.md`: T4-DY meta layer = DIAGNOSTIC layer on the informational axis; stuck signature -> question -> authority (structure, observation, model last) -> fact + ledger; slice A offline router, slice B in the loop (core/stuck, DoD met 2026-09-26). The dossier was removed 2026-10-04 (T4-DY closed). Read before building under T4-DY. (reviewed 2026-10-05)
 - `project_t4bz_design_note.md`: T4-BZ signal re-architecture SHIPPED; family map and invariants I1-I12 are the design record. (reviewed 2026-09-08)
 - `project_t4bo_design_note.md`: T4-BO signal-decay observability — two-snapshot death attribution, causality-preserving snapshot point. Read before touching signal plumbing. (reviewed 2026-07-09)
 - `project_t4ai_design_note.md`: T4-AI — the meta lane was decorative; closed by deletion. Read before touching AdaptiveExecutionEngine/DeliberationService. (reviewed 2026-07-09)
@@ -98,7 +98,7 @@ False completions and diagnosis lenses:
 - `project_meta_concrete_target_hint_idea.md`: historical note; read only if reintroducing a concrete-target hint via a non-LLM path. (reviewed 2026-07-09)
 
 Operations:
-- `project_run_lifecycle_runbook.md`: start/stop/monitor runs; watcher traps; adopted-target runs, `early_stop.sh`, `bundle.py`. Prove a monitor STREAMS first: `scripts/prove_watcher_streams.sh`. Toy cases are versioned (`toycase_version.py`). (reviewed 2026-09-27)
+- `project_run_lifecycle_runbook.md`: start/stop/monitor runs; watcher traps; adopted-target runs, `early_stop.sh`, `bundle.py`. Prove a monitor STREAMS first: `scripts/prove_watcher_streams.sh`. Toy cases are versioned (`toycase_version.py`). (reviewed 2026-10-05)
 - `project_log_and_backup_conventions.md`: current run is UNSUFFIXED `logs/behaviour.ndjson`; files are concatenated pretty JSON, not line-JSON. (reviewed 2026-09-08)
 - `project_tests_rotate_live_logs.md`: SUPERSEDED: redirect `FILE_BASE_PATH` to a scratch dir instead of stopping the app. (reviewed 2026-09-08)
 
@@ -165,7 +165,7 @@ Watchers:
 - `feedback_waiter_fires_on_loop_terminal.md`: a run waiter fires on the LOOP's terminal line, not only preflight's final line minutes later. (reviewed 2026-09-24)
 - `feedback_fix_first_when_a_finding_changes_the_measurement.md`: when a finding changes what a running batch measures, stop and fix first (user's choice twice); never let a batch build from uncommitted code. (reviewed 2026-09-30)
 - `feedback_progress_updates_during_batches.md`: post a short update after every run of an unattended batch; arm a per-run watcher. (reviewed 2026-09-30)
-- `feedback_cut_flat_runs_short.md`: start `scripts/early_stop.sh` beside every field run; the user wants flat runs cut by a rule stated in advance, but "30 minutes is too soon" -- firestarter uses patience 30, minimum 45. (reviewed 2026-09-26)
+- `feedback_cut_flat_runs_short.md`: start `scripts/early_stop.sh` beside every field run; firestarter patience 30, minimum 45; a STEP-SCORED ladder case needs patience half the budget and no stop before three quarters (2026-10-05). (reviewed 2026-10-05)
 
 Writing:
 - `feedback_curly_quotes.md`: no curly quotes/stray non-Latin chars; enforced by `scripts/charset_guard.py`. No `jq`; use python3. (reviewed 2026-08-28)

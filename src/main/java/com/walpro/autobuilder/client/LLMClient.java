@@ -94,6 +94,10 @@ public class LLMClient {
     @Value("${llm.api.response-reserve-tokens:4096}")
     private int responseReserveTokens;
 
+    // The context window the model is served with: a cut answer whose prompt and answer reach it filled the room.
+    @Value("${llm.api.context-window-tokens:" + com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_CONTEXT_WINDOW_TOKENS + "}")
+    private int contextWindowTokens = com.walpro.autobuilder.protocol.PromptTokenBudget.DEFAULT_CONTEXT_WINDOW_TOKENS;
+
     // Whether answers are capped and runaways retried with a changed request (OutputBounds).
     @Value("${llm.api.output-bounds.enabled:true}")
     private boolean outputBoundsEnabled;
@@ -168,13 +172,17 @@ public class LLMClient {
         String role = LlmCallContext.currentRole();
         int variant = -1;
         int growths = 0;
+        int contextRescue = -1;
         Integer rescueCap = null;
+        Integer room = null;
         while (true) {
             // A runaway's rescue keeps the cap the runaway ran into: that cap says nothing about how long the
             // rescued answer needs, and halving it first cost the live check an extra, cut call (2026-10-01).
             // The halving applies to the role's NEXT call.
             int capTokens = rescueCap != null ? rescueCap : outputBounds.capFor(role);
             rescueCap = null;
+            // T6-T: once the prompt's size is known, a cap above the room it leaves is no cap at all.
+            if (room != null && room > 0) capTokens = Math.min(capTokens, room);
             request.setMaxTokens(capTokens);
             Exchanged done = exchange(request, promptDigest, outputBounds.timeoutFor(capTokens, readTimeoutMs));
             ChatResponse body = done.response().getBody();
@@ -182,23 +190,40 @@ public class LLMClient {
                     : body.getChoices().get(0).getFinishReason();
             String content = body == null ? null : body.getFirstContent();
             Integer completion = body == null || body.getUsage() == null ? null : body.getUsage().getCompletionTokens();
-            OutputBounds.Verdict verdict = OutputBounds.verdict(finish, content);
+            Integer prompt = body == null || body.getUsage() == null ? null : body.getUsage().getPromptTokens();
+            room = OutputBounds.room(contextWindowTokens, prompt);
+            OutputBounds.Verdict verdict = OutputBounds.verdict(finish, content, prompt, completion, contextWindowTokens);
             int next = outputBounds.learn(role, verdict, completion, done.durationMs());
             if (verdict == OutputBounds.Verdict.ENDED) return done.response();
-            boolean again = verdict == OutputBounds.Verdict.CUT_CLEAN ? growths++ < MAX_CAP_GROWTHS
-                    : variant + 1 < OutputBounds.RUNAWAY_VARIANTS.size();
+            boolean again = switch (verdict) {
+                case CUT_CLEAN -> growths++ < MAX_CAP_GROWTHS;
+                case RUNAWAY -> variant + 1 < OutputBounds.RUNAWAY_VARIANTS.size();
+                case CONTEXT_FULL -> contextRescue + 1 < OutputBounds.CONTEXT_RESCUES.size() && room != null && room > 0;
+                case ENDED -> false;
+            };
             String retry = !again ? "none left -- the answer is returned as it is"
                     : verdict == OutputBounds.Verdict.CUT_CLEAN ? "the same request with a cap of " + next
+                    : verdict == OutputBounds.Verdict.CONTEXT_FULL ? "a note naming the " + room + " tokens left (rescue "
+                            + (contextRescue + 2) + " of " + OutputBounds.CONTEXT_RESCUES.size() + ")"
                     : OutputBounds.RUNAWAY_VARIANTS.get(variant + 1).name() + ", cap " + capTokens
                             + " (the role's next call: " + next + ")";
-            log.warn("LLM answer {} at {} tokens (role {}, cap {}) -- retry: {}",
-                    verdict == OutputBounds.Verdict.RUNAWAY ? "RAN AWAY" : "was cut clean", completion, role, capTokens, retry);
+            log.warn("LLM answer {} at {} tokens (role {}, cap {}, prompt {}) -- retry: {}",
+                    verdict == OutputBounds.Verdict.RUNAWAY ? "RAN AWAY"
+                            : verdict == OutputBounds.Verdict.CONTEXT_FULL ? "FILLED THE CONTEXT" : "was cut clean",
+                    completion, role, capTokens, prompt, retry);
             if (behaviourLogger != null) {
+                String applied = contextRescue >= 0 ? "context rescue " + (contextRescue + 1)
+                        : variant < 0 ? null : OutputBounds.RUNAWAY_VARIANTS.get(variant).name();
                 behaviourLogger.llmOutputBounded(LlmCallContext.currentCycleId(), role, capTokens, completion,
-                        verdict.name(), variant < 0 ? null : OutputBounds.RUNAWAY_VARIANTS.get(variant).name(),
-                        next, again ? retry : null);
+                        verdict.name(), applied, next, again ? retry : null);
             }
             if (!again) return done.response();
+            if (verdict == OutputBounds.Verdict.CONTEXT_FULL) {
+                // An identical request fills the same room again: ask for a smaller answer, saying how small.
+                String note = String.format(OutputBounds.CONTEXT_RESCUES.get(++contextRescue), room);
+                request.setMessages(withNote(conversation, note));
+                continue;
+            }
             if (verdict == OutputBounds.Verdict.RUNAWAY) {
                 // At temperature 0 a runaway repeats itself on an identical request: change the request.
                 OutputBounds.Variant v = OutputBounds.RUNAWAY_VARIANTS.get(++variant);
@@ -207,6 +232,19 @@ public class LLMClient {
                 request.setFrequencyPenalty(v.frequencyPenalty());
             }
         }
+    }
+
+    /** {@code conversation} with {@code note} appended to its last user message (a new list; the original stays). */
+    static List<Message> withNote(List<Message> conversation, String note) {
+        List<Message> out = new java.util.ArrayList<>(conversation);
+        for (int i = out.size() - 1; i >= 0; i--) {
+            if ("user".equals(out.get(i).getRole())) {
+                out.set(i, new Message("user", out.get(i).getContent() + "\n\n" + note));
+                return out;
+            }
+        }
+        out.add(new Message("user", note));
+        return out;
     }
 
     /** One answer and how long its successful attempt took. */

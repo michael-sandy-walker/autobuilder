@@ -66,4 +66,23 @@ class OutputBoundsTest {
         assertThat(b.timeoutFor(8192, 120_000)).isEqualTo(245_760);       // 8192 x 0.02 x 1.5
         assertThat(b.timeoutFor(1000, 120_000)).isEqualTo(120_000);
     }
+    /**
+     * T6-T: a cut answer whose prompt and answer together reach the window filled the CONTEXT -- repeating or
+     * not -- and says nothing about the cap. Ladder-rows run 2026-10-05_18-34-29: 21,384 + 11,384 = 32,768.
+     */
+    @Test
+    void anAnswerThatFilledTheContextIsItsOwnVerdict_andLeavesTheCapAlone() {
+        assertThat(OutputBounds.verdict("length", clean(300), 21_384, 11_384, 32_768)).isEqualTo(OutputBounds.Verdict.CONTEXT_FULL);
+        assertThat(OutputBounds.verdict("length", runaway(), 21_384, 11_384, 32_768)).isEqualTo(OutputBounds.Verdict.CONTEXT_FULL);
+        assertThat(OutputBounds.verdict("length", clean(300), 21_384, 8_127, 32_768)).as("the cap ended it")
+                .isEqualTo(OutputBounds.Verdict.CUT_CLEAN);
+        assertThat(OutputBounds.verdict("length", clean(300), null, 11_384, 32_768)).as("prompt size unknown")
+                .isEqualTo(OutputBounds.Verdict.CUT_CLEAN);
+        assertThat(OutputBounds.verdict("stop", clean(300), 21_384, 11_384, 32_768)).isEqualTo(OutputBounds.Verdict.ENDED);
+
+        OutputBounds b = new OutputBounds(4096);
+        assertThat(b.learn("evolution", OutputBounds.Verdict.CONTEXT_FULL, 11_384, 180_000)).isEqualTo(4096);
+        assertThat(OutputBounds.room(32_768, 21_384)).isEqualTo(11_384);
+        assertThat(OutputBounds.room(32_768, null)).isNull();
+    }
 }

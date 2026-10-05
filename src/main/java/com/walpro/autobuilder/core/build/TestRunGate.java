@@ -258,7 +258,8 @@ public class TestRunGate {
         // whole fact. Ladder-rows run 2026-10-05_16-22-15: a changed record broke an existing test's
         // constructor call, and for an hour every gate run said only "test suite failing" to a reader that
         // then found no report and showed nothing -- the error first reached a prompt through packaging.
-        String uncompiled = testsDoNotCompile(plain, Path.of(fileBasePath, "output").toString());
+        // The compiler names files by their absolute path; the base path may be relative (run 2026-10-05_18-34-29).
+        String uncompiled = testsDoNotCompile(plain, Path.of(fileBasePath, "output").toAbsolutePath().normalize().toString());
         if (uncompiled != null) {
             lastBlocker = uncompiled;
             log.info("T4-AN-2: {}", uncompiled);

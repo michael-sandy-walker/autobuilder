@@ -30,7 +30,13 @@ import java.util.concurrent.ConcurrentHashMap;
  *       answers 0.15-0.33). It is retried with a changed request, in {@link #RUNAWAY_VARIANTS} order -- never
  *       identically;</li>
  *   <li>the read timeout follows the cap at the run's observed seconds per completion token, with headroom,
- *       so a capped call is not cut by a timeout that predates the cap.</li>
+ *       so a capped call is not cut by a timeout that predates the cap;</li>
+ *   <li>(T6-T) an answer that filled the CONTEXT -- the prompt and the answer together reach the window --
+ *       was not ended by the cap, so growing the cap cannot help and an identical request fills it again.
+ *       Ladder-rows run 2026-10-05_18-34-29 lost 26 minutes to eight such calls: a 21.4k-token prompt left
+ *       11.4k for an answer the model spent on reasoning and drafts, and the cap was raised to 14k regardless.
+ *       It is asked again with a note, in {@link #CONTEXT_RESCUES} order, naming the room left; the cap is
+ *       never set above that room once the prompt's size is known.</li>
  * </ul>
  * Thread-safe; state lives for the JVM, which is one run.
  */
@@ -52,6 +58,21 @@ public final class OutputBounds {
             new Variant("frequency penalty 0.5", null, 0.5),
             new Variant("temperature 0.4", 0.4, null));
 
+    /** Prompt and answer within this many tokens of the window: the context, not the cap, ended the answer. */
+    static final int CONTEXT_MARGIN = 32;
+
+    /**
+     * What an answer that filled the context is asked again with, appended to the last user message: the room
+     * left ({@code %d}), first for the answer alone, then for a smaller piece of the work.
+     */
+    public static final List<String> CONTEXT_RESCUES = List.of(
+            "Your previous answer did not fit: only about %d tokens are left for the answer after this prompt."
+                    + " Send only what the response format asks for -- no explanation, no reasoning, no drafts,"
+                    + " nothing restated -- and keep every quoted part as short as it can be.",
+            "Your previous answer still did not fit in the about %d tokens left for it. If the work changes several"
+                    + " files, send only the files that must change together for the project to build, the smallest"
+                    + " such set; the others can follow in a later answer. No explanation, no drafts.");
+
     /** How one answer ended, as far as the bound is concerned. */
     public enum Verdict {
         /** The model ended it. */
@@ -59,7 +80,9 @@ public final class OutputBounds {
         /** The cap ended a clean answer: it needed more room. */
         CUT_CLEAN,
         /** The cap ended an answer that was repeating itself. */
-        RUNAWAY
+        RUNAWAY,
+        /** The context window ended it: the prompt left no more room, whatever the cap. */
+        CONTEXT_FULL
     }
 
     private final int reserve;
@@ -81,6 +104,25 @@ public final class OutputBounds {
     public static Verdict verdict(String finishReason, String content) {
         if (!"length".equals(finishReason)) return Verdict.ENDED;
         return tailRepeats(content) >= RUNAWAY_SHARE ? Verdict.RUNAWAY : Verdict.CUT_CLEAN;
+    }
+
+    /**
+     * As {@link #verdict(String, String)}, and CONTEXT_FULL when a cut answer and its prompt together reach
+     * {@code contextWindow}: the room ran out, not the cap -- repeating or not, a retry needs a smaller task.
+     */
+    public static Verdict verdict(String finishReason, String content, Integer promptTokens, Integer completionTokens,
+                                  int contextWindow) {
+        if ("length".equals(finishReason) && promptTokens != null && completionTokens != null && contextWindow > 0
+                && promptTokens + completionTokens >= contextWindow - CONTEXT_MARGIN) {
+            return Verdict.CONTEXT_FULL;
+        }
+        return verdict(finishReason, content);
+    }
+
+    /** The tokens the window leaves for an answer to a prompt of {@code promptTokens}; null when unknown. */
+    public static Integer room(int contextWindow, Integer promptTokens) {
+        if (contextWindow <= 0 || promptTokens == null || promptTokens <= 0) return null;
+        return Math.max(0, contextWindow - promptTokens);
     }
 
     /** The share of the last {@link #TAIL_LINES} non-blank lines that already occurred earlier in the text. */
@@ -120,6 +162,8 @@ public final class OutputBounds {
             }
             case CUT_CLEAN -> current + reserve / 2;
             case RUNAWAY -> Math.max(floor(k), current / 2);
+            // The cap did not end it, so it says nothing about the cap.
+            case CONTEXT_FULL -> current;
         };
         cap.put(k, next);
         return next;

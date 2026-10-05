@@ -348,4 +348,17 @@ class TestRunGateTest {
         assertThat(TestRunGate.testsDoNotCompile("Tests run: 3, Failures: 1, Errors: 0\n[ERROR] /p/A.java:[1,1] x", "/p")).isNull();
         assertThat(TestRunGate.testsDoNotCompile("[ERROR] There are test failures.", "/p")).isNull();
     }
+    /** The compiler names files absolutely; a relative base path still yields project-relative files. */
+    @Test
+    void aRelativeBasePath_stillGivesProjectRelativeFiles() {
+        String abs = java.nio.file.Path.of("rel/quill/output").toAbsolutePath().normalize().toString();
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(eq("rel/quill"), any(), eq("mvn test"))).thenReturn(new BuildOutcome(BuildResult.COMPILE_ERROR,
+                "[ERROR] " + abs + "/src/test/java/zeta/NibTest.java:[9,5] cannot find symbol\n", 2000L, "mvn test", "c"));
+        TestRunGate g = new TestRunGate(true, "mvn test", buildExecutor);
+        g.setFileBasePath("rel/quill");
+
+        assertThat(g.verifyTestsPass("cycle-5").orElseThrow())
+                .contains("-- src/test/java/zeta/NibTest.java:9: cannot find symbol").doesNotContain(abs);
+    }
 }

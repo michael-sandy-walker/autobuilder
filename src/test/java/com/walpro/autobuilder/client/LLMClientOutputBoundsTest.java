@@ -43,12 +43,19 @@ class LLMClientOutputBoundsTest {
         set("restTemplate", rest);
         set("outputBoundsEnabled", true);
         set("outputBounds", new OutputBounds(1000));
+        set("contextWindowTokens", 32_768);
     }
 
     private void set(String field, Object value) throws Exception {
         Field f = LLMClient.class.getDeclaredField(field);
         f.setAccessible(true);
         f.set(client, value);
+    }
+
+    private static ResponseEntity<ChatResponse> answer(String finish, String content, int tokens, int promptTokens) {
+        ResponseEntity<ChatResponse> r = answer(finish, content, tokens);
+        r.getBody().getUsage().setPromptTokens(promptTokens);
+        return r;
     }
 
     private static ResponseEntity<ChatResponse> answer(String finish, String content, int tokens) {
@@ -114,5 +121,51 @@ class LLMClientOutputBoundsTest {
 
         assertThat(sent).extracting(ChatRequest::getMaxTokens).containsExactly(1000, 1500);
         assertThat(sent.get(1).getFrequencyPenalty()).as("the same request, only bigger").isNull();
+    }
+    /**
+     * T6-T: an answer that filled the context is asked again with a note naming the room left -- never the same
+     * request, and never with a cap above that room.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void anAnswerThatFilledTheContextIsAskedAgainWithANoteNamingTheRoom() throws Exception {
+        set("contextWindowTokens", 2_000);
+        answers(answer("length", OutputBoundsTest.clean(300), 1000, 1000), answer("stop", OutputBoundsTest.clean(20), 400, 1050));
+
+        ChatResponse got = client.ask(msg).getBody();
+
+        assertThat(got.getChoices().get(0).getFinishReason()).isEqualTo("stop");
+        assertThat(sent).hasSize(2);
+        String asked = sent.get(1).getMessages().get(sent.get(1).getMessages().size() - 1).getContent();
+        assertThat(asked).startsWith("write the class").contains("only about 1000 tokens are left", "no drafts");
+        assertThat(sent.get(1).getMaxTokens()).isLessThanOrEqualTo(1000);
+        assertThat(sent.get(1).getFrequencyPenalty()).isNull();
+        assertThat(msg.get(0).getContent()).as("the caller's conversation is not changed").isEqualTo("write the class");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void anAnswerThatKeepsFillingTheContextIsReturnedAfterTheRescues() throws Exception {
+        set("contextWindowTokens", 2_000);
+        answers(answer("length", OutputBoundsTest.clean(300), 1000, 1000));
+
+        ChatResponse got = client.ask(msg).getBody();
+
+        assertThat(got.getChoices().get(0).getFinishReason()).isEqualTo("length");
+        assertThat(sent).hasSize(1 + OutputBounds.CONTEXT_RESCUES.size());
+        assertThat(sent.get(2).getMessages().get(0).getContent()).contains("the smallest such set");
+        verify(breaker, never()).recordNetworkFailure();
+    }
+
+    /** A clean cut grows the cap -- but never past the room the prompt leaves. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aGrownCapNeverExceedsTheRoomThePromptLeaves() throws Exception {
+        set("contextWindowTokens", 1_500);
+        answers(answer("length", OutputBoundsTest.clean(300), 1000, 300), answer("stop", OutputBoundsTest.clean(320), 1100, 300));
+
+        client.ask(msg);
+
+        assertThat(sent).extracting(ChatRequest::getMaxTokens).containsExactly(1000, 1200);
     }
 }

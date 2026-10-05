@@ -75,6 +75,21 @@ class EvaluationTestEvidenceTest {
         assertThat(evidence.block(ctx)).isEmpty();
     }
 
+    /** T6-T: a run that left no report because its tests did not compile is shown as its blocker. */
+    @Test
+    void aRunWhoseTestsDidNotCompileIsShownAsItsBlocker() {
+        when(gate.isLive()).thenReturn(true);
+        when(declared.isDeclared()).thenReturn(true);
+        when(gate.freshReport()).thenReturn(Optional.empty());
+        when(gate.verifyTestsPass("cycle-7-eval-tests")).thenReturn(Optional.of(
+                "the tests do not compile, so none ran -- src/test/java/zeta/NibTest.java:9: cannot find symbol"));
+
+        String block = evidence.block(ctx).orElseThrow();
+
+        assertThat(block).startsWith(EvaluationTestEvidence.RULE).contains("PROJECT TEST RUN",
+                "the tests do not compile, so none ran -- src/test/java/zeta/NibTest.java:9: cannot find symbol");
+    }
+
     @SuppressWarnings("unchecked")
     private static <T> ObjectProvider<T> provider(T value) {
         ObjectProvider<T> p = mock(ObjectProvider.class);

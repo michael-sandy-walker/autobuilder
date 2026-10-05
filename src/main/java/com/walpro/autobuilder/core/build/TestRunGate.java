@@ -70,6 +70,15 @@ public class TestRunGate {
 
     private static final int MAX_NAMED_FAILURES = 5;
 
+    /** A compiler error line, {@code <file>.java:[line,col] message}, as the build tool reports it. */
+    private static final Pattern COMPILER_ERROR = Pattern.compile("(?m)^\\s*(?:\\[[A-Z]+\\]\\s*)?(\\S+\\.java):\\[(\\d+),\\d+\\]\\s*(.*)$");
+    /** The detail lines the compiler prints under an error: the symbol it could not find and where. */
+    private static final Pattern COMPILER_DETAIL = Pattern.compile("^\\s*(?:\\[[A-Z]+\\]\\s*)?((?:symbol|location|required|found|reason):.*)$");
+    private static final int MAX_COMPILE_ERRORS = 6;
+
+    /** T6-T: the blocker of the last run, for a reader that finds no per-test report (the tests never ran). */
+    private volatile String lastBlocker;
+
     /**
      * Per-test report locations of the configured test command, relative to the project root —
      * report-location data tied to {@code test-gate.command}'s default, not framework vocabulary
@@ -231,6 +240,7 @@ public class TestRunGate {
                     null, List.of(), outcome.result().name(), outcome.durationMs());
         }
         if (outcome.result() != BuildResult.COMPILE_ERROR) {
+            lastBlocker = null;
             // T4-DY: the suite passes -- an answer to tests that kept failing has done its work and ends.
             if (stuckLayer != null) {
                 var layer = stuckLayer.getIfAvailable();
@@ -243,6 +253,16 @@ public class TestRunGate {
         if (NO_TESTS.matcher(plain).find() && !plain.contains("<<< FAILURE!") && !plain.contains("<<< ERROR!")) {
             log.info("T4-AN-2: test command failed but no tests ran — abstaining (not a test failure)");
             return Optional.empty();
+        }
+        // T6-T: the tests did not compile, so none ran and no report exists: the compiler's errors are the
+        // whole fact. Ladder-rows run 2026-10-05_16-22-15: a changed record broke an existing test's
+        // constructor call, and for an hour every gate run said only "test suite failing" to a reader that
+        // then found no report and showed nothing -- the error first reached a prompt through packaging.
+        String uncompiled = testsDoNotCompile(plain, Path.of(fileBasePath, "output").toString());
+        if (uncompiled != null) {
+            lastBlocker = uncompiled;
+            log.info("T4-AN-2: {}", uncompiled);
+            return Optional.of(uncompiled);
         }
         String summary = summarise(plain);
         // T4-DY: the same failing tests, run after run, are a stuck case of their own -- judged by
@@ -271,7 +291,41 @@ public class TestRunGate {
         if (!causes.isEmpty()) {
             summary += "; root cause(s): " + String.join(" | ", causes);
         }
+        lastBlocker = summary;
         return Optional.of(summary);
+    }
+
+    /** T6-T: the last run's blocker, empty when the last run passed or none has run. */
+    public Optional<String> lastBlocker() {
+        return Optional.ofNullable(lastBlocker);
+    }
+
+    /**
+     * T6-T: "the tests do not compile" with the compiler's errors -- file relative to the project, line,
+     * message and the symbol/location lines under it -- or null when the output carries a test tally (the
+     * tests ran) or no compiler error.
+     */
+    static String testsDoNotCompile(String plain, String projectRoot) {
+        if (plain == null || TESTS_RUN_SUMMARY.matcher(plain).find()) return null;
+        String root = projectRoot == null ? "" : projectRoot.replace('\\', '/');
+        if (!root.isEmpty() && !root.endsWith("/")) root += "/";
+        List<String> errors = new ArrayList<>();
+        String[] lines = plain.split("\\R");
+        for (int i = 0; i < lines.length && errors.size() < MAX_COMPILE_ERRORS; i++) {
+            Matcher m = COMPILER_ERROR.matcher(lines[i]);
+            if (!m.matches()) continue;
+            String file = m.group(1).replace('\\', '/');
+            if (!root.isEmpty() && file.startsWith(root)) file = file.substring(root.length());
+            StringBuilder e = new StringBuilder(file).append(':').append(m.group(2)).append(": ").append(m.group(3).strip().replaceAll(";$", ""));
+            for (int j = i + 1; j < lines.length; j++) {
+                Matcher d = COMPILER_DETAIL.matcher(lines[j]);
+                if (!d.matches()) break;
+                e.append("; ").append(d.group(1).replaceAll("\\s+", " ").strip());
+            }
+            if (!errors.contains(e.toString())) errors.add(e.toString());
+        }
+        if (errors.isEmpty()) return null;
+        return "the tests do not compile, so none ran -- " + String.join(" | ", errors);
     }
 
     /**

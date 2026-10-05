@@ -311,4 +311,41 @@ class TestRunGateTest {
 
         assertThat(g.verifyTestsPass("c", false)).isEmpty();
     }
+    /**
+     * T6-T: tests that do not compile leave no tally and no report -- the compiler's errors are the whole
+     * fact, file relative to the project, line, message and the lines under it. Ladder-rows run
+     * 2026-10-05_16-22-15 said only "test suite failing" here for an hour.
+     */
+    @Test
+    void testsThatDoNotCompile_areReportedWithTheCompilersErrors_andKeptAsTheLastBlocker() {
+        stubOutcome(BuildResult.COMPILE_ERROR, """
+                [ERROR] COMPILATION ERROR :
+                [ERROR] /tmp/project/output/src/test/java/zeta/InkwellTest.java:[22,16] constructor Inkwell in record zeta.Inkwell cannot be applied to given types;
+                  required: java.lang.String,int,java.lang.Integer
+                  found:    java.lang.String,int
+                  reason: actual and formal argument lists differ in length
+                [ERROR] /tmp/project/output/src/test/java/zeta/NibTest.java:[9,5] cannot find symbol
+                [ERROR]   symbol:   method width(int)
+                [ERROR]   location: class zeta.Nib
+                [ERROR] Failed to execute goal org.example:compiler:testCompile (default-testCompile) on project quill: Compilation failure
+                """);
+        TestRunGate g = gate(true);
+
+        String blocker = g.verifyTestsPass("cycle-4").orElseThrow();
+
+        assertThat(blocker).startsWith("the tests do not compile, so none ran")
+                .contains("src/test/java/zeta/InkwellTest.java:22: constructor Inkwell in record zeta.Inkwell cannot be applied"
+                        + " to given types; required: java.lang.String,int,java.lang.Integer; found: java.lang.String,int;"
+                        + " reason: actual and formal argument lists differ in length")
+                .contains("src/test/java/zeta/NibTest.java:9: cannot find symbol; symbol: method width(int); location: class zeta.Nib")
+                .doesNotContain("/tmp/project/output/").doesNotContain("test suite failing");
+        assertThat(g.lastBlocker()).contains(blocker);
+    }
+
+    /** A run with a tally ran its tests: a failing suite stays a failing suite, not a compile failure. */
+    @Test
+    void aTallyMeansTheTestsRan_soNoCompileFailureIsReported() {
+        assertThat(TestRunGate.testsDoNotCompile("Tests run: 3, Failures: 1, Errors: 0\n[ERROR] /p/A.java:[1,1] x", "/p")).isNull();
+        assertThat(TestRunGate.testsDoNotCompile("[ERROR] There are test failures.", "/p")).isNull();
+    }
 }

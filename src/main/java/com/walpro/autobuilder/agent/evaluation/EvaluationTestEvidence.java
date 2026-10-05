@@ -25,7 +25,8 @@ import java.util.Optional;
  *
  * <p>Only where the operator declared the suite an authority ({@link DeclaredTestSuite}), the same
  * condition the staged-test heuristic uses. A report of exactly this tree is reused; otherwise the
- * suite runs once. No report, no block: the prompt is then exactly what it was.
+ * suite runs once. A run that left no report (its tests did not compile) is shown as its blocker; no run
+ * and no report, no block: the prompt is then exactly what it was.
  */
 @Slf4j
 @Component
@@ -53,9 +54,17 @@ public class EvaluationTestEvidence {
             return Optional.empty();
         }
         Optional<TestRunReport> report = gate.freshReport();
+        Optional<String> blocker = Optional.empty();
         if (report.isEmpty()) {
-            gate.verifyTestsPass(context.cycleName() + "-eval-tests");
+            blocker = gate.verifyTestsPass(context.cycleName() + "-eval-tests");
             report = gate.freshReport();
+        }
+        // T6-T: tests that do not compile leave no report, and the run's blocker is then the whole observation.
+        // Ladder-rows run 2026-10-05_16-22-15: for an hour the evaluator was shown nothing while an existing test
+        // no longer compiled against the change -- the error first reached a prompt through packaging.
+        if (report.isEmpty() && blocker.isPresent()) {
+            log.info("EvaluationTestEvidence: no report; the evaluator is shown the test run's blocker");
+            return Optional.of(RULE + "\n--- PROJECT TEST RUN ---\n" + blocker.get());
         }
         if (report.isEmpty()) return Optional.empty();
         List<String> shown = new ArrayList<>();

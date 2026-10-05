@@ -179,7 +179,7 @@ public class EvolutionLLMAdapter {
             outcome = new EvolutionOutcome(
                     List.of(),
                     List.of(),
-                    "Invalid response: " + response.failureReason(),
+                    EvolutionOutcome.INVALID_PREFIX + response.failureReason(),
                     response.rawContent(),
                     recombined
             );

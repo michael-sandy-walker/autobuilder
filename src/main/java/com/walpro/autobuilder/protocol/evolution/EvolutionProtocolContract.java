@@ -584,7 +584,7 @@ public class EvolutionProtocolContract {
         // T4-CQ: the files the subgoal names, as they are -- the structure summary alone gives a model
         // told to keep a file's declarations only their names (see SubgoalSourcePromptBlock).
         String subgoalSource = SubgoalSourcePromptBlock.render(input,
-                promptHeadroomTokens - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(prompt));
+                promptHeadroomTokens - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(prompt), isProtected);
         if (subgoalSource != null) {
             prompt.append("\n").append(subgoalSource).append("\n");
         }
@@ -719,6 +719,16 @@ public class EvolutionProtocolContract {
      */
     static String formatLastRawOutput(EvolutionOutcome outcome) {
         if (outcome == null) return "(none)";
+        // T6-T: a discarded answer changed nothing, and its text is not what the files say. Ladder-rows run
+        // 2026-10-05_12-25-01 relayed one here verbatim -- an edit whose SEARCH part quoted an earlier draft of
+        // a method -- while the file itself was left out of the prompt; the model copied the relay back ten
+        // answers in a row, each discarded for the same SEARCH text.
+        if (outcome.discarded()) {
+            String why = outcome.summary().substring(EvolutionOutcome.INVALID_PREFIX.length()).strip();
+            if (why.length() > 400) why = why.substring(0, 400) + "...";
+            return "(nothing was applied: your previous answer was discarded unread -- " + why
+                    + ". Its text is not what the files say; copy each SEARCH part from the files as this prompt shows them.)";
+        }
 
         StringBuilder sb = new StringBuilder();
         List<FileMutation> files = outcome.addedOrChangedFiles();

@@ -707,6 +707,22 @@ class EvolutionProtocolContractTest {
         assertThat(rendered.length()).isLessThan(700);
     }
 
+    /**
+     * T6-T: a discarded answer is not relayed -- its SEARCH text is not what the file says, and ladder-rows
+     * run 2026-10-05_12-25-01 copied such a relay back ten answers in a row.
+     */
+    @Test
+    void formatLastRawOutput_aDiscardedAnswer_isNotRelayed_itsReasonIs() {
+        EvolutionOutcome outcome = new EvolutionOutcome(List.of(), List.of(), EvolutionOutcome.INVALID_PREFIX
+                + "an edit could not be applied: src/main/java/zeta/Nib.java: hunk 1's SEARCH text is not in the file",
+                "```edit [src/main/java/zeta/Nib.java]\n<<<<<<< SEARCH\n    int width() { return 9; }\n=======\n    x\n>>>>>>> REPLACE\n```");
+
+        String rendered = EvolutionProtocolContract.formatLastRawOutput(outcome);
+
+        assertThat(rendered).contains("nothing was applied", "discarded unread", "zeta/Nib.java: hunk 1's SEARCH text")
+                .doesNotContain("return 9;").doesNotContain("<<<<<<< SEARCH");
+    }
+
     @Test
     void formatLastRawOutput_nullOutcome_isNone() {
         assertThat(EvolutionProtocolContract.formatLastRawOutput(null)).isEqualTo("(none)");

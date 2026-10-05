@@ -111,7 +111,13 @@ public final class ExecutionTrace {
             });
             try {
                 vm = attach(port, deadline, mvn);
-                if (vm == null) return Optional.empty();
+                if (vm == null) {
+                    // Say why: a test that does not build never opens the port (ladder-rows field33: a trace asked for
+                    // while the tree did not compile ended in 7 s, logged only as "could not be attached to").
+                    if (!mvn.isAlive()) log.info("T4-DY: execution trace of {}#{} not taken: the test did not build -- {}",
+                            testClass, testMethod, firstError(copy.resolve("trace-build.log")));
+                    return Optional.empty();
+                }
                 return Optional.of(record(vm, mainTypes, deadline)).filter(l -> !l.isEmpty());
             } finally {
                 watchdog.interrupt();
@@ -290,6 +296,16 @@ public final class ExecutionTrace {
             if (!roots.contains(root)) roots.add(root);
         }
         return roots;
+    }
+
+    /** The first error line of a build log, or a short note when there is none. */
+    private static String firstError(Path buildLog) {
+        try (Stream<String> lines = Files.lines(buildLog)) {
+            return lines.filter(l -> l.contains("[ERROR]") && l.contains(".java")).findFirst()
+                    .map(l -> l.replaceAll("\\x1B\\[[0-9;]*m", "").strip()).orElse("no error line in the build log");
+        } catch (IOException | java.io.UncheckedIOException e) {
+            return "the build log could not be read";
+        }
     }
 
     private static boolean isProject(String type, List<String> mainTypes) {

@@ -39,6 +39,9 @@ import java.util.stream.Collectors;
                 + "to the T4-DQ transition log")
 public class GoalPlannerService {
 
+    /** The test gate's work item, followed by the gate's blocker as it was when the item was made. */
+    public static final String TEST_SUITE_WORK_ITEM = "[BUILD_FIX] Make the project's own test suite pass — ";
+
     private static final String GOAL_PATH = "meta/GoalStack.json";
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
@@ -4439,7 +4442,7 @@ public class GoalPlannerService {
                                     + " automated tests, removing test sources that cannot be made to"
                                     + " pass is also an acceptable resolution)";
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
-                            "[BUILD_FIX] Make the project's own test suite pass — " + testFailure.get()
+                            TEST_SUITE_WORK_ITEM + testFailure.get()
                                     + resolutionHint), true);
                     if (!injected.injected().isEmpty()) {
                         // Same blob-becomes-criterion guard as the T4-BP-3 injection below; the

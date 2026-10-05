@@ -107,4 +107,26 @@ class StuckLedgerTest {
         assertThat(StuckLayer.aboutTheTree(StuckObservation.Source.TEST_FAILURES)).isTrue();
         assertThat(StuckLayer.aboutTheTree(StuckObservation.Source.CLOSURE_REFUSAL)).isFalse();
     }
+    /**
+     * T6-T: an answer about the tests whose failure came back with no question left still stands -- it is the
+     * last fact read about a failure that is still there -- and ends with the suite like a delivered one.
+     */
+    @Test
+    void aTestAnswerWithNoQuestionLeftStandsWhileTheFailureDoes_andEndsWithTheSuite() {
+        StuckLedger l = new StuckLedger();
+        StuckObservation tests = new StuckObservation(StuckObservation.Source.TEST_FAILURES,
+                "the same tests keep failing: QuillTest.dries", "sg-1", "c1", List.of("QuillTest.dries -- expected 3"));
+        l.observe(tests);
+        StuckLedger.Entry t = l.pending().get(0);
+        l.recordAsked(t, answered(), "c1", "sg-1");
+        l.observe(new StuckObservation(StuckObservation.Source.TEST_FAILURES,
+                "the same tests keep failing: QuillTest.dries", "sg-1", "c2", List.of("QuillTest.dries -- expected 3")));
+        l.noQuestionLeft(t);
+
+        assertThat(t.status()).isEqualTo(StuckLedger.Status.UNANSWERED);
+        assertThat(l.delivered()).containsExactly(t);
+        assertThat(l.testsPassed("c3")).containsExactly(t);
+        assertThat(t.status()).isEqualTo(StuckLedger.Status.ENDED);
+        assertThat(l.delivered()).isEmpty();
+    }
 }

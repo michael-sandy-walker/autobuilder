@@ -48,6 +48,26 @@ public class EvolutionLLMAdapter {
         }
     }
 
+    /** T6-T: the test gate and the goal tree, to state the test gate's work item as of now; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.core.build.TestRunGate> testRunGate;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.goal.GoalPlannerService> goalPlannerService;
+
+    private CycleContextData withTestRunNow(CycleContextData ctx) {
+        var gate = testRunGate == null ? null : testRunGate.getIfAvailable();
+        var goals = goalPlannerService == null ? null : goalPlannerService.getIfAvailable();
+        if (gate == null || goals == null) return ctx;
+        return TestWorkItemNow.restate(ctx,
+                id -> goals.getGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY),
+                () -> {
+                    var root = goals.getRootGoal();
+                    boolean required = root != null
+                            && com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(root.getDescription());
+                    return gate.verifyTestsPass(ctx.cycleName() + "-evolution-tests", required);
+                });
+    }
+
     /** T4-CQ: operator-declared paths no writer may touch; optional in narrow tests. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.ProtectedPaths protectedPaths;
@@ -83,7 +103,7 @@ public class EvolutionLLMAdapter {
         // current output state before rendering — same pattern as PlannerLLMAdapter /
         // AnalysisLLMAdapter. Without this, the evolution prompt can carry stale markers and
         // encourage re-creating files that already exist on disk.
-        CycleContextData refreshed = groundingService.refreshGoalAnnotations(context);
+        CycleContextData refreshed = withTestRunNow(groundingService.refreshGoalAnnotations(context));
         var result = refreshed.evaluationInterpretation();
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
         java.util.function.Predicate<String> isProtected = protectedPaths == null ? path -> false

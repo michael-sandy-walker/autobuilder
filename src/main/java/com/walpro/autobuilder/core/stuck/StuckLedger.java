@@ -188,7 +188,8 @@ public final class StuckLedger {
 
     /** Entries whose delivered answer still stands, most recently delivered first. */
     public synchronized List<Entry> delivered() {
-        List<Entry> out = new ArrayList<>(entries.values().stream().filter(e -> e.status == Status.DELIVERED).toList());
+        List<Entry> out = new ArrayList<>(entries.values().stream()
+                .filter(e -> e.status == Status.DELIVERED || standsUnanswered(e)).toList());
         out.sort((a, b) -> Long.compare(b.deliveredSeq, a.deliveredSeq));
         return out;
     }
@@ -215,6 +216,18 @@ public final class StuckLedger {
         return noQuestionLeft(e);
     }
 
+    /**
+     * T6-T: an answer about the TREE (a build, the tests) whose failure came back after it and has no question
+     * left still stands: it is the last fact read about a failure that is still there. Ladder-rows run
+     * 2026-10-05_22-14-30: a trace showed the gate never called the class the failing test needed; the failure
+     * recurred, no second question existed, and from then on no prompt carried the trace -- the model spent its
+     * last 26 minutes on another class. It ends with the build or the suite, like a delivered one.
+     */
+    private static boolean standsUnanswered(Entry e) {
+        return e.status == Status.UNANSWERED && e.deliveredAnswer() != null
+                && (e.source == StuckObservation.Source.BUILD || e.source == StuckObservation.Source.TEST_FAILURES);
+    }
+
     /** Marks an entry whose source has no question at its rung as handed to the operator; true the first time. */
     public synchronized boolean noQuestionLeft(Entry e) {
         if (e.rung < StuckDiagnosis.questionsFor(e.source)) return false;
@@ -233,7 +246,7 @@ public final class StuckLedger {
         List<Entry> ended = new ArrayList<>();
         for (Entry e : entries.values()) {
             if (e.source != StuckObservation.Source.BUILD) continue;
-            if (e.status == Status.DELIVERED) {
+            if (e.status == Status.DELIVERED || standsUnanswered(e)) {
                 e.status = Status.ENDED;
                 e.endedCycle = cycleId;
                 ended.add(e);
@@ -252,7 +265,7 @@ public final class StuckLedger {
         List<Entry> ended = new ArrayList<>();
         for (Entry e : entries.values()) {
             if (e.source != StuckObservation.Source.TEST_FAILURES) continue;
-            if (e.status == Status.DELIVERED) {
+            if (e.status == Status.DELIVERED || standsUnanswered(e)) {
                 e.status = Status.ENDED;
                 e.endedCycle = cycleId;
                 ended.add(e);

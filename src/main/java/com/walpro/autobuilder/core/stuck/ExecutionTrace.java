@@ -187,8 +187,12 @@ public final class ExecutionTrace {
     private static void recordInto(List<Call> calls, VirtualMachine vm, List<String> mainTypes, long deadline) throws InterruptedException {
         EventRequestManager erm = vm.eventRequestManager();
         List<EventRequest> requests = new ArrayList<>();
-        for (String type : mainTypes) {
-            for (String filter : List.of(type, type + "$*")) {
+        // One entry and one exit request per root package, the project's own types picked in the handler: a request
+        // per type (two filters each) stopped the trace from seeing any call once a tree had 20 types -- every method
+        // the JVM runs is checked against every request, and a Mockito test runs a great many (ladder-rows field32:
+        // a trace of TestRunGateTest saw no call in 250 s; two such requests saw the calls at once).
+        for (String root : rootPackages(mainTypes)) {
+            for (String filter : List.of(root + ".*")) {
                 MethodEntryRequest entry = erm.createMethodEntryRequest();
                 entry.addClassFilter(filter);
                 MethodExitRequest exit = erm.createMethodExitRequest();
@@ -200,14 +204,13 @@ public final class ExecutionTrace {
                 }
             }
         }
-        // Every exception, wherever thrown: one a project method CATCHES is part of that call's story even when a
-        // library threw it (parameterized-rows field24: JavaParser's "Text Block Literals are not supported ...
-        // JAVA_15", caught by the method under test and returned as empty -- the one fact the fix needed, and the
-        // trace, filtered to exceptions thrown in project code, never showed it).
-        ExceptionRequest exceptions = erm.createExceptionRequest(null, true, true);
-        exceptions.setSuspendPolicy(EventRequest.SUSPEND_NONE);
-        exceptions.enable();
-        requests.add(exceptions);
+        // Every exception thrown while a thread is inside the project's code, wherever thrown: one a project method
+        // CATCHES is part of that call's story even when a library threw it (parameterized-rows field24: JavaParser's
+        // "Text Block Literals are not supported ... JAVA_15", caught by the method under test and returned as
+        // empty). Only while inside: an exception caught in project code is thrown during a project call, and the
+        // first version, which asked for every exception in the JVM, drowned in a mocking library's own (ladder-rows
+        // field32: a Mockito test's trace ran out its budget before the test reached the project).
+        Map<ThreadReference, ExceptionRequest> watching = new HashMap<>();
         vm.resume();
         Map<ThreadReference, Deque<List<String>>> pending = new HashMap<>();
         Map<ThreadReference, String> thrownBy = new HashMap<>();
@@ -217,35 +220,53 @@ public final class ExecutionTrace {
             if (set == null) break;
             boolean over = false;
             for (Event event : set) {
-                if (event instanceof VMDeathEvent || event instanceof VMDisconnectEvent) return;
-                if (event instanceof MethodEntryEvent e) {
-                    if (skipped(e.method())) continue;
-                    pending.computeIfAbsent(e.thread(), t -> new ArrayDeque<>()).push(arguments(e.thread(), e.method(), requests));
-                } else if (event instanceof ExceptionEvent e) {
-                    com.sun.jdi.Location caught = e.catchLocation();
-                    if (caught != null && isProject(caught.declaringType().name(), mainTypes)) {
-                        caughtBy.computeIfAbsent(e.thread(), t -> new HashMap<>()).put(caught.method(),
-                                "caught " + e.exception().referenceType().name() + " at line " + caught.lineNumber()
-                                        + (isProject(e.location().declaringType().name(), mainTypes) ? ""
-                                        : " (thrown in " + e.location().declaringType().name() + ")")
-                                        + message(e.exception()));
-                    } else if (isProject(e.location().declaringType().name(), mainTypes)) {
-                        thrownBy.put(e.thread(), e.exception().referenceType().name() + " at line " + e.location().lineNumber()
-                                + message(e.exception()));
+                // One event that cannot be read must not stop the trace with the test thread still suspended: the
+                // set would never be resumed, the test JVM would hang to the budget, and no call would be shown
+                // (ladder-rows field32: "no trace -- the run could not be attached to", 250 s, nothing recorded).
+                try {
+                    if (event instanceof VMDeathEvent || event instanceof VMDisconnectEvent) return;
+                    if (event instanceof MethodEntryEvent e) {
+                        if (skipped(e.method()) || !isProject(e.method().declaringType().name(), mainTypes)) continue;
+                        Deque<List<String>> stack = pending.computeIfAbsent(e.thread(), t -> new ArrayDeque<>());
+                        if (stack.isEmpty() && !watching.containsKey(e.thread())) {
+                            ExceptionRequest inside = erm.createExceptionRequest(null, true, true);
+                            inside.addThreadFilter(e.thread());
+                            inside.setSuspendPolicy(EventRequest.SUSPEND_NONE);
+                            inside.enable();
+                            watching.put(e.thread(), inside);
+                        }
+                        stack.push(arguments(e.thread(), e.method(), requests));
+                    } else if (event instanceof ExceptionEvent e) {
+                        com.sun.jdi.Location caught = e.catchLocation();
+                        if (caught != null && isProject(caught.declaringType().name(), mainTypes)) {
+                            caughtBy.computeIfAbsent(e.thread(), t -> new HashMap<>()).put(caught.method(),
+                                    "caught " + e.exception().referenceType().name() + " at line " + caught.lineNumber()
+                                            + (isProject(e.location().declaringType().name(), mainTypes) ? ""
+                                            : " (thrown in " + e.location().declaringType().name() + ")")
+                                            + message(e.exception()));
+                        } else if (isProject(e.location().declaringType().name(), mainTypes)) {
+                            thrownBy.put(e.thread(), e.exception().referenceType().name() + " at line " + e.location().lineNumber()
+                                    + message(e.exception()));
+                        }
+                    } else if (event instanceof MethodExitEvent e) {
+                        if (skipped(e.method()) || !isProject(e.method().declaringType().name(), mainTypes)) continue;
+                        Deque<List<String>> stack = pending.getOrDefault(e.thread(), new ArrayDeque<>());
+                        List<String> args = stack.isEmpty() ? List.of() : stack.pop();
+                        if (stack.isEmpty() && watching.containsKey(e.thread())) erm.deleteEventRequest(watching.remove(e.thread()));
+                        String threw = thrownBy.remove(e.thread());
+                        boolean isVoid = "void".equals(e.method().returnTypeName());
+                        String caught = caughtBy.getOrDefault(e.thread(), Map.of()).isEmpty() ? null
+                                : caughtBy.get(e.thread()).remove(e.method());
+                        String result = threw != null ? "threw " + threw : isVoid ? "void" : value(e.returnValue(), 0, e.thread(), requests);
+                        if (caught != null && threw == null) result = result + "  after it " + caught;
+                        calls.add(new Call(stack.size(), e.method().declaringType().name(), e.method().name(), args, result,
+                                threw != null, e.location().lineNumber(), locals(e.thread(), args.size(), requests)));
+                        if (calls.size() >= CALL_LIMIT) over = true;
                     }
-                } else if (event instanceof MethodExitEvent e) {
-                    if (skipped(e.method())) continue;
-                    Deque<List<String>> stack = pending.getOrDefault(e.thread(), new ArrayDeque<>());
-                    List<String> args = stack.isEmpty() ? List.of() : stack.pop();
-                    String threw = thrownBy.remove(e.thread());
-                    boolean isVoid = "void".equals(e.method().returnTypeName());
-                    String caught = caughtBy.getOrDefault(e.thread(), Map.of()).isEmpty() ? null
-                            : caughtBy.get(e.thread()).remove(e.method());
-                    String result = threw != null ? "threw " + threw : isVoid ? "void" : value(e.returnValue(), 0, e.thread(), requests);
-                    if (caught != null && threw == null) result = result + "  after it " + caught;
-                    calls.add(new Call(stack.size(), e.method().declaringType().name(), e.method().name(), args, result,
-                            threw != null, e.location().lineNumber(), locals(e.thread(), args.size(), requests)));
-                    if (calls.size() >= CALL_LIMIT) over = true;
+                } catch (com.sun.jdi.VMDisconnectedException gone) {
+                    throw gone;
+                } catch (RuntimeException unreadable) {
+                    log.warn("T4-DY: execution trace: an event could not be read ({}) -- skipped", unreadable.toString());
                 }
             }
             if (over) {
@@ -258,7 +279,21 @@ public final class ExecutionTrace {
         return;
     }
 
+    /** The packages the main types live under, cut to their common roots: com.a.b.X and com.a.c.Y give com.a. */
+    static List<String> rootPackages(List<String> mainTypes) {
+        java.util.TreeSet<String> pkgs = new java.util.TreeSet<>();
+        for (String t : mainTypes) pkgs.add(t.contains(".") ? t.substring(0, t.lastIndexOf('.')) : t);
+        List<String> roots = new ArrayList<>();
+        for (String p : pkgs) {
+            String[] parts = p.split("\\.");
+            String root = parts.length >= 2 ? parts[0] + "." + parts[1] : p;   // e.g. com.walpro, org.sample
+            if (!roots.contains(root)) roots.add(root);
+        }
+        return roots;
+    }
+
     private static boolean isProject(String type, List<String> mainTypes) {
+        if (type.contains("$$Lambda")) return false;   // the JVM's generated lambda classes: plumbing, not calls
         for (String t : mainTypes) if (type.equals(t) || type.startsWith(t + "$")) return true;
         return false;
     }

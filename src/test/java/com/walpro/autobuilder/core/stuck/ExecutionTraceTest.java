@@ -154,6 +154,47 @@ class ExecutionTraceTest {
                 .doesNotContain("threw");
     }
 
+    /**
+     * ladder-rows field32: a request per type stopped the trace from seeing any call once the tree had about twenty
+     * types and the test ran a mocking library -- 250 s, nothing recorded, the fact the fix needed never shown.
+     */
+    @Test
+    void aTreeOfManyTypesWithAMockedTestIsStillTraced(@TempDir Path project) throws Exception {
+        Assumptions.assumeTrue(Boolean.getBoolean("execution.trace.live"), "live: -Dexecution.trace.live=true");
+        Files.writeString(project.resolve("pom.xml"), POM.replace("</dependencies>",
+                "<dependency><groupId>org.mockito</groupId><artifactId>mockito-core</artifactId><version>5.7.0</version>"
+                        + "<scope>test</scope></dependency>"
+                        // Autobuilder's own Byte Buddy, so the fixture resolves offline from the local repository
+                        + "<dependency><groupId>net.bytebuddy</groupId><artifactId>byte-buddy</artifactId><version>1.14.16</version><scope>test</scope></dependency>"
+                        + "<dependency><groupId>net.bytebuddy</groupId><artifactId>byte-buddy-agent</artifactId><version>1.14.16</version><scope>test</scope></dependency>"
+                        + "</dependencies>"));
+        Path main = Files.createDirectories(project.resolve("src/main/java/org/ink"));
+        Path test = Files.createDirectories(project.resolve("src/test/java/org/ink"));
+        for (int i = 0; i < 24; i++) {
+            Files.writeString(main.resolve("Part" + i + ".java"), "package org.ink; public class Part" + i + " { public int n() { return " + i + "; } }");
+        }
+        Files.writeString(main.resolve("Gate.java"), """
+                package org.ink;
+                public class Gate {
+                  private final Part0 part;
+                  public Gate(Part0 part) { this.part = part; }
+                  public String blocker() { return "failing: " + part.n(); }
+                }""");
+        Files.writeString(test.resolve("GateTest.java"), """
+                package org.ink;
+                class GateTest {
+                  @org.junit.jupiter.api.Test void blocks() {
+                    Part0 part = org.mockito.Mockito.mock(Part0.class);
+                    org.mockito.Mockito.when(part.n()).thenReturn(7);
+                    org.junit.jupiter.api.Assertions.assertEquals("ran with: 7", new Gate(part).blocker());
+                  }
+                }""");
+
+        var calls = ExecutionTrace.trace(project, "org.ink.GateTest", "blocks", 200_000).orElseThrow();
+
+        assertThat(ExecutionTrace.render(calls, Map.of(), 20)).contains("Gate.blocker() -> \"failing: 7\"");
+    }
+
     /** The failing test comes from the observation's own lines, which stay right however the tree changed since. */
     @Test
     void theFailingTestIsReadFromTheObservationsEvidence() {

@@ -5316,6 +5316,24 @@ public class GoalPlannerService {
                         }
                     }
                 }
+                // T6-T: a work item the CRITERIA gate raised (the closure's verifier could not confirm these criteria)
+                // is discharged by that verifier, not by a score. Ladder-rows run 2026-10-06_16-35-49: such an item was
+                // marked fulfilled by "score-based closure" and by the interpreter, every criterion banked met, and the
+                // next closure refused the identical four criteria again -- a chain only the deadline ended. A
+                // contradiction keeps the item open; no answer lets it through (the closure checks again).
+                if (com.walpro.autobuilder.core.build.BlockerTypes.isFromCriteriaGate(g.getMetadata())
+                        && criteriaVerificationService != null) {
+                    List<String> criteria = acceptanceCriteriaOf(g);
+                    Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+                    if (!criteria.isEmpty() && output != null && !output.isEmpty()) {
+                        var check = criteriaVerificationService.verifyCompletion(g.getDescription(), criteria, output);
+                        if (check.answered() && check.unconfirmed().isPresent()) {
+                            log.warn("T6-T: refusing FULFILLED for criteria-gate work item [{}] -- the verifier that raised it"
+                                    + " still does not confirm: {}", goalId, check.unconfirmed().get());
+                            return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
+                        }
+                    }
+                }
                 // Bank every defined criterion as true before flipping status — FULFILLED
                 // means "criteria are met", so the ledger must reflect that. Centralising the
                 // bank here covers every FULFILLED entry point (transitionGoal, the T2-CC

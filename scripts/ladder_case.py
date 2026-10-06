@@ -79,9 +79,11 @@ def seed(c, core, before, spec, withheld):
     out = ['  An existing project, adopted, and now asked to change. It was written by someone else and it already',
            '  builds; its existing behaviour is characterised by the tests in src/test/java.',
            '  The change wanted is written in the ticket that asked for it. In the ticket\'s own words:', '', ticket, '']
+    # T6-T (user, 2026-10-06): the classes the original commit changed are ORIENTATION, never a requirement -- the
+    # tests are. As an obligation, "X is modified" refused a correct ladder-rows tree at 29/29 (field41 run 2).
     if changed:
-        out.append(f"  The classes to change are {listed(changed)}." if len(changed) > 1
-                   else f"  The one class to change is {changed[0]}.")
+        out.append(f"  For orientation: the change that answered this ticket touched {listed(changed)}. Which classes"
+                   " you change is yours to decide; the specification's tests are the requirement.")
     if new:
         out.append(f"  Add the new class{'es' if len(new) > 1 else ''} {listed(new)} in package{'s' if len(new_pkgs) > 1 else ''} "
                    f"{listed(new_pkgs)}.")

@@ -1312,4 +1312,40 @@ public class GoalPlannerServiceClosureTest {
                     .isNotEqualTo("AUTHORED");
         }
     }
+    /**
+     * T6-T: a work item the criteria gate raised is not marked fulfilled while the verifier that raised it still does
+     * not confirm its criteria -- the chain of ladder-rows run 2026-10-06_16-35-49 (fulfilled by a score, refused
+     * again by the closure on the identical criteria). With the verifier confirming, it is fulfilled as before.
+     */
+    @Test
+    void aCriteriaGateItemIsNotFulfilledWhileItsVerifierStillDoesNotConfirmIt() throws IOException {
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        GoalEntity root = new GoalEntity("G", "root spec", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity item = new GoalEntity("C", "[BUILD_FIX] Implement the unconfirmed acceptance criteria", "planner",
+                GoalType.SUBGOAL, "G");
+        item.setStatus(GoalStatus.ACTIVE);
+        item.getMetadata().put(com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.GATE_CRITERIA);
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put("G", root);
+        goalMap.put("C", item);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+        ReflectionTestUtils.setField(service, "currentSubGoalId", "C");
+        ReflectionTestUtils.setField(service, "currentCycleContext", com.walpro.autobuilder.core.lifecycle.CycleContextData
+                .builder().previousOutput(Map.of("src/main/java/zeta/Nib.java", "class Nib {}")).build());
+        service.setAcceptanceCriteria("C", java.util.List.of("Nib is one unit wide"));
+        com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService verifier =
+                mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        service.setCriteriaVerificationService(verifier);
+        when(verifier.verifyCompletion(anyString(), anyList(), anyMap())).thenReturn(
+                com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.blocked(
+                        "1 acceptance criterion(s) not confirmed: Nib is one unit wide", java.util.List.of("Nib is one unit wide")));
+
+        service.applyGoalProgress("C", com.walpro.autobuilder.model.GoalProgressState.FULFILLED, "score-based closure");
+
+        assertThat(service.getGoalById("C").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
 }

@@ -10,7 +10,8 @@
     row from the test source (literal rows only, else empty); TestRunPromptBlock and the test
     gate's repair item show it as 'ran with:'. Suite 3742/0.
 
-  The classes to change are SurefireReports, TestAssertionVocabulary, TestRunGate, TestRunPromptBlock and TestRunReport.
+  For orientation: the change that answered this ticket touched SurefireReports, TestAssertionVocabulary, TestRunGate,
+  TestRunPromptBlock and TestRunReport. Which classes you change is yours to decide; the specification's tests are the requirement.
   Add the new class ParameterizedCaseInput in package com.walpro.autobuilder.core.build.
   They already work as their class comments say, and their existing tests must keep passing.
 

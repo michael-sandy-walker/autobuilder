@@ -579,7 +579,7 @@ public class CriteriaVerificationService {
         java.util.Set<String> testClaimsWithoutRun = new java.util.HashSet<>();
         boolean testRunAvailable = testRunGate == null || !testRunGate.isLive() || testRunGate.freshReport().isPresent();
         for (String c : requiredCriteria) {
-            Boolean recorded = recordAnswer(c, rootDescription);
+            Boolean recorded = recordAnswer(c, rootDescription, outputFiles);
             if (recorded != null) recordedByCriterion.put(c, recorded);
             // T6-T: a test claim is answered by the test run or not at all. With the gate live and no report of
             // this tree (the run hung, or never ran), a reading would only predict -- the archive replay of
@@ -700,6 +700,27 @@ public class CriteriaVerificationService {
      * record was consulted 0 times in three runs). TRUE proven, FALSE contradicted, null no record answers.
      */
     Boolean recordAnswer(String criterion, String goalText) {
+        return recordAnswer(criterion, goalText, null);
+    }
+
+    /**
+     * As {@link #recordAnswer(String, String)}, and with the tree in hand, claims about one named file the tree can
+     * contradict ({@code ChangeClaims}): "X is modified ..." when X was not changed since adoption, "X includes
+     * '...'" when X's text has no such thing. Only ever a contradiction there; a met claim still goes to a reading.
+     */
+    Boolean recordAnswer(String criterion, String goalText, Map<String, String> files) {
+        Boolean answered = recordAnswerFromRuns(criterion, goalText);
+        if (answered != null || files == null) return answered;
+        var changes = adoptionManifest == null ? null : adoptionManifest.changes().orElse(null);
+        Boolean contradicted = com.walpro.autobuilder.core.build.ChangeClaims.answer(criterion, changes, files);
+        if (contradicted != null) {
+            log.info("T6-T: [{}] contradicted by the tree itself (the changes since adoption, the file's text), not by a reading",
+                    criterion);
+        }
+        return contradicted;
+    }
+
+    private Boolean recordAnswerFromRuns(String criterion, String goalText) {
         var report = testRunGate == null ? java.util.Optional.<com.walpro.autobuilder.core.build.TestRunReport>empty()
                 : testRunGate.freshReport();
         if (report.isPresent()) {

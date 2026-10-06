@@ -8,3 +8,8 @@
 
 - reason: the pilot's generated obligations, checked: three spec classes answered by the test run, the whole suite marked gate: tests, the how-to lines marked rule:
 - bootstrap digest: `0287e259486c1c19`
+
+## v3 -- 2026-10-06
+
+- reason: the generated 'classes to change' line is orientation, not a requirement (user, 2026-10-06): field41 run 2 reached 29/29 and was refused over it, run 3 closed while a reading confirmed it falsely; the three 'X is modified to support the new behavior' obligations merged into one rule: line; the tests are the requirement
+- bootstrap digest: `c56c6639c6dda963`

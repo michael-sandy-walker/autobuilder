@@ -81,6 +81,31 @@ public class CriteriaVerificationService {
 
     private static final Pattern ASSESSMENT_LINE =
             Pattern.compile("(?m)^\\s*(\\d+)\\.\\s*([✓✗])\\s*(.+)$");
+    /** T6-T: "N. ? needs <path>[, <path>]" -- the criterion cannot be judged without a file that was only referenced. */
+    private static final Pattern NEEDS_LINE = Pattern.compile("(?m)^\\s*(\\d+)\\.\\s*\\?\\s*needs?:?\\s+(.+)$");
+    /** T6-T: "N. <path>, <path>" or "N. none" -- the locating pass's answer. */
+    private static final Pattern LOCATE_LINE = Pattern.compile("(?m)^\\s*(\\d+)\\.\\s*(.+)$");
+    /** T6-T: rounds of the decentralized verification -- the first, and the ones answering "? needs". */
+    static final int MAX_ROUNDS = 3;
+
+    /**
+     * T6-T: the deployed context, so the file budget is a share of what the model can read rather than a constant
+     * that outgrew it (120,000 characters against a 32k-token window: the 2026-10-06 closure prompt was 128,000).
+     * Optional; absent, the configured budget stands.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.protocol.PromptTokenBudget promptTokenBudget;
+
+    /** The characters the files may take, after {@code otherChars} of prompt around them. */
+    int fileBudget(int otherChars) {
+        int budget = fileBudgetChars > 0 ? fileBudgetChars : Integer.MAX_VALUE;
+        if (promptTokenBudget != null) {
+            long fromContext = (long) promptTokenBudget.promptHeadroomTokens() * 4 - otherChars - SYSTEM_PROMPT.length();
+            budget = (int) Math.max(0, Math.min(budget, fromContext));
+        }
+        return budget;
+    }
 
     private static final String SYSTEM_PROMPT = """
             You verify whether acceptance criteria are satisfied by the current state of a codebase.
@@ -219,8 +244,10 @@ public class CriteriaVerificationService {
         }
         Evidence evidence = buildPrompt(subjectDescription, features, outputFiles, structuralNotes);
         if (!evidence.complete()) {
-            log.warn("T2-FI: the verification prompt does not carry all the evidence — {}. "
-                    + "Verdicts formed on it cannot confirm a criterion.", evidence.describeGaps());
+            // T6-T: the tree does not fit -- verify it in pieces that do, the rest referenced by outline.
+            log.info("T6-T: the files do not fit one verification prompt ({}) -- verifying per criterion, the rest"
+                    + " of the tree referenced", evidence.describeGaps());
+            return verifyDecentralized(subjectDescription, features, outputFiles, structuralNotes);
         }
         String response;
         try {
@@ -243,6 +270,232 @@ public class CriteriaVerificationService {
             log.warn("T4-BP-1: unparseable verification response — no observation recorded");
         }
         return new Assessment(passMap, evidence.complete(), evidence.describeGaps());
+    }
+
+    /**
+     * T6-T: verification of a tree too large for one prompt (the user's direction, 2026-10-06: "split it up and
+     * process it in such a way that it can fit the context window while the other part of the tree gets only
+     * referenced").
+     *
+     * <p>Each criterion has HOME files: the files whose class it names, those a locating pass over the outlines
+     * points to when it names none, and those it asks for. Criteria are packed into calls whose home files fit
+     * whole; every other file is shown only as its outline (path and declarations). A criterion is answered
+     * ✓, ✗, or "? needs &lt;path&gt;", and a "needs" answer is asked again with that file whole, for at most
+     * {@link #MAX_ROUNDS} rounds.
+     *
+     * <p>T2-FI's rule holds per call: a ✓ counts only from a call that showed its files whole; a ✗ counts from
+     * any call (the asymmetry: a wrong block costs cycles, a wrong pass a false completion). The evidence is
+     * complete when every criterion has a counted verdict.
+     */
+    private Assessment verifyDecentralized(String subject, List<String> features, Map<String, String> files,
+                                           String structuralNotes) {
+        Map<Integer, java.util.LinkedHashSet<String>> home = new LinkedHashMap<>();
+        List<Integer> unhomed = new ArrayList<>();
+        for (int i = 1; i <= features.size(); i++) {
+            java.util.LinkedHashSet<String> named = namedFiles(features.get(i - 1), files);
+            home.put(i, named);
+            if (named.isEmpty()) unhomed.add(i);
+        }
+        if (!unhomed.isEmpty()) locate(subject, features, unhomed, files, home);
+        for (int i : unhomed) {
+            if (home.get(i).isEmpty()) home.get(i).addAll(files.keySet()); // nothing located: the whole tree, as before
+        }
+
+        Map<Integer, Boolean> counted = new LinkedHashMap<>();
+        List<String> gaps = new ArrayList<>();
+        List<Integer> pending = new ArrayList<>(home.keySet());
+        for (int round = 0; round < MAX_ROUNDS && !pending.isEmpty(); round++) {
+            List<Integer> again = new ArrayList<>();
+            for (List<Integer> batch : pack(pending, home, files, structuralNotes)) {
+                java.util.LinkedHashSet<String> whole = new java.util.LinkedHashSet<>();
+                for (int i : batch) whole.addAll(home.get(i));
+                Evidence ev = buildBatchPrompt(subject, features, batch, files, whole, structuralNotes);
+                String response = ask(ev.prompt());
+                if (response == null) continue;
+                Map<Integer, Boolean> verdicts = parse(response, batch.size());
+                Map<Integer, List<String>> needs = parseNeeds(response, batch.size(), files);
+                for (int k = 1; k <= batch.size(); k++) {
+                    int criterion = batch.get(k - 1);
+                    Boolean v = verdicts.get(k);
+                    if (Boolean.FALSE.equals(v) || (Boolean.TRUE.equals(v) && ev.complete())) {
+                        counted.put(criterion, v);
+                    } else if (needs.containsKey(k) && home.get(criterion).addAll(needs.get(k))) {
+                        again.add(criterion);
+                    } else if (Boolean.TRUE.equals(v)) {
+                        gaps.add("criterion " + criterion + " passed on cropped files (" + ev.describeGaps() + ")");
+                    }
+                }
+            }
+            pending = again;
+        }
+        List<Integer> unanswered = new ArrayList<>();
+        for (int i : home.keySet()) if (!counted.containsKey(i)) unanswered.add(i);
+        if (!unanswered.isEmpty()) gaps.add("no counted verdict for criteria " + unanswered);
+        log.info("T6-T: decentralized verification -- {} of {} criteria answered on whole files{}", counted.size(),
+                features.size(), gaps.isEmpty() ? "" : " (" + String.join("; ", gaps) + ")");
+        return new Assessment(counted, unanswered.isEmpty(), String.join("; ", gaps));
+    }
+
+    /** The files whose class a criterion names, as a word -- main sources before tests. */
+    static java.util.LinkedHashSet<String> namedFiles(String criterion, Map<String, String> files) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        if (criterion == null) return out;
+        List<String> paths = new ArrayList<>(files.keySet());
+        paths.sort(java.util.Comparator.comparing((String p) -> p.replace('\\', '/').contains("/src/test/")
+                || p.replace('\\', '/').startsWith("src/test/")));
+        for (String path : paths) {
+            String p = path.replace('\\', '/');
+            if (!p.endsWith(".java")) continue;
+            String simple = p.substring(p.lastIndexOf('/') + 1, p.length() - ".java".length());
+            if (Pattern.compile("\\b" + Pattern.quote(simple) + "\\b").matcher(criterion).find()) out.add(path);
+        }
+        return out;
+    }
+
+    /** Criteria into calls whose home files fit whole beside the outline of the rest; a criterion too large goes alone. */
+    private List<List<Integer>> pack(List<Integer> criteria, Map<Integer, java.util.LinkedHashSet<String>> home,
+                                     Map<String, String> files, String structuralNotes) {
+        int notes = structuralNotes == null ? 0 : structuralNotes.length();
+        int budget = fileBudget(notes + 2_000);
+        List<List<Integer>> batches = new ArrayList<>();
+        List<Integer> current = new ArrayList<>();
+        java.util.Set<String> shown = new java.util.HashSet<>();
+        int used = 0;
+        for (int c : criteria) {
+            int add = 0;
+            for (String f : home.get(c)) if (!shown.contains(f)) add += files.getOrDefault(f, "").length();
+            int outline = outlineChars(files, shown, home.get(c));
+            if (!current.isEmpty() && used + add + outline > budget) {
+                batches.add(current);
+                current = new ArrayList<>();
+                shown = new java.util.HashSet<>();
+                used = 0;
+                add = 0;
+                for (String f : home.get(c)) add += files.getOrDefault(f, "").length();
+            }
+            current.add(c);
+            shown.addAll(home.get(c));
+            used += add;
+        }
+        if (!current.isEmpty()) batches.add(current);
+        return batches;
+    }
+
+    private static int outlineChars(Map<String, String> files, java.util.Set<String> shown, java.util.Set<String> adding) {
+        int n = 0;
+        for (String f : files.keySet()) if (!shown.contains(f) && !adding.contains(f)) n += f.length() + 60;
+        return n;
+    }
+
+    /** One call of the decentralized verification: its criteria (numbered 1..k), its files whole, the rest outlined. */
+    private Evidence buildBatchPrompt(String subject, List<String> features, List<Integer> batch, Map<String, String> files,
+                                      java.util.Set<String> whole, String structuralNotes) {
+        StringBuilder sb = new StringBuilder("GOAL:\n").append(subject != null ? subject : "(none)").append("\n\nREQUIREMENTS:\n");
+        for (int k = 0; k < batch.size(); k++) sb.append(k + 1).append(". ").append(features.get(batch.get(k) - 1)).append("\n");
+        if (structuralNotes != null && !structuralNotes.isBlank()) sb.append("\n").append(structuralNotes.strip()).append("\n");
+        StringBuilder outline = new StringBuilder("\nREFERENCED, NOT SHOWN (the rest of the project: each file's declarations only):\n");
+        for (Map.Entry<String, String> e : files.entrySet()) {
+            if (whole.contains(e.getKey())) continue;
+            List<String> decls = com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer.summarizeContent(e.getValue());
+            outline.append("  ").append(e.getKey()).append(decls.isEmpty() ? "" : " -- " + String.join("; ",
+                    decls.subList(0, Math.min(12, decls.size()))).replaceAll("\\s+", " ")).append("\n");
+        }
+        int budget = fileBudget(sb.length() + outline.length() + 800);
+        if (outline.length() > budget / 4) {         // a large tree: its paths only, so the files keep the room
+            outline = new StringBuilder("\nREFERENCED, NOT SHOWN (the rest of the project):\n");
+            for (String f : files.keySet()) if (!whole.contains(f)) outline.append("  ").append(f).append("\n");
+            budget = fileBudget(sb.length() + outline.length() + 800);
+        }
+        sb.append("\nSHOWN WHOLE (the files these requirements are about):\n");
+        List<String> cropped = new ArrayList<>();
+        int remaining = budget;
+        for (String f : whole) {
+            String content = files.getOrDefault(f, "");
+            sb.append("=== ").append(f).append(" ===\n");
+            if (content.length() <= remaining) {
+                sb.append(content).append("\n");
+                remaining -= content.length();
+            } else {
+                sb.append(content, 0, Math.max(0, remaining)).append("\n... (")
+                        .append(content.length() - Math.max(0, remaining)).append(" characters truncated)\n");
+                cropped.add(f);
+                remaining = 0;
+            }
+        }
+        sb.append(outline);
+        sb.append("""
+
+                For EACH requirement, answer with exactly one line:
+                <requirement number>. ✓ <requirement text>   (when the shown files satisfy it)
+                <requirement number>. ✗ <requirement text>   (when they do not)
+                <requirement number>. ? needs <path>         (when you cannot judge it without a file listed under REFERENCED)
+                """);
+        return new Evidence(sb.toString(), List.copyOf(cropped), 0);
+    }
+
+    /** The locating pass: from the outlines alone, which files each unhomed criterion is about. */
+    private void locate(String subject, List<String> features, List<Integer> unhomed, Map<String, String> files,
+                        Map<Integer, java.util.LinkedHashSet<String>> home) {
+        StringBuilder sb = new StringBuilder("GOAL:\n").append(subject != null ? subject : "(none)").append("\n\nREQUIREMENTS:\n");
+        for (int k = 0; k < unhomed.size(); k++) sb.append(k + 1).append(". ").append(features.get(unhomed.get(k) - 1)).append("\n");
+        sb.append("\nPROJECT FILES (declarations only):\n");
+        for (Map.Entry<String, String> e : files.entrySet()) {
+            List<String> decls = com.walpro.autobuilder.analysis.structure.DefaultProjectStructureSummarizer.summarizeContent(e.getValue());
+            sb.append("  ").append(e.getKey()).append(decls.isEmpty() ? "" : " -- " + String.join("; ",
+                    decls.subList(0, Math.min(12, decls.size()))).replaceAll("\\s+", " ")).append("\n");
+        }
+        sb.append("""
+
+                For EACH requirement, answer with exactly one line naming the files (paths exactly as listed, at most 4)
+                that implement it or are needed to judge it:
+                <requirement number>. <path>, <path>
+                or
+                <requirement number>. none
+                """);
+        String response = ask(sb.toString());
+        if (response == null) return;
+        Matcher m = LOCATE_LINE.matcher(response);
+        while (m.find()) {
+            int k = Integer.parseInt(m.group(1));
+            if (k < 1 || k > unhomed.size()) continue;
+            for (String part : m.group(2).split(",")) {
+                String path = part.strip().replaceAll("^`|`$", "");
+                if (files.containsKey(path)) home.get(unhomed.get(k - 1)).add(path);
+            }
+        }
+    }
+
+    /** "N. ? needs a, b" lines, keeping only paths that are files of the tree. */
+    static Map<Integer, List<String>> parseNeeds(String raw, int count, Map<String, String> files) {
+        Map<Integer, List<String>> out = new LinkedHashMap<>();
+        Matcher m = NEEDS_LINE.matcher(raw);
+        while (m.find()) {
+            int k = Integer.parseInt(m.group(1));
+            if (k < 1 || k > count) continue;
+            List<String> paths = new ArrayList<>();
+            for (String part : m.group(2).split(",")) {
+                String path = part.strip().replaceAll("^`|`$", "");
+                if (files.containsKey(path)) paths.add(path);
+            }
+            if (!paths.isEmpty()) out.put(k, paths);
+        }
+        return out;
+    }
+
+    /** One verification call; null on failure or an empty answer. */
+    private String ask(String prompt) {
+        try {
+            List<Message> messages = List.of(new Message("system", SYSTEM_PROMPT), new Message("user", prompt));
+            ResponseEntity<ChatResponse> r;
+            try (var llmPurpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("criteria-verification")) {
+                r = llmClient.ask(messages);
+            }
+            String response = r.getBody() != null ? r.getBody().getFirstContent() : null;
+            return response == null || response.isBlank() ? null : response;
+        } catch (Exception e) {
+            log.warn("T6-T: a verification call failed ({}) -- no observation from it", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -318,16 +571,32 @@ public class CriteriaVerificationService {
             cachedByKey = Map.of();
         }
 
-        // Verify only the criteria with no cached result at this code state.
+        // T6-T: record first -- a claim the test run of this tree or the changes since adoption answer is never
+        // put to a model at all. Before, every criterion went to the reading and the record overrode it after;
+        // a proven "every test in X passes" still sat in a prompt that could not fit, and its cropping deferred
+        // a closure the record had already settled (run 2026-10-06_11-50-45).
+        Map<String, Boolean> recordedByCriterion = new java.util.HashMap<>();
+        java.util.Set<String> testClaimsWithoutRun = new java.util.HashSet<>();
+        boolean testRunAvailable = testRunGate == null || !testRunGate.isLive() || testRunGate.freshReport().isPresent();
+        for (String c : requiredCriteria) {
+            Boolean recorded = recordAnswer(c, rootDescription);
+            if (recorded != null) recordedByCriterion.put(c, recorded);
+            // T6-T: a test claim is answered by the test run or not at all. With the gate live and no report of
+            // this tree (the run hung, or never ran), a reading would only predict -- the archive replay of
+            // 2026-10-06 saw a model confirm "ParameterizedCaseInputTest passes" on a tree whose suite hangs.
+            else if (!testRunAvailable && com.walpro.autobuilder.core.build.TestRunClaims.isClaim(c)) testClaimsWithoutRun.add(c);
+        }
+        // Verify only the criteria with no cached result at this code state, and no record answering them.
         List<String> uncached = new ArrayList<>();
         for (String c : requiredCriteria) {
-            if (!cachedByKey.containsKey(CriterionResultEntity.keyOf(c))) uncached.add(c);
+            if (!cachedByKey.containsKey(CriterionResultEntity.keyOf(c)) && !recordedByCriterion.containsKey(c)
+                    && !testClaimsWithoutRun.contains(c)) uncached.add(c);
         }
         Map<String, Boolean> freshByCriterion = new java.util.HashMap<>();
         boolean evidenceComplete = true;
         String evidenceGaps = "";
         if (uncached.isEmpty()) {
-            log.info("T4-BP-3: completion verification fully cache-hit at this code state — no LLM call ({} criteria)",
+            log.info("T4-BP-3: completion verification answered by the cache and the record -- no LLM call ({} criteria)",
                     requiredCriteria.size());
         } else {
             // T4-BS: give the verifier concrete wiring facts for THIS code state alongside the files.
@@ -361,19 +630,30 @@ public class CriteriaVerificationService {
                         passMap.size(), evidenceGaps);
             }
             for (int i = 0; i < uncached.size(); i++) {
-                freshByCriterion.put(uncached.get(i), Boolean.TRUE.equals(passMap.get(i + 1)));
+                Boolean v = passMap.get(i + 1);
+                if (v != null || evidenceComplete) freshByCriterion.put(uncached.get(i), Boolean.TRUE.equals(v));
             }
         }
 
-        // Combine cached + fresh; absent or false ⇒ unconfirmed.
+        // Combine cached + fresh; false ⇒ unconfirmed. Absent ⇒ unconfirmed when the evidence was whole (the model
+        // omitted it), and unanswered when it was not (T6-T: a criterion the decentralized pass could not settle on
+        // whole files defers the closure rather than raising a work item about code nobody judged).
         List<String> unconfirmed = new ArrayList<>();
+        List<String> unanswered = new ArrayList<>();
         for (String c : requiredCriteria) {
             Boolean ok = cachedByKey.containsKey(CriterionResultEntity.keyOf(c))
                     ? cachedByKey.get(CriterionResultEntity.keyOf(c))
                     : freshByCriterion.get(c);
-            Boolean recorded = recordAnswer(c, rootDescription);
+            Boolean recorded = recordedByCriterion.get(c);
             if (recorded != null) ok = recorded;
-            if (ok == null || !ok) unconfirmed.add(c);
+            if (ok == null && (!evidenceComplete || testClaimsWithoutRun.contains(c))) unanswered.add(c);
+            else if (ok == null || !ok) unconfirmed.add(c);
+        }
+        if (unconfirmed.isEmpty() && !unanswered.isEmpty()) {
+            log.warn("T4-BP-3 / T2-FI: {} criterion(s) got no verdict on whole files or from a test run ({}) -- deferring"
+                    + " this closure attempt", unanswered.size(), testClaimsWithoutRun.isEmpty() ? evidenceGaps
+                    : "no test run of this tree for " + testClaimsWithoutRun);
+            return CompletionVerification.abstained();
         }
         if (unconfirmed.isEmpty()) {
             // T2-FI: THE ASYMMETRY IS THE WHOLE POINT, and it is deliberate rather than uniform.
@@ -515,7 +795,7 @@ public class CriteriaVerificationService {
         sb.append("\nCURRENT PROJECT FILES:\n");
         int files = 0;
         int omitted = 0;
-        int remaining = fileBudgetChars > 0 ? fileBudgetChars : Integer.MAX_VALUE;
+        int remaining = fileBudget(sb.length() + 400);
         List<String> cropped = new ArrayList<>();
         for (Map.Entry<String, String> e : output.entrySet()) {
             if (files++ >= MAX_FILES) {

@@ -95,6 +95,18 @@ public final class TestRunClaims {
     }
 
     /**
+     * T6-T: whether {@code criterion} is, as a whole, a claim that tests pass -- the suite, or named test classes --
+     * which only a test run can answer.
+     */
+    public static boolean isClaim(String criterion) {
+        if (criterion == null) return false;
+        String claim = LISTED_CLASSES.matcher(criterion.strip().replaceAll("`", "")).replaceAll("")
+                .replaceAll("\\s*\\([^()]*\\)\\s*$", "")
+                .replaceAll("[.\\s]+$", "");
+        return SUITE.matcher(claim.toLowerCase(Locale.ROOT)).matches() || CLASS.matcher(claim).matches();
+    }
+
+    /**
      * The test run's answer to {@code criterion}: TRUE when it claims only that tests pass and the run shows
      * it, FALSE when the run shows one of those tests failing (or, for the suite, any), null when it is not
      * such a claim or names a class the run did not contain (a reading answers it).

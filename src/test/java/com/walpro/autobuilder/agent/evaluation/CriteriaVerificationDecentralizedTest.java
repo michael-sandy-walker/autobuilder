@@ -1,0 +1,136 @@
+package com.walpro.autobuilder.agent.evaluation;
+
+import com.walpro.autobuilder.client.LLMClient;
+import com.walpro.autobuilder.client.dto.ChatResponse;
+import com.walpro.autobuilder.client.dto.Message;
+import com.walpro.autobuilder.core.build.TestRunGate;
+import com.walpro.autobuilder.core.build.TestRunReport;
+import com.walpro.autobuilder.graph.agent.AgentGraphService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.*;
+
+/**
+ * T6-T: a tree too large for one verification prompt is verified in pieces that fit -- each criterion's files
+ * whole, the rest referenced by outline -- and a claim the test run answers never reaches a model. Invented
+ * coordinates; the shape is the ladder-rows closure of 2026-10-06 (26 files, 128,000 characters of prompt).
+ */
+class CriteriaVerificationDecentralizedTest {
+
+    private final LLMClient llm = mock(LLMClient.class);
+    private final AgentGraphService graph = mock(AgentGraphService.class);
+    private final CriteriaVerificationService service = new CriteriaVerificationService(llm, graph);
+    private final List<String> prompts = new ArrayList<>();
+
+    private static final String A = "src/main/java/zeta/Inkwell.java";
+    private static final String B = "src/main/java/zeta/Nib.java";
+    private final Map<String, String> files = new LinkedHashMap<>();
+
+    @BeforeEach
+    void setUp() {
+        files.put(A, "package zeta;\npublic class Inkwell {\n    public int drops() { return 3; }\n" + "    // ink\n".repeat(300) + "}\n");
+        files.put(B, "package zeta;\npublic class Nib {\n    public int width() { return 1; }\n" + "    // nib\n".repeat(300) + "}\n");
+        service.setFileBudgetChars(4_000);  // one file fits, both do not
+    }
+
+    private void answer(Function<String, String> byPrompt) {
+        doAnswer(inv -> {
+            List<Message> m = inv.getArgument(0);
+            String user = m.get(m.size() - 1).getContent();
+            prompts.add(user);
+            ChatResponse body = mock(ChatResponse.class);
+            when(body.getFirstContent()).thenReturn(byPrompt.apply(user));
+            return ResponseEntity.ok(body);
+        }).when(llm).ask(anyList());
+    }
+
+    @Test
+    void aTreeThatDoesNotFitIsVerifiedPerCriterion_eachCallShowingItsFilesWholeAndReferencingTheRest() {
+        answer(p -> "1. ✓ ok");
+
+        var result = service.verifyCompletion("ink", List.of("Inkwell holds three drops", "Nib is one wide"), files);
+
+        assertThat(result.answered()).isTrue();
+        assertThat(result.unconfirmed()).isEmpty();
+        assertThat(prompts).hasSize(2);
+        assertThat(prompts.get(0)).contains("=== " + A + " ===", "REFERENCED, NOT SHOWN", B).doesNotContain("=== " + B + " ===")
+                .doesNotContain("truncated");
+        assertThat(prompts.get(1)).contains("=== " + B + " ===").doesNotContain("=== " + A + " ===");
+    }
+
+    @Test
+    void aCriterionThatNeedsAReferencedFileIsAskedAgainWithItWhole() {
+        answer(p -> p.contains("=== " + B + " ===") ? "1. ✓ ok" : "1. ? needs " + B);
+
+        var result = service.verifyCompletion("ink", List.of("Inkwell pours through the Nib"), Map.of(A, files.get(A), B, "package zeta;\npublic class Nib {}\n"));
+
+        assertThat(result.answered()).isTrue();
+        assertThat(result.unconfirmed()).isEmpty();
+    }
+
+    @Test
+    void aCriterionNamingNoFileIsLocatedFromTheOutlinesFirst() {
+        answer(p -> p.contains("declarations only):") && p.contains("<path>, <path>") ? "1. " + B
+                : p.contains("=== " + B + " ===") && !p.contains("=== " + A + " ===") ? "1. ✗ too narrow" : "1. ✓ ok");
+
+        var result = service.verifyCompletion("ink", List.of("the writing tip is one unit wide"), files);
+
+        assertThat(result.unconfirmed()).isPresent();
+        assertThat(prompts.get(0)).contains("declarations only");
+    }
+
+    @Test
+    void aPassOnCroppedFilesStillDefers_aFailStillBlocks() {
+        service.setFileBudgetChars(500);
+        answer(p -> "1. ✓ ok");
+        assertThat(service.verifyCompletion("ink", List.of("Inkwell holds three drops"), files).answered()).isFalse();
+
+        prompts.clear();
+        answer(p -> "1. ✗ no");
+        assertThat(service.verifyCompletion("ink", List.of("Inkwell holds three drops"), files).unconfirmed()).isPresent();
+    }
+
+    /** Record first: a test claim the test run of this tree answers never reaches the model. */
+    @Test
+    void aTestClaimTheTestRunAnswersIsNeverAskedOfAModel() {
+        TestRunGate gate = mock(TestRunGate.class);
+        when(gate.freshReport()).thenReturn(Optional.of(new TestRunReport(4, 0, 0, 0, List.of(),
+                Map.of("zeta.InkwellTest", List.of(new TestRunReport.Case("pours", TestRunReport.Outcome.PASSED))))));
+        ReflectionTestUtils.setField(service, "testRunGate", gate);
+        service.setFileBudgetChars(100_000);
+        answer(p -> "1. ✓ ok");
+
+        var result = service.verifyCompletion("ink", List.of("every test in InkwellTest passes", "Nib is one wide"), files);
+
+        assertThat(result.unconfirmed()).isEmpty();
+        assertThat(prompts).hasSize(1);
+        assertThat(prompts.get(0)).contains("Nib is one wide").doesNotContain("every test in InkwellTest passes");
+    }
+    /** A test claim with the gate live and no report of this tree is not put to a model: the closure defers. */
+    @Test
+    void aTestClaimWithNoTestRunIsLeftUnanswered_notReadByAModel() {
+        TestRunGate gate = mock(TestRunGate.class);
+        when(gate.isLive()).thenReturn(true);
+        when(gate.freshReport()).thenReturn(Optional.empty());
+        ReflectionTestUtils.setField(service, "testRunGate", gate);
+        service.setFileBudgetChars(100_000);
+        answer(p -> "1. ✓ ok");
+
+        var result = service.verifyCompletion("ink", List.of("InkwellTest passes"), files);
+
+        assertThat(result.answered()).isFalse();
+        assertThat(prompts).isEmpty();
+    }
+}

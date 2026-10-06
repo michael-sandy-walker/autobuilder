@@ -977,7 +977,7 @@ public class GoalPlannerServiceClosureTest {
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         com.walpro.autobuilder.core.build.TestRunGate testRunGate =
                 mock(com.walpro.autobuilder.core.build.TestRunGate.class);
-        when(testRunGate.verifyTestsPass(any(), anyBoolean()))
+        when(testRunGate.runOnTree(any(), anyBoolean()))
                 .thenReturn(java.util.Optional.of("test suite failing (Tests run: 7, Failures: 7): MemberServiceTest.testGetMemberById"));
         service.setTestRunGate(testRunGate);
 
@@ -1016,7 +1016,7 @@ public class GoalPlannerServiceClosureTest {
         GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
         com.walpro.autobuilder.core.build.TestRunGate testRunGate =
                 mock(com.walpro.autobuilder.core.build.TestRunGate.class);
-        when(testRunGate.verifyTestsPass(any(), anyBoolean()))
+        when(testRunGate.runOnTree(any(), anyBoolean()))
                 .thenReturn(java.util.Optional.of("test suite failing (Tests run: 3, Failures: 3)"));
         service.setTestRunGate(testRunGate);
 

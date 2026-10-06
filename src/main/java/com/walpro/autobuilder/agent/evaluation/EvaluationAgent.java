@@ -118,6 +118,9 @@ public class EvaluationAgent implements ExecutionAgent {
     @Setter
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.goal.DeclaredTestSuite declaredTestSuite;
 
     /** T2-ES: actuator for a structural defect that has survived repeated re-asking. Null in
      *  unit tests, in which case the streak is still counted and the warning still rendered —
@@ -432,6 +435,9 @@ public class EvaluationAgent implements ExecutionAgent {
         finalOutcome = applyOriginatingGateCheck(context, negotiationResult, finalOutcome);
         boolean gateAccepted = finalOutcome != preGateOutcome
                 && finalOutcome.mutationState() == MutationAcceptanceState.ACCEPTED;
+        EvaluationOutcome preProgressOutcome = finalOutcome;
+        finalOutcome = applyTestProgressCheck(context, negotiationResult, finalOutcome);
+        boolean progressAccepted = finalOutcome != preProgressOutcome;
 
         if (behaviourLogger != null) {
             List<String> overrides = negotiationResult.criticalOpinions() != null
@@ -440,6 +446,10 @@ public class EvaluationAgent implements ExecutionAgent {
             if (gateAccepted) {
                 overrides = new java.util.ArrayList<>(overrides);
                 overrides.add("OriginatingGateCheck");
+            }
+            if (progressAccepted) {
+                overrides = new java.util.ArrayList<>(overrides);
+                overrides.add("TestProgressCheck");
             }
             behaviourLogger.mutationNegotiated(
                     context.cycleName(),
@@ -801,6 +811,52 @@ public class EvaluationAgent implements ExecutionAgent {
                 outcome.goalProgress(),
                 "Originating " + gate + " still failing — " + truncate(gateFailure.get(), 400),
                 outcome.recommendation());
+    }
+
+    /**
+     * T6-T: decisive acceptance of a change that makes the operator's suite BETTER than the project as it is --
+     * the tree's tests did not compile and the candidate's run, or fewer fail and none that passed breaks.
+     *
+     * <p>The evaluator judges a candidate against "everything passes", not against the tree it would replace.
+     * Ladder-rows run 2026-10-06_07-42-22: from minute 23 the candidates compiled and passed 22 of 29 tests while
+     * the merged tree's specification did not compile at all; six were rejected for the seven that still failed,
+     * and the first merge came at minute 55. Across 122 archived runs with a declared suite, 83 rejected
+     * candidates qualify (57 against a tree whose tests had never run, 26 with fewer failing and none broken),
+     * in 38 runs. The test run is the authority the operator declared; a candidate it shows better than the tree
+     * is progress whatever remains.
+     *
+     * <p>As for the originating gate: deterministic defect findings keep their decision (the regression guard
+     * among them), and only a declared suite counts. Every comparison is also recorded (test_delta), accepted or
+     * not, so a run reports how often its decisions and its own tests disagreed.
+     */
+    EvaluationOutcome applyTestProgressCheck(CycleContextData context, NegotiationResult negotiationResult,
+                                             EvaluationOutcome outcome) {
+        if (outcome == null || testRunGate == null || declaredTestSuite == null || !declaredTestSuite.isDeclared()
+                || !testRunGate.isLive()) {
+            return outcome;
+        }
+        var probe = context.lastProbeOutcome();
+        if (probe == null || probe.result() != BuildResult.COMPILE_OK) return outcome;
+        var report = testRunGate.freshReport();
+        if (report.isEmpty()) return outcome;
+        var delta = testRunGate.compareWithTree(report.get());
+        boolean defects = negotiationResult.criticalOpinions() != null && negotiationResult.criticalOpinions().stream()
+                .anyMatch(HeuristicOpinion::defectFinding);
+        EvaluationOutcome decided = outcome;
+        if (delta.better() && outcome.mutationState() == MutationAcceptanceState.REJECTED && !defects) {
+            log.info("T6-T: the candidate makes the project's own suite better -- {} -- decisive accept", delta.describe());
+            decided = new EvaluationOutcome(outcome.score(), MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING,
+                    "The project's own suite is better with this change: " + delta.describe()
+                            + ". Accepted as progress (T6-T); what still fails is the next step. The evaluator's"
+                            + " assessment (recorded, not applied) was REJECTED: " + truncate(outcome.feedbackMessage(), 220),
+                    outcome.recommendation());
+        }
+        if (behaviourLogger != null) {
+            behaviourLogger.testDelta(context.cycleName(), delta.verdict(), delta.candidateFailing(), delta.treeFailing(),
+                    delta.newlyFailing(), delta.newlyPassing(),
+                    decided.mutationState() == null ? null : decided.mutationState().name(), decided != outcome);
+        }
+        return decided;
     }
 
     /** Runs the stamped gate against the staged candidate; null when the gate bean is absent. */

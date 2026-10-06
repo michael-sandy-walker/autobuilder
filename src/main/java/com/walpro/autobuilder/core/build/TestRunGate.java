@@ -242,6 +242,7 @@ public class TestRunGate {
         }
         if (outcome.result() != BuildResult.COMPILE_ERROR) {
             lastBlocker = null;
+            lastRunDidNotCompile = false;
             // T4-DY: the suite passes -- an answer to tests that kept failing has done its work and ends.
             if (stuckLayer != null) {
                 var layer = stuckLayer.getIfAvailable();
@@ -261,6 +262,7 @@ public class TestRunGate {
         // then found no report and showed nothing -- the error first reached a prompt through packaging.
         // The compiler names files by their absolute path; the base path may be relative (run 2026-10-05_18-34-29).
         String uncompiled = testsDoNotCompile(plain, Path.of(fileBasePath, "output").toAbsolutePath().normalize().toString());
+        lastRunDidNotCompile = uncompiled != null;
         if (uncompiled != null) {
             lastBlocker = uncompiled;
             log.info("T4-AN-2: {}", uncompiled);
@@ -316,9 +318,69 @@ public class TestRunGate {
         return out;
     }
 
+    /** The tree's tests did not compile at its last run: any candidate whose tests run is better. */
+    private volatile boolean treeNotCompiling;
+    /** Whether this gate's last run ended with the tests not compiling (no report). */
+    private volatile boolean lastRunDidNotCompile;
+
     /** A run of the tree as merged (not a candidate): its failing tests are now the baseline. */
     public void treeRan(TestRunReport report) {
-        if (report != null) treeFailing = failingNames(report);
+        if (report != null) {
+            treeFailing = failingNames(report);
+            treeNotCompiling = false;
+        }
+    }
+
+    /**
+     * T6-T: runs the suite on the tree as merged (no candidate on disk) and records what it found as the
+     * baseline -- its failing tests, or that its tests do not compile. The result is the gate's blocker.
+     */
+    public Optional<String> runOnTree(String cycleId, boolean testsRequired) {
+        Optional<String> blocker = verifyTestsPass(cycleId, testsRequired);
+        Optional<TestRunReport> report = freshReport();
+        if (report.isPresent()) {
+            treeRan(report.get());
+        } else if (lastRunDidNotCompile) {
+            treeFailing = null;
+            treeNotCompiling = true;
+        }
+        return blocker;
+    }
+
+    /** What the gate knows of the tree's tests. */
+    public enum TreeTests { UNKNOWN, NOT_COMPILING, RAN }
+
+    public TreeTests treeTests() {
+        if (treeNotCompiling) return TreeTests.NOT_COMPILING;
+        return treeFailing == null ? TreeTests.UNKNOWN : TreeTests.RAN;
+    }
+
+    /**
+     * T6-T: a candidate's suite against the tree's. BETTER: the tree's tests did not compile and the candidate's
+     * ran, or fewer fail and none that passed breaks; WORSE: more fail; SAME: as many, or a trade; UNKNOWN: the
+     * tree's state is not known.
+     */
+    public record Delta(String verdict, int candidateFailing, Integer treeFailing, int newlyFailing, int newlyPassing) {
+        public boolean better() { return "BETTER".equals(verdict); }
+
+        public String describe() {
+            return treeFailing == null
+                    ? candidateFailing + " test(s) fail with it; without it the tests do not compile"
+                    : candidateFailing + " test(s) fail with it, " + treeFailing + " without it ("
+                            + newlyPassing + " newly passing, " + newlyFailing + " newly failing)";
+        }
+    }
+
+    public Delta compareWithTree(TestRunReport candidate) {
+        Set<String> now = failingNames(candidate);
+        if (treeNotCompiling) return new Delta("BETTER", now.size(), null, 0, 0);
+        Set<String> tree = treeFailing;
+        if (tree == null) return new Delta("UNKNOWN", now.size(), null, 0, 0);
+        int newlyFailing = (int) now.stream().filter(t -> !tree.contains(t)).count();
+        int newlyPassing = (int) tree.stream().filter(t -> !now.contains(t)).count();
+        String verdict = now.size() > tree.size() ? "WORSE"
+                : now.size() < tree.size() && newlyFailing == 0 ? "BETTER" : "SAME";
+        return new Delta(verdict, now.size(), tree.size(), newlyFailing, newlyPassing);
     }
 
     /** A candidate's run, or null when this evaluation has none; kept until the candidate merges or the next. */
@@ -329,6 +391,7 @@ public class TestRunGate {
     /** The candidate merged: its failing tests are the tree's now. A merge with no candidate run leaves it unknown. */
     public void candidateMerged() {
         treeFailing = candidateFailing;
+        treeNotCompiling = false;
         candidateFailing = null;
     }
 

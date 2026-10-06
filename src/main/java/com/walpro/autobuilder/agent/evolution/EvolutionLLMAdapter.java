@@ -54,20 +54,36 @@ public class EvolutionLLMAdapter {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.goal.GoalPlannerService> goalPlannerService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.goal.DeclaredTestSuite> declaredTestSuite;
+
     private CycleContextData withTestRunNow(CycleContextData ctx) {
         var gate = testRunGate == null ? null : testRunGate.getIfAvailable();
         var goals = goalPlannerService == null ? null : goalPlannerService.getIfAvailable();
         if (gate == null || goals == null) return ctx;
-        return TestWorkItemNow.restate(ctx,
+        var root = goals.getRootGoal();
+        boolean required = root != null
+                && com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(root.getDescription());
+        boolean[] ran = {false};
+        CycleContextData out = TestWorkItemNow.restate(ctx,
                 id -> goals.getGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY),
                 () -> {
-                    var root = goals.getRootGoal();
-                    boolean required = root != null
-                            && com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(root.getDescription());
-                    java.util.Optional<String> now = gate.verifyTestsPass(ctx.cycleName() + "-evolution-tests", required);
-                    gate.freshReport().ifPresent(gate::treeRan); // a run of the tree as merged: the baseline
-                    return now;
+                    ran[0] = true;
+                    return gate.runOnTree(ctx.cycleName() + "-evolution-tests", required);
                 });
+        // T6-T: on a declared suite the tree's test state is the baseline every candidate is compared with
+        // (TestRegressionHeuristic, the test-progress acceptance); while it is unknown -- at the start, after a
+        // merge with no test run -- the tree is run once, before any candidate is on disk.
+        var declared = declaredTestSuite == null ? null : declaredTestSuite.getIfAvailable();
+        if (!ran[0] && declared != null && declared.isDeclared() && gate.isLive()
+                && gate.treeTests() == com.walpro.autobuilder.core.build.TestRunGate.TreeTests.UNKNOWN) {
+            try {
+                gate.runOnTree(ctx.cycleName() + "-tree-tests", required);
+            } catch (RuntimeException e) {
+                log.debug("T6-T: the tree's test run could not be made: {}", e.getMessage());
+            }
+        }
+        return out;
     }
 
     /** T4-CQ: operator-declared paths no writer may touch; optional in narrow tests. */

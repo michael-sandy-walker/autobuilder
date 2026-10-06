@@ -4425,10 +4425,10 @@ public class GoalPlannerService {
                 // tests (observed 2026-06-22).
                 boolean testsRequired = com.walpro.autobuilder.core.build.TestRunGate
                         .specRequiresTests(root.getDescription());
-                java.util.Optional<String> testFailure = testRunGate.verifyTestsPass(
+                // T6-T: a run of the tree itself -- it is also the baseline candidates are compared with
+                java.util.Optional<String> testFailure = testRunGate.runOnTree(
                         currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge",
                         testsRequired);
-                testRunGate.freshReport().ifPresent(testRunGate::treeRan); // T6-T: the tree's own run: the baseline
                 if (testFailure.isPresent()) {
                     // Run 2 (2026-07-03) churned to a T2-CB halt on this work item: the model had
                     // authored a hollow test unprompted (test infrastructure never initialized),

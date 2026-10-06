@@ -361,4 +361,29 @@ class TestRunGateTest {
         assertThat(g.verifyTestsPass("cycle-5").orElseThrow())
                 .contains("-- src/test/java/zeta/NibTest.java:9: cannot find symbol").doesNotContain(abs);
     }
+    /** T6-T: the tree's test state -- unknown, not compiling, ran -- and a candidate compared with it. */
+    @Test
+    void theTreesTestStateAndACandidateComparedWithIt() {
+        stubOutcome(BuildResult.COMPILE_ERROR, "[ERROR] /tmp/project/output/src/test/java/zeta/NibTest.java:[9,5] cannot find symbol\n");
+        TestRunGate g = gate(true);
+        assertThat(g.treeTests()).isEqualTo(TestRunGate.TreeTests.UNKNOWN);
+        assertThat(g.compareWithTree(report("NibTest.widens")).verdict()).isEqualTo("UNKNOWN");
+
+        g.runOnTree("c1", false);
+        assertThat(g.treeTests()).isEqualTo(TestRunGate.TreeTests.NOT_COMPILING);
+        assertThat(g.compareWithTree(report("NibTest.widens", "InkwellTest.pours")).better()).isTrue();
+
+        g.treeRan(report("NibTest.widens", "InkwellTest.pours"));
+        assertThat(g.treeTests()).isEqualTo(TestRunGate.TreeTests.RAN);
+        assertThat(g.compareWithTree(report("NibTest.widens")).verdict()).isEqualTo("BETTER");
+        assertThat(g.compareWithTree(report("NibTest.widens", "QuillTest.dries")).verdict()).as("a trade").isEqualTo("SAME");
+        assertThat(g.compareWithTree(report("QuillTest.dries")).verdict()).as("fewer, but one newly broken").isEqualTo("SAME");
+        assertThat(g.compareWithTree(report("NibTest.widens", "InkwellTest.pours", "QuillTest.dries")).verdict()).isEqualTo("WORSE");
+    }
+
+    private static TestRunReport report(String... tests) {
+        java.util.List<TestRunReport.Failure> f = java.util.Arrays.stream(tests).map(t -> new TestRunReport.Failure(
+                "zeta." + t.substring(0, t.indexOf('.')), t.substring(t.indexOf('.') + 1), TestRunReport.Outcome.FAILED, "x")).toList();
+        return new TestRunReport(9, f.size(), 0, 0, f, java.util.Map.of());
+    }
 }

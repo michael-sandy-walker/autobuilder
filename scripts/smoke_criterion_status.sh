@@ -21,7 +21,12 @@ CHANGED=$(grep -o 'The one class to change is [A-Za-z0-9_]*' "$ROOT/data/$TGT/bo
 # A change across several classes names them all: "The classes to change are A, B and C."
 [ -n "$CHANGED" ] || CHANGED=$(grep -o 'The classes to change are [A-Za-z0-9_, ]*' "$ROOT/data/$TGT/bootstrap/seed.txt" | head -1 \
     | sed -e 's/The classes to change are //' -e 's/ and /,/g' | tr -d ' ')
-[ -n "$SPEC" ] && [ -n "$CHANGED" ] || { echo "the seed names no specification class or no class to change"; echo "SMOKE: 0/1"; exit 0; }
+# A seed that names the original change's classes only as ORIENTATION (ladder cases since 2026-10-06: "For
+# orientation: the change that answered this ticket touched ...; which classes you change is yours to decide")
+# restricts no source, so the "existing sources unchanged" check is not the seed's to ask and is left out.
+ORIENTATION=$(grep -c 'For orientation: the change that answered this ticket touched' "$ROOT/data/$TGT/bootstrap/seed.txt")
+[ -n "$SPEC" ] && { [ -n "$CHANGED" ] || [ "$ORIENTATION" -gt 0 ]; } \
+    || { echo "the seed names no specification class or no class to change"; echo "SMOKE: 0/1"; exit 0; }
 n=0; pass=0
 chk(){ n=$((n+1)); if [ "$1" = "$2" ]; then pass=$((pass+1)); [ -n "${QUIET:-}" ] || echo "PASS [$n] $3"; \
        else echo "FAIL [$n] $3 (want $2 got $1)"; fi; }
@@ -30,7 +35,7 @@ SCRATCH=$(mktemp -d)
 diff -rq "$SCRATCH/orig/src/test" "$TREE/src/test" > /dev/null 2>&1 && u=untouched || u=modified
 # Every source the module had, other than the one class the seed says to change, byte for byte.
 kept=kept
-while IFS= read -r f; do
+[ -n "$CHANGED" ] && while IFS= read -r f; do
     case ",$CHANGED," in *",$(basename "$f" .java),"*) continue ;; esac
     cmp -s "$SCRATCH/orig/src/main/$f" "$TREE/src/main/$f" || { kept=changed; echo "      changed: $f"; }
 done < <(cd "$SCRATCH/orig/src/main" && find . -name '*.java' | sort)
@@ -80,7 +85,7 @@ PY
 )
 done
 chk "$u" untouched "src/test is unmodified"
-chk "$kept" kept "the module's existing sources are unchanged"
+[ -n "$CHANGED" ] && chk "$kept" kept "the module's existing sources are unchanged"
 chk "$suite" pass "the whole suite passes"
 [ "$suite" = pass ] || echo "      $(grep -m1 -E 'Tests run:|ERROR' "$SCRATCH/test.log" 2>/dev/null | head -c 140)"
 rm -rf "${SCRATCH:?}"

@@ -1,14 +1,18 @@
 package com.walpro.autobuilder.core.build;
 
-import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * T6-T: claims about one named file that the tree itself can CONTRADICT -- that it was changed, or that it contains
- * a quoted text. Only ever a contradiction (FALSE) or no answer (null): a change does not prove "to support the new
- * behaviour", and a text being present does not prove it is used, so a met claim still goes to the reading.
+ * T6-T: claims about one named file that the tree itself can CONTRADICT -- that it was changed. Only ever a
+ * contradiction (FALSE) or no answer (null): a change does not prove "to support the new behaviour", so a met claim
+ * still goes to the reading.
+ *
+ * <p><b>Not a claim about a file's TEXT.</b> A first version also contradicted "X includes '&lt;text&gt;'" when X's
+ * source lacked the text; on field42 run 1 it refused a correct tree (28/28): the claims quoted a template
+ * ("ran with: &lt;row&gt;"), and text a class outputs may live in a constant of another class (the reference
+ * implementation's ParameterizedCaseInput.LABEL). A file's text is no authority on what it outputs.
  *
  * <p>Ladder-rows run 2026-10-06_18-38-56: the completion verifier, shown TestAssertionVocabulary whole, confirmed
  * "TestAssertionVocabulary is modified to support the new behavior" and "... includes the 'ran with:' format" --
@@ -25,17 +29,12 @@ public final class ChangeClaims {
             "^`?([A-Z][A-Za-z0-9_]*)`?(?:\\.java)? (?:is|are|was|were|has been|have been|gets|get) "
                     + "(?:modified|updated|changed|extended|adapted)\\b.*$");
 
-    /** "X includes / contains / has / exposes / carries ... '<text>'" about one class, with a quoted text. */
-    private static final Pattern CONTAINS = Pattern.compile(
-            "^`?([A-Z][A-Za-z0-9_]*)`?(?:\\.java)? (?:includes|contains|has|holds|carries|exposes|defines|declares)\\b.*?"
-                    + "['\"‘“]([^'\"’”]{2,})['\"’”].*$");
-
     /**
      * FALSE when the tree contradicts {@code criterion}; null when it is not such a claim, names no file of the tree,
      * or the tree cannot settle it.
      *
      * @param changes the changes since adoption, or null when the project was not adopted
-     * @param files   the tree, by relative path
+     * @param files   the tree, by relative path (to know the claim names a file of it)
      */
     public static Boolean answer(String criterion, AdoptionManifest.Changes changes, Map<String, String> files) {
         if (criterion == null || files == null) return null;
@@ -46,16 +45,6 @@ public final class ChangeClaims {
             if (pathOf(name, files) == null) return null;
             boolean changed = changes.changedOrAdded().stream().anyMatch(p -> simpleName(p).equals(name));
             return changed ? null : Boolean.FALSE;
-        }
-        Matcher contains = CONTAINS.matcher(claim);
-        if (contains.matches()) {
-            String path = pathOf(contains.group(1), files);
-            if (path == null) return null;
-            String text = contains.group(2).strip();
-            String content = files.get(path);
-            if (content == null) return null;
-            boolean present = content.contains(text) || content.toLowerCase(Locale.ROOT).contains(text.toLowerCase(Locale.ROOT));
-            return present ? null : Boolean.FALSE;
         }
         return null;
     }

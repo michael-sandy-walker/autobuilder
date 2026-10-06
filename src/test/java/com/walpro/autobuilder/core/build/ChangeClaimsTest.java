@@ -28,10 +28,10 @@ class ChangeClaimsTest {
         assertThat(ChangeClaims.answer("Inkwell is modified", null, TREE)).as("not adopted: no record").isNull();
     }
 
+    /** A claim about a file's text is not answered: what a class outputs may live in another class's constant. */
     @Test
-    void aFileClaimedToHoldATextItDoesNotIsContradicted_oneThatDoesIsLeftToTheReading() {
-        assertThat(ChangeClaims.answer("Inkwell includes the 'ran with:' format", ONLY_NIB_CHANGED, TREE)).isFalse();
-        assertThat(ChangeClaims.answer("Nib contains the \"width: \" label", ONLY_NIB_CHANGED, TREE)).isNull();
-        assertThat(ChangeClaims.answer("Inkwell pours three drops", ONLY_NIB_CHANGED, TREE)).as("no such claim").isNull();
+    void aClaimAboutWhatAFileHoldsOrOutputsIsLeftToTheReading() {
+        assertThat(ChangeClaims.answer("Inkwell includes the 'ran with: <row>' context in its output", ONLY_NIB_CHANGED, TREE)).isNull();
+        assertThat(ChangeClaims.answer("Inkwell pours three drops", ONLY_NIB_CHANGED, TREE)).isNull();
     }
 }

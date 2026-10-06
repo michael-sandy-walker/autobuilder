@@ -13,3 +13,4 @@
 
 - reason: the generated 'classes to change' line is orientation, not a requirement (user, 2026-10-06): field41 run 2 reached 29/29 and was refused over it, run 3 closed while a reading confirmed it falsely; the three 'X is modified to support the new behavior' obligations merged into one rule: line; the tests are the requirement
 - bootstrap digest: `c56c6639c6dda963`
+- yardstick (2026-10-06, same version): the seed restricts no source any more, so `smoke_criterion_status.sh` leaves out "the module's existing sources are unchanged" for a seed carrying the orientation line -- a v3 tree is scored out of 28, not 29 (the first v3 batch scored 0/1: the yardstick needed the removed line). Field41 run 3's tree scores 28/28 on v3.

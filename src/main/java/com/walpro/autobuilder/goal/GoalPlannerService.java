@@ -4428,6 +4428,7 @@ public class GoalPlannerService {
                 java.util.Optional<String> testFailure = testRunGate.verifyTestsPass(
                         currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge",
                         testsRequired);
+                testRunGate.freshReport().ifPresent(testRunGate::treeRan); // T6-T: the tree's own run: the baseline
                 if (testFailure.isPresent()) {
                     // Run 2 (2026-07-03) churned to a T2-CB halt on this work item: the model had
                     // authored a hollow test unprompted (test infrastructure never initialized),

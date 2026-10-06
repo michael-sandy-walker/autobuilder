@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -294,6 +295,46 @@ public class TestRunGate {
         }
         lastBlocker = summary;
         return Optional.of(summary);
+    }
+
+    /**
+     * T6-T: the failing tests ({@code Class.method}) of the tree as merged, and of the last candidate run;
+     * null while unknown. The tree's set is the regression baseline: a candidate failing more tests than
+     * the tree does makes the operator's suite worse (TestRegressionHeuristic).
+     */
+    private volatile Set<String> treeFailing;
+    private volatile Set<String> candidateFailing;
+
+    /** The failing tests of {@code report}, one name per test ({@code Class.method}). */
+    public static Set<String> failingNames(TestRunReport report) {
+        Set<String> out = new java.util.TreeSet<>();
+        if (report == null || report.failing() == null) return out;
+        for (TestRunReport.Failure f : report.failing()) {
+            String cls = f.className() == null ? "" : f.className().substring(f.className().lastIndexOf('.') + 1);
+            out.add(cls + "." + f.method());
+        }
+        return out;
+    }
+
+    /** A run of the tree as merged (not a candidate): its failing tests are now the baseline. */
+    public void treeRan(TestRunReport report) {
+        if (report != null) treeFailing = failingNames(report);
+    }
+
+    /** A candidate's run, or null when this evaluation has none; kept until the candidate merges or the next. */
+    public void candidateRan(TestRunReport report) {
+        candidateFailing = report == null ? null : failingNames(report);
+    }
+
+    /** The candidate merged: its failing tests are the tree's now. A merge with no candidate run leaves it unknown. */
+    public void candidateMerged() {
+        treeFailing = candidateFailing;
+        candidateFailing = null;
+    }
+
+    /** The failing tests of the tree as merged, while known. */
+    public Optional<Set<String>> treeFailing() {
+        return Optional.ofNullable(treeFailing);
     }
 
     /** T6-T: the last run's blocker, empty when the last run passed or none has run. */

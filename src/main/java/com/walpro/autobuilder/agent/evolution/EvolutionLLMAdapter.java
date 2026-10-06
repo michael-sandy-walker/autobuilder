@@ -64,7 +64,9 @@ public class EvolutionLLMAdapter {
                     var root = goals.getRootGoal();
                     boolean required = root != null
                             && com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(root.getDescription());
-                    return gate.verifyTestsPass(ctx.cycleName() + "-evolution-tests", required);
+                    java.util.Optional<String> now = gate.verifyTestsPass(ctx.cycleName() + "-evolution-tests", required);
+                    gate.freshReport().ifPresent(gate::treeRan); // a run of the tree as merged: the baseline
+                    return now;
                 });
     }
 

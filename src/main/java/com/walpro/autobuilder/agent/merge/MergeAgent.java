@@ -93,6 +93,11 @@ public class MergeAgent implements ExecutionAgent {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.StructuralTreeRepair structuralTreeRepair;
 
+    /** T6-T: the test gate, told when a candidate's run becomes the tree's; optional in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
+
     /** T4-BE: optional deferred-mutation clearance hook — wired in production, null in unit tests. */
     @Setter
     @Autowired(required = false)
@@ -596,6 +601,8 @@ public class MergeAgent implements ExecutionAgent {
             goalPlannerService.incrementGoalMergeCount(context.currentSubGoalId());
         }
         goalPlannerService.recordMergedFiles(context.currentSubGoalId(), mergedPaths);
+        // T6-T: the candidate's test run is the tree's now -- the baseline the next candidate is held to.
+        if (testRunGate != null) testRunGate.candidateMerged();
         if (behaviourLogger != null) {
             behaviourLogger.mutationMerged(
                     context.cycleName(),

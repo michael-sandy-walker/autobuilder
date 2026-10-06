@@ -93,6 +93,20 @@ class TestRegressionHeuristicTest {
         verify(gate, never()).candidateRan(argThat(r -> r != null));
     }
 
+    /** T6-T: a change whose suite does not finish is rejected as a defect, naming what never finished. */
+    @Test
+    void aChangeWhoseSuiteDoesNotFinishIsRejected() {
+        when(gate.freshReport()).thenReturn(Optional.empty());
+        when(gate.lastRunTimedOut()).thenReturn(true);
+        when(gate.lastBlocker()).thenReturn(Optional.of("the suite did not finish within 120 s -- never finished: NibTest"));
+
+        HeuristicOpinion o = heuristic.evaluate(compiled, accepted);
+
+        assertThat(o.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(o.defectFinding()).isTrue();
+        assertThat(o.rationale()).contains("does not finish", "never finished: NibTest");
+    }
+
     /** The gate's own bookkeeping: a merge promotes the candidate's run; a merge with none leaves the tree unknown. */
     @Test
     void theGateKeepsTheTreesFailingTests() {

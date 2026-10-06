@@ -169,6 +169,7 @@ public class TestRunGate {
      * report. A reader given a stale report would be told the outcome of code that no longer exists.
      */
     public Optional<TestRunReport> freshReport() {
+        if (lastRunTimedOut) return Optional.empty(); // T6-T: the classes that finished are not the suite
         long since = lastRunStartedAt;
         if (since < 0) return Optional.empty();
         Path out = Path.of(fileBasePath, "output");
@@ -240,11 +241,24 @@ public class TestRunGate {
             behaviourLogger.buildFixAttempt(cycleId, "test-gate", 0, null, null,
                     null, List.of(), outcome.result().name(), outcome.durationMs());
         }
+        // T6-T: a suite that did not finish is not a passing one. Ladder-rows run 2026-10-06_11-50-45: a change made
+        // one test class loop forever; the run was cut at the timeout, read as "not failing", and the one class that
+        // had finished (3 run, 0 failed) was taken for the suite -- the change was merged as better, the closure
+        // "confirmed the full suite passes", and the final tree scored 2/29.
+        lastRunTimedOut = outcome.result() == BuildResult.TIMEOUT;
+        if (lastRunTimedOut) {
+            lastRunDidNotCompile = false;
+            String unfinished = suiteDidNotFinish(outcome.durationMs());
+            lastBlocker = unfinished;
+            log.info("T4-AN-2: {}", unfinished);
+            return Optional.of(unfinished);
+        }
         if (outcome.result() != BuildResult.COMPILE_ERROR) {
             lastBlocker = null;
             lastRunDidNotCompile = false;
-            // T4-DY: the suite passes -- an answer to tests that kept failing has done its work and ends.
-            if (stuckLayer != null) {
+            // T4-DY: the suite passes -- an answer to tests that kept failing has done its work and ends. Only a run
+            // that passed says so; a skipped one observed nothing.
+            if (outcome.result() == BuildResult.COMPILE_OK && stuckLayer != null) {
                 var layer = stuckLayer.getIfAvailable();
                 if (layer != null) layer.testsPassed(cycleId);
             }
@@ -322,6 +336,54 @@ public class TestRunGate {
     private volatile boolean treeNotCompiling;
     /** Whether this gate's last run ended with the tests not compiling (no report). */
     private volatile boolean lastRunDidNotCompile;
+    /** T6-T: whether this gate's last run was cut at the timeout -- its reports are a part of the suite, never the suite. */
+    private volatile boolean lastRunTimedOut;
+
+    /** Whether the last run was cut at the timeout (a test hangs or loops). */
+    public boolean lastRunTimedOut() {
+        return lastRunTimedOut;
+    }
+
+    /**
+     * T6-T: "the suite did not finish" with what is known of where: the test classes that wrote a report in this
+     * run finished; the ones that did not are where a test hangs or loops.
+     */
+    private String suiteDidNotFinish(long durationMs) {
+        Path out = Path.of(fileBasePath, "output");
+        java.util.TreeSet<String> all = new java.util.TreeSet<>();
+        try (Stream<Path> walk = Files.walk(out.resolve("src/test/java"))) {
+            walk.filter(p -> p.toString().endsWith("Test.java") || p.toString().endsWith("Tests.java"))
+                    .forEach(p -> all.add(p.getFileName().toString().replace(".java", "")));
+        } catch (Exception e) {
+            // no test sources readable: the message says only that the suite did not finish
+        }
+        java.util.TreeSet<String> finished = new java.util.TreeSet<>();
+        for (String dir : TEST_REPORT_DIRS) {
+            Path reports = out.resolve(dir);
+            if (!Files.isDirectory(reports)) continue;
+            try (Stream<Path> files = Files.list(reports)) {
+                files.filter(p -> p.toString().endsWith(".txt")).forEach(p -> {
+                    try {
+                        if (Files.getLastModifiedTime(p).toMillis() >= lastRunStartedAt) {
+                            String n = p.getFileName().toString().replace(".txt", "");
+                            finished.add(n.substring(n.lastIndexOf('.') + 1));
+                        }
+                    } catch (Exception ignored) {
+                        // an unreadable report counts as not finished
+                    }
+                });
+            } catch (Exception ignored) {
+                // no reports: nothing finished
+            }
+        }
+        java.util.TreeSet<String> never = new java.util.TreeSet<>(all);
+        never.removeAll(finished);
+        StringBuilder sb = new StringBuilder("the suite did not finish within ").append(durationMs / 1000)
+                .append(" s and was stopped -- a test hangs or loops forever");
+        if (!never.isEmpty()) sb.append("; never finished: ").append(String.join(", ", never));
+        if (!finished.isEmpty()) sb.append("; finished: ").append(String.join(", ", finished));
+        return sb.toString();
+    }
 
     /** A run of the tree as merged (not a candidate): its failing tests are now the baseline. */
     public void treeRan(TestRunReport report) {
@@ -343,6 +405,9 @@ public class TestRunGate {
         } else if (lastRunDidNotCompile) {
             treeFailing = null;
             treeNotCompiling = true;
+        } else if (lastRunTimedOut) {
+            treeFailing = null;       // a tree whose suite hangs has no baseline to be compared with
+            treeNotCompiling = false;
         }
         return blocker;
     }

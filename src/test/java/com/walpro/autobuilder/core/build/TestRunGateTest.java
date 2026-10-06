@@ -246,10 +246,11 @@ class TestRunGateTest {
         assertThat(gate(true).verifyTestsPass("c")).isEmpty();
     }
 
+    /** T6-T: a timeout is a blocker (the suite did not finish), no longer "no result"; a disabled gate still abstains. */
     @Test
-    void noResult_timeoutAndDisabled_returnEmpty() {
+    void aTimeoutIsABlocker_aDisabledGateAbstains() {
         stubOutcome(BuildResult.TIMEOUT, "");
-        assertThat(gate(true).verifyTestsPass("c")).isEmpty();
+        assertThat(gate(true).verifyTestsPass("c")).hasValueSatisfying(b -> assertThat(b).startsWith("the suite did not finish"));
 
         assertThat(gate(false).verifyTestsPass("c")).isEmpty();
         verify(buildExecutor, never()).execute(any(), any(), eq(null));
@@ -385,5 +386,39 @@ class TestRunGateTest {
         java.util.List<TestRunReport.Failure> f = java.util.Arrays.stream(tests).map(t -> new TestRunReport.Failure(
                 "zeta." + t.substring(0, t.indexOf('.')), t.substring(t.indexOf('.') + 1), TestRunReport.Outcome.FAILED, "x")).toList();
         return new TestRunReport(9, f.size(), 0, 0, f, java.util.Map.of());
+    }
+    /**
+     * T6-T: a run cut at the timeout is a failure that names the classes that never finished, and the classes that
+     * did finish are never taken for the suite. Ladder-rows run 2026-10-06_11-50-45: "3 run, 0 failed" from the one
+     * finished class confirmed a suite that hung.
+     */
+    @Test
+    void aRunCutAtTheTimeoutIsAFailure_namingWhatNeverFinished_andItsPartialReportIsNotTheSuites(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path base) throws Exception {
+        java.nio.file.Path tests = base.resolve("output/src/test/java/zeta");
+        java.nio.file.Files.createDirectories(tests);
+        java.nio.file.Files.writeString(tests.resolve("InkwellTest.java"), "class InkwellTest {}");
+        java.nio.file.Files.writeString(tests.resolve("NibTest.java"), "class NibTest {}");
+        java.nio.file.Path reports = base.resolve("output/target/surefire-reports");
+        java.nio.file.Files.createDirectories(reports);
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(eq(base.toString()), any(), eq("mvn test"))).thenAnswer(inv -> {
+            java.nio.file.Path report = reports.resolve("zeta.InkwellTest.txt");
+            java.nio.file.Files.writeString(report,
+                    "Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.1 s -- in zeta.InkwellTest\n");
+            java.nio.file.Files.setLastModifiedTime(report,
+                    java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 1_000));
+            return new BuildOutcome(BuildResult.TIMEOUT, "", 120_000L, "mvn test", "c");
+        });
+        TestRunGate g = new TestRunGate(true, "mvn test", buildExecutor);
+        g.setFileBasePath(base.toString());
+
+        String blocker = g.verifyTestsPass("cycle-6").orElseThrow();
+
+        assertThat(blocker).startsWith("the suite did not finish within 120 s")
+                .contains("hangs or loops forever", "never finished: NibTest", "finished: InkwellTest");
+        assertThat(g.lastRunTimedOut()).isTrue();
+        assertThat(g.freshReport()).as("the class that finished is not the suite").isEmpty();
+        assertThat(g.lastBlocker()).contains(blocker);
     }
 }

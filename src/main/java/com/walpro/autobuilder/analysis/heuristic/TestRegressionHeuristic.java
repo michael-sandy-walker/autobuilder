@@ -34,6 +34,9 @@ import java.util.Set;
  * through (T4-CC). Only a change that leaves the suite worse than it found it is refused, with the tests it
  * broke named so the next attempt knows what to keep.
  *
+ * <p><b>A suite that does not finish</b> (cut at the timeout) is rejected the same way, naming the classes that never
+ * finished: a hang is worse than any failing test, and its partial report must never be judged as the suite.
+ *
  * <p><b>Why gated on the declaration.</b> As {@link StagedTestFailureHeuristic}: a greenfield target writes its
  * own tests and may write one before its code; there the suite is not yet the operator's authority.
  */
@@ -65,6 +68,16 @@ public class TestRegressionHeuristic implements EvaluationHeuristic {
         BuildOutcome probe = input.lastProbeOutcome();
         if (probe == null || probe.result() != BuildResult.COMPILE_OK) return HeuristicOpinion.none(NAME);
         Optional<TestRunReport> report = gate.freshReport();
+        // T6-T: a change whose suite does not finish is worse than any tree -- nothing can be judged by it, and a
+        // merged hang cost run 2026-10-06_11-50-45 its whole result (final tree 2/29, its preserved one 26/29).
+        if (report.isEmpty() && gate.lastRunTimedOut()) {
+            String rationale = "With this change the project's own suite does not finish: "
+                    + gate.lastBlocker().orElse("the run was stopped at the timeout")
+                    + ". Find the loop that does not end before anything else.";
+            log.info("{}: {}", NAME, rationale);
+            return HeuristicOpinion.ofDefectWithScore(NAME, 0.9, MutationAcceptanceState.REJECTED,
+                    GoalProgressState.STAGNATING, rationale, Math.max(0.0, outcome.score() - 0.10));
+        }
         if (report.isEmpty()) return HeuristicOpinion.none(NAME);
         gate.candidateRan(report.get());
 

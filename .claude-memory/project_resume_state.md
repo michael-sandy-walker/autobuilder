@@ -11,7 +11,13 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-07 EVENING (Opus 5.5, session 12 continued) — field46 DONE: THE COMPILE WALL CROSSED IN 2 OF 3 (46/51, 45/51); 0 OF 3 FULFILLED — START HERE
+## 2026-10-07 NIGHT (Opus 5.5, session 12 continued) — field47: 47/51 AND 48/51 (BEST ON LADDER-GRIND); TRACE-EVERY-FAILING-TEST PROPOSED — START HERE
+
+- **Head: see `git log`; nothing pushed. Suite 3839/0. No run is live.** `scripts/run_outcomes.json` modified (pre-existing); `data/ladder-grind/bootstrap/seed.obligations.txt` untracked (generated, kept for comparability).
+- **field47** (build `fa60d2fa`, the gate-item fix): run 1 47/51, run 2 48/51, both at the deadline; run 3 skipped by agreement. Remaining: [2] `DeclaredMembers` record members, [4] `GrindDetector` noting, [51].
+- **Pending user decision:** the stuck layer traces only the FIRST failing test and only when the failing set changes; proposed: trace every failing test, in parallel by available memory, bounded relative to the suite's run time (`StuckLayer.traceFailingTest` -> `traceFailingTests` + a `TraceCapacity` helper). Detail on T6-T (last entry).
+
+## 2026-10-07 EVENING (Opus 5.5, session 12 continued) — field46 DONE: THE COMPILE WALL CROSSED IN 2 OF 3 (46/51, 45/51); 0 OF 3 FULFILLED
 
 - **Head: see `git log`; nothing pushed. Suite 3838/0. No run is live.** `scripts/run_outcomes.json` modified (pre-existing); `data/ladder-grind/bootstrap/seed.obligations.txt` untracked (generated, kept for comparability).
 - **This session's builds (T6-T):** ladder cuts ship test helpers (`de3a59f6`); a candidate after which more test files compile is progress (`3ca592b6`); a file too large to show whole shows its nested types and its end (`319647a9`).

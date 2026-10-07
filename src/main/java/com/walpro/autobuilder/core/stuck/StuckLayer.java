@@ -257,8 +257,20 @@ public class StuckLayer {
                 one.append("  - ").append(e.signature()).append(" (").append(e.occurrences()).append(" times)\n");
                 if (e.prior().seenBefore()) one.append("    ").append(provenance(e)).append('\n');
             }
+            int head = one.length();
             one.append("    ").append(a.getKey().replace("\n", "\n    ")).append('\n');
             if (PromptTokenBudget.estimateTokens(sb) + PromptTokenBudget.estimateTokens(one) > maxTokens) {
+                // T6-T: an answer of several traced tests that does not fit whole is shown as the traces that do --
+                // each whole, in order. field48 run 1: four traces joined into one answer of more than the ~5,000
+                // tokens a prompt had free were left out whole nine times, and the model never saw one of them.
+                String partial = tracesThatFit(a.getKey(), maxTokens - PromptTokenBudget.estimateTokens(sb)
+                        - PromptTokenBudget.estimateTokens(one.substring(0, head)));
+                if (partial != null) {
+                    one.setLength(head);
+                    one.append("    ").append(partial.replace("\n", "\n    ")).append('\n');
+                    sb.append(one);
+                    continue;
+                }
                 left++;
                 log.warn("T4-DY: an answer for '{}' did not fit this prompt ({} token(s) free) -- left out whole;"
                         + " the ledger still counts it delivered", a.getValue().get(0).signature(), maxTokens);
@@ -268,6 +280,34 @@ public class StuckLayer {
         }
         if (left > 0) sb.append("  (").append(left).append(" more answer(s) left out: no room in this prompt)\n");
         return sb.toString().stripTrailing();
+    }
+
+    /** Where one traced test's block starts in an answer that joins several (see {@link #traced}). */
+    private static final java.util.regex.Pattern TRACE_BLOCK = java.util.regex.Pattern.compile("\n\n(?=The failing test )");
+
+    /**
+     * The traced tests of {@code answer} that fit in {@code tokens}, each whole, in order, with a line naming how many
+     * did not; null when the answer is not several traces or not even the first fits.
+     */
+    static String tracesThatFit(String answer, int tokens) {
+        String[] blocks = TRACE_BLOCK.split(answer);
+        if (blocks.length < 2) return null;
+        StringBuilder out = new StringBuilder();
+        int shown = 0;
+        for (String b : blocks) {
+            String next = (shown == 0 ? "" : "\n\n") + b;
+            // the indentation the caller adds and the closing note are part of the cost
+            int cost = PromptTokenBudget.estimateTokens(out + next) + PromptTokenBudget.estimateTokens("    ".repeat(
+                    (int) next.chars().filter(c -> c == '\n').count() + 1)) + 20;
+            if (cost > tokens) continue;
+            out.append(next);
+            shown++;
+        }
+        if (shown == 0) return null;
+        if (shown < blocks.length) {
+            out.append("\n(").append(blocks.length - shown).append(" more traced test(s) left out: no room in this prompt)");
+        }
+        return out.toString();
     }
 
     /** A second reading for the same subgoal joins the first; neither replaces the other. */

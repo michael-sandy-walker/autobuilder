@@ -253,4 +253,25 @@ class ExecutionTraceTest {
             pool.shutdownNow();
         }
     }
+
+    /**
+     * T6-T: several traces that do not fit one prompt are shown as the traces that do, each whole -- field48 run 1 left
+     * four out whole nine times, so the model saw none.
+     */
+    @Test
+    void tracesThatDoNotAllFit_areShownAsTheOnesThatDo_eachWhole() {
+        String one = "The failing test NibTest.widens was run again under the debugger. It failed with: boom\n" + "    Nib.widen() -> 1\n".repeat(40);
+        String two = one.replace("NibTest.widens", "InkTest.pours");
+        String three = one.replace("NibTest.widens", "QuillTest.dries");
+        String answer = String.join("\n\n", one, two, three);
+        int each = com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(one);
+
+        String fit = StuckLayer.tracesThatFit(answer, each * 2 + 200);
+
+        assertThat(fit).contains("NibTest.widens", "InkTest.pours").doesNotContain("QuillTest.dries")
+                .contains("1 more traced test(s) left out: no room in this prompt");
+        assertThat(fit.split("Nib.widen\\(\\) -> 1", -1)).as("each shown trace is whole").hasSize(81);
+        assertThat(StuckLayer.tracesThatFit(answer, 10)).as("not even one fits").isNull();
+        assertThat(StuckLayer.tracesThatFit(one, 100_000)).as("a single trace is the caller's case").isNull();
+    }
 }

@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-07 (Opus 5.5, session 11 continued) — LADDER-ROWS STABLE: THE DoD MET TWICE (field41, field43), 4 OF THE LAST 6 VALID RUNS GOAL_FULFILLED — START HERE
+## 2026-10-07 EARLY MORNING (Opus 5.5, session 12) — LADDER-GRIND VALIDATED (ONE GENERATOR DEFECT FIXED); BATCH field44 RUNNING — START HERE
+
+- **Head `de3a59f6`; nothing pushed. No Java change since the 3834/0 suite.** `scripts/run_outcomes.json` still modified, uncommitted (pre-existing).
+- **ladder-grind:** the first cut shipped a spec test without its test fixture (the harvester dropped test-helper imports in silence); fixed in `ladder_harvest.py`/`ladder_case.py`, case regenerated and committed. Pristine 1/51, reference 51/51, STEP-shaped (49/51 once it compiles) -- see the case CHANGELOG and T6-T.
+- **Running at hand-off: `field44`** (`~/.autobuilder/field44/run.sh`, results in `results.txt`), ladder-grind x3 at 120 min, field43's rule. Run 1 `2026-10-07_04-08-53`. Before any edit or mvn: `ps -eo pid,args | grep '[f]ield44/run.sh'`.
+- **Next:** read field44 per run (failing check SETS); then band 4.
+
+## 2026-10-07 (Opus 5.5, session 11 continued) — LADDER-ROWS STABLE: THE DoD MET TWICE (field41, field43), 4 OF THE LAST 6 VALID RUNS GOAL_FULFILLED
 
 - **User decision 2026-10-06: make ladder-rows stable before scaling** -- DoD: one batch of 3 at 120 min with at least 2 of 3 GOAL_FULFILLED by the loop itself and no run ended by a count-based brake while its score rises. **Met by `field41` (v2) and `field43` (v3).** Before 2026-10-06 no ladder-rows run had ever closed itself.
 - **Head: see `git log`; nothing pushed. Suite 3834/0.** No run is live. `scripts/run_outcomes.json` modified, uncommitted (pre-existing). `data/ladder-grind/` untracked, NOT YET VALIDATED (re-cut with the v3 seed wording).

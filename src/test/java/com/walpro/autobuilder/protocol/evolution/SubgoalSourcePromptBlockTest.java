@@ -50,7 +50,7 @@ class SubgoalSourcePromptBlockTest {
 
     /** A file that does not fit is named, never cut: a half-shown file invites the same invention. */
     @Test
-    void aFileTooLargeForTheHeadroomIsNamedAsLeftOut_notCut() {
+    void aFileTooLargeForTheHeadroom_isShownAsItsEnd_neverCut() {
         String huge = "package zeta;\npublic class Quill {\n" + "    int a;\n".repeat(4000) + "}\n";
         Map<String, String> files = new LinkedHashMap<>();
         files.put("src/main/java/zeta/Inkwell.java", INKWELL);
@@ -58,8 +58,10 @@ class SubgoalSourcePromptBlockTest {
 
         String block = SubgoalSourcePromptBlock.render(ctx("Change Quill and Inkwell", List.of(), files), 2_000);
 
+        // T6-T: a file the work may change keeps the end of its type, where a new member goes -- and only that
         assertThat(block).contains("```java [src/main/java/zeta/Inkwell.java]",
-                "too large to show here: src/main/java/zeta/Quill.java").doesNotContain("int a;");
+                "```java [src/main/java/zeta/Quill.java, lines 4002-4003, the end of Quill, where a new member goes]\n    int a;\n}\n```")
+                .doesNotContain("    int a;\n    int a;").doesNotContain("too large to show here");
     }
 
     /**
@@ -206,6 +208,31 @@ class SubgoalSourcePromptBlockTest {
         assertThat(block).contains("Only parts of src/test/java/zeta/QuillTest.java", "This file is not yours to change.",
                 "assert new Quill().drain(5) == 0;",
                 "```java [src/main/java/zeta/Inkwell.java]").doesNotContain("case7()");
+    }
+
+    /**
+     * T6-T: an interface of records too large to show whole -- a record the work names is a member, and the end of
+     * the type is shown so a record the work ADDS has a place to go (ladder-grind field45 run 1: the file was "too
+     * large to show here" in 31 of 35 prompts).
+     */
+    @Test
+    void anInterfaceOfRecords_showsTheNamedRecordAndItsEnd_whereANewRecordGoes() {
+        StringBuilder ink = new StringBuilder("package zeta;\npublic sealed interface InkEvent {\n    String name();\n\n");
+        for (int i = 0; i < 120; i++) {
+            ink.append("    /** Blot ").append(i).append(". */\n    record Blot").append(i)
+                    .append("(String cycle, int drops) implements InkEvent {\n        public String name() { return \"blot")
+                    .append(i).append("\"; }\n    }\n\n");
+        }
+        ink.append("    record Smudge(String cycle) implements InkEvent {\n        public String name() { return \"smudge\"; }\n    }\n}\n");
+        Map<String, String> files = Map.of("src/main/java/zeta/InkEvent.java", ink.toString());
+
+        String block = SubgoalSourcePromptBlock.render(
+                ctx("Add the record Spill to InkEvent, shaped like Blot7", List.of(), files), 2_000);
+
+        assertThat(block).contains("Only parts of src/main/java/zeta/InkEvent.java",
+                "the end of InkEvent, where a new member goes]\n    record Smudge(String cycle) implements InkEvent {",
+                "    }\n}\n```", "    /** Blot 7. */\n    record Blot7(String cycle, int drops)")
+                .doesNotContain("record Blot8(").doesNotContain("too large to show here");
     }
 
     private static final class PromptTokenBudgetSize {

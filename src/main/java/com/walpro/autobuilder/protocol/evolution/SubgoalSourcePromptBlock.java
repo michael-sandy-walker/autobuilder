@@ -182,8 +182,12 @@ public final class SubgoalSourcePromptBlock {
     /**
      * T6-T: a file too large to show whole, shown as the members the work names -- each exactly as the file
      * has it, with its comment, so an edit block's SEARCH part can be copied from it. An edit needs the text
-     * it changes, not the whole file; a member is never cut, and a file with no named member stays left out.
-     * Null when nothing named fits in {@code tokens}.
+     * it changes, not the whole file; a member is never cut. A nested type is a member like any other. A file
+     * the work may change also shows the end of its type -- the last member and the closing brace -- because a
+     * member the work ADDS is named nowhere in the file: ladder-grind field45 run 1, the change needed a new
+     * record in a 1065-line interface of records; no record was a "member", nothing was shown, and for 31 of 35
+     * prompts the file was "too large to show here" -- twenty answers in a row left it alone and failed to
+     * compile, and the ones that rewrote it whole lost an annotation. Null when nothing fits in {@code tokens}.
      */
     static String parts(String path, String content, String text, int tokens) {
         return parts(path, content, text, tokens, false);
@@ -197,9 +201,13 @@ public final class SubgoalSourcePromptBlock {
         // A member counts as named when the text writes its name as code -- called, qualified, or in a shape
         // prose does not take (camelCase, underscores): "of" or "row" in a sentence names nothing.
         Set<String> words = new java.util.HashSet<>();
+        // A type is named by its capitalised name, which prose takes too -- but it counts only for a type the file
+        // declares, and no type is called "The".
+        Set<String> typeWords = new java.util.HashSet<>();
         Matcher w = WORD.matcher(text);
         while (w.find()) {
             String word = w.group();
+            if (Character.isUpperCase(word.charAt(0))) typeWords.add(word);
             boolean called = w.end() < text.length() && text.charAt(w.end()) == '(';
             boolean qualified = w.start() > 0 && text.charAt(w.start() - 1) == '.';
             boolean codeShaped = word.indexOf('_') >= 0 || !word.substring(1).equals(word.substring(1).toLowerCase());
@@ -212,26 +220,60 @@ public final class SubgoalSourcePromptBlock {
                 + " answer would lose everything not shown.\n");
         int header = PromptTokenBudget.estimateTokens(sb);
         int used = header;
+        List<int[]> shown = new ArrayList<>();
+        // The end of the file's own type first, while the budget is whole: where a member the work adds goes.
+        if (!readOnly) {
+            TypeDeclaration<?> own = unit.getTypes().stream()
+                    .filter(t -> t.getNameAsString().equals(simpleName(path))).findFirst()
+                    .orElse(unit.getTypes().isEmpty() ? null : unit.getType(0));
+            if (own != null && own.getMembers().isNonEmpty()) {
+                BodyDeclaration<?> last = own.getMembers().get(own.getMembers().size() - 1);
+                int from = startLine(last);
+                int to = own.getEnd().map(e -> e.line).orElse(0);
+                String block = lines(path, lines, from, to, "the end of " + own.getNameAsString() + ", where a new member goes");
+                int cost = block == null ? 0 : PromptTokenBudget.estimateTokens(block);
+                if (block != null && used + cost <= tokens) {
+                    sb.append(block);
+                    used += cost;
+                    shown.add(new int[]{from, to});
+                }
+            }
+        }
         for (BodyDeclaration<?> member : unit.findAll(BodyDeclaration.class)) {
-            if (!(member instanceof CallableDeclaration<?> || member instanceof FieldDeclaration)) continue;
+            if (!(member instanceof CallableDeclaration<?> || member instanceof FieldDeclaration
+                    || member instanceof TypeDeclaration<?>)) continue;
             if (member.getParentNode().filter(n -> n instanceof TypeDeclaration<?>).isEmpty()) continue;
-            if (!names(member).stream().anyMatch(words::contains)) continue;
-            int from = member.getComment().flatMap(c -> c.getBegin()).map(b -> b.line)
-                    .orElse(member.getBegin().map(b -> b.line).orElse(0));
+            Set<String> naming = member instanceof TypeDeclaration<?> ? typeWords : words;
+            if (!names(member).stream().anyMatch(naming::contains)) continue;
+            int from = startLine(member);
             int to = member.getEnd().map(e -> e.line).orElse(0);
-            if (from < 1 || to < from || to > lines.length) continue;
-            String block = "```java [" + path + ", lines " + from + "-" + to + "]\n"
-                    + String.join("\n", java.util.Arrays.copyOfRange(lines, from - 1, to)) + "\n```\n";
+            if (shown.stream().anyMatch(r -> r[0] <= from && to <= r[1])) continue;   // inside a part already shown
+            String block = lines(path, lines, from, to, null);
+            if (block == null) continue;
             int cost = PromptTokenBudget.estimateTokens(block);
             if (used + cost > tokens) continue;
             sb.append(block);
             used += cost;
+            shown.add(new int[]{from, to});
         }
         return used == header ? null : sb.append('\n').toString();
     }
 
+    private static int startLine(BodyDeclaration<?> member) {
+        return member.getComment().flatMap(c -> c.getBegin()).map(b -> b.line)
+                .orElse(member.getBegin().map(b -> b.line).orElse(0));
+    }
+
+    /** Lines {@code from..to} of the file as one fenced part; null when the range is not in the file. */
+    private static String lines(String path, String[] lines, int from, int to, String label) {
+        if (from < 1 || to < from || to > lines.length) return null;
+        return "```java [" + path + ", lines " + from + "-" + to + (label == null ? "" : ", " + label) + "]\n"
+                + String.join("\n", java.util.Arrays.copyOfRange(lines, from - 1, to)) + "\n```\n";
+    }
+
     private static List<String> names(BodyDeclaration<?> member) {
         if (member instanceof CallableDeclaration<?> c) return List.of(c.getNameAsString());
+        if (member instanceof TypeDeclaration<?> t) return List.of(t.getNameAsString());
         return ((FieldDeclaration) member).getVariables().stream().map(v -> v.getNameAsString()).toList();
     }
 

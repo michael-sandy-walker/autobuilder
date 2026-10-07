@@ -1,0 +1,2 @@
+# T4-DG: the yardstick this target is scored by. One line: <script> [mode]
+scripts/smoke_ladder_case.sh terminating

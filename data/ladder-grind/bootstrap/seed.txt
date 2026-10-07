@@ -1,0 +1,34 @@
+  An existing project, adopted, and now asked to change. It was written by someone else and it already
+  builds; its existing behaviour is characterised by the tests in src/test/java.
+  The change wanted is written in the ticket that asked for it. In the ticket's own words:
+
+    feat(T4-CQ,T5-BO): a grind is noted, a refused write is told, a protected type's members are shown
+
+    structdiff run 1 ground for 25 minutes on one move: the model called
+    getters on records, the missing-member block told it to edit the
+    protected records, every write was refused in silence, and the
+    repetition signal only re-ranked agents.
+
+    - GrindDetector: failure signatures counted once per cycle, noted at the
+      third occurrence and every doubling (log, grind_detected event,
+      interface, voice, prompt block, run-report watch).
+    - The missing-member advice reverses for a protected type and lists what
+      it declares; the evolution prompt names the protected paths and every
+      write refused since the last prompt.
+    - An override's or anonymous class's unread parameter is not reported
+      as ignored input.
+    - The interface shows package and test gate builds as checks of the tree
+      on disk, not as fix attempts, and no longer narrates them as repairs.
+    - The structdiff yardstick requires a value assertion per entry point.
+
+  For orientation: the change that answered this ticket touched BehaviourEvent, BehaviourLogger, ProtectedPaths and WiringFactsAnalyzer. Which classes you change is yours to decide; the specification's tests are the requirement.
+  Add the new classes DeclaredMembers and GrindDetector in package com.walpro.autobuilder.core.build.
+  They already work as their class comments say, and their existing tests must keep passing.
+
+  The specification is DeclaredMembersTest, GrindDetectorTest, ProtectedPathsPromptTest and WiringFactsAnalyzerTest in src/test/java: their tests say exactly what the
+  code must do, and they fail until the code provides it.
+
+  OBJECTIVE: every test in DeclaredMembersTest, GrindDetectorTest, ProtectedPathsPromptTest and WiringFactsAnalyzerTest passes, and the whole suite passes.
+
+  DO NOT modify the existing tests under src/test: they are the operator's, and if one of them fails, the
+  code is what is wrong. Keep the project's packages, classes and naming.

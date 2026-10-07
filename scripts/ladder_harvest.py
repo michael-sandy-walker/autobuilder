@@ -44,6 +44,9 @@ class Tree:
         self.paths = [p for p in git('ls-tree', '-r', '--name-only', rev).split('\n') if p.endswith('.java')]
         self.by_fqn = {}
         self.by_pkg = collections.defaultdict(dict)
+        # test sources, by name: a test reaches its helpers (fixtures, harnesses) the way code reaches code
+        self.test_fqn = {}
+        self.test_pkg = collections.defaultdict(dict)
         for p in self.paths:
             root = MAIN if p.startswith(MAIN) else TEST if p.startswith(TEST) else None
             if not root:
@@ -53,6 +56,9 @@ class Tree:
             if root == MAIN:
                 self.by_fqn[fqn] = p
                 self.by_pkg[pkg][simple] = p
+            else:
+                self.test_fqn[fqn] = p
+                self.test_pkg[pkg][simple] = p
         self._text = {}
 
     def text(self, path):
@@ -63,43 +69,56 @@ class Tree:
                 self._text[path] = ''
         return self._text[path]
 
-    def refs(self, source):
-        """The main files this source refers to: its imports, and names of its own package."""
+    def refs(self, source, tests=False, unresolved=None):
+        """The main files this source refers to: its imports, and names of its own package. With tests, the test
+        sources it refers to as well (a fixture class); an import of the project this tree cannot resolve is added
+        to unresolved when one is given -- dropped in silence, it shipped a test without its fixture (ladder-grind)."""
         out, external = set(), set()
+        fqns = {**self.by_fqn, **self.test_fqn} if tests else self.by_fqn
+        pkgs = self.by_pkg
+        if tests:
+            pkgs = collections.defaultdict(dict, {k: dict(v) for k, v in self.by_pkg.items()})
+            for k, v in self.test_pkg.items():
+                pkgs[k].update(v)
         pkg = PACKAGE.search(source)
         pkg = pkg.group(1) if pkg else ''
         for imp in IMPORT.findall(source):
-            if imp in self.by_fqn:
-                out.add(self.by_fqn[imp])
-            elif imp in self.by_pkg:                       # import of a whole package
-                out.update(self.by_pkg[imp].values())
+            if imp in fqns:
+                out.add(fqns[imp])
+            elif imp in pkgs:                              # import of a whole package
+                out.update(pkgs[imp].values())
             else:
                 # a static import or a nested type: the longest prefix that is a class
                 parts = imp.split('.')
                 for k in range(len(parts) - 1, 1, -1):
-                    if '.'.join(parts[:k]) in self.by_fqn:
-                        out.add(self.by_fqn['.'.join(parts[:k])]); break
+                    if '.'.join(parts[:k]) in fqns:
+                        out.add(fqns['.'.join(parts[:k])]); break
                 else:
-                    if not imp.startswith(('java.', 'javax.', ROOT_PKG)):
+                    if imp.startswith(ROOT_PKG):
+                        if unresolved is not None:
+                            unresolved.add(imp)
+                    elif not imp.startswith(('java.', 'javax.')):
                         external.add('.'.join(parts[:3]))
-        same = self.by_pkg.get(pkg, {})
+        same = pkgs.get(pkg, {})
         for w in set(WORD.findall(NOISE.sub(' ', source))):
-            if w in same:
+            # a sibling test class named in a test is no helper of it
+            if w in same and (same[w].startswith(MAIN) or not re.search(r'Tests?$', w)):
                 out.add(same[w])
         return out, external
 
-    def closure(self, seeds_sources):
-        """Every main file the sources reach, and the external packages on the way."""
+    def closure(self, seeds_sources, tests=False, unresolved=None):
+        """Every main file the sources reach, and the external packages on the way; with tests, every test
+        helper too (the caller tells them apart by root)."""
         seen, external, todo = set(), set(), []
         for s in seeds_sources:
-            r, e = self.refs(s)
+            r, e = self.refs(s, tests, unresolved)
             todo.extend(r); external |= e
         while todo:
             p = todo.pop()
             if p in seen:
                 continue
             seen.add(p)
-            r, e = self.refs(self.text(p))
+            r, e = self.refs(self.text(p), tests, unresolved)
             external |= e
             todo.extend(r - seen)
         return seen, external

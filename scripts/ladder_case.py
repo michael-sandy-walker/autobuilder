@@ -34,15 +34,34 @@ def cut(commit, max_closure, any_library):
             core.append(p); closure |= files
     allowed = closure | {p for p in core if p in before.paths}
     names = {p.rsplit('/', 1)[1][:-5] for p in core}
+    core_fqns = {p[len(h.MAIN):-5].replace('/', '.') for p in core}
     reaches = lambda text: any(re.search(r'\b' + n + r'\b', text) for n in names)
+    helpers = set()
+
+    def fits(t, text):
+        """A test belongs to the cut when everything it reaches does: main files within the cut, its helpers
+        (fixtures, harnesses) shipped beside it, and no import of the project the tree cannot resolve but the
+        cut's new classes -- the first cut dropped such an import in silence and shipped a test without its
+        fixture (ladder-grind v1)."""
+        unresolved = set()
+        files, ext = before.closure([text], tests=True, unresolved=unresolved)
+        unresolved = {u for u in unresolved if u not in core_fqns and not any(u.startswith(f + '.') for f in core_fqns)}
+        main = {f for f in files if f.startswith(h.MAIN)}
+        if unresolved:
+            print(f'left out {t}: it imports {", ".join(sorted(unresolved))}, which the tree before the commit lacks',
+                  file=sys.stderr)
+        if main <= allowed and light(ext) and not unresolved:
+            helpers.update(files - main)
+            return True
+        return False
+
     spec = []
     for t in c['test']:
         try:
             text = h.git('show', f"{c['hash']}:{t}")
         except h.subprocess.CalledProcessError:
             continue
-        files, ext = before.closure([text])
-        if reaches(text) and files <= allowed and light(ext):
+        if reaches(text) and fits(t, text):
             spec.append(t)
     # The cut's existing tests: the behaviour it already has, which must keep passing.
     existing = []
@@ -50,11 +69,13 @@ def cut(commit, max_closure, any_library):
         if not t.startswith(h.TEST) or t in spec:
             continue
         text = before.text(t)
-        if not reaches(text):
-            continue
-        files, ext = before.closure([text])
-        if files <= allowed and light(ext):
+        if reaches(text) and fits(t, text):
             existing.append(t)
+    # A helper is the operator's like any test; the commit's own change to one would make it specification.
+    changed_helpers = helpers & set(c['test'])
+    if changed_helpers:
+        sys.exit(f'the commit changes test helper(s) {sorted(changed_helpers)}; a cut cannot ship them yet')
+    existing = sorted(set(existing) | (helpers - set(spec)))
     return c, before, core, sorted(allowed), spec, sorted(existing)
 
 

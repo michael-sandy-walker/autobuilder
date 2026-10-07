@@ -253,6 +253,7 @@ public class TestRunGate {
             log.info("T4-AN-2: {}", unfinished);
             return Optional.of(unfinished);
         }
+        lastUncompiled = null;
         if (outcome.result() != BuildResult.COMPILE_ERROR) {
             lastBlocker = null;
             lastRunDidNotCompile = false;
@@ -275,8 +276,10 @@ public class TestRunGate {
         // constructor call, and for an hour every gate run said only "test suite failing" to a reader that
         // then found no report and showed nothing -- the error first reached a prompt through packaging.
         // The compiler names files by their absolute path; the base path may be relative (run 2026-10-05_18-34-29).
-        String uncompiled = testsDoNotCompile(plain, Path.of(fileBasePath, "output").toAbsolutePath().normalize().toString());
+        String root = Path.of(fileBasePath, "output").toAbsolutePath().normalize().toString();
+        String uncompiled = testsDoNotCompile(plain, root);
         lastRunDidNotCompile = uncompiled != null;
+        lastUncompiled = uncompiled == null ? null : uncompiledFiles(outcome.errorFiles(), root);
         if (uncompiled != null) {
             lastBlocker = uncompiled;
             log.info("T4-AN-2: {}", uncompiled);
@@ -334,6 +337,10 @@ public class TestRunGate {
 
     /** The tree's tests did not compile at its last run: any candidate whose tests run is better. */
     private volatile boolean treeNotCompiling;
+    /** T6-T: the test files that did not compile -- in the tree as merged, the last run, the last candidate; null while unknown. */
+    private volatile Set<String> treeUncompiled;
+    private volatile Set<String> lastUncompiled;
+    private volatile Set<String> candidateUncompiled;
     /** Whether this gate's last run ended with the tests not compiling (no report). */
     private volatile boolean lastRunDidNotCompile;
     /** T6-T: whether this gate's last run was cut at the timeout -- its reports are a part of the suite, never the suite. */
@@ -390,6 +397,7 @@ public class TestRunGate {
         if (report != null) {
             treeFailing = failingNames(report);
             treeNotCompiling = false;
+            treeUncompiled = null;
         }
     }
 
@@ -405,6 +413,7 @@ public class TestRunGate {
         } else if (lastRunDidNotCompile) {
             treeFailing = null;
             treeNotCompiling = true;
+            treeUncompiled = lastUncompiled;
         } else if (lastRunTimedOut) {
             treeFailing = null;       // a tree whose suite hangs has no baseline to be compared with
             treeNotCompiling = false;
@@ -425,10 +434,25 @@ public class TestRunGate {
      * ran, or fewer fail and none that passed breaks; WORSE: more fail; SAME: as many, or a trade; UNKNOWN: the
      * tree's state is not known.
      */
-    public record Delta(String verdict, int candidateFailing, Integer treeFailing, int newlyFailing, int newlyPassing) {
+    public record Delta(String verdict, int candidateFailing, Integer treeFailing, int newlyFailing, int newlyPassing,
+                        boolean byCompilation, List<String> stillUncompiled) {
+        public Delta(String verdict, int candidateFailing, Integer treeFailing, int newlyFailing, int newlyPassing) {
+            this(verdict, candidateFailing, treeFailing, newlyFailing, newlyPassing, false, List.of());
+        }
+
+        Delta(String verdict, int candidateFailing, Integer treeFailing, int newlyFailing, int newlyPassing,
+              boolean byCompilation) {
+            this(verdict, candidateFailing, treeFailing, newlyFailing, newlyPassing, byCompilation, List.of());
+        }
+
         public boolean better() { return "BETTER".equals(verdict); }
 
         public String describe() {
+            if (byCompilation) {
+                return newlyPassing + " test file(s) that did not compile do now; " + candidateFailing
+                        + " still do not (" + String.join(", ", stillUncompiled.stream()
+                                .map(f -> f.substring(f.lastIndexOf('/') + 1)).toList()) + ")";
+            }
             return treeFailing == null
                     ? candidateFailing + " test(s) fail with it; without it the tests do not compile"
                     : candidateFailing + " test(s) fail with it, " + treeFailing + " without it ("
@@ -451,13 +475,67 @@ public class TestRunGate {
     /** A candidate's run, or null when this evaluation has none; kept until the candidate merges or the next. */
     public void candidateRan(TestRunReport report) {
         candidateFailing = report == null ? null : failingNames(report);
+        candidateUncompiled = null;
     }
 
-    /** The candidate merged: its failing tests are the tree's now. A merge with no candidate run leaves it unknown. */
+    /** A candidate's run whose tests did not compile: the test files that do not are kept for the merge. */
+    public void candidateDidNotCompile() {
+        candidateFailing = null;
+        candidateUncompiled = lastRunDidNotCompile ? lastUncompiled : null;
+    }
+
+    /**
+     * The candidate merged: its failing tests are the tree's now, or, when its tests did not compile, the test
+     * files that do not. A merge with no candidate run leaves it unknown.
+     */
     public void candidateMerged() {
         treeFailing = candidateFailing;
-        treeNotCompiling = false;
+        treeNotCompiling = candidateUncompiled != null;
+        treeUncompiled = candidateUncompiled;
         candidateFailing = null;
+        candidateUncompiled = null;
+    }
+
+    /**
+     * T6-T: a candidate whose tests still do not compile, against a tree whose tests do not either -- by the test
+     * files that do not compile. BETTER: every one that fails with it fails without it, and at least one compiles
+     * now; WORSE: one compiles without it and not with it; SAME: the same files; UNKNOWN: either side unknown, or
+     * the candidate's run has a compiler error outside the tests (its main code does not compile).
+     *
+     * <p>Ladder-grind, field44 (0 of 3, every run 1/51): the specification compiled only once four classes changed
+     * together. Every run had candidates after which a whole specification class compiled (ProtectedPathsPromptTest,
+     * seven candidates in three runs), all rejected because the rest still did not; nothing was merged after minute
+     * 4, so no step was ever kept. The count of errors is no measure: a class that appears turns one "cannot find
+     * class" into one error per missing member. A test file that compiles is.
+     */
+    public Delta compareUncompiledWithTree() {
+        Set<String> tree = treeUncompiled;
+        Set<String> now = lastRunDidNotCompile ? lastUncompiled : null;
+        if (!treeNotCompiling || tree == null || now == null || tree.isEmpty() || now.isEmpty()) {
+            return new Delta("UNKNOWN", now == null ? 0 : now.size(), tree == null ? null : tree.size(), 0, 0, true);
+        }
+        int newly = (int) now.stream().filter(f -> !tree.contains(f)).count();
+        int fixed = (int) tree.stream().filter(f -> !now.contains(f)).count();
+        String verdict = newly > 0 ? "WORSE" : fixed > 0 ? "BETTER" : "SAME";
+        return new Delta(verdict, now.size(), tree.size(), newly, fixed, true, List.copyOf(now));
+    }
+
+    /**
+     * The test sources among a run's error files, relative to the project; null when a file outside the tests
+     * has an error too (the run is not one of "the tests do not compile") or none is named.
+     */
+    static Set<String> uncompiledFiles(List<String> errorFiles, String projectRoot) {
+        if (errorFiles == null || errorFiles.isEmpty()) return null;
+        String root = projectRoot == null ? "" : projectRoot.replace('\\', '/');
+        if (!root.isEmpty() && !root.endsWith("/")) root += "/";
+        Set<String> out = new java.util.TreeSet<>();
+        for (String f : errorFiles) {
+            String rel = f.replace('\\', '/');
+            if (!root.isEmpty() && rel.startsWith(root)) rel = rel.substring(root.length());
+            if (!rel.startsWith("src/test/")) return null;
+            out.add(rel);
+        }
+        return out;
     }
 
     /** The failing tests of the tree as merged, while known. */

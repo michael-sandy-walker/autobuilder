@@ -172,7 +172,8 @@ public sealed interface BehaviourEvent {
     /**
      * T6-T: a candidate's test run against the tree's, on a target that declares its suite: BETTER / SAME / WORSE /
      * UNKNOWN, the counts, and what the evaluation decided -- so a run says itself how often a better candidate
-     * was rejected or a worse one merged.
+     * was rejected or a worse one merged. With {@code measure} "compilation" both sides' tests did not compile and
+     * the counts are test FILES that do not (newlyPassing: files that compile now); "tests" otherwise.
      */
     record TestDelta(
             Instant timestamp,
@@ -183,7 +184,8 @@ public sealed interface BehaviourEvent {
             int newlyFailing,
             int newlyPassing,
             String decision,
-            boolean decisive
+            boolean decisive,
+            String measure
     ) implements BehaviourEvent {
         public String event() { return "test_delta"; }
     }

@@ -182,9 +182,9 @@ public class BehaviourLogger {
     }
 
     public void testDelta(String cycleId, String verdict, int candidateFailing, Integer treeFailing, int newlyFailing,
-                          int newlyPassing, String decision, boolean decisive) {
+                          int newlyPassing, String decision, boolean decisive, String measure) {
         emit(new BehaviourEvent.TestDelta(Instant.now(), cycleId, verdict, candidateFailing, treeFailing, newlyFailing,
-                newlyPassing, decision, decisive));
+                newlyPassing, decision, decisive, measure));
     }
 
     public void mutationMerged(String cycleId, String mutationId, List<String> files) {

@@ -838,8 +838,10 @@ public class EvaluationAgent implements ExecutionAgent {
         var probe = context.lastProbeOutcome();
         if (probe == null || probe.result() != BuildResult.COMPILE_OK) return outcome;
         var report = testRunGate.freshReport();
-        if (report.isEmpty()) return outcome;
-        var delta = testRunGate.compareWithTree(report.get());
+        // T6-T: tests that still do not compile are compared by the test files that do not -- a change the operator's
+        // suite needs in several classes at once is then kept one class at a time (ladder-grind, field44).
+        var delta = report.isPresent() ? testRunGate.compareWithTree(report.get()) : testRunGate.compareUncompiledWithTree();
+        if (report.isEmpty() && "UNKNOWN".equals(delta.verdict())) return outcome;
         boolean defects = negotiationResult.criticalOpinions() != null && negotiationResult.criticalOpinions().stream()
                 .anyMatch(HeuristicOpinion::defectFinding);
         EvaluationOutcome decided = outcome;
@@ -854,7 +856,8 @@ public class EvaluationAgent implements ExecutionAgent {
         if (behaviourLogger != null) {
             behaviourLogger.testDelta(context.cycleName(), delta.verdict(), delta.candidateFailing(), delta.treeFailing(),
                     delta.newlyFailing(), delta.newlyPassing(),
-                    decided.mutationState() == null ? null : decided.mutationState().name(), decided != outcome);
+                    decided.mutationState() == null ? null : decided.mutationState().name(), decided != outcome,
+                    delta.byCompilation() ? "compilation" : "tests");
         }
         return decided;
     }

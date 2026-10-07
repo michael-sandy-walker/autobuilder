@@ -3,7 +3,11 @@ package com.walpro.autobuilder.core.build;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * T1-GE: the bounded view of a build's output that every {@link BuildOutcome#stderrTail()} is
@@ -35,6 +39,16 @@ public final class BuildOutputWindow {
     private final Deque<String> tail = new ArrayDeque<>();
     private int dropped;
 
+    /** A compiler error line's file, {@code <file>.java:[line,col]}, as the build tool reports it. */
+    private static final Pattern ERROR_FILE = Pattern.compile("^\\s*(?:\\[[A-Z]+\\]\\s*)?(\\S+\\.java):\\[\\d+,\\d+\\]");
+
+    /**
+     * T6-T: every file a compiler error names, in the order first named -- kept whole while the lines are cut.
+     * Which files do not compile is a fact about the whole output; the window keeps its ends, and a report of
+     * a hundred errors loses the files in its middle (ladder-grind, 2026-10-07).
+     */
+    private final Set<String> errorFiles = new LinkedHashSet<>();
+
     public BuildOutputWindow() {
         this(DEFAULT_HEAD_LINES, DEFAULT_TAIL_LINES);
     }
@@ -59,6 +73,10 @@ public final class BuildOutputWindow {
         if (line != null && line.indexOf('\u001B') >= 0) {
             line = BuildErrorClassifier.ANSI_ESCAPE.matcher(line).replaceAll("");
         }
+        if (line != null) {
+            Matcher m = ERROR_FILE.matcher(line);
+            if (m.find()) errorFiles.add(m.group(1).replace('\\', '/'));
+        }
         if (head.size() < headLines) {
             head.add(line);
             return;
@@ -78,6 +96,11 @@ public final class BuildOutputWindow {
     /** Lines seen in total, retained or not. */
     public synchronized int totalLines() {
         return head.size() + tail.size() + dropped;
+    }
+
+    /** The files compiler errors named, in the order first named; empty when none did. */
+    public synchronized List<String> errorFiles() {
+        return List.copyOf(errorFiles);
     }
 
     public synchronized String render() {

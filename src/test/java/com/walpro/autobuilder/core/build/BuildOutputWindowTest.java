@@ -101,4 +101,20 @@ class BuildOutputWindowTest {
                 .contains("ERROR] Widget.java:[4,9] incompatible types")
                 .contains("INFO] -----");
     }
+
+    /** T6-T: which files do not compile is kept whole while the lines are cut -- the middle held them (ladder-grind). */
+    @Test
+    void theFilesCompilerErrorsName_areKeptWhole_whileTheMiddleIsCut() {
+        BuildOutputWindow w = new BuildOutputWindow(2, 2);
+        w.add("[INFO] compiling");
+        w.add("\u001B[1;31m[ERROR]\u001B[m /p/src/test/java/zeta/NibTest.java:[9,5] cannot find symbol");
+        w.add("[ERROR] /p/src/test/java/zeta/InkwellTest.java:[3,1] cannot find symbol");
+        w.add("[ERROR]   symbol:   class Inkwell");
+        w.add("[ERROR] /p/src/test/java/zeta/NibTest.java:[12,5] cannot find symbol");
+        w.add("[INFO] BUILD FAILURE");
+        w.add("[ERROR] help");
+
+        assertThat(w.render()).doesNotContain("InkwellTest");
+        assertThat(w.errorFiles()).containsExactly("/p/src/test/java/zeta/NibTest.java", "/p/src/test/java/zeta/InkwellTest.java");
+    }
 }

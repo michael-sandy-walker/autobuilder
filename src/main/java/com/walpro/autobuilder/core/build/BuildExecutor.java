@@ -202,7 +202,7 @@ public class BuildExecutor {
             BuildResult result = exit == 0 ? BuildResult.COMPILE_OK : BuildResult.COMPILE_ERROR;
             log.info("BuildExecutor: {} (exit={}, durationMs={}, stderrLines={}, totalLines={})",
                     result, exit, elapsed, stderrWindow.retainedLines(), stderrWindow.totalLines());
-            return new BuildOutcome(result, tail, elapsed, effectiveCommand, cycleId);
+            return new BuildOutcome(result, tail, elapsed, effectiveCommand, cycleId, stderrWindow.errorFiles());
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();

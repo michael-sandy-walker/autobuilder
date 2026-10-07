@@ -382,6 +382,53 @@ class TestRunGateTest {
         assertThat(g.compareWithTree(report("NibTest.widens", "InkwellTest.pours", "QuillTest.dries")).verdict()).isEqualTo("WORSE");
     }
 
+    /**
+     * T6-T: tests that still do not compile, compared by the test files that do not. Ladder-grind field44: candidates
+     * after which a whole specification class compiled were rejected for the rest, and no step was ever kept.
+     */
+    @Test
+    void testsThatStillDoNotCompile_areComparedByTheFilesThatDoNot_andAMergeHandsItsFilesToTheTree() {
+        String nib = "/tmp/project/output/src/test/java/zeta/NibTest.java";
+        String ink = "/tmp/project/output/src/test/java/zeta/InkwellTest.java";
+        String quill = "/tmp/project/output/src/test/java/zeta/QuillTest.java";
+        String main = "/tmp/project/output/src/main/java/zeta/Nib.java";
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(eq("/tmp/project"), any(), eq("mvn test"))).thenReturn(
+                uncompiled(nib, ink), uncompiled(nib), uncompiled(nib, quill), uncompiled(nib, ink), uncompiled(nib, main),
+                uncompiled(nib), uncompiled(nib));
+        TestRunGate g = gate(true);
+        assertThat(g.compareUncompiledWithTree().verdict()).as("tree unknown").isEqualTo("UNKNOWN");
+
+        g.runOnTree("c1", false);
+        g.verifyTestsPass("c2");
+        TestRunGate.Delta better = g.compareUncompiledWithTree();
+        assertThat(better.verdict()).isEqualTo("BETTER");
+        assertThat(better.byCompilation()).isTrue();
+        assertThat(better.describe()).isEqualTo("1 test file(s) that did not compile do now; 1 still do not (NibTest.java)");
+
+        g.verifyTestsPass("c3");
+        assertThat(g.compareUncompiledWithTree().verdict()).as("one compiles, another stops").isEqualTo("WORSE");
+        g.verifyTestsPass("c4");
+        assertThat(g.compareUncompiledWithTree().verdict()).isEqualTo("SAME");
+        g.verifyTestsPass("c5");
+        assertThat(g.compareUncompiledWithTree().verdict()).as("its main code does not compile").isEqualTo("UNKNOWN");
+
+        // the better candidate merges: its files are the tree's, and the same files again are no progress
+        g.verifyTestsPass("c6");
+        g.candidateRan(null);
+        g.candidateDidNotCompile();
+        g.candidateMerged();
+        assertThat(g.treeTests()).isEqualTo(TestRunGate.TreeTests.NOT_COMPILING);
+        g.verifyTestsPass("c7");
+        assertThat(g.compareUncompiledWithTree().verdict()).isEqualTo("SAME");
+    }
+
+    private static BuildOutcome uncompiled(String... files) {
+        StringBuilder tail = new StringBuilder();
+        for (String f : files) tail.append("[ERROR] ").append(f).append(":[9,5] cannot find symbol\n");
+        return new BuildOutcome(BuildResult.COMPILE_ERROR, tail.toString(), 2000L, "mvn test", "c", List.of(files));
+    }
+
     private static TestRunReport report(String... tests) {
         java.util.List<TestRunReport.Failure> f = java.util.Arrays.stream(tests).map(t -> new TestRunReport.Failure(
                 "zeta." + t.substring(0, t.indexOf('.')), t.substring(t.indexOf('.') + 1), TestRunReport.Outcome.FAILED, "x")).toList();

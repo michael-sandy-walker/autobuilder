@@ -9,14 +9,25 @@ package com.walpro.autobuilder.core.build;
  * @param durationMs  wall-clock duration of the build invocation
  * @param command     command line that was executed (for logging/prompt context)
  * @param cycleId     cycle in which this build ran — used to tell a stale result from this cycle's
+ * @param errorFiles  T6-T: every file a compiler error named, from the whole output (the tail is cut; this is
+ *                    not); empty when none did or the executor does not know
  */
 public record BuildOutcome(
         BuildResult result,
         String stderrTail,
         long durationMs,
         String command,
-        String cycleId
+        String cycleId,
+        java.util.List<String> errorFiles
 ) {
+    public BuildOutcome {
+        errorFiles = errorFiles == null ? java.util.List.of() : java.util.List.copyOf(errorFiles);
+    }
+
+    public BuildOutcome(BuildResult result, String stderrTail, long durationMs, String command, String cycleId) {
+        this(result, stderrTail, durationMs, command, cycleId, java.util.List.of());
+    }
+
     public static BuildOutcome skipped(String reason) {
         return new BuildOutcome(BuildResult.SKIPPED, reason == null ? "" : reason, 0L, "", null);
     }

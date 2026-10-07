@@ -78,7 +78,11 @@ public class TestRegressionHeuristic implements EvaluationHeuristic {
             return HeuristicOpinion.ofDefectWithScore(NAME, 0.9, MutationAcceptanceState.REJECTED,
                     GoalProgressState.STAGNATING, rationale, Math.max(0.0, outcome.score() - 0.10));
         }
-        if (report.isEmpty()) return HeuristicOpinion.none(NAME);
+        if (report.isEmpty()) {
+            // T6-T: its tests did not compile -- which test files do not is what a merge hands the tree.
+            gate.candidateDidNotCompile();
+            return HeuristicOpinion.none(NAME);
+        }
         gate.candidateRan(report.get());
 
         Optional<Set<String>> tree = gate.treeFailing();

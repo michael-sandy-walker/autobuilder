@@ -122,4 +122,20 @@ class EvaluationAgentTestProgressTest {
         CycleContextData broken = compiled.withLastProbeOutcome(new BuildOutcome(BuildResult.COMPILE_ERROR, "", 0L, "", "c"));
         assertThat(agent.applyTestProgressCheck(broken, plain(rejected), rejected)).isSameAs(rejected);
     }
+
+    /** T6-T: tests that still do not compile -- fewer test files that do not is progress (ladder-grind, field44). */
+    @Test
+    void aCandidateAfterWhichMoreTestFilesCompileIsAccepted_whenNoneRan() {
+        when(testRunGate.freshReport()).thenReturn(Optional.empty());
+        when(testRunGate.compareUncompiledWithTree()).thenReturn(new TestRunGate.Delta("BETTER", 1, 2, 0, 1, true,
+                List.of("src/test/java/zeta/NibTest.java")));
+
+        EvaluationOutcome out = agent.applyTestProgressCheck(compiled, plain(rejected), rejected);
+
+        assertThat(out.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
+        assertThat(out.feedbackMessage()).contains("1 test file(s) that did not compile do now; 1 still do not (NibTest.java)");
+
+        when(testRunGate.compareUncompiledWithTree()).thenReturn(new TestRunGate.Delta("UNKNOWN", 0, null, 0, 0));
+        assertThat(agent.applyTestProgressCheck(compiled, plain(rejected), rejected)).isSameAs(rejected);
+    }
 }

@@ -67,3 +67,5 @@ low score on the right one**, because it reads as evidence against a mechanism t
 **Before quoting any score: check `PREFLIGHT_SMOKE` against that target's `bootstrap/seed.txt`.**
 The outcome ledger's row for that run says 12/12 and is misleading.
 
+
+**2026-10-07, both directions on ladder-rows (T6-T).** (1) The SEED outran the tests: the ladder generator wrote the original commit's changed classes as "The classes to change are ...", the obligations made "X is modified" binding, and the closure refused a correct 29/29 tree over it (field41 run 2) -- fixed by making that line orientation (v3). (2) Changing the seed broke the YARDSTICK, which parsed the removed line: every tree scored 0/1 and early_stop paused a correct run (field42). **Before editing a toy case's seed, grep the yardstick scripts for what they read from it, and score a known-good tree on the edited case before launching a batch.**

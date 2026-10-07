@@ -254,6 +254,7 @@ public class TestRunGate {
             return Optional.of(unfinished);
         }
         lastUncompiled = null;
+        if (outcome.result() == BuildResult.COMPILE_OK) lastSuiteMs = outcome.durationMs();
         if (outcome.result() != BuildResult.COMPILE_ERROR) {
             lastBlocker = null;
             lastRunDidNotCompile = false;
@@ -285,6 +286,7 @@ public class TestRunGate {
             log.info("T4-AN-2: {}", uncompiled);
             return Optional.of(uncompiled);
         }
+        lastSuiteMs = outcome.durationMs();   // the tests ran (failing): how long the project's suite takes
         String summary = summarise(plain);
         // T4-DY: the same failing tests, run after run, are a stuck case of their own -- judged by
         // ratios over this run, never by a fixed count.
@@ -345,6 +347,13 @@ public class TestRunGate {
     private volatile boolean lastRunDidNotCompile;
     /** T6-T: whether this gate's last run was cut at the timeout -- its reports are a part of the suite, never the suite. */
     private volatile boolean lastRunTimedOut;
+
+    /** T6-T: how long the last run that ran the suite took, compile included; -1 until one has. */
+    private volatile long lastSuiteMs = -1L;
+
+    public long lastSuiteMs() {
+        return lastSuiteMs;
+    }
 
     /** Whether the last run was cut at the timeout (a test hangs or loops). */
     public boolean lastRunTimedOut() {

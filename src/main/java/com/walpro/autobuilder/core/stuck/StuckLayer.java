@@ -372,28 +372,88 @@ public class StuckLayer {
         return java.util.Optional.empty();
     }
 
+    /** Every failing test the evidence names, each once, in the evidence's order. */
+    static List<FailingTest> failingTestsIn(List<String> evidence) {
+        List<FailingTest> out = new ArrayList<>();
+        if (evidence == null) return out;
+        for (String line : evidence) {
+            failingTestIn(List.of(line)).ifPresent(t -> {
+                if (out.stream().noneMatch(o -> o.testClass().equals(t.testClass()) && o.method().equals(t.method()))) out.add(t);
+            });
+        }
+        return out;
+    }
+
     /**
-     * The failing test the observation names, run again under the debugger in a copy of {@code project}: the calls into
-     * the project's own code, with their values.
+     * T6-T: a trace may take this many times the project's own suite run (compile included) -- a debugger stepping
+     * one test through every call costs far more than the suite runs it; field traces took about nine times a
+     * ladder case's suite run. Until the suite has run, the configured budget.
+     */
+    static final int TRACE_SUITE_MULTIPLE = 30;
+
+    /**
+     * The failing tests the observation names, EACH run again under the debugger in its own copy of {@code project},
+     * as many at once as the memory available allows: the calls into the project's own code, with their values.
+     *
+     * <p>T6-T, ladder-grind field47: one trace per observation, of the FIRST failing test, and a new one only when
+     * the failing set changed -- so the tests behind it waited their turn: run 1 traced WiringFactsAnalyzerTest at
+     * minute 27 (it passed at minute 80), DeclaredMembersTest at minute 113 of 120, GrindDetectorTest never.
      */
     private StuckDiagnosis.Asked traceFailingTest(String signature, List<String> evidence, java.nio.file.Path project,
                                                   Map<String, String> live) {
-        var named = failingTestIn(evidence);
-        if (named.isEmpty()) return new StuckDiagnosis.Asked("", "", null, false);
-        FailingTest chosen = named.get();
-        var calls = ExecutionTrace.trace(project, chosen.testClass(), chosen.method(), executionTraceBudgetMs);
+        List<FailingTest> tests = failingTestsIn(evidence);
+        if (tests.isEmpty()) return new StuckDiagnosis.Asked("", "", null, false);
+        long suite = testRunGate == null ? -1L : testRunGate.lastSuiteMs();
+        long bound = suite > 0 ? suite * TRACE_SUITE_MULTIPLE : executionTraceBudgetMs;
+        List<String> answers = new ArrayList<>();
+        List<FailingTest> rest = tests;
+        if (!TraceCapacity.known() && tests.size() > 1) {
+            // the first runs alone, so what one trace takes is measured before any run beside it
+            try {
+                String first = TraceCapacity.measured(() -> traced(tests.get(0), project, live, bound));
+                if (first != null) answers.add(first);
+            } catch (Exception e) {
+                log.info("T4-DY: a trace failed: {}", e.getMessage());
+            }
+            rest = tests.subList(1, tests.size());
+        }
+        int parallel = TraceCapacity.parallel(rest.size());
+        log.info("T4-DY: tracing {} failing test(s), {} at a time, each within {} s", tests.size(), parallel, bound / 1000);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(Math.max(1, parallel));
+        List<java.util.concurrent.Future<String>> runs = new ArrayList<>();
+        try {
+            for (FailingTest t : rest) {
+                runs.add(pool.submit(() -> TraceCapacity.measured(() -> traced(t, project, live, bound))));
+            }
+            for (var run : runs) {
+                try {
+                    String a = run.get();
+                    if (a != null) answers.add(a);
+                } catch (Exception e) {
+                    log.info("T4-DY: a trace failed: {}", e.getMessage());
+                }
+            }
+            if (answers.isEmpty()) return new StuckDiagnosis.Asked("", "", null, false);
+            return new StuckDiagnosis.Asked("", "", String.join("\n\n", answers), false);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** One failing test traced, as the answer's block for it; null when no trace was taken. */
+    private String traced(FailingTest chosen, java.nio.file.Path project, Map<String, String> live, long bound) {
+        var calls = ExecutionTrace.trace(project, chosen.testClass(), chosen.method(), bound);
         if (calls.isEmpty()) {
             log.info("T4-DY: no trace of {}.{} -- the run could not be attached to, or it called none of the project's code",
                     chosen.testClass(), chosen.method());
-            return new StuckDiagnosis.Asked("", "", null, false);
+            return null;
         }
         String test = chosen.testClass() + "." + chosen.method();
-        String answer = "The failing test " + test + " was run again under the debugger. It failed with: "
+        log.warn("T4-DY: traced {} under the debugger -- {} call(s) into the project's own code", test, calls.get().size());
+        return "The failing test " + test + " was run again under the debugger. It failed with: "
                 + (chosen.message() == null || chosen.message().isBlank() ? "(no message)" : chosen.message().replace('\n', ' '))
                 + "\n    The calls into the project's own code, in the order they returned -- a call's own calls come before it, indented one step more:\n"
                 + ExecutionTrace.render(calls.get(), live, TRACE_LINES).replace("\n", "\n    ");
-        log.warn("T4-DY: traced {} under the debugger -- {} call(s) into the project's own code", test, calls.get().size());
-        return new StuckDiagnosis.Asked("", "", answer, false);
     }
 
     StuckLedger.Entry find(StuckObservation o) {

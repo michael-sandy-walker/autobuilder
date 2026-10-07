@@ -208,4 +208,49 @@ class ExecutionTraceTest {
         assertThat(StuckLayer.failingTestIn(List.of("no test here", ""))).isEmpty();
         assertThat(StuckLayer.failingTestIn(null)).isEmpty();
     }
+
+    /** T6-T: every failing test the evidence names, once each, in its order -- not only the first (ladder-grind field47). */
+    @Test
+    void everyFailingTestIsReadFromTheEvidence_onceEach() {
+        var tests = StuckLayer.failingTestsIn(List.of(
+                "RowsSpecTest.dries(String, String, int)[2] -- ran with: green | Nib | 4 -- expected: \"green\" but was: null",
+                "RowsSpecTest.dries(String, String, int)[3] -- ran with: blue | Nib | 4 -- expected: \"blue\" but was: null",
+                "no test here",
+                "InkwellTest.pours -- boom"));
+        assertThat(tests).extracting(t -> t.testClass() + "." + t.method()).containsExactly("RowsSpecTest.dries", "InkwellTest.pours");
+        assertThat(StuckLayer.failingTestsIn(null)).isEmpty();
+    }
+
+    /** T6-T: with no trace measured yet, one at a time; never fewer than one, never more than the tests. */
+    @Test
+    void howManyTracesRunAtOnce_isOneUntilATraceIsMeasured() {
+        org.junit.jupiter.api.Assumptions.assumeFalse(TraceCapacity.known(), "a trace was measured earlier in this JVM");
+        assertThat(TraceCapacity.parallel(5)).isEqualTo(1);
+        assertThat(TraceCapacity.parallel(1)).isEqualTo(1);
+    }
+
+    /** T6-T: two failing tests of one tree traced side by side, each in its own copy and on its own port. */
+    @Test
+    void twoFailingTestsAreTracedAtOnce(@TempDir Path project) throws Exception {
+        Assumptions.assumeTrue(Boolean.getBoolean("execution.trace.live"), "live: -Dexecution.trace.live=true");
+        Files.writeString(project.resolve("pom.xml"), POM);
+        Path main = Files.createDirectories(project.resolve("src/main/java/org/ink"));
+        Path test = Files.createDirectories(project.resolve("src/test/java/org/ink"));
+        Files.writeString(main.resolve("Rows.java"), SOURCES.get("src/main/java/org/ink/Rows.java"));
+        Files.writeString(test.resolve("RowsTest.java"), """
+                package org.ink;
+                class RowsTest {
+                  @org.junit.jupiter.api.Test void finds() { org.junit.jupiter.api.Assertions.assertEquals("Quill", Rows.of("org.ink.Quill")); }
+                  @org.junit.jupiter.api.Test void findsNib() { org.junit.jupiter.api.Assertions.assertEquals("Nib", Rows.of("org.ink.Nib")); }
+                }""");
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var a = pool.submit(() -> TraceCapacity.measured(() -> ExecutionTrace.trace(project, "org.ink.RowsTest", "finds", 240_000)));
+            var b = pool.submit(() -> TraceCapacity.measured(() -> ExecutionTrace.trace(project, "org.ink.RowsTest", "findsNib", 240_000)));
+            assertThat(ExecutionTrace.render(a.get().orElseThrow(), SOURCES, 10)).contains("Rows.of(name = \"org.ink.Quill\") -> null");
+            assertThat(ExecutionTrace.render(b.get().orElseThrow(), SOURCES, 10)).contains("Rows.of(name = \"org.ink.Nib\") -> null");
+        } finally {
+            pool.shutdownNow();
+        }
+    }
 }

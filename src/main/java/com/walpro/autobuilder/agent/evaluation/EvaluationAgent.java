@@ -435,6 +435,11 @@ public class EvaluationAgent implements ExecutionAgent {
         finalOutcome = applyOriginatingGateCheck(context, negotiationResult, finalOutcome);
         boolean gateAccepted = finalOutcome != preGateOutcome
                 && finalOutcome.mutationState() == MutationAcceptanceState.ACCEPTED;
+        if (gateAccepted) {
+            // T6-T: a gate-raised item's criteria state the gate's claim; the gate's pass is their measurement, and
+            // a model's unmet mark must not veto the closure the gate decided.
+            context = criteriaMetByGate(context);
+        }
         EvaluationOutcome preProgressOutcome = finalOutcome;
         finalOutcome = applyTestProgressCheck(context, negotiationResult, finalOutcome);
         boolean progressAccepted = finalOutcome != preProgressOutcome;
@@ -798,9 +803,15 @@ public class EvaluationAgent implements ExecutionAgent {
             log.info("T4-CC: originating {} passed on the staged candidate — decisive accept "
                             + "(LLM assessment kept as background: state={}, score={})",
                     gate, outcome.mutationState(), outcome.score());
+            // T6-T: and the work item is DONE -- the gate that raised it no longer fails. As PROGRESSING it stayed
+            // open and could close only by the model's score: ladder-grind field46 run 2, the packaging item's one
+            // criterion was the gate's own claim, the model marked it unmet 17 times while the gate passed, and for
+            // twenty minutes every candidate that packaged was merged under an item already met (8 merges, the
+            // project's suite SAME on each) until the item was given up.
             return new EvaluationOutcome(outcome.score(), MutationAcceptanceState.ACCEPTED,
-                    GoalProgressState.PROGRESSING,
-                    "Originating " + gate + " passed on the staged candidate — decisive acceptance (T4-CC). "
+                    GoalProgressState.FULFILLED,
+                    "Originating " + gate + " passed on the staged candidate — decisive acceptance (T4-CC), the work"
+                            + " item it raised is done. "
                             + "The LLM assessment (recorded, not applied) was REJECTED: "
                             + truncate(outcome.feedbackMessage(), 220),
                     outcome.recommendation());
@@ -973,6 +984,17 @@ public class EvaluationAgent implements ExecutionAgent {
      * Omitted indices (LLM partial compliance) are left at their prior value.
      * Lines are expected in the form "[N] ✓ ..." or "[N] ✗ ...".
      */
+    /** Every criterion of the current subgoal recorded as met: the gate that raised it passed on the candidate. */
+    static CycleContextData criteriaMetByGate(CycleContextData context) {
+        List<String> criteria = context.currentSubGoalCriteria();
+        if (criteria == null || criteria.isEmpty()) return context;
+        List<String> met = new ArrayList<>();
+        for (int i = 0; i < criteria.size(); i++) {
+            met.add("[" + (i + 1) + "] \u2713 " + criteria.get(i) + " -- the gate that raised this item passed on the candidate");
+        }
+        return mergeCumulativeCriteriaStatus(context.withCriteriaAssessments(met), met);
+    }
+
     private static CycleContextData mergeCumulativeCriteriaStatus(CycleContextData context,
                                                                   List<String> assessments) {
         Map<Integer, Boolean> cumulative = context.cumulativeCriteriaStatus() != null

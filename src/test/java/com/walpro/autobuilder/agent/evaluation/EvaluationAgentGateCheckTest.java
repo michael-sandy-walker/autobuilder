@@ -110,11 +110,25 @@ class EvaluationAgentGateCheckTest {
         EvaluationOutcome result = agent.applyOriginatingGateCheck(ctx, noOverrides(rejected), rejected);
 
         assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
-        assertThat(result.goalProgress()).isEqualTo(GoalProgressState.PROGRESSING);
+        // T6-T: the item the gate raised is done -- left PROGRESSING it stayed open under a met gate (ladder-grind)
+        assertThat(result.goalProgress()).isEqualTo(GoalProgressState.FULFILLED);
         assertThat(result.feedbackMessage())
-                .contains("package-gate passed")
+                .contains("package-gate passed", "the work item it raised is done")
                 .contains("recorded, not applied");
         verify(packageGate).verifyPackageable("cycle-t4cc");
+    }
+
+    /** T6-T: the gate's pass records the item's criteria as met, so a model's unmet mark cannot veto its closure. */
+    @Test
+    void aGatePass_recordsTheItemsCriteriaAsMet() {
+        CycleContextData ctx = CycleContextData.builder().cycleName("cycle-t4cc")
+                .currentSubGoalCriteria(List.of("The project packages without build errors", "It starts"))
+                .build().withCumulativeCriteriaStatus(java.util.Map.of(1, false));
+
+        CycleContextData met = EvaluationAgent.criteriaMetByGate(ctx);
+
+        assertThat(met.cumulativeCriteriaStatus()).containsEntry(1, true).containsEntry(2, true);
+        assertThat(met.criteriaAssessments()).hasSize(2).allMatch(a -> a.contains("\u2713"));
     }
 
     @Test

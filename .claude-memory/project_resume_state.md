@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-07 AFTERNOON (Opus 5.5, session 12 continued) — COMPILE STEPS KEPT (field45 run 1: 2 MERGES); A TOO-LARGE FILE NOW SHOWS ITS END; BATCH field46 RUNNING — START HERE
+## 2026-10-07 EVENING (Opus 5.5, session 12 continued) — field46 DONE: THE COMPILE WALL CROSSED IN 2 OF 3 (46/51, 45/51); 0 OF 3 FULFILLED — START HERE
+
+- **Head: see `git log`; nothing pushed. Suite 3838/0. No run is live.** `scripts/run_outcomes.json` modified (pre-existing); `data/ladder-grind/bootstrap/seed.obligations.txt` untracked (generated, kept for comparability).
+- **This session's builds (T6-T):** ladder cuts ship test helpers (`de3a59f6`); a candidate after which more test files compile is progress (`3ca592b6`); a file too large to show whole shows its nested types and its end (`319647a9`).
+- **ladder-grind across batches:** field44 0/3 crossed the compile wall (all 1/51); field46 2/3 crossed (46/51, 45/51), both stalled on the SAME failing checks [2] [4] [6] [17] [51]. Detail and the open questions on T6-T (last entry).
+- **Next: a user decision** on the post-compile gap (T6-T last entry: a model-score veto against a SAME/BETTER test run; which failing test a subgoal targets; run 1's first-step stall). Band 4 still waits.
+
+## 2026-10-07 AFTERNOON (Opus 5.5, session 12 continued) — COMPILE STEPS KEPT (field45 run 1: 2 MERGES); A TOO-LARGE FILE NOW SHOWS ITS END; BATCH field46 RUNNING
 
 - **Head `319647a9` + memory commits; nothing pushed. Suite 3838/0.** `scripts/run_outcomes.json` modified (pre-existing); `data/ladder-grind/bootstrap/seed.obligations.txt` untracked (generated, kept for comparability).
 - **field45 run 1:** the compile-step accept worked (DeclaredMembers, then ProtectedPaths merged); the run then stalled on `BehaviourEvent`, a file the model was never shown (too large, and an interface of records had no "members"). Fixed in `SubgoalSourcePromptBlock.parts` (nested types are members; the type's end is shown). field45 stopped after run 1 (run 2 INVALID -- my slip, see feedback_no_heavy_mvn_beside_a_live_run).

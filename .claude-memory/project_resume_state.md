@@ -17,6 +17,7 @@ metadata:
 - **This session's builds (T6-T):** ladder cuts ship test helpers (`de3a59f6`); a candidate after which more test files compile is progress (`3ca592b6`); a file too large to show whole shows its nested types and its end (`319647a9`).
 - **ladder-grind across batches:** field44 0/3 crossed the compile wall (all 1/51); field46 2/3 crossed (46/51, 45/51), both stalled on the SAME failing checks [2] [4] [6] [17] [51]. Detail and the open questions on T6-T (last entry).
 - **Later the same evening:** (1) the score-drop veto measured -- not the lever; (2) a stale package-gate work item found and fixed (`fa60d2fa`, suite 3839/0): a gate pass now closes the item it raised. **Next: a user decision** on targeting within the test-suite work item (one item lists every failing test; run 3 worked the first-named, [17], for ~40 min), then a confirming batch on the new build. Band 4 still waits.
+- **User chose: confirming batch first, no targeting rule yet.** **Running: `field47`** (`~/.autobuilder/field47/run.sh`, build `fa60d2fa`), ladder-grind x3, field44's rule. Watch: a gate-pass accept must be followed by the item's closure ("Subgoal fulfilled"). Before ANY edit: `ps -eo pid,args | grep '[f]ield47/run.sh'`. Compare against field46 runs 2-3: minutes under the packaging item after the suite compiles, SAME merges, failing check sets.
 
 ## 2026-10-07 AFTERNOON (Opus 5.5, session 12 continued) — COMPILE STEPS KEPT (field45 run 1: 2 MERGES); A TOO-LARGE FILE NOW SHOWS ITS END; BATCH field46 RUNNING
 

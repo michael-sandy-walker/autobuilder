@@ -1,7 +1,8 @@
 # Autobuilder -- functional documentation
 
 What Autobuilder does and how to use it on a project of your own: what to give it, how to start it, how to
-follow a run, and how to read what it produced. How it works inside is in [technical.md](technical.md).
+follow a run, how it deals with difficulty, and how to read what it produced. How it works inside is in
+[technical.md](technical.md).
 
 ---
 
@@ -11,7 +12,15 @@ You give Autobuilder a **specification** -- what a project should do, in plain p
 then builds or changes the project toward that specification, one cycle at a time: it plans the work into
 subgoals, proposes a change for one of them, checks the change (it must compile, keep what it must keep, and
 satisfy the subgoal's criteria), merges it, and moves on. It stops when every requirement of the specification
-is met and the project passes its own checks -- or when it can show it is not getting further.
+is met and the project passes its own checks -- or when it can show it is not getting further, and says why.
+
+It can work in three ways:
+
+- **build a new project** from a specification;
+- **change or extend an existing project** someone else wrote -- including against tests you provide, which then
+  define what "done" means;
+- **continue** a project it built in an earlier run, or **combine** two runs that grew one project in different
+  directions.
 
 It is meant to run unattended against a **local** language model (an OpenAI-compatible endpoint such as Ollama).
 Everything it decides and every change it makes is kept: in a structured event log, in the run's goal state, and
@@ -29,6 +38,8 @@ artifact, tracing a failing test) rely on that.
   its credentials in `spring.data.neo4j.*`.
 - A local model behind an OpenAI-compatible API: `llm.api.url`, `llm.api.model` (and `llm.api.key` if the
   endpoint wants one). Set `llm.api.context-window-tokens` to the window the model is actually served with.
+- Memory to spare beside the model: builds, test runs and debugger traces each start a JVM. Autobuilder sizes its
+  parallel traces to the memory available, but other heavy programs on the same machine slow or endanger a run.
 - A **target directory** for your project, under `data/<name>/` (see below).
 
 Build Autobuilder with `mvn clean install`; it runs as `java -jar target/autobuilder-*.jar` and listens on port
@@ -73,7 +84,10 @@ All data stored in in-memory collections (no database). Invalid input returns HT
 
 If you want an **existing** project changed (rather than a new one built), say so in the seed and say what must
 stay as it is -- for example "Change only `ParameterizedCaseInput` and add the new class beside it; keep every
-other class exactly as it is; do not modify anything under `src/test`." See section 4.
+other class exactly as it is; do not modify anything under `src/test`." The strongest form of a change request is
+**tests you write**: put them in `src/test/java`, protect them (3.3), and end the seed with one sentence opened by
+`OBJECTIVE:` -- "OBJECTIVE: every test in RolesSpecTest passes, and the whole suite passes." Autobuilder then works
+until your tests pass, and checks that by running them, not by reading the code.
 
 ### 3.2 The obligations: `bootstrap/seed.obligations.txt`
 
@@ -85,7 +99,9 @@ as yours. Two markers matter:
   It guides the work but is never something the end result is checked for.
 - `gate: tests` marks a line whose whole claim is that the project's own tests pass (e.g.
   `gate: tests The whole test suite passes.`). It is then answered by actually running the tests, not by a
-  model reading your code. Mark such lines yourself if the generated file left them unmarked.
+  model reading your code -- and it makes your test suite an authority for the whole run: a change that makes
+  more of your tests fail is rejected, and a change that makes them better is accepted even when the model
+  doubts it. Mark such lines yourself if the generated file left them unmarked.
 
 ### 3.3 What may not be touched: `bootstrap/protected-paths.txt`
 
@@ -115,8 +131,10 @@ Choose how the run begins with `autobuilder.start.mode`. Autobuilder checks your
 |---|---|---|
 | build a new project from the specification | `NEW_PROJECT` | `output/` is cleared and the goal is taken from `seed.txt`. Refused if `output/` holds code Autobuilder did not write. |
 | change or extend an existing project | `ADOPT_PROJECT` | Put your project in `output/`. Nothing is cleared. Autobuilder reads it and **waits for a goal** -- send it (below). |
-| continue a project Autobuilder built before | `CONTINUE_LINEAGE` | Restores the earlier artifact and goal state and goes on. |
+| continue a project Autobuilder built before | `CONTINUE_LINEAGE` | Restores the best state the earlier run preserved, with its goal state, and goes on; the new run reads the earlier run's own end report first. |
 | decide later | `ASK` | Nothing happens until you choose (`start.html` in the browser, or `POST /autobuilder/start`). |
+
+`GET /autobuilder/targets` lists the targets under `data/` and which modes each supports.
 
 Then choose how it runs, with a Spring profile:
 
@@ -136,29 +154,69 @@ curl -X POST -H 'Content-Type: text/plain' --data-binary @data/my-service/bootst
      http://localhost:8081/autobuilder/goal                       # the goal, byte for byte
 ```
 
-Post the seed file unchanged: the obligations file is keyed to its exact text.
+Post the seed file unchanged: the obligations file is keyed to its exact text. On adoption Autobuilder records the
+digest of every file, so "nothing else was changed" can later be proven, not guessed.
 
 `scripts/preflight.sh` does all of this for a target under `data/` -- builds Autobuilder, starts it with a time
 budget, and archives and scores the run when it ends (`PREFLIGHT_TARGET=<name> scripts/preflight.sh live 60`).
-`scripts/post_adopted_goal.sh <name> <goal-file>` posts the goal of an adopted project once it is ready.
+`scripts/post_adopted_goal.sh <name> <goal-file>` posts the goal of an adopted project once it is ready, and
+`scripts/early_stop.sh` started beside a run pauses it when its score stops moving.
 
 ---
 
 ## 5. Following a run
 
-- **In the browser:** `goals.html` shows the goal tree as it changes -- subgoals, their criteria, which are met;
-  `graph.html` and `graph-explorer.html` show the history in the graph. The run can be narrated aloud.
-- **Status:** `GET /autobuilder/status` -- the current cycle and goal.
+- **In the browser:** `goals.html` shows the goal tree as it changes -- subgoals, their criteria, which are met --
+  and can narrate the run aloud; `graph.html` and `graph-explorer.html` show the history in the graph.
+- **Status:** `GET /autobuilder/status` -- the current cycle and goal; `GET /autobuilder/usage` -- model usage.
 - **The event log:** `logs/behaviour.ndjson` in the target directory, one structured event per decision (also
   streamed live on `GET /events/behaviour`): which agent ran, what was proposed, what was rejected and why, what
-  was merged, what the stuck layer asked and answered.
-- **Steering by hand:** `POST /autobuilder/pause` and `/resume`; `POST /autobuilder/rewind` to return to an
-  earlier checkpoint; the goal explorer endpoints (`/autobuilder/goals/...`) to inspect or edit subgoals and
-  criteria, inject a subgoal, or give one up.
+  was merged, each comparison of a change with the project's own tests (`test_delta`), what the stuck layer asked
+  and answered, and why the run stopped.
+- **Steering by hand:**
+  - `POST /autobuilder/pause` and `/resume`;
+  - `POST /autobuilder/rewind` to return to an earlier checkpoint (`GET /autobuilder/checkpoints` lists them);
+  - the goal explorer (`/autobuilder/goals/...`) to inspect or edit subgoals and criteria, mark a criterion met,
+    inject a subgoal, pin one, give one up or reactivate it;
+  - `POST /autobuilder/coverage-review` to have the plan checked against the specification;
+  - `PUT /autobuilder/signals/{name}` to poke the loop: ask a role to run, open a role's window, or set a switch.
 
 ---
 
-## 6. Reading the result
+## 6. How Autobuilder deals with difficulty
+
+What it does on its own when work does not go smoothly -- each of these shows up in the event log.
+
+- **A change does not compile.** Before asking the model again, it tries known repairs itself: a missing import or
+  dependency, a method called on the wrong type, `getX()` on a record that declares `x()`, a dependency version
+  that will not resolve, missing test-framework dependencies. Versions and coordinates come from your project's
+  own build and local repository first. The model is then shown the exact compiler errors, and what the types
+  involved really declare.
+- **A change needs something that does not exist yet.** A change rejected only because it uses a member or class
+  that a later change could supply is kept, and re-tried automatically once a merge supplies it.
+- **A change must touch several classes before anything compiles.** Each step that leaves fewer of your test files
+  failing to compile is kept, so such a change is built one class at a time instead of all at once or not at all.
+- **The model judges a good change wrongly.** Measurements outrank it: a change after which the check that raised
+  the work item passes, or after which your test suite is better, is accepted -- and a change that makes your
+  suite worse, removes an annotation a type relied on, or manufactures a dependency instead of injecting it, is
+  rejected whatever the model said.
+- **The same failure keeps coming back.** The stuck layer asks a question about it and answers it from the code:
+  what a type really declares, where a class really lives, what the failing line constructs, the declaring file
+  whole -- and, for failing tests, **what each failing test actually executed**: every failing test is run again
+  under a debugger, side by side as far as memory allows, and the model is shown each call into your code with the
+  values it received and returned. If no question helps, it asks you for a diagnosis. Earlier runs on the same
+  specification hand over what ended each failure there.
+- **The plan drifts.** Work items the specification does not ask for cannot block the goal; requirements no subgoal
+  ever targeted are added back; duplicate subgoals are merged; earlier abandoned work on the same topic is shown
+  before new work is planned.
+- **The run stops making progress.** Before stopping, it may **rewind** to an earlier checkpoint and take a
+  different path, or explore more than one path from the same point and keep the better one. When it does stop,
+  it keeps the best state it ever reached (not merely the last one) and writes an end report a continuing run will
+  read.
+
+---
+
+## 7. Reading the result
 
 ### How a run ends
 
@@ -166,19 +224,22 @@ budget, and archives and scores the run when it ends (`PREFLIGHT_TARGET=<name> s
 |---|---|
 | `GOAL_FULFILLED` | every obligation was confirmed and the completion checks passed (the project assembles, its tests pass, and it starts and answers the way the specification says) |
 | `GOAL_EXHAUSTED` | the work items ran out without fulfilling the goal |
-| `honest-halt:...` | the loop stopped itself because it was not converging, and says on what (e.g. `root-convergence-stall`) |
+| `honest-halt:<reason>` | the loop stopped itself because it was not converging, and says on what -- e.g. `root-convergence-stall` (no subgoal completed for a stretch while no work landed), `exhaustion-runaway` (subgoals kept being given up), `build-blocked-deadlock`, `empty-backlog-injection-limit`, `llm-circuit-breaker` (the model endpoint kept failing) |
 | `deadline` / `operator-stop` | the time budget ran out, or the run was paused from outside |
 
 A run's verdict is the loop's own. To know whether the project really does what you specified, check it
 independently: Autobuilder's toy cases each carry a **yardstick** -- a script that tests the artifact against the
 specification without trusting the loop -- and you can write one for your project the same way (one check per
-requirement, the last line `SMOKE: <passed>/<total>`). `preflight.sh` runs it on every run.
+requirement, the last line `SMOKE: <passed>/<total>`). `preflight.sh` runs it on every run, on the final tree and
+on the preserved one. When two runs score the same total, compare *which* checks fail: the checks build on each
+other, and the same number can mean different things.
 
 ### What to look at
 
-- `output/` -- your project as it is now.
+- `output/` -- your project as it is now; `meta/preserved-artifact/` -- the best state the run reached.
 - `meta/GoalStack.json` -- the goal tree: every subgoal, its criteria, and how each ended.
 - `meta/stuck-ledger.json` -- what kept failing, which questions were asked about it, and what answered them.
+- the run end report -- why the run stopped, in the loop's own words.
 - `logs/behaviour.ndjson` -- the whole run, decision by decision.
 
 When the loop gets stuck on something, the stuck ledger usually shows the exact fact it was missing, and its
@@ -188,24 +249,38 @@ specification.
 
 ---
 
-## 7. Worked examples: the toy cases
+## 8. Worked examples: the toy cases
 
-The targets under `data/` are toy cases -- small, versioned projects Autobuilder is measured on. They are also
-the best examples of how to prepare a target:
+The targets under `data/` are toy cases -- small, versioned projects Autobuilder is measured on (each records its
+version and the reason for every change in `bootstrap/CHANGELOG.md`). They are also the best examples of how to
+prepare a target:
 
 | Toy case | Kind | Shows |
 |---|---|---|
-| `firestarter` | new project | a REST API built from a prose specification |
+| `firestarter` | new project | a REST API built from a prose specification, checked by calling it |
 | `clitarget` | new project | a command-line tool, checked by running it |
-| `receiver-questions`, `edit-hunks`, `parameterized-rows` | change an existing project | a seed quoting a real ticket, `members:` rules, a specification test the change must satisfy |
-| `participation-totals`, `participation-roles` | extend an existing library | operator-written specification tests, protected tests |
+| `rung1` | adopted project | a small REST service read from its README and routes, then extended |
+| `structdiff`, `participation`, `participation-b` | adopted library | an existing library whose behaviour the loop characterises with tests |
+| `participation-roles`, `participation-totals` | extend an existing library | operator-written specification tests, protected tests |
+| `receiver-questions`, `edit-hunks`, `parameterized-rows`, `criterion-status`, `stuck-questions` | change an existing project | a seed quoting a real ticket, `members:` rules, a specification test the change must satisfy |
+| `ladder-rows`, `ladder-grind` | the ticket ladder | a past change of Autobuilder itself, cut out as it was before, with that change's own tests as the specification |
+| `flightsim` | new project, no yardstick | a large open-ended specification (a 3D flight simulator), for observing behaviour rather than scoring it |
 
 Each has `bootstrap/` with its seed, obligations, protected paths, and a `yardstick` line naming its scoring
 script.
 
+### The ticket ladder
+
+The ladder measures Autobuilder on real changes of growing size: each rung is a commit from Autobuilder's own
+history, banded by how many classes it changed. `scripts/ladder_case.py <commit> <name>` turns a commit into a toy
+case -- the classes it changed and everything they reach, as they were before it, the commit's own tests as the
+specification, and its commit message as the ticket. A case is validated before it is run: its starting tree must
+build with its existing tests passing, must fail the specification, and must pass it with the original commit's
+classes in place.
+
 ---
 
-## 8. What it cannot do (yet)
+## 9. What it cannot do (yet)
 
 - Projects other than Java with Maven: the checks that compile, test, boot and trace rely on Maven.
 - Requirements the specification does not state: Autobuilder only holds the result to what was written. If it
@@ -213,5 +288,7 @@ script.
 - Judging whether a result is *better* than required: it checks the requirements, not taste or design quality.
 - Hosted models are not part of its design: it is built for a local model, and its timeouts and output bounds
   adapt to one.
-- Large changes across many classes of an existing project remain hard for a local model; expect the stuck
-  layer to show what it could not resolve rather than a finished change.
+- Changes across several classes of an existing project are within reach -- such a change is now kept step by step
+  -- but they remain the hardest work for a local model: on the ladder's second band-3 case the best runs reach
+  most of the specification and stall on the last few tests. Expect the stuck layer to show what it could not
+  resolve rather than a finished change.

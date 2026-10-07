@@ -243,7 +243,7 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `llm.api.context-window-tokens` | The context window the model is served with; every prompt budget is a share of it. | `32768` | `32768` | `PromptTokenBudget` |
+| `llm.api.context-window-tokens` | The context window the model is served with; every prompt budget is a share of it. | `32768` | `32768` | `LLMClient`, `PromptTokenBudget` |
 | `llm.api.key` | The model endpoint's API key, if it asks for one. | (required) | `${OPENAI_API_KEY:local-only-no-key}` | `LLMClient` |
 | `llm.api.model` | The model name sent with every request. | (required) | `qwen3.8` | `LLMClient` |
 | `llm.api.output-bounds.enabled` | Whether answers are capped and runaways retried with a changed request (OutputBounds). | `true` |  | `LLMClient` |

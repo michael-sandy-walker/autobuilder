@@ -36,6 +36,9 @@ public final class BlockerTypes {
     public static final String GATE_PACKAGE = "package-gate";
     public static final String GATE_BOOT = "boot-gate";
     public static final String GATE_TEST = "test-gate";
+    /** T6-T: a skeleton work item -- done when the test classes named under {@link #SKELETON_TESTS_KEY} pass. */
+    public static final String GATE_SKELETON = "skeleton-gate";
+    public static final String SKELETON_TESTS_KEY = "skeletonTests";
 
     /**
      * The completion edge's acceptance-criteria check (T4-BP-3). Unlike the gates above, whose

@@ -57,6 +57,10 @@ public class EvolutionLLMAdapter {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.goal.DeclaredTestSuite> declaredTestSuite;
 
+    /** T6-T: stubs the specification's missing surface once, before the first candidate. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.core.build.SkeletonFirst> skeletonFirst;
+
     private CycleContextData withTestRunNow(CycleContextData ctx) {
         var gate = testRunGate == null ? null : testRunGate.getIfAvailable();
         var goals = goalPlannerService == null ? null : goalPlannerService.getIfAvailable();
@@ -81,6 +85,20 @@ public class EvolutionLLMAdapter {
                 gate.runOnTree(ctx.cycleName() + "-tree-tests", required);
             } catch (RuntimeException e) {
                 log.debug("T6-T: the tree's test run could not be made: {}", e.getMessage());
+            }
+        }
+        // T6-T: skeleton first -- the operator's tests do not compile on the tree: stub what they need from the
+        // compiler's errors before any candidate, then measure the tree again (its baseline changed)
+        var skeleton = skeletonFirst == null ? null : skeletonFirst.getIfAvailable();
+        if (skeleton != null && !skeleton.attempted() && declared != null && declared.isDeclared() && gate.isLive()
+                && gate.treeTests() == com.walpro.autobuilder.core.build.TestRunGate.TreeTests.NOT_COMPILING
+                && ctx.outputPath() != null) {
+            try {
+                if (skeleton.apply(java.nio.file.Path.of(ctx.outputPath()), ctx.cycleName())) {
+                    gate.runOnTree(ctx.cycleName() + "-skeleton-tests", required);
+                }
+            } catch (RuntimeException e) {
+                log.warn("T6-T: skeleton first could not run: {}", e.getMessage());
             }
         }
         return out;

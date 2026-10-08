@@ -7,7 +7,7 @@ default in the code, and the value `application.yml` sets when it sets one (prof
 What a key does is the first sentence of the comment on the field that reads it, so it is written once, in
 the code.
 
-112 keys.
+114 keys.
 
 ## `autobuilder.bootstrap`
 
@@ -202,6 +202,13 @@ the code.
 |---|---|---|---|---|
 | `autobuilder.service.reset-on-start` | Whether startup resets the target when the start mode discards the tree: the lineage is severed, meta/ cleaned and the root goal re-seeded (the graph keeps earlier runs as history). | `false` | `true` | `AutobuilderConfigProperties` |
 | `autobuilder.service.resume-from-preserved` | When true AND a preserved artifact from a prior run exists (`meta/preserved-artifact/`, written by T4-CA at every pause transition) AND the loaded goal state is resumable (root present, not COMPLETED), the boot resumes that lineage instead of resetting: `output/` is restored from the preserved copy, goal state is kept and re-grounded, and `reset-on-start` is skipped. | `false` | `false` | `AutobuilderConfigProperties` |
+
+## `autobuilder.skeleton-first`
+
+| Key | What it does | Default in code | application.yml | Read by |
+|---|---|---|---|---|
+| `autobuilder.skeleton-first.budget-ms` | How long stubbing may take, every compile pass included. | `300000` |  | `SkeletonFirst` |
+| `autobuilder.skeleton-first.enabled` | (not described) | `true` |  | `SkeletonFirst` |
 
 ## `autobuilder.start`
 

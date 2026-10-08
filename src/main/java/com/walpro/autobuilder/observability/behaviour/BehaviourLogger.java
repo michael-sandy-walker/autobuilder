@@ -187,6 +187,10 @@ public class BehaviourLogger {
                 newlyPassing, decision, decisive, measure));
     }
 
+    public void skeletonStubbed(String cycleId, boolean compiles, int passes, List<String> stubs, int workItems) {
+        emit(new BehaviourEvent.SkeletonStubbed(Instant.now(), cycleId, compiles, passes, stubs, workItems));
+    }
+
     public void mutationMerged(String cycleId, String mutationId, List<String> files) {
         emit(new BehaviourEvent.MutationMerged(Instant.now(), cycleId, mutationId, files));
     }

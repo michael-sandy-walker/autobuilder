@@ -896,6 +896,21 @@ public class EvaluationAgent implements ExecutionAgent {
                             root != null ? root.getDescription() : "",
                             goalPlannerService.specBoundBehaviouralCriteria());
                 }
+                case BlockerTypes.GATE_SKELETON -> {
+                    // T6-T: the item's own test classes pass on the staged candidate; the rest of the suite is not its
+                    // business (the regression guard keeps what passes passing)
+                    if (testRunGate == null) return null;
+                    String tests = goalPlannerService.getGoalMetadataString(context.currentSubGoalId(), BlockerTypes.SKELETON_TESTS_KEY);
+                    if (tests == null || tests.isBlank()) return null;
+                    testRunGate.verifyTestsPass(cycleId, false);
+                    var report = testRunGate.freshReport();
+                    if (report.isEmpty()) return java.util.Optional.of(testRunGate.lastBlocker().orElse("the tests did not run"));
+                    java.util.Set<String> mine = new java.util.HashSet<>(java.util.Arrays.asList(tests.split(",")));
+                    java.util.List<String> failing = com.walpro.autobuilder.core.build.TestRunGate.failingNames(report.get()).stream()
+                            .filter(n -> mine.contains(n.substring(0, n.indexOf('.')))).toList();
+                    return failing.isEmpty() ? java.util.Optional.empty()
+                            : java.util.Optional.of("still failing: " + String.join(", ", failing));
+                }
                 case BlockerTypes.GATE_TEST -> {
                     if (testRunGate == null) return null;
                     GoalEntity root = goalPlannerService.getRootGoal();

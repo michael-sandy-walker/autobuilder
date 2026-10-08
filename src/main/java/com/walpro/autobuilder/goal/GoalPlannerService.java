@@ -4884,6 +4884,23 @@ public class GoalPlannerService {
         return true;
     }
 
+    /**
+     * T6-T: a work item skeleton first raised -- write a stubbed class's bodies; done when its test classes pass,
+     * measured by {@link com.walpro.autobuilder.core.build.BlockerTypes#GATE_SKELETON}. Empty when nothing was injected.
+     */
+    public java.util.Optional<String> injectSkeletonWorkItem(String description, List<String> criteria, String tests) {
+        GoalEntity root = getRootGoal();
+        if (root == null) return java.util.Optional.empty();
+        CoverageReviewResult injected = injectCoverageGaps(root, List.of(description), true);
+        if (injected.injectedIds().isEmpty()) return java.util.Optional.empty();
+        String id = injected.injectedIds().get(0);
+        setAcceptanceCriteria(id, criteria);
+        setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.GATE_SKELETON);
+        setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.SKELETON_TESTS_KEY, tests);
+        return java.util.Optional.of(id);
+    }
+
     CoverageReviewResult injectCoverageGaps(GoalEntity root, List<String> missing) {
         return injectCoverageGaps(root, missing, false);
     }

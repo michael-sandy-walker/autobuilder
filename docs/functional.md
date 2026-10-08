@@ -38,8 +38,8 @@ artifact, tracing a failing test) rely on that.
   its credentials in `spring.data.neo4j.*`.
 - A local model behind an OpenAI-compatible API: `llm.api.url`, `llm.api.model` (and `llm.api.key` if the
   endpoint wants one). Set `llm.api.context-window-tokens` to the window the model is actually served with.
-- Memory to spare beside the model: builds, test runs and debugger traces each start a JVM. Autobuilder sizes its
-  parallel traces to the memory available, but other heavy programs on the same machine slow or endanger a run.
+- Memory to spare beside the model: builds, test runs and debugger traces each start a JVM, and other heavy
+  programs on the same machine slow or endanger a run.
 - A **target directory** for your project, under `data/<name>/` (see below).
 
 Build Autobuilder with `mvn clean install`; it runs as `java -jar target/autobuilder-*.jar` and listens on port
@@ -202,9 +202,8 @@ What it does on its own when work does not go smoothly -- each of these shows up
   rejected whatever the model said.
 - **The same failure keeps coming back.** The stuck layer asks a question about it and answers it from the code:
   what a type really declares, where a class really lives, what the failing line constructs, the declaring file
-  whole -- and, for failing tests, **what each failing test actually executed**: every failing test is run again
-  under a debugger, side by side as far as memory allows, and the model is shown each call into your code with the
-  values it received and returned. If no question helps, it asks you for a diagnosis. Earlier runs on the same
+  whole -- and, for failing tests, **what a failing test actually executed**: the test is run again under a
+  debugger, and the model is shown each call into your code with the values it received and returned. If no question helps, it asks you for a diagnosis. Earlier runs on the same
   specification hand over what ended each failure there.
 - **The plan drifts.** Work items the specification does not ask for cannot block the goal; requirements no subgoal
   ever targeted are added back; duplicate subgoals are merged; earlier abandoned work on the same topic is shown

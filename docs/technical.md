@@ -465,14 +465,12 @@ The questions, each answered by an authority, structure first:
   or the package's classes that look like it); what the failing line constructs; the declaring file whole; and
   last, an **observation** -- `TerminalAgent`, which runs read-only commands in a copy of the tree (`ReadOnlyCopy`:
   an allow-list, no shell, compile but never execute; exchanges recorded by `TerminalAgentRecorder`).
-- **TEST_FAILURES**: **what each failing test's call executed** (`ExecutionTrace`): every failing test the
-  observation names is run again in its own copy of the tree under the JDK debugger (JDI), and every call into the
+- **TEST_FAILURES**: **what the failing test's call executed** (`ExecutionTrace`): the first failing test the
+  observation names is run again in a copy of the tree under the JDK debugger (JDI), and every call into the
   project's own `src/main/java` types is reported with its arguments, its result, the line it returned at and the
-  values in scope there. The traces run **side by side**: `TraceCapacity` allows as many at once as half the memory
-  available at that moment holds, by what one trace was measured to take (the first trace of a run goes alone and
-  is measured). Each trace is bounded by a multiple of the project's own last suite run
-  (`TestRunGate.lastSuiteMs`), and by `autobuilder.stuck.execution-trace.budget-ms` until the suite has run. Maven
-  projects only; switch `autobuilder.stuck.execution-trace.enabled`.
+  values in scope there; bounded by `autobuilder.stuck.execution-trace.budget-ms`. (Tracing every failing test in
+  parallel was tried on 2026-10-07/08 and rolled back: the traces reached the model and no traced test passed
+  more often.) Maven projects only; switch `autobuilder.stuck.execution-trace.enabled`.
 - **PROTECTED_WRITE**, **CLOSURE_REFUSAL**: what the protected file says; which requirement keeps closure refused.
 
 A signature that comes back after its answer moves to the next question. When no question is left, the layer

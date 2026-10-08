@@ -144,4 +144,23 @@ class EditHunksTest {
         String file = "```java [src/main/java/org/ink/Nib.java]\npackage org.ink;\nclass Nib {\n";
         assertThat(EvolutionProtocolContract.isValidResponse(file)).isFalse();
     }
+
+    /**
+     * T6-T: a whole-file block that keeps less than half of an existing file is refused -- written from the parts a
+     * prompt showed (ladder-grind field50 run 1: a 1,079-line class came back as a fraction of itself); a new file,
+     * a small file, and a whole rewrite that keeps the file are ordinary.
+     */
+    @Test
+    void aWholeFileBlockThatDropsMostOfAnExistingFile_isRefused() {
+        String big = "class Ink {\n" + "  int a;\n".repeat(100) + "}\n";
+        java.util.Map<String, String> tree = java.util.Map.of("src/main/java/Ink.java", big, "src/main/java/Nib.java", "class Nib {}\n");
+        String partial = "```java [src/main/java/Ink.java]\nclass Ink {\n  int b;\n}\n```\n";
+        String whole = "```java [src/main/java/Ink.java]\n" + big.replace("int a;", "int b;") + "```\n";
+        String small = "```java [src/main/java/Nib.java]\nclass Nib { int c; }\n```\n";
+        String fresh = "```java [src/main/java/Quill.java]\nclass Quill {}\n```\n";
+
+        assertThat(EditHunks.partialRewrites(partial, tree)).singleElement().asString()
+                .contains("src/main/java/Ink.java: written whole with 3 of its 102 lines", "edit blocks");
+        assertThat(EditHunks.partialRewrites(whole + small + fresh, tree)).isEmpty();
+    }
 }

@@ -66,6 +66,22 @@ class GoalPlannerServiceTest {
         }
     }
 
+    /** T6-T: while a skeleton work item is open the cycle works on one; with none open nothing changes. */
+    @Test
+    void anOpenSkeletonWorkItem_isWorkedOnBeforeThePlannersSubgoals() {
+        service.resetInitialGoal("root", "Main Goal");
+        service.addSubGoal("plan", "Implement the Nib feature", true, "root");
+        service.preferSkeletonWorkItem();
+        assertThat(service.getCurrentSubGoalId()).as("no skeleton item: unchanged").isEqualTo("plan");
+
+        service.addSubGoal("skel", "Write the bodies of Nib's skeleton members", false, "root");
+        service.setGoalMetadataString("skel", com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                com.walpro.autobuilder.core.build.BlockerTypes.GATE_SKELETON);
+        service.preferSkeletonWorkItem();
+
+        assertThat(service.getCurrentSubGoalId()).isEqualTo("skel");
+    }
+
     @Test
     void addSubGoal_buildFixDescriptionPrefix_stampsBlockerMetadata() {
         service.resetInitialGoal("root", "Main Goal");

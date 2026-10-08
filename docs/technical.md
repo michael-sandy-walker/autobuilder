@@ -199,7 +199,9 @@ the lines that replace them
 
 Each SEARCH part must occur exactly once in the file as it is; zero or several matches refuse that file's edit
 with the reason, which the model is shown on its retry. A block is an edit by what it says: one whose body opens
-with the SEARCH marker is an edit under any tag. New files are written whole.
+with the SEARCH marker is an edit under any tag. New files are written whole. A whole-file block for an existing file
+that keeps less than half of its lines is refused like an edit that does not apply (`EditHunks.partialRewrites`):
+it was written from the parts a prompt showed, and would drop the rest of the file.
 
 ---
 
@@ -278,7 +280,8 @@ what the test does with the value: "Object cannot be converted to T" makes it T,
 assert lacks makes it the type whose assert has that method -- discovered on the project's own test classpath, never
 from a table. Only writable main sources are stubbed. The work then becomes one item per stubbed class -- write these
 bodies, done when these test classes pass -- each closed by that measurement (`BlockerTypes.GATE_SKELETON`). Once per
-run; switch `autobuilder.skeleton-first.enabled`. On ladder-grind the specification compiles after four passes and the
+run; switch `autobuilder.skeleton-first.enabled`. While a skeleton item is open, every cycle works on one
+(`GoalPlannerService.preferSkeletonWorkItem`), ahead of the planner's own subgoals. On ladder-grind the specification compiles after four passes and the
 stub-only tree scores 41/51 (`scripts/skeleton_probe.py` is the offline form).
 
 **Compile-fix injection** (`core.build.inject`). After a failed compile probe, `CompileFixInjector` classifies the

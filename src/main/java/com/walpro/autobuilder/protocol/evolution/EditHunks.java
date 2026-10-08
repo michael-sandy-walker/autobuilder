@@ -119,6 +119,38 @@ public final class EditHunks {
         return new Applied(files, problems);
     }
 
+    /**
+     * T6-T: a whole-file block for an EXISTING file that keeps less than {@link #KEPT_SHARE} of its lines -- written
+     * from the parts a prompt showed, not from the file. ladder-grind field50 run 1: a 1,079-line class shown as its
+     * parts came back as a fraction of itself and no longer parsed ("class, interface, enum, or record expected");
+     * whole rewrites duplicated declarations elsewhere. Such a block is refused with the reason, like an edit whose
+     * SEARCH text is not in the file, so the model is asked again for edit blocks. Measured against the file's own
+     * size, never a fixed number of lines.
+     */
+    public static List<String> partialRewrites(String response, Map<String, String> tree) {
+        List<String> problems = new ArrayList<>();
+        if (response == null || tree == null) return problems;
+        Matcher b = BLOCK.matcher(response);
+        while (b.find()) {
+            if (isEdit(b.group(1), b.group(3))) continue;
+            String path = b.group(2).strip();
+            String current = tree.get(path);
+            if (current == null || !path.endsWith(".java")) continue;
+            long had = current.lines().count(), wrote = b.group(3).lines().count();
+            if (had >= MIN_LINES_FOR_SHARE && wrote < had * KEPT_SHARE) {
+                problems.add(path + ": written whole with " + wrote + " of its " + had + " lines -- change an existing file"
+                        + " with edit blocks whose SEARCH parts are copied from it; a whole file written from the parts"
+                        + " you were shown drops everything else in it");
+            }
+        }
+        return problems;
+    }
+
+    /** The share of an existing file's lines a whole-file rewrite must keep (see {@link #partialRewrites}). */
+    static final double KEPT_SHARE = 0.5;
+    /** Below this, a file is small enough that rewriting it whole is ordinary. */
+    static final int MIN_LINES_FOR_SHARE = 40;
+
     /** The content with the hunk's SEARCH replaced, or null when it does not occur exactly once. */
     private static String replaceOnce(String content, Hunk h) {
         if (h.search().isEmpty() || count(content, h.search()) != 1) return null;

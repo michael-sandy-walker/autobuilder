@@ -805,6 +805,7 @@ public class CycleExecutor implements CheckpointableState {
 
     private CycleContextData syncContextFromGoals(CycleContextData ctx) {
         GoalEntity root = goalPlannerService.getRootGoal();
+        goalPlannerService.preferSkeletonWorkItem();
         GoalEntity current = goalPlannerService.getCurrentSubGoal();
 
         String rootId = root != null ? root.getId() : ctx.currentGoalId();

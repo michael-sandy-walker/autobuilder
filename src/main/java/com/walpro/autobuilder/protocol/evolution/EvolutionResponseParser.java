@@ -106,7 +106,19 @@ public class EvolutionResponseParser {
                 log.warn("Skipping mutation with directory-like path (no file extension): [{}]", path);
                 continue;
             }
-            changedFiles.add(new FileMutation(relocateMisplacedTestSource(path, fileContent), fileContent));
+            String target = relocateMisplacedTestSource(path, fileContent);
+            // T6-T: a whole file for an existing Java file is applied member by member -- what it wrote replaces or is
+            // added, what it left out is kept, nothing is duplicated
+            String current = tree == null ? null : tree.get(target);
+            if (current != null && target.endsWith(".java")) {
+                var merged = MemberMerge.merge(current, fileContent);
+                if (merged.isPresent()) {
+                    log.info("T6-T: {} applied member by member -- replaced {}, added {}, kept {}", target,
+                            merged.get().replaced().size(), merged.get().added().size(), merged.get().kept().size());
+                    fileContent = merged.get().content();
+                }
+            }
+            changedFiles.add(new FileMutation(target, fileContent));
         }
 
         // T4-EB: edits apply to the file as this response's own whole-file blocks left it, else as it is now.

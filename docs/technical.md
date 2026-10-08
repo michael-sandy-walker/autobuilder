@@ -199,9 +199,12 @@ the lines that replace them
 
 Each SEARCH part must occur exactly once in the file as it is; zero or several matches refuse that file's edit
 with the reason, which the model is shown on its retry. A block is an edit by what it says: one whose body opens
-with the SEARCH marker is an edit under any tag. New files are written whole. A whole-file block for an existing file
-that keeps less than half of its lines is refused like an edit that does not apply (`EditHunks.partialRewrites`):
-it was written from the parts a prompt showed, and would drop the rest of the file.
+with the SEARCH marker is an edit under any tag. New files are written whole. A whole-file block for an EXISTING Java
+file is applied member by member (`MemberMerge`): each declaration it writes replaces the one of the same signature (or
+the skeleton stub of the same name and arity) or is added, a declaration it leaves out is kept, imports and type
+annotations are united, nothing is duplicated; a block of members alone (a fragment) is read as the type's body. A
+block that cannot be applied that way and keeps less than half of the file's lines is refused like an edit that does
+not apply (`EditHunks.partialRewrites`).
 
 ---
 

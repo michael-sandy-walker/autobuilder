@@ -154,7 +154,9 @@ class EditHunksTest {
     void aWholeFileBlockThatDropsMostOfAnExistingFile_isRefused() {
         String big = "class Ink {\n" + "  int a;\n".repeat(100) + "}\n";
         java.util.Map<String, String> tree = java.util.Map.of("src/main/java/Ink.java", big, "src/main/java/Nib.java", "class Nib {}\n");
-        String partial = "```java [src/main/java/Ink.java]\nclass Ink {\n  int b;\n}\n```\n";
+        // a rewrite cut short does not parse: it cannot be applied member by member, so it is refused (a whole short
+        // rewrite that parses is applied member by member instead -- MemberMergeTest)
+        String partial = "```java [src/main/java/Ink.java]\nclass Ink {\n  int b;\n  void cut(\n```\n";
         String whole = "```java [src/main/java/Ink.java]\n" + big.replace("int a;", "int b;") + "```\n";
         String small = "```java [src/main/java/Nib.java]\nclass Nib { int c; }\n```\n";
         String fresh = "```java [src/main/java/Quill.java]\nclass Quill {}\n```\n";

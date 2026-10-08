@@ -288,7 +288,9 @@ assert lacks makes it the type whose assert has that method -- discovered on the
 from a table. Only writable main sources are stubbed. The work then becomes one item per stubbed class -- write these
 bodies, done when these test classes pass -- each closed by that measurement (`BlockerTypes.GATE_SKELETON`). Once per
 run; switch `autobuilder.skeleton-first.enabled`. While a skeleton item is open, every cycle works on one
-(`GoalPlannerService.preferSkeletonWorkItem`), ahead of the planner's own subgoals. On ladder-grind the specification compiles after four passes and the
+(`GoalPlannerService.preferSkeletonWorkItem`), ahead of the planner's own subgoals. Its prompt names the bodies still to write in its
+class, read live, and the members of the project types its class and tests use, those they already name first
+(`SkeletonItemPromptBlock`). On ladder-grind the specification compiles after four passes and the
 stub-only tree scores 41/51 (`scripts/skeleton_probe.py` is the offline form).
 
 **Compile-fix injection** (`core.build.inject`). After a failed compile probe, `CompileFixInjector` classifies the

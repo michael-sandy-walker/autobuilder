@@ -74,19 +74,19 @@ public final class SkeletonStubber {
     }
 
     /** One compiler error, with the symbol and location lines under it. */
-    record CompileError(String file, int line, String message, String symbolKind, String symbol, String locationKind,
+    public record CompileError(String file, int line, String message, String symbolKind, String symbol, String locationKind,
                         String location, String found) {
     }
 
     private static final Pattern ERROR = Pattern.compile("^\\[ERROR\\] (\\S+\\.java):\\[(\\d+),(\\d+)\\] (.*)$");
-    private static final Pattern SYMBOL = Pattern.compile("^\\[ERROR\\]\\s+symbol:\\s+(class|method|variable|constructor) (.+)$");
+    private static final Pattern SYMBOL = Pattern.compile("^(?:\\[ERROR\\])?\\s+symbol:\\s+(class|method|variable|constructor) (.+)$");
     private static final Pattern LOCATION = Pattern.compile(
-            "^\\[ERROR\\]\\s+location:\\s+((?:class|interface|package|variable \\w+ of type) )?([\\w.$<>,]+)");
-    private static final Pattern FOUND = Pattern.compile("^\\[ERROR\\]\\s+found:\\s+(.*)$");
+            "^(?:\\[ERROR\\])?\\s+location:\\s+((?:class|interface|package|variable \\w+ of type) )?([\\w.$<>,]+)");
+    private static final Pattern FOUND = Pattern.compile("^(?:\\[ERROR\\])?\\s+found:\\s+(.*)$");
     private static final Pattern ANSI = Pattern.compile("\u001B\\[[0-9;]*m");
 
     /** The compiler's errors in a build's output, each once (the build tool prints them twice). */
-    static List<CompileError> errors(String output) {
+    public static List<CompileError> errors(String output) {
         String[] lines = ANSI.matcher(output).replaceAll("").split("\\R");
         Map<String, CompileError> out = new LinkedHashMap<>();
         for (int i = 0; i < lines.length; i++) {

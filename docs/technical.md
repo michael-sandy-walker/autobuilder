@@ -301,6 +301,7 @@ change carries its provenance (`InjectorFixRecord`) into the evaluator's and pla
 | `SymbolImportResolver` | a missing import (and the dependency that provides it) |
 | `MisplacedMemberResolver` | a call that named the right member on the wrong type (`ClasspathMemberDeclarationService` finds where it is declared) |
 | `DeclaredAccessorResolver` | `getX()` called on a project record that declares `x()` |
+| `RealMemberResolver` | a member the receiver does not have: its REAL members that fit how the call's result was used (iterated with these methods on each element, or these methods on the result), all invented members of a file resolved together, each tried in a copy of the tree, the tests using the class choosing and the likeness of what a member gives to what the candidate expected breaking ties |
 | `UnresolvableDependencyResolver` | a declared dependency version that will not resolve |
 | `TestDependencyEnsurer` | test sources failing on missing test-framework symbols |
 | `BootstrapPomResolver` | sources without a build descriptor: a minimal one derived from the sources |

@@ -7,7 +7,7 @@ default in the code, and the value `application.yml` sets when it sets one (prof
 What a key does is the first sentence of the comment on the field that reads it, so it is written once, in
 the code.
 
-114 keys.
+116 keys.
 
 ## `autobuilder.bootstrap`
 
@@ -127,6 +127,13 @@ the code.
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
 | `autobuilder.heuristic.score-strategy` | Name of the score strategy bean, e.g. | `weightedAverageScoreAdjustmentStrategy` | `weightedAverageScoreAdjustmentStrategy` | `HeuristicConfigProperties` |
+
+## `autobuilder.inject`
+
+| Key | What it does | Default in code | application.yml | Read by |
+|---|---|---|---|---|
+| `autobuilder.inject.real-member.enabled` | (not described) | `true` |  | `RealMemberResolver` |
+| `autobuilder.inject.real-member.trial-ms` | How long one trial (compile and the tests using the class) may take. | `180000` |  | `RealMemberResolver` |
 
 ## `autobuilder.memory`
 

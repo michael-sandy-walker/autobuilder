@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-07 NIGHT (Opus 5.5, session 12 continued) — field47: 47/51 AND 48/51 (BEST ON LADDER-GRIND); TRACE-EVERY-FAILING-TEST PROPOSED — START HERE
+## 2026-10-08 MORNING (Opus 5.5, session 12 continued) — TRACE-EVERY-TEST ROLLED BACK; SKELETON FIRST BUILT (41/51 ON STUBS ALONE); field50 RUNNING — START HERE
+
+- **Head `b1d56c67` + memory; nothing pushed. Suite 3844/0.** `scripts/run_outcomes.json` modified (pre-existing); `data/ladder-grind/bootstrap/seed.obligations.txt` untracked (generated, kept for comparability).
+- **Since the night block:** trace-every-test built, a delivery defect fixed, measured (field48 invalid, field49 45/45) and ROLLED BACK by the user's rule (`77687af9`). The skeleton probe (`scripts/skeleton_probe.py`) showed ladder-grind's spec compiles from compiler-derived stubs (41/51); the user said build it: `SkeletonFirst`/`SkeletonStubber` (`b1d56c67`), assertion types discovered on the classpath, one `GATE_SKELETON` work item per stubbed class. Design notes (the ultimate split; cross-cutting rules as paths; the member ledger on the deferred-mutation ledger; the history-not-verdict audit) are on T6-T; the docs cover every mechanism; an assessment page is published.
+- **Running: `field50`** (`~/.autobuilder/field50/run.sh`): ladder-grind x3 then ladder-rows x3 at 120 min. Watch: the `skeleton_stubbed` event in run 1. Before ANY edit: `ps -eo pid,args | grep '[f]ield50/run.sh'`.
+- **Next:** read field50 per run (minute the spec compiles, skeleton items closed by their gate, failing sets, fulfilled) against field47 / field43; then the efficiency items and the member ledger.
+
+## 2026-10-07 NIGHT (Opus 5.5, session 12 continued) — field47: 47/51 AND 48/51 (BEST ON LADDER-GRIND); TRACE-EVERY-FAILING-TEST PROPOSED
 
 - **Head: see `git log`; nothing pushed. Suite 3839/0. No run is live.** `scripts/run_outcomes.json` modified (pre-existing); `data/ladder-grind/bootstrap/seed.obligations.txt` untracked (generated, kept for comparability).
 - **field47** (build `fa60d2fa`, the gate-item fix): run 1 47/51, run 2 48/51, both at the deadline; run 3 skipped by agreement. Remaining: [2] `DeclaredMembers` record members, [4] `GrindDetector` noting, [51].

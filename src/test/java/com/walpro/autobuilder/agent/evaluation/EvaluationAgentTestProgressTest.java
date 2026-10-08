@@ -138,4 +138,28 @@ class EvaluationAgentTestProgressTest {
         when(testRunGate.compareUncompiledWithTree()).thenReturn(new TestRunGate.Delta("UNKNOWN", 0, null, 0, 0));
         assertThat(agent.applyTestProgressCheck(compiled, plain(rejected), rejected)).isSameAs(rejected);
     }
+
+    /** T6-T: a candidate of several files that does not compile keeps the files that compile alone and together. */
+    @Test
+    void aCandidateThatDoesNotCompile_keepsTheFilesThatDo() {
+        var good = new com.walpro.autobuilder.agent.evolution.model.FileMutation("src/main/java/Nib.java", "class Nib {}");
+        var bad = new com.walpro.autobuilder.agent.evolution.model.FileMutation("src/main/java/Ink.java", "class Ink { x }");
+        var eo = new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(List.of(good, bad), List.of(), "two", "");
+        CycleContextData ctx = compiled.withEvolutionOutcome(eo);
+        var fail = new CompileProbeService.ProbeResult(new BuildOutcome(BuildResult.COMPILE_ERROR, "x", 0L, "", "c"), null);
+        var point = org.mockito.Mockito.mock(com.walpro.autobuilder.core.merge.MergeRollbackPoint.class);
+        var ok = new CompileProbeService.ProbeResult(new BuildOutcome(BuildResult.COMPILE_OK, "", 0L, "", "c"), point);
+        when(compileProbeService.probe(org.mockito.ArgumentMatchers.argThat(c -> c != null && c.evolutionOutcome() != null
+                && c.evolutionOutcome().addedOrChangedFiles().equals(List.of(good))), org.mockito.ArgumentMatchers.eq(false))).thenReturn(ok);
+        when(compileProbeService.probe(org.mockito.ArgumentMatchers.argThat(c -> c != null && c.evolutionOutcome() != null
+                && c.evolutionOutcome().addedOrChangedFiles().equals(List.of(bad))), org.mockito.ArgumentMatchers.eq(false))).thenReturn(fail);
+
+        EvaluationAgent.PartialCandidate p = agent.keepWhatCompiles(ctx, fail);
+
+        assertThat(p).isNotNull();
+        assertThat(p.context().evolutionOutcome().addedOrChangedFiles()).containsExactly(good);
+        assertThat(p.probe().filesOnDisk()).isTrue();
+        assertThat(agent.keepWhatCompiles(compiled.withEvolutionOutcome(new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
+                List.of(good), List.of(), "one", "")), fail)).as("one file: nothing to keep apart").isNull();
+    }
 }

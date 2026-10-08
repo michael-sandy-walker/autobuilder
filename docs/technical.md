@@ -224,7 +224,8 @@ A change passes these checks, cheapest first; each can stop it.
    runs (`autobuilder.build.*`; `JavacDirectProbe` compiles in-process instead when configured). A change that
    does not compile is rolled back and rejected before any model judges it -- after the deterministic repairs of
    section 6 have had their one attempt. A rejection fully explained by members a later change could supply is
-   kept in the deferred-mutation ledger (section 6) instead of being lost.
+   kept in the deferred-mutation ledger (section 6) instead of being lost. A candidate of several files that does not compile keeps the files that compile alone and together
+   (`EvaluationAgent.keepWhatCompiles`); the others are dropped from the outcome and the cycle's mutation folder.
 5. **Evaluation** (`EvaluationAgent`). The model scores the change against the subgoal's criteria, shown the
    project's own test run of exactly these files when the operator declared the suite an authority
    (`EvaluationTestEvidence`, `DeclaredTestSuite`).

@@ -58,9 +58,18 @@ public final class SkeletonStubber {
         }
     }
 
-    public record Result(boolean compiles, int passes, List<Stub> stubs, List<String> remaining) {
+    public record Result(boolean compiles, int passes, List<Stub> stubs, List<String> remaining,
+                         List<SkeletonDeduction.Link> links, int deduced) {
+        public Result(boolean compiles, int passes, List<Stub> stubs, List<String> remaining) {
+            this(compiles, passes, stubs, remaining, List.of(), 0);
+        }
+
         public static Result none(String why) {
             return new Result(false, 0, List.of(), List.of(why));
+        }
+
+        Result with(List<SkeletonDeduction.Link> links, int deduced) {
+            return new Result(compiles, passes, stubs, remaining, links, deduced);
         }
     }
 
@@ -110,6 +119,51 @@ public final class SkeletonStubber {
         List<Stub> stubs = new ArrayList<>();
         Map<String, String> returns = new LinkedHashMap<>();   // "fqn#method" -> current return type
         AssertionTypes assertions = new AssertionTypes(classpath);
+        // the situational part: what the tests' syntax tree settles is written first; the compile loop below settles
+        // what it could not (an ambiguous or unknown type stays Object for the loop to narrow)
+        SkeletonDeduction.Result deduction;
+        try {
+            deduction = SkeletonDeduction.deduce(project, classpath);
+        } catch (RuntimeException e) {
+            log.debug("T6-T: no deduction, the compile loop alone: {}", e.getMessage());
+            deduction = new SkeletonDeduction.Result(List.of(), List.of());
+        }
+        int deduced = writeDeduced(deduction.needs(), main, writable, stubs, returns, project);
+        Result r = loop(project, main, writable, stubs, returns, assertions, timeoutMs);
+        return r.with(deduction.links(), deduced);
+    }
+
+    private static int writeDeduced(List<SkeletonDeduction.Need> needs, Path main, Predicate<String> writable, List<Stub> stubs,
+                                    Map<String, String> returns, Path project) {
+        int n = 0;
+        for (SkeletonDeduction.Need need : needs) if (need.kind().equals("class")) n += newClass(need.type(), main, writable, stubs, project);
+        for (SkeletonDeduction.Need need : needs) {
+            Path file = fileOf(main, need.type().replaceAll("<.*$", ""));
+            if (!Files.isRegularFile(file)) continue;
+            String params = String.join(", ", java.util.stream.IntStream.range(0, need.params().size())
+                    .mapToObj(i -> need.params().get(i) + " a" + i).toList());
+            if (need.kind().equals("constructor")) {
+                String simple = SkeletonDeduction.simple(need.type());
+                if (addMember(file, "public " + simple + "(" + params + ") { }", "public " + simple + "(" + params + ")", writable, project)) {
+                    stubs.add(new Stub("constructor", need.type(), simple + "(" + String.join(",", need.params()) + ")"));
+                    n++;
+                }
+            } else if (need.kind().equals("method")) {
+                String ret = need.returns() == null ? "Object" : need.returns();
+                String body = "{ throw new UnsupportedOperationException(\"" + STUB_MESSAGE + "\"); }";
+                String member = "public " + (need.isStatic() ? "static " : "") + ret + " " + need.name() + "(" + params + ") " + body;
+                if (addMember(file, member, " " + need.name() + "(", writable, project)) {
+                    stubs.add(new Stub("method", need.type(), need.name() + "(" + String.join(",", need.params()) + ")"));
+                    returns.put(need.type() + "#" + need.name(), ret);
+                    n++;
+                }
+            }
+        }
+        return n;
+    }
+
+    private static Result loop(Path project, Path main, Predicate<String> writable, List<Stub> stubs, Map<String, String> returns,
+                               AssertionTypes assertions, long timeoutMs) {
         long deadline = System.currentTimeMillis() + timeoutMs;
         List<CompileError> errs = List.of();
         for (int pass = 1; pass <= MAX_PASSES && System.currentTimeMillis() < deadline; pass++) {
@@ -216,6 +270,7 @@ public final class SkeletonStubber {
                     .matcher(e.message());
             if (conv.find()) want = conv.group(1).strip();
             String wrapper = null;
+            String onlyMember = null;
             if (want == null && "method".equals(e.symbolKind()) && e.location() != null && !Files.isRegularFile(
                     fileOf(main, e.location().replaceAll("<.*$", "")))) {
                 // a method missing on a LIBRARY type that wraps one of our values: the value's type is the one whose
@@ -228,8 +283,9 @@ public final class SkeletonStubber {
                         + Pattern.quote(method) + "\\s*\\(").matcher(line);
                 if (w.find()) {
                     wrapper = w.group(1);
-                    want = assertions.valueType(e.location().replaceAll("<.*$", ""), wrapper, method, args.size(), args)
-                            .orElse(null);
+                    List<String> kinds = assertions.valueTypes(e.location().replaceAll("<.*$", ""), wrapper, method, args);
+                    want = kinds.isEmpty() ? null : kinds.get(0);
+                    onlyMember = w.group(2);   // the stub INSIDE the assertion, never another one on the line
                 }
             }
             if (want == null) continue;
@@ -237,6 +293,7 @@ public final class SkeletonStubber {
             for (Map.Entry<String, String> r : returns.entrySet()) {
                 if (!"Object".equals(r.getValue())) continue;
                 String type = r.getKey().substring(0, r.getKey().indexOf('#')), name = r.getKey().substring(r.getKey().indexOf('#') + 1);
+                if (onlyMember != null && !onlyMember.equals(name)) continue;
                 if (!Pattern.compile("\\.\\s*" + Pattern.quote(name) + "\\s*\\(").matcher(line).find()) continue;
                 Path file = fileOf(main, type);
                 try {
@@ -377,6 +434,13 @@ public final class SkeletonStubber {
         }
 
         Optional<String> valueType(String returnedType, String wrapper, String method, int arity, List<String> args) {
+            List<String> all = valueTypes(returnedType, wrapper, method, args);
+            return all.isEmpty() ? Optional.empty() : Optional.of(all.get(0));
+        }
+
+        /** Every kind of value whose wrapper returns a type with {@code method} taking {@code args}, most specific first. */
+        List<String> valueTypes(String typeInPackage, String wrapper, String method, List<String> args) {
+            String returnedType = typeInPackage;
             String pkg = returnedType.contains(".") ? returnedType.substring(0, returnedType.lastIndexOf('.')) : "";
             Set<Class<?>> candidates = new LinkedHashSet<>();
             for (String cls : classesIn(pkg)) {
@@ -398,7 +462,8 @@ public final class SkeletonStubber {
                     .sorted(java.util.Comparator.<Class<?>>comparingInt(AssertionTypes::preference)
                             .thenComparing(t -> -all.stream().filter(o -> o != t && o.isAssignableFrom(t)).count())
                             .thenComparing(Class::getName))
-                    .findFirst().map(t -> generic(t, args));
+                    .filter(t -> preference(t) < 3)
+                    .map(t -> generic(t, args)).toList();
         }
 
         /** Whether a method can take arguments of these types (by erasure; a type it cannot load is taken to fit). */

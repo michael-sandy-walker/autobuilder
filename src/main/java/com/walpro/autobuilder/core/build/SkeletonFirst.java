@@ -84,7 +84,8 @@ public class SkeletonFirst {
         log.info("T6-T: skeleton first -- {} stub(s) in {} pass(es); the tests {}{}", r.stubs().size(), r.passes(),
                 r.compiles() ? "compile" : "still do not compile",
                 r.remaining().isEmpty() ? "" : " -- " + String.join(" | ", r.remaining()));
-        List<String> items = r.stubs().isEmpty() ? List.of() : raiseWorkItems(project, r.stubs());
+        r.links().forEach(l -> log.info("T6-T: skeleton first -- the tests demand: {}", l.describe()));
+        List<String> items = r.stubs().isEmpty() ? List.of() : raiseWorkItems(project, r.stubs(), r.links());
         if (behaviourLogger != null) {
             behaviourLogger.skeletonStubbed(cycleId, r.compiles(), r.passes(),
                     r.stubs().stream().map(SkeletonStubber.Stub::describe).toList(), items.size());
@@ -99,28 +100,49 @@ public class SkeletonFirst {
         return protectedPaths == null || !protectedPaths.isProtected(p);
     }
 
-    /** One work item per stubbed class: its stubbed members and the test classes that use it. */
-    List<String> raiseWorkItems(Path project, List<SkeletonStubber.Stub> stubs) {
+    /**
+     * One work item per stubbed class: its stubbed members and the test classes that use it -- ordered by the chain the
+     * tests demand (a class another must call comes first), each naming the calls its class must make.
+     */
+    List<String> raiseWorkItems(Path project, List<SkeletonStubber.Stub> stubs, List<SkeletonDeduction.Link> links) {
         Map<String, List<String>> byType = new LinkedHashMap<>();
         for (SkeletonStubber.Stub s : stubs) {
             if (s.kind().equals("return")) continue;
             List<String> members = byType.computeIfAbsent(s.type(), k -> new ArrayList<>());
-            if (s.member() != null) members.add(s.member());
+            if (s.member() != null && !s.kind().equals("class")) members.add(s.member());
         }
+        byType = calleesFirst(byType, links);
         List<String> ids = new ArrayList<>();
         if (goals == null) return ids;
         for (Map.Entry<String, List<String>> t : byType.entrySet()) {
             String simple = t.getKey().substring(t.getKey().lastIndexOf('.') + 1);
             List<String> tests = testsUsing(project, simple);
             if (tests.isEmpty() || t.getValue().isEmpty()) continue;
+            List<String> mustCall = links.stream().filter(l -> l.caller().equals(t.getKey())).map(SkeletonDeduction.Link::describe).toList();
             String description = "Write the bodies of " + simple + "'s skeleton members -- " + String.join(", ", t.getValue())
                     + " -- each still throws UnsupportedOperationException(\"" + SkeletonStubber.STUB_MESSAGE
-                    + "\"). Done when " + String.join(", ", tests) + " pass" + (tests.size() == 1 ? "es" : "") + ".";
+                    + "\"). Done when " + String.join(", ", tests) + " pass" + (tests.size() == 1 ? "es" : "") + "."
+                    + (mustCall.isEmpty() ? "" : " The tests demand: " + String.join("; ", mustCall) + ".");
             List<String> criteria = tests.stream().map(c -> c + " passes").toList();
             goals.injectSkeletonWorkItem(description, criteria, String.join(",", tests)).ifPresent(ids::add);
         }
         log.info("T6-T: skeleton first -- {} work item(s), one per stubbed class", ids.size());
         return ids;
+    }
+
+    /** The stubbed classes in the order the chain allows: a class another must call before that caller. */
+    static Map<String, List<String>> calleesFirst(Map<String, List<String>> byType, List<SkeletonDeduction.Link> links) {
+        List<String> order = new ArrayList<>(byType.keySet());
+        for (SkeletonDeduction.Link l : links) {
+            int caller = order.indexOf(l.caller()), callee = order.indexOf(l.callee());
+            if (caller >= 0 && callee > caller) {
+                order.remove(callee);
+                order.add(caller, l.callee());
+            }
+        }
+        Map<String, List<String>> out = new LinkedHashMap<>();
+        for (String t : order) out.put(t, byType.get(t));
+        return out;
     }
 
     /** The test classes whose source names {@code simpleName}. */

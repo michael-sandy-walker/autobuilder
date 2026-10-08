@@ -108,8 +108,8 @@ class SkeletonStubberTest {
 
         assertThat(r.compiles()).as("remaining: %s", r.remaining()).isTrue();
         assertThat(Files.readString(main.resolve("Quill.java")))
-                .contains("public static java.util.List<String> strokes(java.lang.String a0)", "\"skeleton\"");
-        assertThat(Files.readString(main.resolve("Inkwell.java"))).contains("public java.lang.String colour()");
+                .contains("public static java.util.List<String> strokes(String a0)", "\"skeleton\"");
+        assertThat(Files.readString(main.resolve("Inkwell.java"))).contains("public String colour()");
         assertThat(Files.exists(test.resolve("Quill.java"))).isFalse();
     }
 }

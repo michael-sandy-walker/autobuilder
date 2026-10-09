@@ -952,7 +952,12 @@ public class AutobuilderService implements CheckpointableState {
                     // got furthest. The rewind policy does the same when exploration runs out
                     // mid-run, which is the only chance a deadline-killed run gets; this covers
                     // the halts, and both are one-shot so they cannot fight each other.
-                    if (branchExplorer != null) {
+                    // One-shot, shared with the rewind policy's own settle (see settleAtHalt): an
+                    // unguarded adoption here re-adopted on every tick, because the adoption's rewind
+                    // un-pauses the loop and the next tick halts again.
+                    if (rewindPolicy != null) {
+                        rewindPolicy.settleAtHalt(context.cycleName());
+                    } else if (branchExplorer != null) {
                         branchExplorer.sealCurrent(context.cycleName());
                         log.info("T4-DQ: paths explored this run — {}", branchExplorer.readout());
                         branchExplorer.adoptMostAdvanced(context.cycleName());

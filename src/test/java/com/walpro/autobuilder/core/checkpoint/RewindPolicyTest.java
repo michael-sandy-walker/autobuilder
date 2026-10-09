@@ -134,6 +134,34 @@ class RewindPolicyTest {
     }
 
     @Test
+    @DisplayName("the run adopts its best path once, however often it halts afterwards")
+    void adoptionAtTheHaltIsOneShotWithTheMidRunSettle() {
+        // edit-hunks 2026-10-09_15-23-47: the halt branch adopted on every tick, because the
+        // adoption's rewind un-pauses the loop -- 470 adoptions in eight minutes, no terminal.
+        BranchExplorer explorer = mock(BranchExplorer.class);
+        policy.setBranchExplorer(explorer);
+        when(explorer.adoptMostAdvanced(anyString())).thenReturn(Optional.of(performed("cycle-40")));
+
+        assertThat(policy.settleAtHalt("cycle-50")).isPresent();
+        assertThat(policy.settleAtHalt("cycle-51")).isEmpty();
+        assertThat(policy.settleAtHalt("cycle-52")).isEmpty();
+        verify(explorer, org.mockito.Mockito.times(1)).adoptMostAdvanced(anyString());
+    }
+
+    @Test
+    @DisplayName("a mid-run settle counts: the halt that follows does not adopt again")
+    void aMidRunSettleSpendsTheAdoption() {
+        BranchExplorer explorer = mock(BranchExplorer.class);
+        policy.setBranchExplorer(explorer);
+        policy.setMaxRewinds(0);
+        when(explorer.adoptMostAdvanced(anyString())).thenReturn(Optional.of(performed("cycle-40")));
+
+        assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 3)).isPresent();
+        assertThat(policy.settleAtHalt("cycle-51")).isEmpty();
+        verify(explorer, org.mockito.Mockito.times(1)).adoptMostAdvanced(anyString());
+    }
+
+    @Test
     @DisplayName("when every point that landed work has been explored, the run halts")
     void exhaustedExplorationHalts() {
         BranchExplorer explorer = mock(BranchExplorer.class);

@@ -179,6 +179,21 @@ public class RewindPolicy {
         return branchExplorer.adoptMostAdvanced(atCycleId);
     }
 
+    /**
+     * The run is halting: put it on the path that got furthest -- through the same one-shot as the
+     * mid-run settle, so the two cannot repeat each other.
+     *
+     * <p>The halt branch used to call the explorer directly. Adopting is a rewind, a rewind restores
+     * the loop's holders and with them an un-paused loop, so the next tick halted again and adopted
+     * again: edit-hunks run 2026-10-09_15-23-47 adopted the same branch 470 times in eight minutes and
+     * never reached its terminal, which only became reachable once the harness stopped killing runs at
+     * the first exhaustion line. One adoption per run, from whichever of the two places gets there
+     * first.
+     */
+    public Optional<RewindService.Result> settleAtHalt(String atCycleId) {
+        return settleOnBestPath(atCycleId);
+    }
+
     /** How many rewinds this run has spent. */
     public int rewindsUsed() {
         return rewindsUsed;

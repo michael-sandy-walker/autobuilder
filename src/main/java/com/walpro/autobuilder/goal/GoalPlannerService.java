@@ -107,6 +107,16 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
 
+    /** T6-T: the operator's suite on the merged tree, recorded at a give-up and read at the root give-up. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.OperatorSuiteMeasure suiteMeasure;
+
+    /** T6-T: the operator's suite on the tree when a subgoal was given up (see reopenGivenUpBlockersTheSuiteMovedPast). */
+    static final String SUITE_AT_GIVE_UP_COMPILES = "suiteAtGiveUpCompiles";
+    static final String SUITE_AT_GIVE_UP_FAILING = "suiteAtGiveUpFailing";
+    static final String SUITE_MOVED_REOPENS = "suiteMovedReopens";
+
     /** T4-CQ: observes what an unasserted entry point returns; optional in narrow tests. */
     @Setter
     @Autowired(required = false)
@@ -3222,6 +3232,15 @@ public class GoalPlannerService {
                 g.setStatus(GoalStatus.SUBSUMED);
                 log.info("T2-DR: subgoalId={} promoted GIVEN_UP -> SUBSUMED (all criteria banked at give-up)", id);
             }
+            // T6-T: what the operator's suite said of the tree this was given up on -- the root give-up
+            // asks whether the tree has moved past it since.
+            if (g.getType() == GoalType.SUBGOAL && g.getStatus() == GoalStatus.GIVEN_UP && suiteMeasure != null) {
+                com.walpro.autobuilder.core.build.TreeTestMeasure atGiveUp = suiteMeasure.ofTree();
+                if (atGiveUp != null) {
+                    g.getMetadata().put(SUITE_AT_GIVE_UP_COMPILES, atGiveUp.testsCompile());
+                    g.getMetadata().put(SUITE_AT_GIVE_UP_FAILING, atGiveUp.failing());
+                }
+            }
             goalGraphService.save(g); // properties-only update of status + resolution
             // T1-CA + T1-EJ: cascade GIVEN_UP to direct ACTIVE children, but skip merge-bearing
             // descendants — children with mergeCount > 0 and no outstanding suppressed evictions
@@ -4614,6 +4633,12 @@ public class GoalPlannerService {
                 log.warn("T2-DR: {} closed-but-unmet blocker(s) reopened for rework instead of giving up the root", reopened);
                 return;
             }
+            int moved = reopenGivenUpBlockersTheSuiteMovedPast(allSubgoals);
+            if (moved > 0) {
+                log.warn("T2-DR: {} given-up blocker(s) reopened -- the operator's suite has improved since they were "
+                        + "given up -- instead of giving up the root", moved);
+                return;
+            }
             String rationale = blockers.size() + " subgoal(s) blocking closure";
             markGoalGivenUp(root.getId(), "root goal exhausted: " + rationale);
             log.warn("T2-DR: root '{}' marked GIVEN_UP — {}; blockers={}",
@@ -4665,6 +4690,51 @@ public class GoalPlannerService {
                                 com.walpro.autobuilder.core.lifecycle.ChannelRequest.horizonFromDecay(1.0, 0.2)));
             }
         }
+        return reopened;
+    }
+
+    /**
+     * T6-T: reopen, once, a given-up blocker whose tree the operator's suite has moved past since.
+     *
+     * <p>Field52 run 1: the GrindDetector skeleton item was given up at 18:50 after 49 minutes in which
+     * the suite never moved (13 candidates, all 6 failing). At 18:52 a sibling's merge took the suite
+     * from 6 failing to 4, and seconds later the root was given up because of that one item -- judged on
+     * a tree that no longer existed. A give-up is a verdict about the tree it was reached on; when the
+     * operator's own measure says the tree has improved since, the verdict is stale, and the item gets
+     * one more pass on the new tree (with its stagnation history cleared -- the T2-EI retry budget is
+     * already refreshed by the merge). Once only: a second give-up after the suite moved again is the
+     * honest end, as for the closed-but-unmet reopen above.
+     */
+    private int reopenGivenUpBlockersTheSuiteMovedPast(List<GoalEntity> allSubgoals) {
+        if (suiteMeasure == null) return 0;
+        com.walpro.autobuilder.core.build.TreeTestMeasure now = suiteMeasure.ofTree();
+        if (now == null) return 0;
+        int reopened = 0;
+        for (GoalEntity sg : allSubgoals) {
+            if (sg.getStatus() != GoalStatus.GIVEN_UP) continue;
+            Object compiles = sg.getMetadata().get(SUITE_AT_GIVE_UP_COMPILES);
+            Object failing = sg.getMetadata().get(SUITE_AT_GIVE_UP_FAILING);
+            if (!(compiles instanceof Boolean c) || !(failing instanceof Number f)) continue;
+            com.walpro.autobuilder.core.build.TreeTestMeasure atGiveUp =
+                    new com.walpro.autobuilder.core.build.TreeTestMeasure(c, f.intValue());
+            if (!atGiveUp.worseThan(now)) continue;
+            if (getGoalMetadataInt(sg, SUITE_MOVED_REOPENS) >= 1) continue;
+            if (checkSubgoalClosure(sg).passes()) continue;
+            sg.setStatus(GoalStatus.ACTIVE);
+            sg.setGivenUp(null);
+            sg.getMetadata().put(SUITE_MOVED_REOPENS, 1);
+            sg.getMetadata().put("cumulativeStagnatingCycles", 0);
+            reopened++;
+            closureEdgeInjections++;
+            log.warn("T2-DR: given-up blocker [{}] reopened -- {} when it was given up, {} now", sg.getId(),
+                    atGiveUp.describe(), now.describe());
+            try {
+                goalGraphService.save(sg);
+            } catch (Exception e) {
+                log.debug("Neo4j reopen update failed for goal {} (ignoring): {}", sg.getId(), e.getMessage());
+            }
+        }
+        if (reopened > 0) persist();
         return reopened;
     }
 

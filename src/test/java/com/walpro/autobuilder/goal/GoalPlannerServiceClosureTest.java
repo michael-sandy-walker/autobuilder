@@ -269,6 +269,81 @@ public class GoalPlannerServiceClosureTest {
     }
 
     @Test
+    void autoCompleteRoot_givenUpBlocker_reopensOnceWhenTheOperatorsSuiteImprovedSinceItsGiveUp() throws IOException {
+        // T6-T, field52 run 1: the skeleton item was given up at 6 failing; two minutes later a
+        // sibling's merge took the suite to 4, and the root was given up over the item -- judged on
+        // a tree that no longer existed. Reopen it once on the new tree; give up honestly after.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        var suite = mock(com.walpro.autobuilder.core.build.OperatorSuiteMeasure.class);
+        service.setSuiteMeasure(suite);
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity item = new GoalEntity("S", "implement the skeleton item", "planner", GoalType.SUBGOAL, "G");
+        item.setStatus(GoalStatus.ACTIVE);
+        item.getMetadata().put("acceptanceCriteria", java.util.List.of("the grind detector's tests pass"));
+        item.getMetadata().put("criteriaPassStatus", Map.of("1", false));
+        item.getMetadata().put("cumulativeStagnatingCycles", 7);
+
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(item.getId(), item);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        when(suite.ofTree()).thenReturn(new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 6));
+        service.markGoalGivenUp("S");
+        assertThat(item.getMetadata()).containsEntry("suiteAtGiveUpFailing", 6);
+
+        // A sibling's merge takes the suite from 6 failing to 4.
+        when(suite.ofTree()).thenReturn(new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 4));
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getGoalById("S").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(item.getMetadata()).containsEntry("suiteMovedReopens", 1)
+                .containsEntry("cumulativeStagnatingCycles", 0);
+
+        // Given up again, and the suite moves again: once only -- the root gives up honestly.
+        service.markGoalGivenUp("S");
+        when(suite.ofTree()).thenReturn(new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 2));
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+    }
+
+    @Test
+    void autoCompleteRoot_givenUpBlocker_staysGivenUpWhenTheSuiteDidNotImprove() throws IOException {
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        var suite = mock(com.walpro.autobuilder.core.build.OperatorSuiteMeasure.class);
+        service.setSuiteMeasure(suite);
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity item = new GoalEntity("S", "implement the skeleton item", "planner", GoalType.SUBGOAL, "G");
+        item.setStatus(GoalStatus.ACTIVE);
+        item.getMetadata().put("acceptanceCriteria", java.util.List.of("the grind detector's tests pass"));
+        item.getMetadata().put("criteriaPassStatus", Map.of("1", false));
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(item.getId(), item);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        when(suite.ofTree()).thenReturn(new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 6));
+        service.markGoalGivenUp("S");
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.GIVEN_UP);
+        assertThat(item.getMetadata()).doesNotContainKey("suiteMovedReopens");
+    }
+
+    @Test
     void autoCompleteRoot_depthFirst_absorbsExtraOriginGivenUpLeaf_butBlocksWhenRequired() throws IOException {
         // T2-EI: the 2026-06-24 depth-first run died when a lone GIVEN_UP *extra* leaf (a nested,
         // unrequested unit-test subgoal) became the sole root blocker. Under depth-first, an

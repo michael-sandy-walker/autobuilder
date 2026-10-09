@@ -271,13 +271,9 @@ A change passes these checks, cheapest first; each can stop it.
 
 Where a failure has a known shape, the loop repairs it itself instead of spending a model call on it.
 
-**Skeleton first** (`SkeletonFirst`, `SkeletonDeduction`, `SkeletonStubber`). On a target whose suite is declared an
-authority, when the tree's tests do not compile before the first candidate, what they need is first DEDUCED from their
-syntax tree in one pass -- the declarations, the types each use implies (a typed variable or assertion argument exactly,
-an assertion method only one kind of value has, a discarded value as `void`; an ambiguous one settled by a same-named
-member elsewhere in the project), and the chain the tests demand (which class must call which, from a call check on a
-stand-in and from where the stand-in is handed in), which orders the work items. What deduction cannot settle is then
-stubbed from the compiler's own errors, pass after pass, until they compile: a class for each missing class (a capitalised name used as a receiver is
+**Skeleton first** (`SkeletonFirst`, `SkeletonStubber`). On a target whose suite is declared an authority, when the
+tree's tests do not compile before the first candidate, the missing surface is stubbed from the compiler's own
+errors, pass after pass, until they compile: a class for each missing class (a capitalised name used as a receiver is
 a class called statically), a method for each missing method, a constructor for each missing constructor, each body
 throwing `UnsupportedOperationException("skeleton")`. A new method's return type starts as `Object` and is narrowed by
 what the test does with the value: "Object cannot be converted to T" makes it T, and an assertion method the generic

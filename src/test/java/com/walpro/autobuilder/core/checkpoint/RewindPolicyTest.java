@@ -40,7 +40,7 @@ class RewindPolicyTest {
     @Test
     @DisplayName("a grinding run returns to the last point that landed work")
     void grindingRunReturnsToTheLastMergedPoint() {
-        when(rewindService.lastMergedBefore("cycle-50")).thenReturn(Optional.of(checkpoint("cycle-5", true)));
+        when(rewindService.lastMergedBefore("cycle-50", null)).thenReturn(Optional.of(checkpoint("cycle-5", true)));
         when(rewindService.rewindTo(eq("cycle-5"), any(), anyString(), anyString()))
                 .thenReturn(performed("cycle-5"));
 
@@ -52,7 +52,7 @@ class RewindPolicyTest {
     @Test
     @DisplayName("with no earlier point that landed work, the run halts exactly as it used to")
     void noEligiblePointMeansHaltAsBefore() {
-        when(rewindService.lastMergedBefore(anyString())).thenReturn(Optional.empty());
+        when(rewindService.lastMergedBefore(anyString(), org.mockito.ArgumentMatchers.isNull())).thenReturn(Optional.empty());
 
         assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 42)).isEmpty();
         verify(rewindService, never()).rewindTo(anyString(), any(), anyString(), anyString());
@@ -61,7 +61,7 @@ class RewindPolicyTest {
     @Test
     @DisplayName("the budget is spent, not refunded — a run cannot rewind forever")
     void theBudgetIsFinite() {
-        when(rewindService.lastMergedBefore(anyString())).thenReturn(Optional.of(checkpoint("cycle-5", true)));
+        when(rewindService.lastMergedBefore(anyString(), org.mockito.ArgumentMatchers.isNull())).thenReturn(Optional.of(checkpoint("cycle-5", true)));
         when(rewindService.rewindTo(anyString(), any(), anyString(), anyString()))
                 .thenReturn(performed("cycle-5"));
 
@@ -76,8 +76,8 @@ class RewindPolicyTest {
     @Test
     @DisplayName("the second rewind must target a point strictly older than the first")
     void eachRewindGoesFurtherBack() {
-        when(rewindService.lastMergedBefore("cycle-50")).thenReturn(Optional.of(checkpoint("cycle-20", true)));
-        when(rewindService.lastMergedBefore("cycle-20")).thenReturn(Optional.of(checkpoint("cycle-5", true)));
+        when(rewindService.lastMergedBefore("cycle-50", null)).thenReturn(Optional.of(checkpoint("cycle-20", true)));
+        when(rewindService.lastMergedBefore("cycle-20", null)).thenReturn(Optional.of(checkpoint("cycle-5", true)));
         when(rewindService.rewindTo(anyString(), any(), anyString(), anyString()))
                 .thenReturn(performed("x"));
 
@@ -86,14 +86,14 @@ class RewindPolicyTest {
 
         // The second search starts from the first target, not from the current cycle, so the same
         // stretch is never re-walked from the same place.
-        verify(rewindService).lastMergedBefore("cycle-20");
+        verify(rewindService).lastMergedBefore("cycle-20", null);
         verify(rewindService).rewindTo(eq("cycle-5"), any(), anyString(), anyString());
     }
 
     @Test
     @DisplayName("a refused rewind spends no budget and falls through to the halt")
     void arefusedRewindFallsThrough() {
-        when(rewindService.lastMergedBefore(anyString())).thenReturn(Optional.of(checkpoint("cycle-5", true)));
+        when(rewindService.lastMergedBefore(anyString(), org.mockito.ArgumentMatchers.isNull())).thenReturn(Optional.of(checkpoint("cycle-5", true)));
         when(rewindService.rewindTo(anyString(), any(), anyString(), anyString()))
                 .thenReturn(refused());
 
@@ -108,15 +108,29 @@ class RewindPolicyTest {
         policy.setBranchExplorer(explorer);
         // A point NEWER than the previous target is still untried — the positional rule would skip
         // it for no reason beyond its own arithmetic.
-        when(explorer.nextUntriedForkPoint()).thenReturn(Optional.of(checkpoint("cycle-40", true)));
+        when(explorer.nextUntriedForkPoint(null)).thenReturn(Optional.of(checkpoint("cycle-40", true)));
         when(rewindService.rewindTo(anyString(), any(), anyString(), anyString()))
                 .thenReturn(performed("cycle-40"));
 
         assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 42)).isPresent();
 
         verify(rewindService).rewindTo("cycle-40", CacheMode.FAITHFUL, RewindPolicy.TRIGGER, "cycle-50");
-        verify(rewindService, never()).lastMergedBefore(anyString());
+        verify(rewindService, never()).lastMergedBefore(anyString(), org.mockito.ArgumentMatchers.isNull());
         verify(explorer).forkAt(any(), eq("cycle-50"), anyString());
+    }
+
+    @Test
+    @DisplayName("T6-T: the fork point is chosen against the operator's suite on the tree now")
+    void theForkPointIsChosenAgainstTheTreeNow() {
+        BranchExplorer explorer = mock(BranchExplorer.class);
+        policy.setBranchExplorer(explorer);
+        var now = new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 4);
+        when(rewindService.treeMeasureNow()).thenReturn(now);
+        when(explorer.nextUntriedForkPoint(now)).thenReturn(Optional.empty());
+
+        assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 1)).isEmpty();
+        verify(explorer).nextUntriedForkPoint(now);
+        verify(rewindService, never()).rewindTo(anyString(), any(), anyString(), anyString());
     }
 
     @Test
@@ -124,7 +138,7 @@ class RewindPolicyTest {
     void exhaustedExplorationHalts() {
         BranchExplorer explorer = mock(BranchExplorer.class);
         policy.setBranchExplorer(explorer);
-        when(explorer.nextUntriedForkPoint()).thenReturn(Optional.empty());
+        when(explorer.nextUntriedForkPoint(null)).thenReturn(Optional.empty());
 
         assertThat(policy.considerRewindInsteadOfHalting("cycle-50", 42)).isEmpty();
         verify(rewindService, never()).rewindTo(anyString(), any(), anyString(), anyString());
@@ -134,7 +148,7 @@ class RewindPolicyTest {
     @DisplayName("when exploration runs out, the run is put on the best path it found — once")
     void exhaustedExplorationSettlesOnTheBestPath() {
         BranchExplorer explorer = mock(BranchExplorer.class);
-        when(explorer.nextUntriedForkPoint()).thenReturn(Optional.empty());
+        when(explorer.nextUntriedForkPoint(null)).thenReturn(Optional.empty());
         when(explorer.adoptMostAdvanced(anyString())).thenReturn(Optional.of(performed("cycle-2")));
         policy.setBranchExplorer(explorer);
 

@@ -80,6 +80,11 @@ public class CheckpointService {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T6-T: the operator's suite on the merged tree, recorded with each merged point (see TreeTestMeasure). */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.OperatorSuiteMeasure suiteMeasure;
+
     /** Off by default is the wrong default for a safety net; on by default, one switch to disable. */
     @Value("${autobuilder.checkpoint.enabled:true}")
     private boolean enabled = true;
@@ -159,7 +164,10 @@ public class CheckpointService {
                     capture.failures(),
                     // The context goes into the fingerprint too, so a checkpoint that captured
                     // one makes a claim a later restore can check.
-                    stateFingerprintService.of(capture, context));
+                    stateFingerprintService.of(capture, context),
+                    // T6-T: only at a merge -- an unmerged cycle can leave injected writes on disk that
+                    // no suite run has seen, and only merged points are rewound to anyway.
+                    context.merged() && suiteMeasure != null ? suiteMeasure.ofTree() : null);
 
             fileService.writeJson(dir + "/" + CHECKPOINT_FILE, record);
             position = new Position(record.cycleId(), record.at(), false, null);

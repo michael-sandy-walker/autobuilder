@@ -32,6 +32,8 @@ import java.util.Map;
  * @param fingerprint        the per-component digest of the state at this point, recomputed and
  *                           compared after a rewind so an uncaptured piece of state that MATTERS
  *                           announces itself at the restore instead of being discovered later
+ * @param treeTests          T6-T: how the operator's suite stood on the tree at a merged point, or null
+ *                           when it was not known (no declared suite, no run since the merge, not a merge)
  */
 public record CheckpointRecord(
         String cycleId,
@@ -47,7 +49,18 @@ public record CheckpointRecord(
         boolean cacheCaptured,
         Map<String, Object> holders,
         List<String> captureFailures,
-        StateFingerprint fingerprint) {
+        StateFingerprint fingerprint,
+        com.walpro.autobuilder.core.build.TreeTestMeasure treeTests) {
+
+    /** A point with no test measure: written before T6-T, or rebuilt from the graph index, which keeps none. */
+    public CheckpointRecord(String cycleId, Instant at, String runId, String lineageId, String rootGoalId,
+                            String currentSubGoalId, long goalTransitionSeq, String snapshotPath,
+                            String mutationMetaPath, boolean merged, boolean cacheCaptured,
+                            Map<String, Object> holders, List<String> captureFailures,
+                            StateFingerprint fingerprint) {
+        this(cycleId, at, runId, lineageId, rootGoalId, currentSubGoalId, goalTransitionSeq, snapshotPath,
+                mutationMetaPath, merged, cacheCaptured, holders, captureFailures, fingerprint, null);
+    }
 
     /** A checkpoint is restorable only if it has a tree to restore. */
     public boolean restorable() {

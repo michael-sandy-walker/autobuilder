@@ -77,6 +77,28 @@ class RewindServiceTest {
     }
 
     @Test
+    @DisplayName("T6-T: after a rewind the tree's suite is the one measured at the point returned to, until it runs again")
+    void theTreeMeasureAfterARewindIsThePointsOwn() throws IOException {
+        var four = new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 4);
+        var suite = mock(com.walpro.autobuilder.core.build.OperatorSuiteMeasure.class);
+        when(suite.ofTree()).thenReturn(four);
+        checkpoints.setSuiteMeasure(suite);
+        rewind.setSuiteMeasure(suite);
+        writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));
+        checkpoints.write(context("cycle-1").toBuilder().merged(true).build());
+
+        // The gate forgets the tree when it is replaced, and knows nothing until the suite runs again.
+        when(suite.ofTree()).thenReturn(null);
+        assertThat(rewind.treeMeasureNow()).as("not rewound: nothing recorded stands in for the gate").isNull();
+        assertThat(rewind.rewindTo("cycle-1", CacheMode.FRESH, "test", "cycle-9").performed()).isTrue();
+
+        org.mockito.Mockito.verify(suite).treeReplaced();
+        assertThat(rewind.treeMeasureNow()).isEqualTo(four);
+        when(suite.ofTree()).thenReturn(new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 3));
+        assertThat(rewind.treeMeasureNow()).as("the gate's own run wins once there is one").extracting(m -> m.failing()).isEqualTo(3);
+    }
+
+    @Test
     @DisplayName("the tree comes back as it was, and later files are gone")
     void treeIsRestoredAndLaterWorkDisappears() throws IOException {
         writeSnapshot("cycle-1", Map.of("src/A.java", "class A {}"));

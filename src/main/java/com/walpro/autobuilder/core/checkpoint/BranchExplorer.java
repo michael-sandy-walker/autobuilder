@@ -1,5 +1,6 @@
 package com.walpro.autobuilder.core.checkpoint;
 
+import com.walpro.autobuilder.core.build.TreeTestMeasure;
 import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.RequiredArgsConstructor;
@@ -100,24 +101,62 @@ public class BranchExplorer {
      * exploration rather than a loop.
      */
     public Optional<CheckpointRecord> nextUntriedForkPoint() {
+        return nextUntriedForkPoint(null);
+    }
+
+    /**
+     * T6-T: as {@link #nextUntriedForkPoint()}, among the points whose tree leaves no more of the
+     * operator's suite failing than {@code currentTree} does (null: no measure to keep, every point
+     * qualifies). Field52 run 1 rewound from a tree failing 4 tests to one failing 6 because the
+     * newest untried point was the only rule; going back is for leaving a path, never for losing
+     * the suite's progress along with it.
+     */
+    public Optional<CheckpointRecord> nextUntriedForkPoint(TreeTestMeasure currentTree) {
         // The candidates an automatic rewind is allowed: still open, and by default this run's own.
         for (CheckpointRecord record : checkpointService.autoRewindCandidates()) {
             if (!record.merged()) continue;
             if (branchLedger.alreadyForkedFrom(record.cycleId())) continue;
+            if (!TreeTestMeasure.admissible(record.treeTests(), currentTree)) {
+                log.info("T6-T: not returning to {} -- {} there, against {} on the tree now.",
+                        record.cycleId(), record.treeTests() == null ? "the suite was not measured"
+                                : record.treeTests().describe(), currentTree.describe());
+                continue;
+            }
             return Optional.of(record);
         }
         return Optional.empty();
     }
 
-    /** The sealed branch that got furthest, by the rule in this class's documentation. */
+    /**
+     * The sealed branch that got furthest, by the rule in this class's documentation.
+     *
+     * <p>T6-T: on a target whose suite is the operator's measure, the rule is applied only among the
+     * branches whose tip leaves the fewest of the suite failing -- subgoals and merges are the loop's own
+     * bookkeeping, the suite is the operator's. Branches whose tip was never measured are ranked only when
+     * no tip was.
+     */
     public Optional<ExplorationBranch> mostAdvancedSealedBranch() {
-        return branchLedger.sealedBranches().stream()
+        List<ExplorationBranch> sealed = branchLedger.sealedBranches().stream()
                 .filter(b -> b.outcome() != null)
+                .toList();
+        Optional<TreeTestMeasure> bestTip = TreeTestMeasure.best(sealed.stream().map(this::tipMeasure).toList());
+        return sealed.stream()
+                .filter(b -> bestTip.isEmpty() || TreeTestMeasure.BEST_FIRST.compare(
+                        java.util.Objects.requireNonNullElse(tipMeasure(b), WORST), bestTip.get()) == 0)
                 .max(Comparator
                         .comparingInt((ExplorationBranch b) -> b.outcome().subgoalsCompletedWithMerge())
                         .thenComparingInt(b -> b.outcome().merges())
                         .thenComparing(b -> b.outcome().tipCompiles())
                         .thenComparing(ExplorationBranch::id));
+    }
+
+    /** Ranks below every measured tip: a suite that does not compile with no limit on how many files. */
+    private static final TreeTestMeasure WORST = new TreeTestMeasure(false, Integer.MAX_VALUE);
+
+    private TreeTestMeasure tipMeasure(ExplorationBranch branch) {
+        String tip = branch.outcome() == null ? null : branch.outcome().tipCycleId();
+        if (tip == null) return null;
+        return checkpointService.read(tip).map(CheckpointRecord::treeTests).orElse(null);
     }
 
     /**
@@ -148,6 +187,15 @@ public class BranchExplorer {
         }
         String tip = target.outcome() != null ? target.outcome().tipCycleId() : null;
         if (tip == null) return Optional.empty();
+        // T6-T: never onto a tree that fails more of the operator's suite than the one on disk.
+        TreeTestMeasure now = rewindService.treeMeasureNow();
+        if (!TreeTestMeasure.admissible(tipMeasure(target), now)) {
+            log.info("T6-T: branch {} got furthest by its own bookkeeping, but its tip {} has {} against {} "
+                    + "on the tree now -- staying on {}.", target.id(), tip,
+                    tipMeasure(target) == null ? "an unmeasured suite" : tipMeasure(target).describe(),
+                    now.describe(), current.id());
+            return Optional.empty();
+        }
 
         RewindService.Result result = rewindService.rewindTo(
                 tip, CacheMode.FAITHFUL, "branch-adoption", atCycleId);

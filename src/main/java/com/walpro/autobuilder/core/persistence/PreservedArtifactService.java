@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.build.JavacDirectProbe;
+import com.walpro.autobuilder.core.build.TreeTestMeasure;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
@@ -68,11 +69,19 @@ public class PreservedArtifactService {
      * selected and on what observation. {@code verifiedBuildResult} is the preserve-time compile
      * probe's own result on the preserved tree ({@code UNVERIFIED} when no probe is wired);
      * {@code candidatesProbed} counts how many candidates were compile-checked before one passed.
+     * {@code treeTests} (T6-T) is the operator's suite on the preserved tree, null when not known.
      */
     public record Provenance(String fromCycle, boolean entryPointPresent, boolean entryPointRequired,
                              String buildResult, String verifiedBuildResult, int candidatesProbed,
                              int snapshotsConsidered, String haltCycle,
-                             Instant preservedAt) {}
+                             Instant preservedAt, TreeTestMeasure treeTests) {
+        public Provenance(String fromCycle, boolean entryPointPresent, boolean entryPointRequired,
+                          String buildResult, String verifiedBuildResult, int candidatesProbed,
+                          int snapshotsConsidered, String haltCycle, Instant preservedAt) {
+            this(fromCycle, entryPointPresent, entryPointRequired, buildResult, verifiedBuildResult,
+                    candidatesProbed, snapshotsConsidered, haltCycle, preservedAt, null);
+        }
+    }
 
     private record Candidate(Path dir, String name, MutationSnapshotService.SnapshotState state) {}
 
@@ -99,10 +108,19 @@ public class PreservedArtifactService {
                             Comparator.nullsFirst(Comparator.naturalOrder()))
                     .thenComparing(Candidate::name)
                     .reversed();
+            // T6-T: where the operator's suite measured the trees, the one leaving the fewest failing comes
+            // first, the newest among equals; trees it never measured follow, newest first. Field52 run 1
+            // preserved its 18:27 tree (6 failing) because "newest" was the only rule and the 18:52 tree
+            // (4 failing) had not been preserved by then. Without any measure the order is as it was.
+            Comparator<Candidate> order = Comparator
+                    .comparing((Candidate c) -> c.state().treeTests() == null)
+                    .thenComparing((Candidate c) -> c.state().treeTests(),
+                            Comparator.nullsLast(TreeTestMeasure.BEST_FIRST))
+                    .thenComparing(newestFirst);
             List<Candidate> eligible = candidates.stream()
                     .filter(c -> !entryPointRequired || c.state().entryPointPresent())
                     .filter(c -> !isRecordedFailure(c.state().buildResult()))
-                    .sorted(newestFirst)
+                    .sorted(order)
                     .toList();
             if (eligible.isEmpty()) {
                 log.info("T4-CA: no snapshot passes the run's bar (entryPointRequired={}, considered={}) — abstaining.",
@@ -150,7 +168,8 @@ public class PreservedArtifactService {
             replacePreservedCopy(best.dir());
             Provenance provenance = new Provenance(best.state().cycleId(), best.state().entryPointPresent(),
                     entryPointRequired, best.state().buildResult(), verifiedResult, probed,
-                    candidates.size(), context != null ? context.cycleName() : null, Instant.now());
+                    candidates.size(), context != null ? context.cycleName() : null, Instant.now(),
+                    best.state().treeTests());
             fileService.writeJson(PROVENANCE_FILE, provenance);
             log.info("T4-CA: preserved snapshot {} to {} (entryPointPresent={}, buildResult={}, verified={}, probed={}, considered={}).",
                     best.state().cycleId(), PRESERVED_DIR, best.state().entryPointPresent(),
@@ -184,6 +203,19 @@ public class PreservedArtifactService {
 
     private static boolean isRecordedFailure(String buildResult) {
         return buildResult != null && !"COMPILE_OK".equals(buildResult) && !"SKIPPED".equals(buildResult);
+    }
+
+    /**
+     * T6-T: whether a merged tree measured {@code tree} leaves fewer of the operator's suite failing than the
+     * copy already preserved -- the caller then preserves at once instead of waiting for the interval. Field52
+     * run 1's best tree (18:52, 4 failing) was never preserved: the interval was not due, and a minute later
+     * the run was over. False when {@code tree} is unknown; true when the preserved copy has no measure.
+     */
+    public boolean improvesOnPreserved(TreeTestMeasure tree) {
+        if (tree == null) return false;
+        Provenance preserved = readPriorProvenance();
+        return preserved == null || preserved.treeTests() == null
+                || TreeTestMeasure.BEST_FIRST.compare(tree, preserved.treeTests()) < 0;
     }
 
     /** The provenance currently on disk (a resumed lineage's parent run wrote it), or null. */

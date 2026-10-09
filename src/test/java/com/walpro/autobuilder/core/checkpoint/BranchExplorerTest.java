@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.checkpoint;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.core.build.TreeTestMeasure;
 import com.walpro.autobuilder.core.init.RunIdentityService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
@@ -177,6 +178,61 @@ class BranchExplorerTest {
     }
 
     @Test
+    @DisplayName("T6-T: no fork point whose tree fails more of the operator's suite than the tree now")
+    void aRewindNeverGoesToATreeFailingMoreTests() throws IOException {
+        // Field52 run 1: the 18:27 merge left 6 failing, the 18:52 merge 4. Going back to the 18:52
+        // point is leaving a path; going back to 18:27 would also be losing two tests' progress.
+        measuredCheckpoint("cycle-1", 6);
+        measuredCheckpoint("cycle-2", 4);
+        TreeTestMeasure now = new TreeTestMeasure(true, 4);
+
+        Optional<CheckpointRecord> first = explorer.nextUntriedForkPoint(now);
+        assertThat(first).get().extracting(CheckpointRecord::cycleId).isEqualTo("cycle-2");
+        explorer.forkAt(first.orElseThrow(), "cycle-3", "first attempt");
+
+        assertThat(explorer.nextUntriedForkPoint(now)).isEmpty();
+        assertThat(explorer.nextUntriedForkPoint(null))
+                .as("with no measure of the tree now, the rule is the untried-point rule alone")
+                .get().extracting(CheckpointRecord::cycleId).isEqualTo("cycle-1");
+    }
+
+    @Test
+    @DisplayName("T6-T: adoption ranks by the operator's suite at each tip before root progress")
+    void adoptionPrefersTheTipFailingFewestTests() throws IOException {
+        measuredCheckpoint("cycle-1", 6);
+        measuredCheckpoint("cycle-2", 4);
+        when(planner.countCompletedSubgoalsWithMerges()).thenReturn(1);
+        explorer.forkAt(checkpoints.read("cycle-1").orElseThrow(), "cycle-2", "grinding");
+        // The detour closes more subgoals by its own bookkeeping and leaves more tests failing.
+        measuredCheckpoint("cycle-3", 6);
+        when(planner.countCompletedSubgoalsWithMerges()).thenReturn(5);
+        explorer.sealCurrent("cycle-3");
+        when(rewindService.treeMeasureNow()).thenReturn(new TreeTestMeasure(true, 6));
+        when(rewindService.rewindTo(anyString(), any(), anyString(), anyString())).thenReturn(performed());
+
+        assertThat(explorer.mostAdvancedSealedBranch()).get()
+                .extracting(ExplorationBranch::id).isEqualTo(ExplorationBranch.MAIN);
+        assertThat(explorer.adoptMostAdvanced("cycle-3")).isPresent();
+        verify(rewindService).rewindTo("cycle-2", CacheMode.FAITHFUL, "branch-adoption", "cycle-3");
+    }
+
+    @Test
+    @DisplayName("T6-T: no adoption onto a tip that fails more tests than the tree on disk")
+    void noAdoptionOntoAWorseTree() throws IOException {
+        measuredCheckpoint("cycle-1", 6);
+        when(planner.countCompletedSubgoalsWithMerges()).thenReturn(3);
+        explorer.forkAt(checkpoints.read("cycle-1").orElseThrow(), "cycle-1", "grinding");
+        measuredCheckpoint("cycle-2", 6);
+        when(planner.countCompletedSubgoalsWithMerges()).thenReturn(1);
+        explorer.sealCurrent("cycle-2");
+        when(rewindService.treeMeasureNow()).thenReturn(new TreeTestMeasure(true, 4));
+
+        assertThat(explorer.adoptMostAdvanced("cycle-2")).isEmpty();
+        verify(rewindService, org.mockito.Mockito.never())
+                .rewindTo(anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
     @DisplayName("the ledger survives a fresh reader over the same file")
     void theLedgerIsDurable() throws IOException {
         checkpoint("cycle-1", true);
@@ -186,6 +242,19 @@ class BranchExplorerTest {
         BranchLedger reopened = new BranchLedger(new FileService(tmp.toString(), mapper), mapper);
         assertThat(reopened.branches()).hasSize(2);
         assertThat(reopened.alreadyForkedFrom("cycle-1")).isTrue();
+    }
+
+    /** A merged checkpoint whose tree left {@code failing} of the operator's tests failing. */
+    private void measuredCheckpoint(String cycleId, int failing) throws IOException {
+        com.walpro.autobuilder.core.build.OperatorSuiteMeasure suite =
+                mock(com.walpro.autobuilder.core.build.OperatorSuiteMeasure.class);
+        when(suite.ofTree()).thenReturn(new TreeTestMeasure(true, failing));
+        checkpoints.setSuiteMeasure(suite);
+        try {
+            checkpoint(cycleId, true);
+        } finally {
+            checkpoints.setSuiteMeasure(null);
+        }
     }
 
     private void checkpoint(String cycleId, boolean merged) throws IOException {

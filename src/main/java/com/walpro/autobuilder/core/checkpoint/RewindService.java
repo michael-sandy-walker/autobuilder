@@ -67,6 +67,11 @@ public class RewindService {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T6-T: told when the tree on disk is replaced, so no candidate is judged against the old tree's suite. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.OperatorSuiteMeasure suiteMeasure;
+
     /**
      * Return the loop to the state captured at {@code toCycleId}.
      *
@@ -176,6 +181,7 @@ public class RewindService {
 
         // The loop's state is now that of the target, whatever the checkpoint listing says is newest.
         checkpointService.notePositionAfterRewind(toCycleId, atCycleId);
+        if (suiteMeasure != null) suiteMeasure.treeReplaced();
 
         Result result = new Result(true, toCycleId, null, mode, holders.restored().size(),
                 holders.reset().size(), goals.statusesRestored(), goals.goalsRewoundOut(), undone,
@@ -247,8 +253,31 @@ public class RewindService {
      * run onto a finished earlier one.
      */
     public Optional<CheckpointRecord> lastMergedBefore(String beforeCycleId) {
+        return lastMergedBefore(beforeCycleId, null);
+    }
+
+    /**
+     * T6-T: the operator's suite on the tree on disk now. The gate's own measure when it has one; right
+     * after a rewind -- before the suite has run on the restored tree -- the measure recorded at the point
+     * returned to, since that tree is the one on disk. Null when neither is known.
+     */
+    public com.walpro.autobuilder.core.build.TreeTestMeasure treeMeasureNow() {
+        if (suiteMeasure == null) return null;
+        com.walpro.autobuilder.core.build.TreeTestMeasure live = suiteMeasure.ofTree();
+        if (live != null) return live;
+        return checkpointService.position()
+                .filter(CheckpointService.Position::rewound)
+                .flatMap(p -> checkpointService.read(p.cycleId()))
+                .map(CheckpointRecord::treeTests)
+                .orElse(null);
+    }
+
+    /** T6-T: as above, among the points no worse on the operator's suite than {@code currentTree}. */
+    public Optional<CheckpointRecord> lastMergedBefore(String beforeCycleId,
+                                                       com.walpro.autobuilder.core.build.TreeTestMeasure currentTree) {
         for (CheckpointRecord record : checkpointService.autoRewindCandidates()) {
             if (!record.merged()) continue;
+            if (!com.walpro.autobuilder.core.build.TreeTestMeasure.admissible(record.treeTests(), currentTree)) continue;
             if (beforeCycleId == null || record.cycleId().compareTo(beforeCycleId) < 0) {
                 return Optional.of(record);
             }

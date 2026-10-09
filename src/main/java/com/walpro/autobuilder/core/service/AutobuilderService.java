@@ -89,6 +89,11 @@ public class AutobuilderService implements CheckpointableState {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.persistence.PreservedArtifactService preservedArtifactService;
 
+    /** T6-T: the operator's suite on the merged tree -- a merge that improves on the preserved copy preserves now. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.OperatorSuiteMeasure suiteMeasure;
+
     /**
      * T2-EQ: optional — asks whether the artifact can be packaged before the run halts. Null in
      * pure-unit tests, where the halt path behaves exactly as before.
@@ -1544,7 +1549,12 @@ public class AutobuilderService implements CheckpointableState {
         // Interval-gated because preserve() runs a real build probe per candidate: firing every
         // cycle would add a build to every cycle. Gated on merged() too — an unmerged cycle
         // produced no new state worth the probe.
-        if (preservedArtifactService != null && dueForMidRunPreserve(context.merged())) {
+        //
+        // T6-T: and at once when a merge leaves fewer of the operator's suite failing than the copy
+        // already preserved -- the run's best tree must not wait for the interval it may not live to see.
+        if (preservedArtifactService != null && (dueForMidRunPreserve(context.merged())
+                || (context.merged() && suiteMeasure != null
+                        && preservedArtifactService.improvesOnPreserved(suiteMeasure.ofTree())))) {
             preservedArtifactService.preserve(context);
         }
 

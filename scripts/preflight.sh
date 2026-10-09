@@ -143,6 +143,17 @@ probe_model() {
 # script's last line ("SMOKE: n/23") on success, or a failure token (no-pom / artifact-build-failed
 # / no-jar / boot-failed). Used for both the final-files score and the preserved score. Reads the
 # caller's $run_dir and $smoke_script (dynamic scope).
+# T6-T: the loop's log after its last rewind. A halt line the loop backed out of with a rewind (T4-DQ) is
+# not a terminal: field52 run 1 (2026-10-08_17-40-20) was stopped at its first "Root goal exhausted" while
+# the loop was rewinding instead of halting, so neither the path it went back to nor its final preserve ran.
+post_rewind_log() {
+    local last
+    last=$(grep -n 'T4-DQ: REWOUND to' "$1" | tail -1 | cut -d: -f1)
+    tail -n +"$(( ${last:-0} + 1 ))" "$1"
+}
+# The loop halts in one place, and says so there, after the rewind was declined (AutobuilderService).
+loop_halted() { post_rewind_log "$1" | grep -q 'System is paused (cycle'; }
+
 build_boot_smoke() {
     local tree="$1" port="$2" tag="$3"
     [ -f "$tree/pom.xml" ] || { echo "no-pom"; return; }
@@ -335,42 +346,59 @@ run_live() {
             done
             break
         fi
-        if grep -qE 'Root goal exhausted|root .* marked GIVEN_UP' "$applog"; then terminal="GOAL_EXHAUSTED"; break; fi
-        if grep -qE 'Pausing — manual input required|stagnation-runaway' "$applog"; then terminal="PAUSED"; break; fi
         # An operator's POST /autobuilder/pause (scripts/early_stop.sh stops a run whose yardstick
         # stopped improving): the run is scored and archived like any other, under its own name.
         if grep -q 'pause: reason=user-pause' "$applog"; then terminal="operator-stop"; break; fi
-        # T5-BE: the loop's own brake halting is an HONEST terminal, not a deadline/silence.
-        # Key on the exhaustion-halt markers only (a fulfilled run also pauses, but the
-        # GOAL_FULFILLED check above breaks first). Stop promptly instead of idling to the cap.
-        if grep -qE 'root convergence stall|Pausing for review|build-blocked-deadlock|Exhaustion runaway detected' "$applog"; then
-            # 2026-07-17 run 2 was misclassified deadline: its halt line is
-            # "Exhaustion runaway detected: ... Escalating to root exhaustion" — none of the
-            # prior patterns. Prose marker maps to the pausedReason spelling for the run_dir.
-            hreason=$(grep -oE 'root-convergence-stall|root convergence stall|build-blocked-deadlock|Exhaustion runaway detected' "$applog" | tail -1)
-            hreason=${hreason/Exhaustion runaway detected/exhaustion-runaway}
-            # 2026-08-24 run 00-07-06 recorded a bare honest-halt: RootConvergenceTracker writes
-            # the reason with SPACES at the moment it fires, the hyphenated token exists only in
-            # the end report, and that run was killed before the report was written. Reading the
-            # halt EVENT rather than a downstream report is what makes the reason survive.
-            hreason=${hreason/root convergence stall/root-convergence-stall}
-            # Prose token missing for this flavor (e.g. planner-output-truncated's "Pausing
-            # for review") → the end-report line names the true reason for every flavor.
-            if [ -z "$hreason" ]; then
-                hreason=$(grep -oE 'run end report written \([a-z][a-z-]*' "$applog" | tail -1 | sed 's/.*(//')
+        # T6-T: every halt below is read from the log after the last rewind, and only once the loop
+        # has actually halted -- a halt line followed by a rewind is the loop going back, not ending.
+        # Then wait, bounded, for the end report (the halt branch's last step, after its preserve),
+        # as the fulfilled path above does, so the copy taken at the halt is the one archived.
+        if loop_halted "$applog"; then
+            local halt_settle_end=$(( $(date +%s) + 180 ))
+            while [ "$(date +%s)" -lt "$halt_settle_end" ]; do
+                post_rewind_log "$applog" | grep -q 'T4-CD: run end report w' && break
+                kill -0 "$pid" 2>/dev/null || break
+                sleep 10
+            done
+            local post="$run_dir/post-rewind.log"
+            post_rewind_log "$applog" > "$post"
+            if grep -qE 'Root goal exhausted|root .* marked GIVEN_UP' "$post"; then terminal="GOAL_EXHAUSTED"; break; fi
+            if grep -qE 'Pausing — manual input required|stagnation-runaway' "$post"; then terminal="PAUSED"; break; fi
+            # T5-BE: the loop's own brake halting is an HONEST terminal, not a deadline/silence.
+            # Key on the exhaustion-halt markers only (a fulfilled run also pauses, but the
+            # GOAL_FULFILLED check above breaks first). Stop promptly instead of idling to the cap.
+            if grep -qE 'root convergence stall|Pausing for review|build-blocked-deadlock|Exhaustion runaway detected' "$post"; then
+                # 2026-07-17 run 2 was misclassified deadline: its halt line is
+                # "Exhaustion runaway detected: ... Escalating to root exhaustion" — none of the
+                # prior patterns. Prose marker maps to the pausedReason spelling for the run_dir.
+                hreason=$(grep -oE 'root-convergence-stall|root convergence stall|build-blocked-deadlock|Exhaustion runaway detected' "$post" | tail -1)
+                hreason=${hreason/Exhaustion runaway detected/exhaustion-runaway}
+                # 2026-08-24 run 00-07-06 recorded a bare honest-halt: RootConvergenceTracker writes
+                # the reason with SPACES at the moment it fires, the hyphenated token exists only in
+                # the end report, and that run was killed before the report was written. Reading the
+                # halt EVENT rather than a downstream report is what makes the reason survive.
+                hreason=${hreason/root convergence stall/root-convergence-stall}
+                # Prose token missing for this flavor (e.g. planner-output-truncated's "Pausing
+                # for review") → the end-report line names the true reason for every flavor.
+                if [ -z "$hreason" ]; then
+                    hreason=$(grep -oE 'run end report written \([a-z][a-z-]*' "$post" | tail -1 | sed 's/.*(//')
+                fi
+                terminal="honest-halt${hreason:+:$hreason}"
+                break
             fi
-            terminal="honest-halt${hreason:+:$hreason}"
-            break
-        fi
-        # T4-CD single-home catch-all: the run end report is written exactly once per pause
-        # episode and its log line names the real pausedReason for EVERY halt flavor — so any
-        # honest halt classifies from this one line instead of a prose pattern per flavor
-        # (the 12:56 run halted empty-backlog-injection-limit, matched nothing above, and
-        # idled to a misleading silent-955s that stopped a healthy run series as ENVIRONMENT).
-        # The GOAL_FULFILLED check above breaks first on fulfilled runs.
-        if grep -q 'run end report written (' "$applog"; then
-            hreason=$(grep -oE 'run end report written \([a-z][a-z-]*' "$applog" | tail -1 | sed 's/.*(//')
-            terminal="honest-halt${hreason:+:$hreason}"
+            # T4-CD single-home catch-all: the run end report is written exactly once per pause
+            # episode and its log line names the real pausedReason for EVERY halt flavor — so any
+            # honest halt classifies from this one line instead of a prose pattern per flavor
+            # (the 12:56 run halted empty-backlog-injection-limit, matched nothing above, and
+            # idled to a misleading silent-955s that stopped a healthy run series as ENVIRONMENT).
+            # The GOAL_FULFILLED check above breaks first on fulfilled runs.
+            if grep -q 'run end report written (' "$post"; then
+                hreason=$(grep -oE 'run end report written \([a-z][a-z-]*' "$post" | tail -1 | sed 's/.*(//')
+                terminal="honest-halt${hreason:+:$hreason}"
+                break
+            fi
+            # Halted, and none of the above names how: still a halt, never a deadline.
+            terminal="PAUSED"
             break
         fi
         # T1-FL: 3+ consecutive breaker opens with no successful response between them = the

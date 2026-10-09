@@ -111,15 +111,21 @@ public class RewindPolicy {
         // rewind at least cannot re-walk the same stretch from the same place. The ledger version
         // is strictly better because a point can be untried and NEWER than the last fork, which
         // the positional rule would skip for no reason beyond its own arithmetic.
+        //
+        // T6-T: and no point whose tree fails more of the operator's suite than the tree now. Field52
+        // run 1 went back from 4 failing to 6 -- the path was abandoned and its progress with it.
         boolean branching = branchExplorer != null;
+        com.walpro.autobuilder.core.build.TreeTestMeasure currentTree = rewindService.treeMeasureNow();
         Optional<CheckpointRecord> target = branching
-                ? branchExplorer.nextUntriedForkPoint()
-                : rewindService.lastMergedBefore(lastTargetCycleId != null ? lastTargetCycleId : atCycleId);
+                ? branchExplorer.nextUntriedForkPoint(currentTree)
+                : rewindService.lastMergedBefore(lastTargetCycleId != null ? lastTargetCycleId : atCycleId,
+                        currentTree);
         if (target.isEmpty()) {
-            log.info("T4-DQ: grinding at {} but {} — exploration is over.",
+            log.info("T4-DQ: grinding at {} but {}{} — exploration is over.",
                     atCycleId, branching
                             ? "every checkpoint that landed work has already been explored"
-                            : "no earlier checkpoint landed work");
+                            : "no earlier checkpoint landed work",
+                    currentTree == null ? "" : " with no more than " + currentTree.describe());
             return settleOnBestPath(atCycleId);
         }
 

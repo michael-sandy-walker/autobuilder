@@ -430,6 +430,32 @@ public class TestRunGate {
     }
 
     /**
+     * T6-T: the tree's suite as a measure a checkpoint, a snapshot and the preserve can rank by; null while
+     * unknown, and on a target whose suite is not the operator's authority (nothing to rank by there).
+     */
+    public TreeTestMeasure treeMeasure() {
+        if (!isLive()) return null;
+        if (treeNotCompiling) {
+            Set<String> files = treeUncompiled;
+            return files == null ? null : new TreeTestMeasure(false, files.size());
+        }
+        Set<String> failing = treeFailing;
+        return failing == null ? null : new TreeTestMeasure(true, failing.size());
+    }
+
+    /**
+     * T6-T: the tree on disk was replaced by a rewind; what was known of the one before says nothing about it.
+     * Unknown, the next evolution runs the suite on the restored tree before any candidate (EvolutionLLMAdapter).
+     */
+    public void forgetTree() {
+        treeFailing = null;
+        treeNotCompiling = false;
+        treeUncompiled = null;
+        candidateFailing = null;
+        candidateUncompiled = null;
+    }
+
+    /**
      * T6-T: a candidate's suite against the tree's. BETTER: the tree's tests did not compile and the candidate's
      * ran, or fewer fail and none that passed breaks; WORSE: more fail; SAME: as many, or a trade; UNKNOWN: the
      * tree's state is not known.

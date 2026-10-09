@@ -55,6 +55,15 @@ class PreservedArtifactServiceTest {
                 new MutationSnapshotService.SnapshotState(cycle, entryPoint, buildResult, merged, at));
     }
 
+    private void measuredSnapshot(String cycle, Instant at, String markerFile,
+                                  com.walpro.autobuilder.core.build.TreeTestMeasure tests) throws IOException {
+        Path dir = tempDir.resolve("snapshots/" + cycle);
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve(markerFile), "content-of-" + cycle);
+        objectMapper.writeValue(dir.resolve(MutationSnapshotService.SNAPSHOT_STATE_FILE).toFile(),
+                new MutationSnapshotService.SnapshotState(cycle, false, "COMPILE_OK", true, at, tests));
+    }
+
     private CycleContextData haltContext() {
         return CycleContextData.builder().cycleName("cycle-halt").build();
     }
@@ -248,5 +257,47 @@ class PreservedArtifactServiceTest {
         assertThat(tempDir.resolve("meta/preserved-artifact/only.txt")).exists();
         String provenance = Files.readString(tempDir.resolve("meta/preserved-artifact-provenance.json"));
         assertThat(provenance).contains("\"verifiedBuildResult\" : \"SKIPPED\"");
+    }
+
+    /**
+     * T6-T, field52 run 1: the 18:52 tree left 4 of the operator's tests failing, the 18:27 tree 6, and a
+     * later unmerged-looking tree was never measured. The preserve takes the fewest failing, not the newest.
+     */
+    @Test
+    void prefersTheTreeLeavingFewestOfTheOperatorsTestsFailing() throws IOException {
+        Instant t0 = Instant.parse("2026-10-08T16:27:00Z");
+        measuredSnapshot("cycle-a", t0, "six-failing.txt", new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 6));
+        measuredSnapshot("cycle-b", t0.plusSeconds(1500), "four-failing.txt",
+                new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 4));
+        measuredSnapshot("cycle-c", t0.plusSeconds(1600), "seven-failing.txt",
+                new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 7));
+        measuredSnapshot("cycle-d", t0.plusSeconds(1700), "not-compiling.txt",
+                new com.walpro.autobuilder.core.build.TreeTestMeasure(false, 1));
+        snapshot("cycle-e", false, "COMPILE_OK", t0.plusSeconds(1800), "unmeasured.txt");
+
+        service.preserve(haltContext());
+
+        Path preserved = tempDir.resolve("meta/preserved-artifact");
+        assertThat(preserved.resolve("four-failing.txt")).exists();
+        assertThat(preserved.resolve("unmeasured.txt")).doesNotExist();
+        PreservedArtifactService.Provenance p = objectMapper.readValue(
+                tempDir.resolve("meta/preserved-artifact-provenance.json").toFile(), PreservedArtifactService.Provenance.class);
+        assertThat(p.fromCycle()).isEqualTo("cycle-b");
+        assertThat(p.treeTests()).isEqualTo(new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 4));
+    }
+
+    @Test
+    void anImprovingMergeIsPreservedAtOnceAndAnEqualOneIsNot() throws IOException {
+        var four = new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 4);
+        assertThat(service.improvesOnPreserved(null)).isFalse();
+        assertThat(service.improvesOnPreserved(four)).isTrue();   // nothing preserved yet
+
+        measuredSnapshot("cycle-a", Instant.parse("2026-10-08T16:27:00Z"), "six.txt",
+                new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 6));
+        service.preserve(haltContext());
+
+        assertThat(service.improvesOnPreserved(four)).isTrue();
+        assertThat(service.improvesOnPreserved(new com.walpro.autobuilder.core.build.TreeTestMeasure(true, 6))).isFalse();
+        assertThat(service.improvesOnPreserved(new com.walpro.autobuilder.core.build.TreeTestMeasure(false, 0))).isFalse();
     }
 }

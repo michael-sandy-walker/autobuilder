@@ -22,6 +22,11 @@ public class MutationSnapshotService {
 
     private final FileService fileService;
     private final ObjectMapper objectMapper;
+
+    /** T6-T: the operator's suite on the merged tree, stamped on merged snapshots for the preserve to rank by. */
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.OperatorSuiteMeasure suiteMeasure;
     
     public CycleContextData writeMutationMeta(CycleContextData context) throws IOException {
         String mutationPath = "mutations/" + context.cycleName();
@@ -161,9 +166,16 @@ public class MutationSnapshotService {
      * T4-CA: recorded facts about the tree at snapshot time. {@code buildResult} is the cycle's
      * carried outcome recorded as-carried (may be null when no build ran); {@code entryPointPresent}
      * is a fresh scan. Consumed by {@link PreservedArtifactService} at the run terminal.
+     * {@code treeTests} (T6-T) is the operator's suite on a merged tree, null when not known.
      */
     public record SnapshotState(String cycleId, boolean entryPointPresent, String buildResult,
-                                boolean merged, java.time.Instant recordedAt) {}
+                                boolean merged, java.time.Instant recordedAt,
+                                com.walpro.autobuilder.core.build.TreeTestMeasure treeTests) {
+        public SnapshotState(String cycleId, boolean entryPointPresent, String buildResult,
+                             boolean merged, java.time.Instant recordedAt) {
+            this(cycleId, entryPointPresent, buildResult, merged, recordedAt, null);
+        }
+    }
 
     private void stampSnapshotState(CycleContextData context, String targetDir) {
         try {
@@ -174,7 +186,8 @@ public class MutationSnapshotService {
                     : null;
             fileService.writeJson(targetDir + "/" + SNAPSHOT_STATE_FILE,
                     new SnapshotState(context.cycleName(), entryPoint, buildResult,
-                            context.merged(), java.time.Instant.now()));
+                            context.merged(), java.time.Instant.now(),
+                            context.merged() && suiteMeasure != null ? suiteMeasure.ofTree() : null));
         } catch (Exception e) {
             log.warn("T4-CA: could not stamp snapshot state for {}: {}", context.cycleName(), e.getMessage());
         }

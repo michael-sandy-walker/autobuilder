@@ -124,10 +124,7 @@ public class SkeletonFirst {
                     + "\"). Done when " + String.join(", ", tests) + " pass" + (tests.size() == 1 ? "es" : "") + "."
                     + (mustCall.isEmpty() ? "" : " The tests demand: " + String.join("; ", mustCall) + ".");
             List<String> criteria = tests.stream().map(c -> c + " passes").toList();
-            goals.injectSkeletonWorkItem(description, criteria, String.join(",", tests)).ifPresent(id -> {
-                goals.setGoalMetadataString(id, BlockerTypes.SKELETON_CLASS_KEY, t.getKey());
-                ids.add(id);
-            });
+            goals.injectSkeletonWorkItem(description, criteria, String.join(",", tests)).ifPresent(ids::add);
         }
         log.info("T6-T: skeleton first -- {} work item(s), one per stubbed class", ids.size());
         return ids;

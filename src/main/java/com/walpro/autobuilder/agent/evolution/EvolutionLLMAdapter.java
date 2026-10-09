@@ -152,19 +152,6 @@ public class EvolutionLLMAdapter {
             String block = protectedPaths.promptBlock();
             if (block != null) userPrompt = userPrompt + "\n\n" + block;
         }
-        // T6-T: a skeleton work item names its bodies and what the types around them offer
-        var goals = goalPlannerService == null ? null : goalPlannerService.getIfAvailable();
-        if (goals != null && refreshed.currentSubGoalId() != null && refreshed.outputPath() != null
-                && com.walpro.autobuilder.core.build.BlockerTypes.GATE_SKELETON.equals(goals.getGoalMetadataString(
-                        refreshed.currentSubGoalId(), com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY))) {
-            String type = goals.getGoalMetadataString(refreshed.currentSubGoalId(), com.walpro.autobuilder.core.build.BlockerTypes.SKELETON_CLASS_KEY);
-            String tests = goals.getGoalMetadataString(refreshed.currentSubGoalId(), com.walpro.autobuilder.core.build.BlockerTypes.SKELETON_TESTS_KEY);
-            String block = com.walpro.autobuilder.protocol.evolution.SkeletonItemPromptBlock.render(
-                    java.nio.file.Path.of(refreshed.outputPath()), type, tests == null ? List.of() : List.of(tests.split(",")),
-                    Math.max(0, promptTokenBudget.promptHeadroomTokens()
-                            - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(userPrompt)) / 4);
-            if (block != null) userPrompt = userPrompt + "\n\n" + block;
-        }
         // T4-DY: a failure that kept repeating is a question about the code; its answer, read from the
         // sources now, is in the move it is about.
         if (stuckLayer != null) {

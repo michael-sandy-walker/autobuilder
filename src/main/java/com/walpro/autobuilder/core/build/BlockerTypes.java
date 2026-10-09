@@ -39,8 +39,6 @@ public final class BlockerTypes {
     /** T6-T: a skeleton work item -- done when the test classes named under {@link #SKELETON_TESTS_KEY} pass. */
     public static final String GATE_SKELETON = "skeleton-gate";
     public static final String SKELETON_TESTS_KEY = "skeletonTests";
-    /** T6-T: the stubbed class a skeleton work item is about (qualified). */
-    public static final String SKELETON_CLASS_KEY = "skeletonClass";
 
     /**
      * The completion edge's acceptance-criteria check (T4-BP-3). Unlike the gates above, whose

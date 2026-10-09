@@ -297,12 +297,6 @@ public class EvaluationAgent implements ExecutionAgent {
         CompileProbeService.ProbeResult probeResult = null;
         if (!fingerprintUnchanged) {
             probeResult = compileProbeService.probe(context);
-            // T6-T: a candidate of several files that does not compile keeps the files that do
-            PartialCandidate partial = keepWhatCompiles(context, probeResult);
-            if (partial != null) {
-                context = partial.context();
-                probeResult = partial.probe();
-            }
             // T4-BD: thread the probe outcome onto context so downstream consumers
             // (BuildResultPromptBlock fallback, CompileDiagnosticPromptBlock,
             // MissingMemberPromptBlock) read structured data instead of string-matching a
@@ -881,52 +875,6 @@ public class EvaluationAgent implements ExecutionAgent {
                     delta.byCompilation() ? "compilation" : "tests");
         }
         return decided;
-    }
-
-    record PartialCandidate(CycleContextData context, CompileProbeService.ProbeResult probe) {
-    }
-
-    /**
-     * T6-T, the hybrid's partial acceptance: a candidate of several files that does not compile is not lost whole --
-     * each file is probed alone on the tree, the ones that compile alone are probed together, and when that compiles
-     * the candidate goes on as those files (the others are dropped, from the outcome and from the cycle's mutation
-     * folder, so no later merge picks them up). Null when nothing is to be kept: one file, none or all compile alone,
-     * or the kept files do not compile together.
-     *
-     * <p>Why. ladder-grind field51: 16 of 17 candidates failed the compile probe whole; most bundled a file that
-     * compiled (a ProtectedPaths or DeclaredMembers body) with one that did not, and lost both.
-     */
-    PartialCandidate keepWhatCompiles(CycleContextData context, CompileProbeService.ProbeResult probe) {
-        EvolutionOutcome eo = context.evolutionOutcome();
-        if (probe == null || probe.filesOnDisk() || probe.outcome() == null || probe.outcome().result() != BuildResult.COMPILE_ERROR
-                || eo == null || eo.addedOrChangedFiles() == null || eo.addedOrChangedFiles().size() < 2
-                || (eo.deletedFiles() != null && !eo.deletedFiles().isEmpty())) return null;
-        List<com.walpro.autobuilder.agent.evolution.model.FileMutation> files = eo.addedOrChangedFiles();
-        List<com.walpro.autobuilder.agent.evolution.model.FileMutation> kept = new java.util.ArrayList<>();
-        for (var f : files) {
-            CompileProbeService.ProbeResult alone = compileProbeService.probe(context.withEvolutionOutcome(eo.withAddedOrChangedFiles(List.of(f))), false);
-            if (alone.outcome() != null && alone.outcome().result() == BuildResult.COMPILE_OK) kept.add(f);
-            if (alone.filesOnDisk()) compileProbeService.rollback(alone.rollbackPoint(), context.outputPath());
-        }
-        if (kept.isEmpty() || kept.size() == files.size()) return null;
-        CycleContextData narrowed = context.withEvolutionOutcome(eo.withAddedOrChangedFiles(List.copyOf(kept)));
-        CompileProbeService.ProbeResult together = compileProbeService.probe(narrowed, false);
-        if (together.outcome() == null || together.outcome().result() != BuildResult.COMPILE_OK) {
-            if (together.filesOnDisk()) compileProbeService.rollback(together.rollbackPoint(), context.outputPath());
-            return null;
-        }
-        List<String> dropped = files.stream().filter(f -> !kept.contains(f)).map(com.walpro.autobuilder.agent.evolution.model.FileMutation::path).toList();
-        for (String d : dropped) {
-            try {
-                String inFolder = "mutations/" + context.cycleName() + "/" + d;
-                if (fileService.exists(inFolder)) fileService.deleteFile(inFolder);
-            } catch (Exception e) {
-                log.debug("T6-T: could not drop {} from the mutation folder: {}", d, e.getMessage());
-            }
-        }
-        log.info("T6-T: partial candidate -- kept {} (each compiles, and together), dropped {} (did not compile)",
-                kept.stream().map(com.walpro.autobuilder.agent.evolution.model.FileMutation::path).toList(), dropped);
-        return new PartialCandidate(narrowed.withLastProbeOutcome(together.outcome()), together);
     }
 
     /** Runs the stamped gate against the staged candidate; null when the gate bean is absent. */

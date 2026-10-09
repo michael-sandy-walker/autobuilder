@@ -198,17 +198,15 @@ public class EvolutionLLMAdapter {
                 userPrompt,
                 raw -> EvolutionProtocolContract.isValidResponse(raw)
                         && EditHunks.apply(com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser.normalizeFileHeaders(raw),
-                                currentTree(refreshed)).problems().isEmpty()
-                        && EditHunks.partialRewrites(com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser.normalizeFileHeaders(raw),
-                                currentTree(refreshed)).isEmpty(),
+                                currentTree(refreshed)).problems().isEmpty(),
                 raw -> parser.parse(raw, currentTree(refreshed)),
                 raw -> {
                     // T4-EB: an edit whose SEARCH text does not occur exactly once is asked again, with where.
                     String format = EvolutionProtocolContract.describeMismatch(raw);
                     if (format != null) return format;
-                    String normalized = com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser.normalizeFileHeaders(raw);
-                    List<String> problems = new java.util.ArrayList<>(EditHunks.apply(normalized, currentTree(refreshed)).problems());
-                    problems.addAll(EditHunks.partialRewrites(normalized, currentTree(refreshed)));
+                    List<String> problems = EditHunks.apply(
+                            com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser.normalizeFileHeaders(raw),
+                            currentTree(refreshed)).problems();
                     return problems.isEmpty() ? null : "an edit could not be applied: " + String.join("; ", problems);
                 }
         );

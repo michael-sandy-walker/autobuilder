@@ -4955,30 +4955,6 @@ public class GoalPlannerService {
     }
 
     /**
-     * T6-T: while a skeleton work item is open, the cycle works on one -- they are the units a measurement closes
-     * (their own test classes passing). ladder-grind field50 run 1: the first skeleton item was current for one cycle,
-     * then the planner's own subgoals took over and the model went back to candidates spanning four to six files.
-     * No-op when the current subgoal is one, or when none is open.
-     */
-    public void preferSkeletonWorkItem() {
-        GoalEntity current = getCurrentSubGoal();
-        if (current != null && isSkeletonItem(current)) return;
-        goalMap.values().stream()
-                .filter(g -> g.getType() == GoalType.SUBGOAL && g.getStatus() == GoalStatus.ACTIVE && isSkeletonItem(g))
-                .findFirst()
-                .ifPresent(g -> {
-                    log.info("T6-T: a skeleton work item is open -- working on [{}] before [{}]", g.getId(),
-                            current == null ? "none" : current.getId());
-                    setCurrentSubGoal(g.getId());
-                });
-    }
-
-    private static boolean isSkeletonItem(GoalEntity g) {
-        return g.getMetadata() != null && com.walpro.autobuilder.core.build.BlockerTypes.GATE_SKELETON.equals(
-                g.getMetadata().get(com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY));
-    }
-
-    /**
      * T6-T: a work item skeleton first raised -- write a stubbed class's bodies; done when its test classes pass,
      * measured by {@link com.walpro.autobuilder.core.build.BlockerTypes#GATE_SKELETON}. Empty when nothing was injected.
      */

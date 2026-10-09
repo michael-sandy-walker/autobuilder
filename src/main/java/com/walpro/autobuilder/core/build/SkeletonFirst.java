@@ -146,7 +146,7 @@ public class SkeletonFirst {
     }
 
     /** The test classes whose source names {@code simpleName}. */
-    public static List<String> testsUsing(Path project, String simpleName) {
+    static List<String> testsUsing(Path project, String simpleName) {
         Path test = project.resolve("src/test/java");
         if (!Files.isDirectory(test)) return List.of();
         Pattern word = Pattern.compile("\\b" + Pattern.quote(simpleName) + "\\b");

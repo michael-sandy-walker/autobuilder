@@ -78,4 +78,37 @@ class EvaluationAgentRejectionReasonsTest {
         assertThat(EvaluationAgent.collectRejectionReasons(rejected(null), nr))
                 .containsExactly("H: same");
     }
+
+    /**
+     * T6-T, field52 run 1: ScoreRegressionHeuristic agreed with the evaluator at CRITICAL and its line
+     * replaced the outcome's message, so evolution heard "Severe score drop" nine times and never the
+     * two bugs the evaluator had named. The evaluator's diagnosis and recommendation travel first.
+     */
+    @Test
+    void theEvaluatorsDiagnosisSurvivesAHeuristicThatOverrulesTheMessage() {
+        EvaluationOutcome evaluator = new EvaluationOutcome(0.42, MutationAcceptanceState.REJECTED,
+                GoalProgressState.STAGNATING,
+                "promptBlock() does not filter to the signatures that recurred in the latest cycle.",
+                "Filter promptBlock() to the latest cycle; build the signature with the simple class name.");
+        EvaluationOutcome overruled = rejected("CRITICAL: Heuristic 'ScoreRegressionHeuristic' overruled (0.95): Severe score drop");
+        NegotiationResult nr = new NegotiationResult(overruled, List.of(), List.of(
+                opinion("ScoreRegressionHeuristic", MutationAcceptanceState.REJECTED,
+                        GoalProgressState.STAGNATING, "Severe score drop")));
+
+        assertThat(EvaluationAgent.collectRejectionReasons(evaluator, overruled, nr)).containsExactly(
+                "The evaluator found: promptBlock() does not filter to the signatures that recurred in the latest cycle.",
+                "The evaluator recommends: Filter promptBlock() to the latest cycle; build the signature with the simple class name.",
+                "CRITICAL: Heuristic 'ScoreRegressionHeuristic' overruled (0.95): Severe score drop",
+                "ScoreRegressionHeuristic: Severe score drop");
+    }
+
+    @Test
+    void theEvaluatorsOwnMessageIsNotRelayedTwice() {
+        EvaluationOutcome evaluator = new EvaluationOutcome(0.3, MutationAcceptanceState.REJECTED,
+                GoalProgressState.NOT_EVALUATED, "The rule is not implemented.", null);
+        NegotiationResult nr = new NegotiationResult(evaluator, List.of(), List.of());
+
+        assertThat(EvaluationAgent.collectRejectionReasons(evaluator, evaluator, nr))
+                .containsExactly("The evaluator found: The rule is not implemented.");
+    }
 }

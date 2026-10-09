@@ -343,6 +343,9 @@ public class EvaluationAgent implements ExecutionAgent {
         }
 
         EvaluationOutcome rawOutcome;
+        // T6-T: the outcome the evaluator itself wrote, as opposed to a short-circuit's stand-in --
+        // its diagnosis is relayed even when a heuristic overrules the verdict.
+        EvaluationOutcome evaluatorWritten = null;
         if (fingerprintUnchanged && context.lastEvaluationOutcome() != null) {
             log.info("EvaluationAgent: fingerprint unchanged ({}), reusing prior LLM outcome", currentFingerprint);
             rawOutcome = context.lastEvaluationOutcome();
@@ -385,6 +388,7 @@ public class EvaluationAgent implements ExecutionAgent {
         } else {
             ParsedEvaluation parsed = evaluationAdapter.evaluate(context);
             rawOutcome = parsed.outcome();
+            evaluatorWritten = rawOutcome;
             // Always update criteriaAssessments so stale ✓ data from a prior accepted cycle
             // is cleared when the LLM omits CriteriaCheck in this cycle (common for rejected mutations).
             context = context.withCriteriaAssessments(parsed.criteriaAssessments());
@@ -537,7 +541,7 @@ public class EvaluationAgent implements ExecutionAgent {
             // parallel store, its text became the recorded reason, and the whole relay was then
             // suppressed because the PROBE had failed. The loop fixed the compile error every
             // cycle, never heard about the parallel store, and re-proposed it seven times.
-            List<String> reasons = collectRejectionReasons(finalOutcome, negotiationResult);
+            List<String> reasons = collectRejectionReasons(evaluatorWritten, finalOutcome, negotiationResult);
             List<String> relayable = buildFailureRejection
                     ? collectHeuristicRejectionReasons(negotiationResult)
                     : reasons;
@@ -1336,8 +1340,36 @@ public class EvaluationAgent implements ExecutionAgent {
     }
 
     static List<String> collectRejectionReasons(EvaluationOutcome finalOutcome, NegotiationResult negotiation) {
+        return collectRejectionReasons(null, finalOutcome, negotiation);
+    }
+
+    /**
+     * T6-T: the evaluator's own diagnosis travels first, and survives a heuristic that overrules it.
+     *
+     * <p>A CRITICAL heuristic opinion REPLACES the outcome's feedback message, so the relay used to
+     * carry only the overruling line. Field52 run 1: nine GrindDetector candidates were rejected, and
+     * each time the evaluator wrote the two concrete bugs and their fixes ("promptBlock() does not
+     * filter to the signatures that recurred in the latest cycle"; "use the simple class name, not the
+     * fully qualified one"). ScoreRegressionHeuristic agreed at CRITICAL, its "Severe score drop" became
+     * the message, and evolution was told nine times to address a score -- never what to change. It
+     * never fixed either bug. The verdict can stay the heuristic's; the reason must stay the evaluator's.
+     *
+     * @param evaluatorOutcome the evaluator's own outcome before negotiation, or null
+     */
+    static List<String> collectRejectionReasons(EvaluationOutcome evaluatorOutcome, EvaluationOutcome finalOutcome,
+                                                NegotiationResult negotiation) {
         List<String> reasons = new ArrayList<>();
+        if (evaluatorOutcome != null) {
+            String diagnosis = evaluatorOutcome.feedbackMessage();
+            if (isMeaningfulReason(diagnosis)) reasons.add("The evaluator found: " + diagnosis.trim());
+            String recommendation = evaluatorOutcome.recommendation();
+            if (isMeaningfulReason(recommendation)) reasons.add("The evaluator recommends: " + recommendation.trim());
+        }
         String message = finalOutcome != null ? finalOutcome.feedbackMessage() : null;
+        if (evaluatorOutcome != null && message != null
+                && message.trim().equals(String.valueOf(evaluatorOutcome.feedbackMessage()).trim())) {
+            message = null; // the evaluator's own message, already relayed above
+        }
         if (isMeaningfulReason(message)) {
             reasons.add(message.trim());
         }

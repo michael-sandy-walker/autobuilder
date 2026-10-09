@@ -137,8 +137,7 @@ public final class EditHunks {
             String current = tree.get(path);
             if (current == null || !path.endsWith(".java")) continue;
             long had = current.lines().count(), wrote = b.group(3).lines().count();
-            // a block that applies member by member (MemberMerge) changes only what it wrote: nothing is dropped
-            if (had >= MIN_LINES_FOR_SHARE && wrote < had * KEPT_SHARE && !MemberMerge.applies(current, b.group(3))) {
+            if (had >= MIN_LINES_FOR_SHARE && wrote < had * KEPT_SHARE) {
                 problems.add(path + ": written whole with " + wrote + " of its " + had + " lines -- change an existing file"
                         + " with edit blocks whose SEARCH parts are copied from it; a whole file written from the parts"
                         + " you were shown drops everything else in it");

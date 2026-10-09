@@ -190,18 +190,6 @@ public sealed interface BehaviourEvent {
         public String event() { return "test_delta"; }
     }
 
-    /** T6-T: skeleton first -- what was stubbed from the compiler's errors, whether the tests compile, the work items raised. */
-    record SkeletonStubbed(
-            Instant timestamp,
-            String cycleId,
-            boolean compiles,
-            int passes,
-            List<String> stubs,
-            int workItems
-    ) implements BehaviourEvent {
-        public String event() { return "skeleton_stubbed"; }
-    }
-
     record MutationNegotiated(
             Instant timestamp,
             String cycleId,

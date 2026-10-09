@@ -194,9 +194,6 @@ What it does on its own when work does not go smoothly -- each of these shows up
   involved really declare.
 - **A change needs something that does not exist yet.** A change rejected only because it uses a member or class
   that a later change could supply is kept, and re-tried automatically once a merge supplies it.
-- **Your tests use classes and methods that do not exist yet.** Before proposing anything, Autobuilder adds them as
-  empty stubs, read from the compiler's own errors, until your tests compile; then it works through the stubs one
-  class at a time, each finished when the tests that use it pass.
 - **A change must touch several classes before anything compiles.** Each step that leaves fewer of your test files
   failing to compile is kept, so such a change is built one class at a time instead of all at once or not at all.
 - **The model judges a good change wrongly.** Measurements outrank it: a change after which the check that raised

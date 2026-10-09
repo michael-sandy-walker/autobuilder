@@ -258,37 +258,4 @@ class EvaluationAgentGateCheckTest {
 
         assertThat(result).isSameAs(rejected);
     }
-
-    /**
-     * T6-T, skeleton first: a skeleton work item is done when ITS test classes pass on the candidate -- other failing
-     * tests are other items' work -- and stays open, with what still fails, while one of its tests fails.
-     */
-    @Test
-    void aSkeletonItem_isDoneWhenItsOwnTestClassesPass() {
-        when(goalPlannerService.getGoalMetadataString("goal-blocker", BlockerTypes.ORIGINATING_GATE_KEY))
-                .thenReturn(BlockerTypes.GATE_SKELETON);
-        when(goalPlannerService.getGoalMetadataString("goal-blocker", BlockerTypes.SKELETON_TESTS_KEY))
-                .thenReturn("NibTest");
-        var otherFails = new com.walpro.autobuilder.core.build.TestRunReport(9, 1, 0, 0, List.of(
-                new com.walpro.autobuilder.core.build.TestRunReport.Failure("zeta.InkTest", "pours",
-                        com.walpro.autobuilder.core.build.TestRunReport.Outcome.FAILED, "x")), java.util.Map.of());
-        when(testRunGate.freshReport()).thenReturn(Optional.of(otherFails));
-        CycleContextData ctx = contextOnBlocker("goal-blocker", BuildResult.COMPILE_OK);
-        EvaluationOutcome rejected = hallucinatedRejection();
-
-        EvaluationOutcome done = agent.applyOriginatingGateCheck(ctx, noOverrides(rejected), rejected);
-
-        assertThat(done.mutationState()).isEqualTo(MutationAcceptanceState.ACCEPTED);
-        assertThat(done.goalProgress()).isEqualTo(GoalProgressState.FULFILLED);
-
-        var mineFails = new com.walpro.autobuilder.core.build.TestRunReport(9, 1, 0, 0, List.of(
-                new com.walpro.autobuilder.core.build.TestRunReport.Failure("zeta.NibTest", "widens",
-                        com.walpro.autobuilder.core.build.TestRunReport.Outcome.FAILED, "x")), java.util.Map.of());
-        when(testRunGate.freshReport()).thenReturn(Optional.of(mineFails));
-
-        EvaluationOutcome open = agent.applyOriginatingGateCheck(ctx, noOverrides(rejected), rejected);
-
-        assertThat(open.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
-        assertThat(open.feedbackMessage()).contains("still failing: NibTest.widens");
-    }
 }

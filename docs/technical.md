@@ -269,18 +269,6 @@ A change passes these checks, cheapest first; each can stop it.
 
 Where a failure has a known shape, the loop repairs it itself instead of spending a model call on it.
 
-**Skeleton first** (`SkeletonFirst`, `SkeletonStubber`). On a target whose suite is declared an authority, when the
-tree's tests do not compile before the first candidate, the missing surface is stubbed from the compiler's own
-errors, pass after pass, until they compile: a class for each missing class (a capitalised name used as a receiver is
-a class called statically), a method for each missing method, a constructor for each missing constructor, each body
-throwing `UnsupportedOperationException("skeleton")`. A new method's return type starts as `Object` and is narrowed by
-what the test does with the value: "Object cannot be converted to T" makes it T, and an assertion method the generic
-assert lacks makes it the type whose assert has that method -- discovered on the project's own test classpath, never
-from a table. Only writable main sources are stubbed. The work then becomes one item per stubbed class -- write these
-bodies, done when these test classes pass -- each closed by that measurement (`BlockerTypes.GATE_SKELETON`). Once per
-run; switch `autobuilder.skeleton-first.enabled`. On ladder-grind the specification compiles after four passes and the
-stub-only tree scores 41/51 (`scripts/skeleton_probe.py` is the offline form).
-
 **Compile-fix injection** (`core.build.inject`). After a failed compile probe, `CompileFixInjector` classifies the
 error and walks the `CompileFixResolver` chain in order; the first `FixProposal` is applied once and re-probed. A
 proposal that already failed is not repeated until a file it touches changes (`FixAttemptLedger`). Every injected

@@ -129,7 +129,7 @@ public class GrindDetector {
             if (stuckLayer != null) stuckLayer.buildSucceeded(cycleId);
             return;
         }
-        for (String s : signaturesOf(outcome)) {
+        for (String s : signaturesOf(outcome, candidate == null ? java.util.Set.of() : candidate.keySet())) {
             if (stuckLayer != null) stuckLayer.rememberChange(s, candidate);
             observe(cycleId, StuckObservation.Source.BUILD, s, evidenceFor(s, outcome, candidate));
         }
@@ -197,6 +197,27 @@ public class GrindDetector {
      * Several distinct ones per build, since one move often breaks several things at once.
      */
     static List<String> signaturesOf(BuildOutcome outcome) {
+        return signaturesOf(outcome, java.util.Set.of());
+    }
+
+    /**
+     * As {@link #signaturesOf(BuildOutcome)}, knowing which files the failed change wrote ({@code changed}, paths
+     * relative to the project root): when the compiler reports errors in those, its errors in files the change did
+     * not write are consequences of them and are set aside. When every error is in a file the change did not write
+     * -- it removed something others call -- they are what the change broke, and are kept.
+     *
+     * <p>T6-T, ladder-grind run 2026-10-10_19-22-18: one real error stopped annotation processing, and every class
+     * that reads a generated member reported it missing. "FileWatcherService.java: cannot find symbol variable log"
+     * and its like became stuck cases of their own, were asked about, and their answers took the prompt room and
+     * the five places per build that the real errors needed.
+     */
+    static List<String> signaturesOf(BuildOutcome outcome, java.util.Collection<String> changed) {
+        java.util.Set<String> changedNames = new java.util.HashSet<>();
+        if (changed != null) {
+            for (String path : changed) {
+                if (path != null) changedNames.add(path.substring(path.replace('\\', '/').lastIndexOf('/') + 1));
+            }
+        }
         List<String> out = new ArrayList<>();
         if (outcome == null || outcome.result() != BuildResult.COMPILE_ERROR || outcome.stderrTail() == null) {
             return out;
@@ -211,6 +232,7 @@ public class GrindDetector {
         if (!out.isEmpty()) return out;
         String plain = BuildErrorClassifier.ANSI_ESCAPE.matcher(outcome.stderrTail()).replaceAll("");
         String[] lines = plain.split("\\R");
+        List<String> inChanged = new ArrayList<>();
         for (int i = 0; i < lines.length; i++) {
             // "[ERROR] /abs/path/File.java:[12,5] message" -> "File.java: message"
             var m = java.util.regex.Pattern.compile("([A-Za-z0-9_]+\\.java):\\[\\d+,\\d+]\\s*(.+)$").matcher(lines[i]);
@@ -219,9 +241,10 @@ public class GrindDetector {
             if (message.equals("cannot find symbol")) message += symbolAndLocation(lines, i + 1);
             String s = "the build fails: " + m.group(1) + ": " + message;
             if (!out.contains(s)) out.add(s);
-            if (out.size() >= 5) break;
+            if (changedNames.contains(m.group(1)) && !inChanged.contains(s)) inChanged.add(s);
         }
-        return out;
+        if (!inChanged.isEmpty()) out = inChanged;
+        return out.size() > 5 ? new ArrayList<>(out.subList(0, 5)) : out;
     }
 
     /**

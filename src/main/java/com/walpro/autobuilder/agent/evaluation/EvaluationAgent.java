@@ -57,6 +57,11 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class EvaluationAgent implements ExecutionAgent {
 
+    /** Off: the relay carries the negotiated message only, as before option C. For ablation runs. */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.evaluation.relay-evaluator-diagnosis:true}")
+    private boolean relayEvaluatorDiagnosis = true;
+
+
     private final EvaluationLLMAdapter evaluationAdapter;
     private final ScoringService scoringService;
     private final EvaluationInterpreter evaluationInterpreter;
@@ -535,7 +540,7 @@ public class EvaluationAgent implements ExecutionAgent {
             // parallel store, its text became the recorded reason, and the whole relay was then
             // suppressed because the PROBE had failed. The loop fixed the compile error every
             // cycle, never heard about the parallel store, and re-proposed it seven times.
-            List<String> reasons = collectRejectionReasons(evaluatorWritten, finalOutcome, negotiationResult);
+            List<String> reasons = collectRejectionReasons(relayEvaluatorDiagnosis ? evaluatorWritten : null, finalOutcome, negotiationResult);
             List<String> relayable = buildFailureRejection
                     ? collectHeuristicRejectionReasons(negotiationResult)
                     : reasons;

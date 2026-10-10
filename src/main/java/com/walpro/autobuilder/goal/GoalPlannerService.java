@@ -117,6 +117,10 @@ public class GoalPlannerService {
     static final String SUITE_AT_GIVE_UP_FAILING = "suiteAtGiveUpFailing";
     static final String SUITE_MOVED_REOPENS = "suiteMovedReopens";
 
+    /** Off: a given-up blocker is never reopened because the suite moved past it (as before option B'). */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.goal.reopen-when-suite-moved:true}")
+    private boolean reopenWhenSuiteMoved = true;
+
     /** T4-CQ: observes what an unasserted entry point returns; optional in narrow tests. */
     @Setter
     @Autowired(required = false)
@@ -4706,7 +4710,7 @@ public class GoalPlannerService {
      * honest end, as for the closed-but-unmet reopen above.
      */
     private int reopenGivenUpBlockersTheSuiteMovedPast(List<GoalEntity> allSubgoals) {
-        if (suiteMeasure == null) return 0;
+        if (!reopenWhenSuiteMoved || suiteMeasure == null) return 0;
         com.walpro.autobuilder.core.build.TreeTestMeasure now = suiteMeasure.ofTree();
         if (now == null) return 0;
         int reopened = 0;

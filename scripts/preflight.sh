@@ -302,7 +302,7 @@ run_live() {
     # PREFLIGHT_EXTRA_FLAGS: space-separated extra --spring properties, so an A/B arm can vary ONE
     # setting while keeping all of preflight's safety machinery
     # (model probe, watcher, run_dir capture). Recorded into the run_dir for provenance. Empty by default.
-    echo "${PREFLIGHT_EXTRA_FLAGS:-(none)}" > "$run_dir/extra_flags.txt"
+    echo "${PREFLIGHT_EXTRA_FLAGS:-(none)}${PREFLIGHT_HALT_WAITS_FOR_LOOP:+ PREFLIGHT_HALT_WAITS_FOR_LOOP=$PREFLIGHT_HALT_WAITS_FOR_LOOP}" > "$run_dir/extra_flags.txt"
     FILE_BASE_PATH="$target" nohup java -jar "$jar" \
         --spring.profiles.active=dev-auto,fast \
         --autobuilder.run.budget-minutes="$minutes" \
@@ -353,15 +353,26 @@ run_live() {
         # has actually halted -- a halt line followed by a rewind is the loop going back, not ending.
         # Then wait, bounded, for the end report (the halt branch's last step, after its preserve),
         # as the fulfilled path above does, so the copy taken at the halt is the one archived.
-        if loop_halted "$applog"; then
-            local halt_settle_end=$(( $(date +%s) + 180 ))
-            while [ "$(date +%s)" -lt "$halt_settle_end" ]; do
-                post_rewind_log "$applog" | grep -q 'T4-CD: run end report w' && break
-                kill -0 "$pid" 2>/dev/null || break
-                sleep 10
-            done
+        # PREFLIGHT_HALT_WAITS_FOR_LOOP=0 restores the behaviour before 2026-10-09 for ablation runs: the first
+        # halt line anywhere in the log ends the run at once, rewind or not, with no wait for the end report.
+        local old_halt=0
+        if [ "${PREFLIGHT_HALT_WAITS_FOR_LOOP:-1}" = 0 ] \
+                && grep -qE 'Root goal exhausted|root .* marked GIVEN_UP|Pausing — manual input required|stagnation-runaway|root convergence stall|Pausing for review|build-blocked-deadlock|Exhaustion runaway detected|run end report written \(' "$applog"; then
+            old_halt=1
+        fi
+        if [ "$old_halt" = 1 ] || { [ "${PREFLIGHT_HALT_WAITS_FOR_LOOP:-1}" != 0 ] && loop_halted "$applog"; }; then
             local post="$run_dir/post-rewind.log"
-            post_rewind_log "$applog" > "$post"
+            if [ "$old_halt" = 1 ]; then
+                cp "$applog" "$post"
+            else
+                local halt_settle_end=$(( $(date +%s) + 180 ))
+                while [ "$(date +%s)" -lt "$halt_settle_end" ]; do
+                    post_rewind_log "$applog" | grep -q 'T4-CD: run end report w' && break
+                    kill -0 "$pid" 2>/dev/null || break
+                    sleep 10
+                done
+                post_rewind_log "$applog" > "$post"
+            fi
             if grep -qE 'Root goal exhausted|root .* marked GIVEN_UP' "$post"; then terminal="GOAL_EXHAUSTED"; break; fi
             if grep -qE 'Pausing — manual input required|stagnation-runaway' "$post"; then terminal="PAUSED"; break; fi
             # T5-BE: the loop's own brake halting is an HONEST terminal, not a deadline/silence.

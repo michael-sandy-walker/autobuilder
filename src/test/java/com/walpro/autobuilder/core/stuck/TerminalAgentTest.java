@@ -154,7 +154,7 @@ class TerminalAgentTest {
         }
         layer.beginCycle("c4", "sg");
         assertThat(layer.promptBlock(ctx)).as("structure answers first: what the receiver's JDK type declares")
-                .contains("Map declares:");
+                .contains("Map has no indexOf().").contains("get(Object) : V");
         detector.observeBuild("c4", failed, change); // it came back after the declared names
         assertThat(layer.promptBlock(ctx)).as("the line constructs nothing; the declaring file whole").contains("as it was adopted");
         verify(llm, never()).ask(anyList());

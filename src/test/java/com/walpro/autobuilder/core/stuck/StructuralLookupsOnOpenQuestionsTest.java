@@ -109,6 +109,6 @@ class StructuralLookupsOnOpenQuestionsTest {
         String[] first = firstAnswer(question);
         System.out.println("T4-DY lookups | " + question + " | rung " + first[0] + " | " + first[1]);
         assertThat(first[0]).isEqualTo("0");
-        assertThat(first[1]).startsWith("Map declares: ").contains("get(Object)").contains("It has no indexOf()");
+        assertThat(first[1]).startsWith("Map has no indexOf().").contains("get(Object) : V").contains("Map.Entry<K, V>");
     }
 }

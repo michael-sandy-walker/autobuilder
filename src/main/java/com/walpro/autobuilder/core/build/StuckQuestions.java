@@ -287,6 +287,91 @@ public final class StuckQuestions {
     }
 
     /**
+     * T6-T: the receiver answer as a PROMPT shows it -- the same class {@link #answer} lists whole, arranged so
+     * that the member the caller needs can be found: what the class declares itself first, each with what it
+     * returns, the members whose name starts with the same word as the failed call ahead of the rest; of what it
+     * inherits, only the members named like the call, and the rest as a count per declaring type.
+     *
+     * <p>Ladder-grind run 2026-10-10_19-22-18 stood at 48/51 for ninety minutes on one fact. The model called
+     * {@code RecordDeclaration.getRecordComponents()}; the answer it was shown did contain {@code getParameters()}
+     * -- as one entry among some 250, own and inherited, in alphabetical order, with no return types, 6,912
+     * characters long. It then wrote {@code getComponents()} instead: 61 candidates failed to compile on the two
+     * guesses. The names share no word, so no likeness of names finds the member; a list short enough to read,
+     * saying what each member yields, does. The arrangement is by what the class itself declares and by the
+     * call's own leading word -- nothing about any library.
+     *
+     * @return empty when the signature does not pose the receiver question, or the type is the project's own
+     */
+    public static Optional<String> receiverShown(String signature, Map<String, String> sources, TypeAuthority authority) {
+        if (signature == null || sources == null || authority == null) return Optional.empty();
+        String type = null, member = null;
+        Matcher receiverMatcher = RECEIVER_METHOD_PATTERN.matcher(signature);
+        if (receiverMatcher.find()) {
+            type = receiverMatcher.group(2);
+            member = receiverMatcher.group(1);
+        } else {
+            Matcher membersMatcher = MEMBERS_PATTERN.matcher(signature);
+            if (membersMatcher.find()) {
+                member = membersMatcher.group(1);
+                type = extractTypeFromMembersSignature(signature);
+                if (type != null && findSourceForType(type, sources).isPresent()) return Optional.empty();
+            }
+        }
+        if (type == null || member == null) return Optional.empty();
+        Optional<Class<?>> resolved = authority.resolve(type, sources);
+        if (resolved.isEmpty()) return Optional.empty();
+        Class<?> c = resolved.get();
+        Matcher word = Pattern.compile("^[a-z]+").matcher(member);
+        String leading = word.find() ? word.group() : member;
+        java.util.TreeSet<String> ownLike = new java.util.TreeSet<>(), own = new java.util.TreeSet<>();
+        Map<String, java.util.TreeSet<String>> inheritedLike = new java.util.TreeMap<>();
+        Map<String, Integer> inheritedRest = new java.util.TreeMap<>();
+        try {
+            for (java.lang.reflect.Method m : c.getMethods()) {
+                if (m.isBridge() || m.isSynthetic()) continue;
+                boolean like = namedLike(m.getName(), leading);
+                String shown = m.getName() + "(" + java.util.Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
+                        .collect(Collectors.joining(", ")) + ") : " + simpleTypeName(m.getGenericReturnType().getTypeName());
+                if (m.getDeclaringClass() == c) (like ? ownLike : own).add(shown);
+                else if (like) inheritedLike.computeIfAbsent(m.getDeclaringClass().getSimpleName(), k -> new java.util.TreeSet<>()).add(m.getName());
+                else inheritedRest.merge(m.getDeclaringClass().getSimpleName(), 1, Integer::sum);
+            }
+        } catch (LinkageError | TypeNotPresentException e) {
+            return Optional.empty();
+        }
+        if (ownLike.isEmpty() && own.isEmpty() && inheritedLike.isEmpty()) return Optional.empty();
+        StringBuilder sb = new StringBuilder(c.getSimpleName()).append(" has no ").append(member).append("().");
+        if (!ownLike.isEmpty()) {
+            sb.append(" Of what it declares itself, the members named like the call, each with what it returns: ")
+                    .append(String.join("; ", ownLike)).append('.');
+        }
+        if (!own.isEmpty()) {
+            sb.append(ownLike.isEmpty() ? " What it declares itself, each member with what it returns: " : " Its other own members: ")
+                    .append(String.join("; ", own)).append('.');
+        }
+        if (!inheritedLike.isEmpty()) {
+            sb.append(" Inherited and named like the call, by name only: ").append(inheritedLike.entrySet().stream()
+                    .map(e -> "from " + e.getKey() + " " + String.join(", ", e.getValue())).collect(Collectors.joining("; "))).append('.');
+        }
+        if (!inheritedRest.isEmpty()) {
+            sb.append(" It inherits further members not listed here: ").append(inheritedRest.entrySet().stream()
+                    .map(e -> e.getValue() + " from " + e.getKey()).collect(Collectors.joining(", "))).append('.');
+        }
+        return Optional.of(sb.toString());
+    }
+
+    /** Whether {@code name} starts with the word {@code leading}: the word itself, or followed by a capital. */
+    private static boolean namedLike(String name, String leading) {
+        return name.startsWith(leading)
+                && (name.length() == leading.length() || Character.isUpperCase(name.charAt(leading.length())));
+    }
+
+    /** A type as source code writes it: every package prefix dropped, type arguments kept. */
+    static String simpleTypeName(String typeName) {
+        return typeName.replaceAll("(?<![\\w.])(?:[a-z_][\\w]*\\.)+", "").replace('$', '.');
+    }
+
+    /**
      * The receiver question: {@code type} is not the project's, and the authority names the one class it
      * is. The answer is what that class declares -- its public methods, own and inherited, as
      * {@code name(ParameterSimpleType, ...)}, sorted, compiler-generated bridge and synthetic methods left

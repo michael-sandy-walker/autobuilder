@@ -72,6 +72,50 @@ class TypeAuthorityTest {
                 .as("the JDK alone does not know a dependency type").isEmpty();
     }
 
+    /**
+     * T6-T, ladder-grind 2026-10-10_19-22-18: the answer held getParameters() among some 250 members, alphabetical and
+     * without return types, and the model guessed a second wrong name. Shown for a prompt, the type's own members
+     * named like the call come first, each with what it returns, and what it inherits is counted, not listed.
+     */
+    @Test
+    void aDependencyTypesMembersAreShownArrangedForFindingOne() throws Exception {
+        String jar = System.getProperty("user.home")
+                + "/.m2/repository/com/github/javaparser/javaparser-core/3.25.7/javaparser-core-3.25.7.jar";
+        org.junit.jupiter.api.Assumptions.assumeTrue(new File(jar).isFile(), "javaparser-core 3.25.7 in the local repository");
+        List<String> jars = List.of(jar);
+        URLClassLoader loader = new URLClassLoader(new URL[]{new File(jar).toURI().toURL()}, ClassLoader.getPlatformClassLoader());
+        StuckQuestions.TypeAuthority project = (name, sources) -> StuckQuestions.resolveAgainst(name, sources, loader, simple -> {
+            Set<String> c = new LinkedHashSet<>(JdkPlatformTypeIndex.exportedTypes(simple));
+            c.addAll(PackageDiscoveryService.scanJarsForType(jars, simple).keySet());
+            return c;
+        });
+        String signature = "the build fails: RecordDeclaration has no getRecordComponents()";
+
+        String shown = StuckQuestions.receiverShown(signature, PLAIN, project).orElseThrow();
+        String whole = String.join("; ", StuckQuestions.answer(signature, PLAIN, project).orElseThrow().declared());
+
+        assertThat(shown).startsWith("RecordDeclaration has no getRecordComponents().");
+        String namedLike = shown.substring(shown.indexOf("named like the call"), shown.indexOf("Its other own members"));
+        assertThat(namedLike).contains("getParameters() : NodeList<Parameter>");
+        assertThat(shown).contains("It inherits further members not listed here:").contains(" from Object")
+                .doesNotContain("wait(").doesNotContain("com.github.");
+        assertThat(shown.length()).as("short enough to read: a fraction of the whole list").isLessThan(whole.length() / 2);
+    }
+
+    @Test
+    void aPlatformTypesMembersAreArrangedTheSameWayAndAProjectTypeIsLeftToItsSources() {
+        String shown = StuckQuestions.receiverShown(
+                "the build fails: Quill.java: cannot find symbol method getLength() in variable nib of type java.lang.String",
+                PLAIN, StuckQuestions.TypeAuthority.platform()).orElseThrow();
+
+        assertThat(shown).startsWith("String has no getLength().").contains("getBytes() : byte[]").contains("length() : int");
+        assertThat(shown.indexOf("getBytes() : byte[]")).isLessThan(shown.indexOf("length() : int"));
+        assertThat(StuckQuestions.receiverShown("the build fails: Timer has no getFire()", PLAIN,
+                StuckQuestions.TypeAuthority.platform())).as("the project's own type: its sources answer").isEmpty();
+        assertThat(StuckQuestions.simpleTypeName("java.util.Map<java.lang.String, java.util.List<a.b.Quill>>"))
+                .isEqualTo("Map<String, List<Quill>>");
+    }
+
     /** The independent review of the first draft: an explicit import outranks java.lang and a unique platform name. */
     @Test
     void anExplicitImportOutranksJavaLangAndAUniquePlatformName() {

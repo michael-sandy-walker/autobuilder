@@ -133,7 +133,10 @@ public final class StuckDiagnosis {
         StringBuilder sb = new StringBuilder();
         String meant = meantByImports(signature, now.or(() -> adopted).get(), a);
         if (now.isPresent()) {
-            sb.append(render(now.get()));
+            // T6-T: a library type's members are shown arranged for finding one, not whole and alphabetical.
+            Optional<String> arranged = now.get().kind() == StuckQuestions.Kind.MEMBERS && now.get().meant() == null
+                    ? StuckQuestions.receiverShown(signature, a.currentSources(), a.types()) : Optional.empty();
+            sb.append(arranged.orElseGet(() -> render(now.get())));
             if (adopted.isPresent() && !adopted.get().declared().equals(now.get().declared())) {
                 sb.append("\n    When the project was adopted it was: ").append(String.join("; ", adopted.get().declared()));
             }

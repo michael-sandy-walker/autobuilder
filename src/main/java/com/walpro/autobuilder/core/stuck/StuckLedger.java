@@ -53,6 +53,11 @@ public final class StuckLedger {
         String deliveredCycle;
         String endedCycle;
         boolean diagnosisRequested;
+        /**
+         * T6-T: the delivered answer found no room in the prompt it was due in, so the model has not read it.
+         * A failure that comes back meanwhile says nothing about the answer and does not move to the next question.
+         */
+        boolean withheld;
         /** Observation sequence at the last count and at the last delivery, so a recurrence in the delivery's own cycle is seen. */
         long lastObservedSeq;
         long deliveredSeq;
@@ -78,6 +83,7 @@ public final class StuckLedger {
         public String deliveredCycle() { return deliveredCycle; }
         public String endedCycle() { return endedCycle; }
         public boolean diagnosisRequested() { return diagnosisRequested; }
+        public boolean withheld() { return withheld; }
         public StuckPriors.Prior prior() { return prior; }
 
         /** The last answer delivered, or null. */
@@ -169,6 +175,8 @@ public final class StuckLedger {
                 }
             }
             case DELIVERED, ENDED -> {
+                // An answer nobody was shown cannot have failed: it stays due, at the same question.
+                if (e.status == Status.DELIVERED && e.withheld) return Change.COUNTED;
                 e.recurrencesAfterDelivery++;
                 e.rung++;
                 e.status = Status.PENDING;
@@ -184,6 +192,16 @@ public final class StuckLedger {
     /** Entries with a question due, oldest first. */
     public synchronized List<Entry> pending() {
         return entries.values().stream().filter(e -> e.status == Status.PENDING).toList();
+    }
+
+    /**
+     * T6-T: whether the entry's standing answer was left out of the prompt it was due in. Ladder-grind run
+     * 2026-10-10_19-22-18 left four answers out for want of room -- one for the very test that kept failing --
+     * and counted each delivered: the next recurrence moved on to the next question, past a fact the model had
+     * never read.
+     */
+    public synchronized void withheld(Entry e, boolean withheld) {
+        if (e != null) e.withheld = withheld;
     }
 
     /** Entries whose delivered answer still stands, most recently delivered first. */
@@ -204,6 +222,7 @@ public final class StuckLedger {
                 cycleId, asked.answered() ? subGoalId : null));
         if (asked.answered()) {
             e.status = Status.DELIVERED;
+            e.withheld = false;
             e.deliveredCycle = cycleId;
             e.deliveredSeq = ++seq;
             if (asked.needsOperator() && !e.diagnosisRequested) {

@@ -28,6 +28,29 @@ class StuckLedgerTest {
         assertThat(l.pending()).hasSize(1);
     }
 
+    /**
+     * T6-T, ladder-grind 2026-10-10_19-22-18: four answers found no room in the prompt and were counted delivered;
+     * the next recurrence moved each to its next question, past a fact the model had never read.
+     */
+    @Test
+    void aRecurrenceDoesNotMovePastAnAnswerThatWasNeverShown() {
+        StuckLedger l = new StuckLedger();
+        for (String c : List.of("c1", "c2", "c3")) l.observe(build(c));
+        StuckLedger.Entry e = l.pending().get(0);
+        l.recordAsked(e, answered(), "c3", "sg");
+        int rung = e.rung();
+        l.withheld(e, true);
+
+        assertThat(l.observe(build("c4"))).isEqualTo(StuckLedger.Change.COUNTED);
+        assertThat(e.status()).as("still owed, at the same question").isEqualTo(StuckLedger.Status.DELIVERED);
+        assertThat(e.rung()).isEqualTo(rung);
+        assertThat(l.delivered()).containsExactly(e);
+
+        l.withheld(e, false);   // shown at last
+        assertThat(l.observe(build("c5"))).isEqualTo(StuckLedger.Change.RECURRED_AFTER_DELIVERY);
+        assertThat(e.rung()).isEqualTo(rung + 1);
+    }
+
     @Test
     void aRecurrenceAfterADeliveredAnswerMovesToTheNextQuestionEvenInTheSameCycle() {
         StuckLedger l = new StuckLedger();

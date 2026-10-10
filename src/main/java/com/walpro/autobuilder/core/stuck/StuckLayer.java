@@ -240,6 +240,8 @@ public class StuckLayer {
                 .filter(e -> aboutTheTree(e.source()) || e.subGoalId() == null || e.subGoalId().equals(subGoal))
                 .toList();
         if (standing.isEmpty()) return null;
+        // T6-T: an answer left out of an earlier prompt is given room before one already read.
+        standing = standing.stream().sorted(java.util.Comparator.comparing((StuckLedger.Entry e) -> !e.withheld())).toList();
         StringBuilder sb = new StringBuilder("--- ANSWERS TO WHAT KEPT FAILING (read from the sources, not advice) ---\n")
                 .append("These failures repeated, so the loop looked up what the code and the specification actually say."
                         + " Write against these facts:\n");
@@ -247,10 +249,14 @@ public class StuckLayer {
         // answered by that one file, and showing it five times would crowd out the rest of the prompt.
         Map<String, List<StuckLedger.Entry>> byAnswer = new LinkedHashMap<>();
         for (StuckLedger.Entry e : standing) {
-            if (byAnswer.size() >= PROMPT_ANSWERS && !byAnswer.containsKey(e.deliveredAnswer())) continue;
+            if (byAnswer.size() >= PROMPT_ANSWERS && !byAnswer.containsKey(e.deliveredAnswer())) {
+                ledger.withheld(e, true);
+                continue;
+            }
             byAnswer.computeIfAbsent(e.deliveredAnswer(), k -> new ArrayList<>()).add(e);
         }
         int left = 0;
+        boolean anyShown = false;
         for (Map.Entry<String, List<StuckLedger.Entry>> a : byAnswer.entrySet()) {
             StringBuilder one = new StringBuilder();
             for (StuckLedger.Entry e : a.getValue()) {
@@ -260,11 +266,19 @@ public class StuckLayer {
             one.append("    ").append(a.getKey().replace("\n", "\n    ")).append('\n');
             if (PromptTokenBudget.estimateTokens(sb) + PromptTokenBudget.estimateTokens(one) > maxTokens) {
                 left++;
-                log.warn("T4-DY: an answer for '{}' did not fit this prompt ({} token(s) free) -- left out whole;"
-                        + " the ledger still counts it delivered", a.getValue().get(0).signature(), maxTokens);
+                // Left out behind others: it is still owed, and is first in line next time. Left out with the
+                // block still empty: it fits no prompt of this size at all, and holding the question for it
+                // would hold it for ever -- that one counts as delivered, as before.
+                boolean owed = anyShown;
+                for (StuckLedger.Entry e : a.getValue()) ledger.withheld(e, owed);
+                log.warn("T4-DY: an answer for '{}' did not fit this prompt ({} token(s) free) -- left out whole; {}",
+                        a.getValue().get(0).signature(), maxTokens,
+                        owed ? "it stays owed and goes first in the next prompt" : "it fits no prompt of this size; counted delivered");
                 continue;
             }
             sb.append(one);
+            anyShown = true;
+            for (StuckLedger.Entry e : a.getValue()) ledger.withheld(e, false);
         }
         if (left > 0) sb.append("  (").append(left).append(" more answer(s) left out: no room in this prompt)\n");
         return sb.toString().stripTrailing();

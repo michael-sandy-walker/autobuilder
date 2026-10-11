@@ -178,7 +178,8 @@ public final class StuckLedger {
                 // An answer nobody was shown cannot have failed: it stays due, at the same question.
                 if (e.status == Status.DELIVERED && e.withheld) return Change.COUNTED;
                 e.recurrencesAfterDelivery++;
-                e.rung++;
+                // A question that repeats is asked again at the same place: it has more than one thing to say.
+                if (!StuckDiagnosis.repeats(e.source)) e.rung++;
                 e.status = Status.PENDING;
                 e.endedCycle = null;
                 return Change.RECURRED_AFTER_DELIVERY;

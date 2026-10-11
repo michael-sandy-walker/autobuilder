@@ -85,6 +85,18 @@ public final class StuckDiagnosis {
         };
     }
 
+    /**
+     * T6-T: whether a source's question is asked AGAIN when the failure comes back after its answer, instead of the
+     * next one. A set of failing tests has one question -- what did the test execute? -- and as many answers as it
+     * has tests: asked again, it is put to a test not traced yet, and has no answer once every one was.
+     *
+     * <p>Ladder-grind, four runs on fd0cff33 (2026-10-10/11): each took exactly one trace, always of the same test,
+     * while two to four tests kept failing; the others were never traced, and the runs sat flat from minute 20-50.
+     */
+    public static boolean repeats(StuckObservation.Source source) {
+        return source == StuckObservation.Source.TEST_FAILURES;
+    }
+
     /** The {@code rung}-th question for this observation, asked of the authorities; empty when there is none left. */
     public static Optional<Asked> ask(StuckObservation.Source source, String signature, List<String> detail,
                                       int rung, Authorities authorities) {

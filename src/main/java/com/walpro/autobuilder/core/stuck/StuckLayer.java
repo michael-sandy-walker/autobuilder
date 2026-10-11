@@ -248,13 +248,17 @@ public class StuckLayer {
         // One answer once, under every signature it answers: several failures in one file are often
         // answered by that one file, and showing it five times would crowd out the rest of the prompt.
         Map<String, List<StuckLedger.Entry>> byAnswer = new LinkedHashMap<>();
+        java.util.Optional<java.util.Set<String>> failing = failingOnTree();
         for (StuckLedger.Entry e : standing) {
-            if (byAnswer.size() >= PROMPT_ANSWERS && !byAnswer.containsKey(e.deliveredAnswer())) {
+            String shown = shownAnswer(e, failing);
+            if (shown == null) continue;   // every test it traced passes now: nothing of it is still true
+            if (byAnswer.size() >= PROMPT_ANSWERS && !byAnswer.containsKey(shown)) {
                 ledger.withheld(e, true);
                 continue;
             }
-            byAnswer.computeIfAbsent(e.deliveredAnswer(), k -> new ArrayList<>()).add(e);
+            byAnswer.computeIfAbsent(shown, k -> new ArrayList<>()).add(e);
         }
+        if (byAnswer.isEmpty()) return null;
         int left = 0;
         boolean anyShown = false;
         for (Map.Entry<String, List<StuckLedger.Entry>> a : byAnswer.entrySet()) {
@@ -282,6 +286,28 @@ public class StuckLayer {
         }
         if (left > 0) sb.append("  (").append(left).append(" more answer(s) left out: no room in this prompt)\n");
         return sb.toString().stripTrailing();
+    }
+
+    private static final java.util.regex.Pattern TRACED_TEST = java.util.regex.Pattern.compile("^The failing test ([\\w$]+\\.[\\w$]+) was run again under the debugger");
+
+    /**
+     * What an entry's standing answer says in a prompt. For tests that keep failing it is every trace the entry
+     * took whose test still fails on the tree, the latest first -- a trace of a test that passes now describes code
+     * that has since been put right, and is left out (T6-T: field61's last 25 minutes showed the trace of a test
+     * that had passed since minute 93, and two candidates broke that test again). Null when nothing is left.
+     */
+    static String shownAnswer(StuckLedger.Entry e, java.util.Optional<java.util.Set<String>> failingOnTree) {
+        if (e.source() != StuckObservation.Source.TEST_FAILURES) return e.deliveredAnswer();
+        List<String> traces = new ArrayList<>();
+        List<StuckLedger.Question> asked = e.asked();
+        for (int i = asked.size() - 1; i >= 0; i--) {
+            String answer = asked.get(i).answer();
+            if (answer == null) continue;
+            java.util.regex.Matcher m = TRACED_TEST.matcher(answer);
+            if (m.find() && failingOnTree.isPresent() && !failingOnTree.get().contains(m.group(1))) continue;
+            if (!traces.contains(answer)) traces.add(answer);
+        }
+        return traces.isEmpty() ? null : String.join("\n", traces);
     }
 
     /** A second reading for the same subgoal joins the first; neither replaces the other. */
@@ -373,7 +399,14 @@ public class StuckLayer {
      * made the report stale, so no trace was ever taken.
      */
     static java.util.Optional<FailingTest> failingTestIn(List<String> evidence) {
-        if (evidence == null) return java.util.Optional.empty();
+        List<FailingTest> all = failingTestsIn(evidence);
+        return all.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of(all.get(0));
+    }
+
+    /** Every failing test the evidence names, each once, in the evidence's order. */
+    static List<FailingTest> failingTestsIn(List<String> evidence) {
+        List<FailingTest> out = new ArrayList<>();
+        if (evidence == null) return out;
         for (String line : evidence) {
             String[] parts = line.split(" -- ");
             String head = parts[0].strip();
@@ -381,9 +414,45 @@ public class StuckLayer {
             if (dot <= 0) continue;
             String cls = head.substring(0, dot), method = head.substring(dot + 1).replaceAll("[(\\[].*$", "");
             if (!cls.matches("[A-Za-z_$][\\w$]*") || !method.matches("[A-Za-z_$][\\w$]*")) continue;
-            return java.util.Optional.of(new FailingTest(cls, method, parts.length > 1 ? parts[parts.length - 1].strip() : null));
+            if (out.stream().anyMatch(t -> t.testClass().equals(cls) && t.method().equals(method))) continue;
+            out.add(new FailingTest(cls, method, parts.length > 1 ? parts[parts.length - 1].strip() : null));
         }
-        return java.util.Optional.empty();
+        return out;
+    }
+
+    /** T6-T: the tree each test was last traced on (a digest of the live sources), so the next trace goes to another. */
+    private final Map<String, Integer> tracedOnTree = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong traceSeq = new java.util.concurrent.atomic.AtomicLong();
+    private final Map<String, Long> tracedAt = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The tests failing on the tree as merged, as {@code Class.method}; empty Optional while that is not known. */
+    java.util.Optional<java.util.Set<String>> failingOnTree() {
+        if (testRunGate == null) return java.util.Optional.empty();
+        return testRunGate.treeFailing().map(names -> {
+            java.util.Set<String> out = new java.util.HashSet<>();
+            for (String n : names) out.add(n.replaceAll("[(\\[].*$", ""));
+            return out;
+        });
+    }
+
+    /**
+     * T6-T: the test the trace question is put to this time -- of the tests the evidence names that still fail on
+     * the tree, one never traced; when each was, the one whose trace is of another tree than this and was taken
+     * longest ago; none when every one was traced on this very tree (the question then has nothing new to say).
+     */
+    java.util.Optional<FailingTest> nextToTrace(List<String> evidence, Map<String, String> live) {
+        java.util.Optional<java.util.Set<String>> failing = failingOnTree();
+        int tree = live == null ? 0 : live.hashCode();
+        FailingTest stale = null;
+        for (FailingTest t : failingTestsIn(evidence)) {
+            String name = t.testClass() + "." + t.method();
+            if (failing.isPresent() && !failing.get().contains(name)) continue;
+            Integer on = tracedOnTree.get(name);
+            if (on == null) return java.util.Optional.of(t);
+            if (on != tree && (stale == null || tracedAt.getOrDefault(name, 0L)
+                    < tracedAt.getOrDefault(stale.testClass() + "." + stale.method(), 0L))) stale = t;
+        }
+        return java.util.Optional.ofNullable(stale);
     }
 
     /**
@@ -392,9 +461,11 @@ public class StuckLayer {
      */
     private StuckDiagnosis.Asked traceFailingTest(String signature, List<String> evidence, java.nio.file.Path project,
                                                   Map<String, String> live) {
-        var named = failingTestIn(evidence);
+        var named = nextToTrace(evidence, live);
         if (named.isEmpty()) return new StuckDiagnosis.Asked("", "", null, false);
         FailingTest chosen = named.get();
+        tracedOnTree.put(chosen.testClass() + "." + chosen.method(), live == null ? 0 : live.hashCode());
+        tracedAt.put(chosen.testClass() + "." + chosen.method(), traceSeq.incrementAndGet());
         var calls = ExecutionTrace.trace(project, chosen.testClass(), chosen.method(), executionTraceBudgetMs);
         if (calls.isEmpty()) {
             log.info("T4-DY: no trace of {}.{} -- the run could not be attached to, or it called none of the project's code",

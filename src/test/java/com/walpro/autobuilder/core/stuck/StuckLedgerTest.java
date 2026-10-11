@@ -144,7 +144,10 @@ class StuckLedgerTest {
         l.recordAsked(t, answered(), "c1", "sg-1");
         l.observe(new StuckObservation(StuckObservation.Source.TEST_FAILURES,
                 "the same tests keep failing: QuillTest.dries", "sg-1", "c2", List.of("QuillTest.dries -- expected 3")));
-        l.noQuestionLeft(t);
+        // The trace question repeats: asked again, and with every test already traced it has nothing new to say.
+        assertThat(t.status()).isEqualTo(StuckLedger.Status.PENDING);
+        assertThat(t.rung()).as("the same question, not the next").isZero();
+        l.recordAsked(t, new StuckDiagnosis.Asked("What did the failing test's call execute?", "observation", null, false), "c2", "sg-1");
 
         assertThat(t.status()).isEqualTo(StuckLedger.Status.UNANSWERED);
         assertThat(l.delivered()).containsExactly(t);

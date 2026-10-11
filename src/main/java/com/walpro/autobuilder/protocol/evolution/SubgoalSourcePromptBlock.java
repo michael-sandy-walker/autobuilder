@@ -86,6 +86,7 @@ public final class SubgoalSourcePromptBlock {
         // is StuckQuestions", and the model rewrote that 502-line class whole from a two-line outline -- it
         // had never been shown it. First mentioned first, so the subgoal's own files keep the budget.
         if (input.currentGoalDescription() != null) text.append(input.currentGoalDescription()).append('\n');
+        int goalEnd = text.length();
         if (input.rejectionFeedback() != null) input.rejectionFeedback().forEach(r -> { if (r != null) text.append(r).append('\n'); });
 
         // T6-T: the files the last, discarded answer could not edit. Its SEARCH text was not in the file,
@@ -108,12 +109,21 @@ public final class SubgoalSourcePromptBlock {
         }
         List<String> mentioned = new ArrayList<>();
         List<String> bySubgoal = new ArrayList<>();
+        List<String> byRejection = new ArrayList<>();
         Matcher m = CLASS_NAME.matcher(text);
         while (m.find()) {
             String path = byClass.get(m.group(1));
             if (path != null && !mentioned.contains(path)) mentioned.add(path);
             if (path != null && m.start() < subgoalEnd && !bySubgoal.contains(path)) bySubgoal.add(path);
+            if (path != null && m.start() >= goalEnd && !byRejection.contains(path)) byRejection.add(path);
         }
+        // T6-T: a work item that names a file it may only read -- the test that fails -- is about that test: the
+        // files shown are the ones the item names, every project class its test refers to, and what the last
+        // rejection named. What only the GOAL names is left out. Ladder-grind run 2026-10-10_23-45-15: for one
+        // failing test of one class the prompt still carried two unrelated classes whole (some 700 lines) because
+        // the goal names every class of the change; the room they took is the room the traces and answers need
+        // (four answers were left out for want of it in run 2026-10-10_19-22-18).
+        boolean aboutItsTests = bySubgoal.stream().anyMatch(isProtected);
         // T6-T: the order is what keeps the class to change in. Ladder-rows run 2026-10-05_12-25-01: the one
         // class the change had to edit (16 KB) was named after a read-only specification test and a class the
         // model had already finished; they took the budget first, and it was left out of 49 of 61 prompts.
@@ -131,13 +141,15 @@ public final class SubgoalSourcePromptBlock {
             if (!isProtected.test(p)) continue;
             String reader = input.previousOutput().get(p);
             if (reader == null) continue;
-            mentioned.stream().filter(q -> !isProtected.test(q) && !q.equals(p))
+            (aboutItsTests ? new ArrayList<>(byClass.values()) : mentioned).stream()
+                    .filter(q -> !isProtected.test(q) && !q.equals(p))
                     .filter(q -> Pattern.compile("\\b" + Pattern.quote(simpleName(q)) + "\\b").matcher(reader).find())
                     .forEach(add);
             add.accept(p);
         }
-        mentioned.stream().filter(p -> !isProtected.test(p)).forEach(add);
-        mentioned.stream().filter(isProtected).forEach(add);
+        List<String> rest = aboutItsTests ? byRejection : mentioned;
+        rest.stream().filter(p -> !isProtected.test(p)).forEach(add);
+        rest.stream().filter(isProtected).forEach(add);
         if (named.isEmpty()) return null;
 
         // The names a too-large file's parts are chosen by: what the work says, and what the discarded answer

@@ -192,6 +192,49 @@ class SubgoalSourcePromptBlockTest {
                 .doesNotContain("```java [src/main/java/zeta/Inkwell.java]");
     }
 
+    /**
+     * T6-T, ladder-grind 2026-10-10_23-45-15: for one failing test of one class the prompt carried two unrelated
+     * classes whole, because the goal names every class of the change. A work item that names the test it may only
+     * read is about that test: its files, every project class the test refers to -- named by the goal or not --
+     * and what the last rejection named; what only the goal names is left out, room or no room.
+     */
+    @Test
+    void anItemAboutItsFailingTestShowsWhatTheTestRefersTo_andNotWhatOnlyTheGoalNames() {
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("src/main/java/zeta/Inkwell.java", INKWELL);
+        files.put("src/main/java/zeta/Nib.java", NIB);
+        files.put("src/main/java/zeta/Quill.java", quill(3));
+        files.put("src/main/java/zeta/Blotter.java", "package zeta;\npublic class Blotter { public int dab() { return 1; } }\n");
+        files.put("src/test/java/zeta/QuillTest.java",
+                "package zeta;\nclass QuillTest { Quill q = new Quill(); Blotter b = new Blotter(); }\n");
+        CycleContextData c = CycleContextData.builder()
+                .currentSubGoalDescription("Make the suite pass: QuillTest.drainsToZero fails")
+                .currentGoalDescription("The classes to change are Inkwell, Nib and Quill.")
+                .rejectionFeedback(List.of("The evaluator found: Nib still rounds down."))
+                .previousOutput(files).build();
+
+        String block = SubgoalSourcePromptBlock.render(c, 200_000, p -> p.startsWith("src/test/"));
+
+        assertThat(block).contains("[src/main/java/zeta/Quill.java]", "[src/test/java/zeta/QuillTest.java")
+                .as("the test refers to Blotter, which the goal never names").contains("[src/main/java/zeta/Blotter.java]")
+                .as("the last rejection named Nib").contains("[src/main/java/zeta/Nib.java]")
+                .as("only the goal names Inkwell, and there was room for it").doesNotContain("zeta/Inkwell.java");
+    }
+
+    /** An item that names only files it may write still gets what the goal names: it says what else there is. */
+    @Test
+    void anItemThatNamesNoReadOnlyFileStillGetsTheFilesTheGoalNames() {
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("src/main/java/zeta/Inkwell.java", INKWELL);
+        files.put("src/main/java/zeta/Quill.java", quill(3));
+        CycleContextData c = CycleContextData.builder()
+                .currentSubGoalDescription("Change Quill so that it drains")
+                .currentGoalDescription("The classes to change are Inkwell and Quill.").previousOutput(files).build();
+
+        assertThat(SubgoalSourcePromptBlock.render(c, 200_000, p -> p.startsWith("src/test/")))
+                .contains("[src/main/java/zeta/Quill.java]", "[src/main/java/zeta/Inkwell.java]");
+    }
+
     /** T6-T: a read-only file the work names members of is shown as those members, leaving room for the rest. */
     @Test
     void aReadOnlyTestIsShownAsTheCasesTheWorkNames() {

@@ -35,7 +35,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 ## Roadmap
 - `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-10-05)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-10-10)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-10-11)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: live ordering is the 2026-08-23 REORDER section at the end; S1-S6 kept for reasoning only. Never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-10-10)
+- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-10-11)
 - `project_wave2_structure.md`: wave 2's five layers and gate-driven sequence; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
@@ -128,6 +128,7 @@ Evidence discipline:
 - `feedback_grep_the_behaviour_not_the_name.md`: a grep finds a SPELLING, not a BEHAVIOUR; test the predicate on a known positive before reporting zero. (reviewed 2026-09-13)
 - `feedback_count_events_not_log_lines.md`: count the EVENT, not log lines mentioning it; re-rendered records inflated two ticket headlines 23x and 3x. (reviewed 2026-08-01)
 - `feedback_dont_group_defects_by_vocabulary.md`: a shared description is not a shared cause; verify each member's mechanism. (reviewed 2026-08-29)
+- `feedback_compare_against_the_last_good_build.md`: judge a new line against the last GOOD build's runs (scores, failing sets, best measure), never its own predecessor; name the reference in the batch header. (reviewed 2026-10-11)
 - `feedback_dont_evaluate_a_build_with_older_runs.md`: a window is a rate only if build AND target are constant; split by target first. (reviewed 2026-09-21)
 - `feedback_verify_diff_is_substantive.md`: prove which input now yields different output; green tests on a no-op diff is not progress. (reviewed 2026-09-08)
 - `feedback_verify_at_decision_timestamp.md`: diagnose against the state AT decision time (per-cycle snapshots), not the final artifact. (reviewed 2026-07-09)
@@ -161,6 +162,7 @@ Code and design constraints:
 - `feedback_string_consumption_path.md`: "structured, do not string-scrape" governs CODE consuming strings for control flow, NOT prose relayed into another agent's PROMPT. (reviewed 2026-07-09)
 
 Watchers:
+- `feedback_batch_watcher_alarms_on_the_environment.md`: the watcher alarms on Neo4j down and under 2 GB available; a run with almost no cycles is an environment failure, not a score. (reviewed 2026-10-11)
 - `feedback_monitor_every_terminal.md`: a monitor must match EVERY terminal state; stopping one for noise means re-arming a narrower one, never going blind. (reviewed 2026-07-27)
 - `feedback_escalate_unrecoverable_stagnation.md`: watchers must detect periodic failure patterns and inform early, not just terminal markers and silence. (reviewed 2026-07-09)
 - `feedback_waiter_fires_on_loop_terminal.md`: a run waiter fires on the LOOP's terminal line, not only preflight's final line minutes later. (reviewed 2026-09-24)

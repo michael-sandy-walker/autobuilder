@@ -42,6 +42,10 @@ import java.util.regex.Pattern;
  * files that test uses, then the test); then the other files the work may write; then the ones it may only
  * read -- each group first mentioned first.
  *
+ * <p><b>An item about its failing test.</b> Once the suite runs on the tree, a work item that names a test it may
+ * only read is shown its own files and what that test refers to; the other files the goal names stay as what
+ * they declare, not as their source. Before the suite compiles every file the goal names is shown.
+ *
  * <p><b>How much.</b> At most half the headroom still free where the block is placed; the rest stays
  * for the blocks after it. A file that does not fit is never cut mid-way, because a half-shown file
  * invites the same invention: it is shown as the whole members the work names (an edit block needs only
@@ -75,6 +79,16 @@ public final class SubgoalSourcePromptBlock {
      *                    files it may write, so a read-only test never takes the place of the class to change.
      */
     public static String render(CycleContextData input, int headroomTokens, Predicate<String> isProtected) {
+        return render(input, headroomTokens, isProtected, false);
+    }
+
+    /**
+     * @param treeTestsRan whether the suite compiled and ran on the tree as it is now. Only then can a work item
+     *                     be about a test that FAILS; before that its test does not compile, and what stands in
+     *                     the way is the rest of the change.
+     */
+    public static String render(CycleContextData input, int headroomTokens, Predicate<String> isProtected,
+            boolean treeTestsRan) {
         if (!enabled) return null;
         if (input == null || input.previousOutput() == null || input.previousOutput().isEmpty()) return null;
         StringBuilder text = new StringBuilder();
@@ -123,7 +137,14 @@ public final class SubgoalSourcePromptBlock {
         // failing test of one class the prompt still carried two unrelated classes whole (some 700 lines) because
         // the goal names every class of the change; the room they took is the room the traces and answers need
         // (four answers were left out for want of it in run 2026-10-10_19-22-18).
-        boolean aboutItsTests = bySubgoal.stream().anyMatch(isProtected);
+        //
+        // Only once the suite has run on the tree. The condition used to be the named read-only file alone, and
+        // the items worked BEFORE the suite compiles name their tests too: ladder-rows runs 2026-10-12_11-36-58
+        // and 2026-10-12_13-39-25 showed the class the ticket is about in 43 and 36 of some 43 prompts where the
+        // run before this narrowing showed it in every one, and took 55 and 68 minutes to a suite that compiles
+        // (17 before); ladder-grind 44, 48 and 95 (11 and 11 before). While the tests do not compile the work is
+        // the whole coupled change, so every file the goal names is shown.
+        boolean aboutItsTests = treeTestsRan && bySubgoal.stream().anyMatch(isProtected);
         // T6-T: the order is what keeps the class to change in. Ladder-rows run 2026-10-05_12-25-01: the one
         // class the change had to edit (16 KB) was named after a read-only specification test and a class the
         // model had already finished; they took the budget first, and it was left out of 49 of 61 prompts.
@@ -151,6 +172,12 @@ public final class SubgoalSourcePromptBlock {
         rest.stream().filter(p -> !isProtected.test(p)).forEach(add);
         rest.stream().filter(isProtected).forEach(add);
         if (named.isEmpty()) return null;
+        // What the narrowing leaves out stays in the prompt as what it declares (user, 2026-10-12: "a small
+        // reference regarding every class involved instead of trimming it"): a class that is not shown is
+        // otherwise a class the model does not know exists, and it writes a second one.
+        List<String> referenced = !aboutItsTests ? List.of() : mentioned.stream()
+                .filter(p -> !isProtected.test(p) && !named.containsKey(p))
+                .filter(p -> { String c = input.previousOutput().get(p); return c != null && !c.isBlank(); }).toList();
 
         // The names a too-large file's parts are chosen by: what the work says, and what the discarded answer
         // tried to change.
@@ -187,6 +214,27 @@ public final class SubgoalSourcePromptBlock {
         if (shown == 0) return null;
         if (!leftOut.isEmpty()) {
             sb.append("Also named but too large to show here: ").append(String.join(", ", leftOut)).append(".\n");
+        }
+        if (!referenced.isEmpty()) {
+            String head = "These files belong to the same change and exist as well. They are not shown in full, because"
+                    + " this work is about the failing test above; what each declares:\n";
+            StringBuilder ref = new StringBuilder();
+            int refUsed = PromptTokenBudget.estimateTokens(head);
+            for (String path : referenced) {
+                String content = input.previousOutput().get(path);
+                String line = null;
+                for (String candidate : new String[]{outline(path, content, true), outline(path, content, false),
+                        "- " + path + "\n"}) {
+                    if (candidate != null && used + refUsed + PromptTokenBudget.estimateTokens(candidate) <= budget) {
+                        line = candidate;
+                        break;
+                    }
+                }
+                if (line == null) continue;
+                ref.append(line);
+                refUsed += PromptTokenBudget.estimateTokens(line);
+            }
+            if (ref.length() > 0) sb.append(head).append(ref);
         }
         return sb.toString().stripTrailing();
     }
@@ -269,6 +317,47 @@ public final class SubgoalSourcePromptBlock {
             shown.add(new int[]{from, to});
         }
         return used == header ? null : sb.append('\n').toString();
+    }
+
+    /**
+     * What a file declares, without a body: its types, and for each its members -- with their signatures, or
+     * ({@code signatures} false) by name alone, for a file whose signatures would not fit. Null when the file
+     * does not parse.
+     */
+    static String outline(String path, String content, boolean signatures) {
+        CompilationUnit unit = new JavaParser(new ParserConfiguration()
+                .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17)).parse(content).getResult().orElse(null);
+        if (unit == null || unit.getTypes().isEmpty()) return null;
+        StringBuilder sb = new StringBuilder("- ").append(path).append('\n');
+        for (TypeDeclaration<?> type : unit.getTypes()) {
+            List<String> members = new ArrayList<>();
+            for (BodyDeclaration<?> member : type.getMembers()) {
+                if (member instanceof CallableDeclaration<?> c) {
+                    members.add(signatures ? c.getDeclarationAsString(false, false, true) : c.getNameAsString() + "()");
+                } else if (member instanceof FieldDeclaration f) {
+                    f.getVariables().forEach(v -> members.add(signatures
+                            ? v.getTypeAsString() + " " + v.getNameAsString() : v.getNameAsString()));
+                } else if (member instanceof TypeDeclaration<?> t) {
+                    members.add(signatures ? header(t) : t.getNameAsString());
+                }
+            }
+            sb.append("    ").append(header(type)).append(members.isEmpty() ? "" : ": " + String.join("; ", members))
+                    .append('\n');
+        }
+        return sb.toString();
+    }
+
+    /** A type as its kind and name; a record with its components, which are its constructor and its accessors. */
+    private static String header(TypeDeclaration<?> type) {
+        if (type instanceof com.github.javaparser.ast.body.RecordDeclaration r) {
+            return "record " + r.getNameAsString() + "(" + String.join(", ", r.getParameters().stream()
+                    .map(p -> p.getTypeAsString() + " " + p.getNameAsString()).toList()) + ")";
+        }
+        String kind = type instanceof com.github.javaparser.ast.body.EnumDeclaration ? "enum"
+                : type instanceof com.github.javaparser.ast.body.AnnotationDeclaration ? "annotation"
+                : type instanceof com.github.javaparser.ast.body.ClassOrInterfaceDeclaration c && c.isInterface()
+                ? "interface" : "class";
+        return kind + " " + type.getNameAsString();
     }
 
     private static int startLine(BodyDeclaration<?> member) {

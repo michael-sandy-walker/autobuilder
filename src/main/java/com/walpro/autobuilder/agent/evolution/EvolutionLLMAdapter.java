@@ -126,8 +126,11 @@ public class EvolutionLLMAdapter {
         String systemPrompt = EvolutionProtocolContract.getSystemPrompt();
         java.util.function.Predicate<String> isProtected = protectedPaths == null ? path -> false
                 : protectedPaths::isProtected;
+        var gate = testRunGate == null ? null : testRunGate.getIfAvailable();
+        boolean treeTestsRan = gate != null
+                && gate.treeTests() == com.walpro.autobuilder.core.build.TestRunGate.TreeTests.RAN;
         String userPrompt = EvolutionProtocolContract.getUserPrompt(refreshed, result, recombined,
-                promptTokenBudget.promptHeadroomTokens(), isProtected);
+                promptTokenBudget.promptHeadroomTokens(), isProtected, treeTestsRan);
         // T4-CQ: the paths the operator protected, and every write refused since the last prompt --
         // a refusal the model never hears about is a move it will make again.
         if (protectedPaths != null) {

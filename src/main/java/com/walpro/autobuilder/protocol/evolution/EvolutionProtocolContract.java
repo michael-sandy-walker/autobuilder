@@ -246,6 +246,15 @@ public class EvolutionProtocolContract {
     /** @param isProtected T4-CQ: operator-protected paths, so no block advises editing one. */
     public static String getUserPrompt(CycleContextData input, InterpretationResult result, boolean divergent,
             int promptHeadroomTokens, java.util.function.Predicate<String> isProtected) {
+        return getUserPrompt(input, result, divergent, promptHeadroomTokens, isProtected, false);
+    }
+
+    /**
+     * @param treeTestsRan T6-T: whether the suite compiled and ran on the tree as it is now -- only then is a
+     *                     work item that names its test shown that test's files alone (SubgoalSourcePromptBlock).
+     */
+    public static String getUserPrompt(CycleContextData input, InterpretationResult result, boolean divergent,
+            int promptHeadroomTokens, java.util.function.Predicate<String> isProtected, boolean treeTestsRan) {
         // T4-BN-3: while TEST_REPAIR_FOCUS is active, replace the full ~15-section prompt with a
         // trimmed one so a test-only compile break gets high salience instead of competing as one
         // diagnostic among many (low-salience diagnostics measured at ~0.08 adherence). Sits ON
@@ -584,7 +593,8 @@ public class EvolutionProtocolContract {
         // T4-CQ: the files the subgoal names, as they are -- the structure summary alone gives a model
         // told to keep a file's declarations only their names (see SubgoalSourcePromptBlock).
         String subgoalSource = SubgoalSourcePromptBlock.render(input,
-                promptHeadroomTokens - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(prompt), isProtected);
+                promptHeadroomTokens - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(prompt), isProtected,
+                treeTestsRan);
         if (subgoalSource != null) {
             prompt.append("\n").append(subgoalSource).append("\n");
         }

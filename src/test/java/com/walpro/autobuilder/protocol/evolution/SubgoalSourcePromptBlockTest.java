@@ -213,12 +213,64 @@ class SubgoalSourcePromptBlockTest {
                 .rejectionFeedback(List.of("The evaluator found: Nib still rounds down."))
                 .previousOutput(files).build();
 
-        String block = SubgoalSourcePromptBlock.render(c, 200_000, p -> p.startsWith("src/test/"));
+        String block = SubgoalSourcePromptBlock.render(c, 200_000, p -> p.startsWith("src/test/"), true);
 
         assertThat(block).contains("[src/main/java/zeta/Quill.java]", "[src/test/java/zeta/QuillTest.java")
                 .as("the test refers to Blotter, which the goal never names").contains("[src/main/java/zeta/Blotter.java]")
                 .as("the last rejection named Nib").contains("[src/main/java/zeta/Nib.java]")
-                .as("only the goal names Inkwell, and there was room for it").doesNotContain("zeta/Inkwell.java");
+                .as("only the goal names Inkwell, and there was room for it")
+                .doesNotContain("```java [src/main/java/zeta/Inkwell.java]")
+                .as("what is left out stays as what it declares: the class exists, with this constructor and member")
+                .contains("- src/main/java/zeta/Inkwell.java",
+                        "record Inkwell(String well, int drops, Integer spare): Inkwell pour(int more)");
+    }
+
+    /**
+     * T6-T, ladder-rows 2026-10-12_11-36-58 and 2026-10-12_13-39-25: the work items before the suite compiles name
+     * their tests as well, so the narrowing took the class the ticket is about out of most prompts and the suite
+     * took 55 and 68 minutes to compile (17 before). A test that does not compile has not failed: until the suite
+     * has run on the tree the work is the whole coupled change, and every file the goal names is shown.
+     */
+    @Test
+    void untilTheSuiteHasRunOnTheTree_anItemThatNamesItsTestStillGetsEveryFileTheGoalNames() {
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("src/main/java/zeta/Inkwell.java", INKWELL);
+        files.put("src/main/java/zeta/Nib.java", NIB);
+        files.put("src/main/java/zeta/Quill.java", quill(3));
+        files.put("src/test/java/zeta/QuillTest.java", "package zeta;\nclass QuillTest { Quill q = new Quill(); }\n");
+        CycleContextData c = CycleContextData.builder()
+                .currentSubGoalDescription("Write Quill so that QuillTest compiles and passes")
+                .currentGoalDescription("The classes to change are Inkwell, Nib and Quill.").previousOutput(files).build();
+
+        String block = SubgoalSourcePromptBlock.render(c, 200_000, p -> p.startsWith("src/test/"), false);
+
+        assertThat(block).contains("```java [src/main/java/zeta/Quill.java]", "```java [src/main/java/zeta/Inkwell.java]",
+                        "```java [src/main/java/zeta/Nib.java]")
+                .doesNotContain("These files belong to the same change");
+    }
+
+    /** A file whose signatures do not fit is still named, by its members' names or at least by its path. */
+    @Test
+    void aLeftOutFileTooLargeForItsSignatures_isStillNamed() {
+        StringBuilder wide = new StringBuilder("package zeta;\npublic class Ledger {\n");
+        for (int i = 0; i < 400; i++) {
+            wide.append("    public java.util.Map<String, java.util.List<Integer>> entryNumber").append(i)
+                    .append("(java.util.Map<String, java.util.List<Integer>> previousEntries) { return null; }\n");
+        }
+        wide.append("}\n");
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("src/main/java/zeta/Ledger.java", wide.toString());
+        files.put("src/main/java/zeta/Quill.java", quill(3));
+        files.put("src/test/java/zeta/QuillTest.java", "package zeta;\nclass QuillTest { Quill q = new Quill(); }\n");
+        CycleContextData c = CycleContextData.builder()
+                .currentSubGoalDescription("Make the suite pass: QuillTest.drainsToZero fails")
+                .currentGoalDescription("The classes to change are Ledger and Quill.").previousOutput(files).build();
+        int room = 2 * (com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(quill(3)) + 600);
+
+        String block = SubgoalSourcePromptBlock.render(c, room, p -> p.startsWith("src/test/"), true);
+
+        assertThat(block).contains("```java [src/main/java/zeta/Quill.java]", "- src/main/java/zeta/Ledger.java")
+                .doesNotContain("java.util.Map<String, java.util.List<Integer>> previousEntries");
     }
 
     /** An item that names only files it may write still gets what the goal names: it says what else there is. */

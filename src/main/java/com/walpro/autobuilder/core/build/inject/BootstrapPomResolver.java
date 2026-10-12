@@ -123,19 +123,26 @@ public class BootstrapPomResolver implements CompileFixResolver {
         return (common == null || common.isEmpty()) ? null : String.join(".", common);
     }
 
-    /** The single class declaring an entry point, or null when there is not exactly one. */
+    /**
+     * The single class declaring an entry point, or null when there is not exactly one. Asked of the sources that
+     * are packaged -- a test source is not -- and of what each DECLARES (see {@code EntryPointScan.entryPointTypeOf}).
+     */
     public static String soleMainClassOf(Map<String, String> sources) {
         if (sources == null) return null;
         List<String> found = new ArrayList<>();
         for (Map.Entry<String, String> e : sources.entrySet()) {
             String path = e.getKey(), body = e.getValue();
             if (path == null || !path.endsWith(".java") || body == null) continue;
-            if (!MAIN_METHOD.matcher(body).find()) continue;
+            if (com.walpro.autobuilder.core.persistence.EntryPointScan.isTestSource(path)) continue;
+            Optional<String> declaring = com.walpro.autobuilder.core.persistence.EntryPointScan
+                    .entryPointTypeOf(body, true, MAIN_METHOD);
+            if (declaring.isEmpty()) continue;
             Matcher pm = PACKAGE_DECL.matcher(body);
             String pkg = pm.find() ? pm.group(1) : null;
             String simple = path.substring(path.lastIndexOf('/') + 1, path.length() - ".java".length());
             Matcher tm = TYPE_DECL.matcher(body);
-            if (tm.find()) simple = tm.group(1);
+            if (!declaring.get().isEmpty()) simple = declaring.get();
+            else if (tm.find()) simple = tm.group(1);
             found.add(pkg == null || pkg.isBlank() ? simple : pkg + "." + simple);
         }
         return found.size() == 1 ? found.get(0) : null;

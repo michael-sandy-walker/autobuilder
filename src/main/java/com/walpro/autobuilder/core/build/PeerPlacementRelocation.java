@@ -137,7 +137,8 @@ public final class PeerPlacementRelocation {
         Set<String> packages = new LinkedHashSet<>();
         for (Map.Entry<String, String> e : sources.entrySet()) {
             if (e.getKey() == null || !JAVA_FILE.matcher(e.getKey()).matches()) continue;
-            if (e.getValue() == null || !MAIN_METHOD.matcher(e.getValue()).find()) continue;
+            if (e.getValue() == null || com.walpro.autobuilder.core.persistence.EntryPointScan
+                    .entryPointTypeOf(e.getValue(), false, MAIN_METHOD).isEmpty()) continue;
             packages.add(packageDeclaredIn(e.getValue()));
         }
         return packages;

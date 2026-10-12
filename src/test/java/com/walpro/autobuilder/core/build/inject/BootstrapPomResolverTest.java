@@ -141,4 +141,51 @@ class BootstrapPomResolverTest {
         assertThat(resolver.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Foo", null, c)).isEmpty();
         assertThat(resolver.resolve(cls(Kind.UNKNOWN), null, null, c)).isEmpty();
     }
+
+    // ── T6-T: an entry point is what a packaged source DECLARES ──────────────
+
+    /**
+     * Edit-hunks, field65 (2026-10-12), four runs of four: a test of a source parser holds a Java source as a
+     * string, an entry point among it. Read as text, that test was the project's one entry point; the build was
+     * told to launch a class the jar cannot hold, and a library could close only by declaring a main class.
+     */
+    @Test
+    void theWordsOfAnEntryPointInAStringOfATestDeclareNoEntryPoint() {
+        Map<String, String> sources = Map.of(
+                "src/main/java/zeta/Quill.java", "package zeta;\npublic class Quill { public int ink() { return 3; } }\n",
+                "src/test/java/zeta/QuillTest.java", "package zeta;\nclass QuillTest {\n"
+                        + "    String sample = \"public class Sample { public static void main(String[] args) {} }\";\n}\n");
+
+        assertThat(BootstrapPomResolver.soleMainClassOf(sources)).isNull();
+    }
+
+    @Test
+    void anEntryPointDeclaredByATestSourceIsNotThePackagedOne() {
+        Map<String, String> sources = Map.of(
+                "src/main/java/zeta/Quill.java", "package zeta;\npublic class Quill { public int ink() { return 3; } }\n",
+                "src/test/java/zeta/Harness.java",
+                "package zeta;\npublic class Harness { public static void main(String[] args) {} }\n");
+
+        assertThat(BootstrapPomResolver.soleMainClassOf(sources)).isNull();
+    }
+
+    @Test
+    void theWordsInAStringOfAPackagedSourceDoNotCount_theDeclaredOneDoes() {
+        Map<String, String> sources = Map.of(
+                "src/main/java/zeta/Template.java", "package zeta;\npublic class Template {\n"
+                        + "    static final String TEXT = \"public static void main(String[] args) {}\";\n}\n",
+                "src/main/java/zeta/Launch.java",
+                "package zeta;\n/** Not Other. */\npublic class Launch { public static void main(String... args) {} }\n");
+
+        assertThat(BootstrapPomResolver.soleMainClassOf(sources)).isEqualTo("zeta.Launch");
+    }
+
+    /** A source that does not parse is still asked, as text: an unreadable file may be the entry point. */
+    @Test
+    void aSourceThatDoesNotParseIsStillReadAsText() {
+        Map<String, String> sources = Map.of("src/main/java/zeta/Launch.java",
+                "package zeta;\npublic class Launch { public static void main(String[] args) { int x = ; } \n");
+
+        assertThat(BootstrapPomResolver.soleMainClassOf(sources)).isEqualTo("zeta.Launch");
+    }
 }

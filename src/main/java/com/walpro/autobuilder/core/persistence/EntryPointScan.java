@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.persistence;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -50,6 +51,55 @@ public final class EntryPointScan {
     private EntryPointScan() {
     }
 
+    /** Whether {@code path} lies under a test source root: such a file is never packaged, whatever it declares. */
+    public static boolean isTestSource(String path) {
+        if (path == null) return false;
+        String normalized = path.replace('\\', '/');
+        return normalized.contains("/src/test/") || normalized.startsWith("src/test/");
+    }
+
+    /**
+     * The type in {@code source} that DECLARES an entry point -- a static {@code void main} taking the argument
+     * array -- read from the parsed source, so the words in a comment or a string literal declare nothing.
+     *
+     * <p>Edit-hunks, every run since 2026-09-21 (field65, 2026-10-12: four of four): a test of the response
+     * parser carries a Java source as a string literal, {@code "public static void main(String[] args)"} among
+     * it. The text match took that test for the project's one entry point, the pom was told to launch a test
+     * class, packaging then named a class the jar cannot hold, and the goal could only close when the model
+     * declared some other main class the ticket never asked for -- or not at all, at full score.
+     *
+     * @param mustBePublic     whether only a public method counts (what a launcher accepts)
+     * @param whenUnparsable   asked of the text when the source does not parse; a match answers with an empty
+     *                         name -- an entry point is declared, by a type this could not read
+     * @return the declaring type's name, empty when the source declares no entry point
+     */
+    public static Optional<String> entryPointTypeOf(String source, boolean mustBePublic, Pattern whenUnparsable) {
+        if (source == null) return Optional.empty();
+        com.github.javaparser.ast.CompilationUnit unit;
+        try {
+            unit = new com.github.javaparser.JavaParser(new com.github.javaparser.ParserConfiguration()
+                    .setLanguageLevel(com.github.javaparser.ParserConfiguration.LanguageLevel.JAVA_17))
+                    .parse(source).getResult().orElse(null);
+        } catch (RuntimeException e) {
+            unit = null;
+        }
+        if (unit == null || unit.getTypes().isEmpty()) {
+            return whenUnparsable != null && whenUnparsable.matcher(source).find() ? Optional.of("") : Optional.empty();
+        }
+        for (com.github.javaparser.ast.body.MethodDeclaration m
+                : unit.findAll(com.github.javaparser.ast.body.MethodDeclaration.class)) {
+            if (!m.getNameAsString().equals("main") || !m.isStatic() || !m.getType().isVoidType()) continue;
+            if (mustBePublic && !m.isPublic()) continue;
+            if (m.getParameters().size() != 1) continue;
+            com.github.javaparser.ast.body.Parameter arg = m.getParameter(0);
+            String type = arg.getTypeAsString().replace(" ", "");
+            if (!(type.equals("String[]") || (type.equals("String") && arg.isVarArgs()))) continue;
+            return Optional.of(m.findAncestor(com.github.javaparser.ast.body.TypeDeclaration.class)
+                    .map(t -> t.getNameAsString()).orElse(""));
+        }
+        return Optional.empty();
+    }
+
     /**
      * True when any {@code .java} file under the tree declares a {@code static void main(} method.
      * Prefers {@code src/main/java} when present (test sources cannot carry the packaged entry
@@ -84,16 +134,15 @@ public final class EntryPointScan {
         for (java.util.Map.Entry<String, String> e : files.entrySet()) {
             String path = e.getKey();
             if (path == null || !path.endsWith(".java")) continue;
-            String normalized = path.replace('\\', '/');
-            if (normalized.contains("/src/test/") || normalized.startsWith("src/test/")) continue;
-            if (e.getValue() != null && MAIN_METHOD.matcher(e.getValue()).find()) return true;
+            if (isTestSource(path)) continue;
+            if (entryPointTypeOf(e.getValue(), false, MAIN_METHOD).isPresent()) return true;
         }
         return false;
     }
 
     private static boolean declaresMain(Path file) {
         try {
-            return MAIN_METHOD.matcher(Files.readString(file)).find();
+            return entryPointTypeOf(Files.readString(file), false, MAIN_METHOD).isPresent();
         } catch (IOException | RuntimeException e) {
             return false;
         }

@@ -66,7 +66,13 @@ public final class ExecutionTrace {
 
     /** One call into the project's own code, as observed. */
     public record Call(int depth, String type, String method, List<String> arguments, String result, boolean threw,
-                       int line, List<String> locals) {
+                       int line, List<String> locals, List<String> state) {
+
+        /** A call whose object's state was not read. */
+        public Call(int depth, String type, String method, List<String> arguments, String result, boolean threw,
+                    int line, List<String> locals) {
+            this(depth, type, method, arguments, result, threw, line, locals, List.of());
+        }
     }
 
     private ExecutionTrace() {
@@ -266,7 +272,8 @@ public final class ExecutionTrace {
                         String result = threw != null ? "threw " + threw : isVoid ? "void" : value(e.returnValue(), 0, e.thread(), requests);
                         if (caught != null && threw == null) result = result + "  after it " + caught;
                         calls.add(new Call(stack.size(), e.method().declaringType().name(), e.method().name(), args, result,
-                                threw != null, e.location().lineNumber(), locals(e.thread(), args.size(), requests)));
+                                threw != null, e.location().lineNumber(), locals(e.thread(), args.size(), requests),
+                                stack.isEmpty() ? state(e.thread(), requests) : List.of()));
                         if (calls.size() >= CALL_LIMIT) over = true;
                     }
                 } catch (com.sun.jdi.VMDisconnectedException gone) {
@@ -366,9 +373,37 @@ public final class ExecutionTrace {
         return out;
     }
 
-    /** Class initialisers, synthetic methods and lambdas are plumbing, not calls a reader follows. */
+    /**
+     * What the object a call was made on holds when that call returns -- its fields, as {@link #value} shows them;
+     * none for a static call. Read for the calls the test itself makes: what a test asserts afterwards is as often
+     * what the object KEPT as what a call returned (ladder-grind 2026-10-13_01-53-56: twelve calls each returned
+     * void, and the count the test asserted on stood at 1 in a map no line of the trace showed).
+     */
+    private static List<String> state(ThreadReference thread, List<EventRequest> quiet) {
+        List<String> out = new ArrayList<>();
+        try {
+            ObjectReference self = thread.frame(0).thisObject();
+            if (self == null) return out;
+            for (Field f : self.referenceType().allFields()) {
+                if (f.isStatic() || f.isSynthetic()) continue;
+                out.add(f.name() + "=" + value(self.getValue(f), 0, thread, quiet));
+                if (out.size() >= 8) break;
+            }
+        } catch (Exception e) {
+            // the frame is gone, or a field could not be read: no state
+        }
+        return out;
+    }
+
+    /**
+     * Class initialisers, synthetic methods and lambdas are plumbing, not calls a reader follows -- and so is an
+     * enumeration coming into being: its constants' constructors and its values()/valueOf() took 16 of the 43
+     * lines of a trace whose point was in the rest (ladder-grind 2026-10-13_01-53-56).
+     */
     private static boolean skipped(com.sun.jdi.Method m) {
-        return m.isSynthetic() || m.isStaticInitializer() || m.name().startsWith("lambda$");
+        if (m.isSynthetic() || m.isStaticInitializer() || m.name().startsWith("lambda$")) return true;
+        return m.declaringType() instanceof com.sun.jdi.ClassType c && c.isEnum()
+                && (m.isConstructor() || m.name().equals("values") || m.name().equals("valueOf"));
     }
 
     /**
@@ -430,25 +465,162 @@ public final class ExecutionTrace {
     /**
      * The calls as an indented trace, each with what it returned, the line it returned at (its source text when the
      * sources are known) and the values in scope there; at most {@code maxLines} lines, the rest counted.
+     *
+     * <p><b>A test that does one thing many times</b> is shown as what it did once and how often. The calls the
+     * test itself makes each close a group (that call and the calls it made); groups that made the same calls and
+     * returned at the same lines, one after the other, are shown once, then counted, with every value that
+     * differed between them listed in order -- and what the object held after the last. Ladder-grind
+     * 2026-10-13_01-53-56: a loop of twelve identical calls filled the forty lines with its first four rounds;
+     * that the second round no longer made a call the first had made, and what the count stood at after the
+     * twelfth, were the two facts the failure turned on, and neither was on the page.
      */
     public static String render(List<Call> calls, Map<String, String> sources, int maxLines) {
-        StringBuilder sb = new StringBuilder();
-        int lines = 0;
+        int top = calls.stream().mapToInt(Call::depth).min().orElse(0);
+        List<List<Call>> groups = new ArrayList<>();
+        List<Call> open = new ArrayList<>();
         for (Call c : calls) {
-            if (lines >= maxLines) {
-                sb.append("  ... and ").append(calls.size() - lines).append(" more call(s)\n");
-                break;
+            open.add(c);
+            if (c.depth() == top) {
+                groups.add(open);
+                open = new ArrayList<>();
             }
-            String indent = "  ".repeat(c.depth() + 1);
-            String text = lineText(sources, c.type(), c.line());
-            sb.append(indent).append(simple(c.type())).append('.').append(c.method())
-                    .append('(').append(String.join(", ", c.arguments())).append(") -> ").append(c.result())
-                    .append("  [").append(c.threw() ? "at" : "returned at").append(" line ").append(c.line())
-                    .append(text == null ? "" : ": " + text).append(']')
-                    .append(c.locals().isEmpty() ? "" : "  where " + String.join(", ", c.locals())).append('\n');
-            lines++;
         }
+        if (!open.isEmpty()) groups.add(open);
+
+        StringBuilder sb = new StringBuilder();
+        String indent = "  ".repeat(top + 1);
+        int lines = 0, shownCalls = 0;
+        for (int g = 0; g < groups.size(); ) {
+            // The longest stretch from here that is one sequence of groups, over and over: a test's round is
+            // often several calls of its own (it builds an input, then hands it over), so a round is looked for
+            // as up to eight groups, the shortest that covers most.
+            int period = 1, times = 1;
+            for (int p = 1; p <= Math.min(8, (groups.size() - g) / 2); p++) {
+                int t = 1;
+                while (g + (t + 1) * p <= groups.size() && sameShapes(groups, g, g + t * p, p)) t++;
+                if (t >= 2 && t * p > times * period) {
+                    period = p;
+                    times = t;
+                }
+            }
+            List<Call> round = flat(groups, g, period);
+            if (lines > 0 && lines + round.size() > maxLines) break;
+            boolean cut = false;
+            for (Call c : round) {
+                if (lines >= maxLines) {
+                    cut = true;
+                    break;
+                }
+                sb.append(line(c, sources)).append('\n');
+                lines++;
+                shownCalls++;
+                if (times == 1 && c.depth() == top && !c.state().isEmpty() && !c.method().equals("<init>")) {
+                    sb.append(indent).append("  after it, ").append(simple(c.type())).append(" holds: ")
+                            .append(String.join(", ", c.state())).append('\n');
+                    lines++;
+                }
+            }
+            if (cut) break;
+            if (times > 1) {
+                int more = times - 1;
+                sb.append(indent).append("... the same ").append(round.size()).append(round.size() == 1 ? " call " : " calls ")
+                        .append(more).append(more == 1 ? " more time" : " more times")
+                        .append(", one after the other, returning at the same lines");
+                List<List<Call>> rounds = new ArrayList<>();
+                for (int t = 0; t < times; t++) rounds.add(flat(groups, g + t * period, period));
+                List<String> all = differing(rounds);
+                // The calls the test made come first in that list; a long tail of inner values is counted.
+                List<String> differing = new ArrayList<>(all.subList(0, Math.min(all.size(), 6)));
+                if (all.size() > 6) differing.add("... and " + (all.size() - 6) + " more value(s) inside them");
+                sb.append(differing.isEmpty() ? " with the same values\n" : "; what differed, in order:\n");
+                lines++;
+                for (String d : differing) {
+                    sb.append(indent).append("    ").append(d).append('\n');
+                    lines++;
+                }
+                List<Call> last = rounds.get(times - 1);
+                for (int k = last.size() - 1; k >= 0; k--) {
+                    Call c = last.get(k);
+                    if (c.depth() != top || c.state().isEmpty() || c.method().equals("<init>")) continue;
+                    sb.append(indent).append("  after the last of them, ").append(simple(c.type())).append(" holds: ")
+                            .append(String.join(", ", c.state())).append('\n');
+                    lines++;
+                    break;
+                }
+                shownCalls += more * round.size();
+            }
+            g += period * times;
+        }
+        if (shownCalls < calls.size()) sb.append("  ... and ").append(calls.size() - shownCalls).append(" more call(s)\n");
         return sb.toString().stripTrailing();
+    }
+
+    private static List<Call> flat(List<List<Call>> groups, int from, int count) {
+        List<Call> out = new ArrayList<>();
+        for (int k = from; k < from + count; k++) out.addAll(groups.get(k));
+        return out;
+    }
+
+    private static boolean sameShapes(List<List<Call>> groups, int a, int b, int count) {
+        for (int k = 0; k < count; k++) {
+            if (!sameShape(groups.get(a + k), groups.get(b + k))) return false;
+        }
+        return true;
+    }
+
+    private static String line(Call c, Map<String, String> sources) {
+        String text = lineText(sources, c.type(), c.line());
+        return "  ".repeat(c.depth() + 1) + simple(c.type()) + '.' + c.method()
+                + '(' + String.join(", ", c.arguments()) + ") -> " + c.result()
+                + "  [" + (c.threw() ? "at" : "returned at") + " line " + c.line()
+                + (text == null ? "" : ": " + text) + ']'
+                + (c.locals().isEmpty() ? "" : "  where " + String.join(", ", c.locals()));
+    }
+
+    /** The same calls, nested the same way, each ending at the same line the same way. */
+    private static boolean sameShape(List<Call> a, List<Call> b) {
+        if (a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) {
+            Call x = a.get(i), y = b.get(i);
+            if (x.depth() != y.depth() || x.line() != y.line() || x.threw() != y.threw()
+                    || !x.type().equals(y.type()) || !x.method().equals(y.method())
+                    || x.arguments().size() != y.arguments().size()) return false;
+        }
+        return true;
+    }
+
+    /**
+     * For groups of one shape: each argument and each result that was not the same in all of them, with its
+     * values in the groups' order -- the calls the test made first, then the ones they made.
+     */
+    private static List<String> differing(List<List<Call>> groups) {
+        List<Call> first = groups.get(0);
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < first.size(); i++) order.add(i);
+        order.sort(java.util.Comparator.comparingInt(i -> first.get(i).depth()));
+        List<String> out = new ArrayList<>();
+        for (int i : order) {
+            Call c = first.get(i);
+            String name = simple(c.type()) + '.' + c.method();
+            for (int a = 0; a < c.arguments().size(); a++) {
+                int arg = a;
+                List<String> values = groups.stream().map(g -> g.get(i).arguments().get(arg)).toList();
+                if (values.stream().distinct().count() < 2) continue;
+                String label = values.get(0).contains(" = ") ? values.get(0).substring(0, values.get(0).indexOf(" = ")) : "argument " + (a + 1);
+                out.add(name + ", " + label + ": " + inOrder(values.stream()
+                        .map(v -> v.contains(" = ") ? v.substring(v.indexOf(" = ") + 3) : v).toList()));
+            }
+            List<String> results = groups.stream().map(g -> g.get(i).result()).toList();
+            if (results.stream().distinct().count() > 1) out.add(name + " returned: " + inOrder(results));
+        }
+        return out;
+    }
+
+    /** Values in order, every one while they are few, else the first three and the last. */
+    private static String inOrder(List<String> values) {
+        if (values.size() <= 6) return String.join(", ", values);
+        return String.join(", ", values.subList(0, 3)) + ", ... , " + values.get(values.size() - 1)
+                + " (" + values.size() + " in all)";
     }
 
     private static String lineText(Map<String, String> sources, String type, int line) {

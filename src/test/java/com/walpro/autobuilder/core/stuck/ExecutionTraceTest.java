@@ -46,6 +46,63 @@ class ExecutionTraceTest {
                 "  Rows.of(name = \"org.ink.Quill\") -> null  [returned at line 8: return find(name);]"));
     }
 
+    /**
+     * T6-T, ladder-grind 2026-10-13_01-53-56: a test called one method twelve times; the forty lines held the first
+     * four rounds, and neither fact the failure turned on was shown -- that from the second round on a call the
+     * first round had made was no longer made, and what the object's count stood at after the last. Rounds that
+     * made the same calls are shown once and counted, with what differed; a round that made other calls starts a
+     * new group, so the difference is on the page.
+     */
+    @Test
+    void aTestThatDoesOneThingManyTimes_isShownOnceAndCounted_withWhatDifferedAndWhatTheObjectHeldAtTheEnd() {
+        List<ExecutionTrace.Call> calls = new java.util.ArrayList<>();
+        calls.add(new ExecutionTrace.Call(1, "org.ink.Tally", "due", List.of("count = 1"), "false", false, 7, List.of()));
+        calls.add(new ExecutionTrace.Call(0, "org.ink.Tally", "note", List.of("round = \"round-1\"", "what = \"blot\""), "void",
+                false, 5, List.of(), List.of("seen={blot=1}", "thisRound=[blot]")));
+        for (int r = 2; r <= 12; r++) {
+            calls.add(new ExecutionTrace.Call(0, "org.ink.Tally", "note", List.of("round = \"round-" + r + "\"", "what = \"blot\""),
+                    "void", false, 5, List.of(), List.of("seen={blot=1}", "thisRound=[blot]")));
+        }
+        // A round is often two calls of the test's own -- it builds what it hands over: the same holds then.
+        List<ExecutionTrace.Call> built = new java.util.ArrayList<>();
+        for (int r = 1; r <= 5; r++) {
+            built.add(new ExecutionTrace.Call(0, "org.ink.Blot", "<init>", List.of("size = 2"), "void", false, 3, List.of(),
+                    List.of("size=2")));
+            built.add(new ExecutionTrace.Call(0, "org.ink.Tally", "note", List.of("round = \"round-" + r + "\""), "void", false, 5,
+                    List.of(), List.of("seen={blot=1}")));
+        }
+        assertThat(ExecutionTrace.render(built, Map.of(), 40))
+                .contains("... the same 2 calls 4 more times", "Tally.note, round: \"round-1\", \"round-2\"",
+                        "after the last of them, Tally holds: seen={blot=1}")
+                .as("what a constructor leaves is its arguments again").doesNotContain("Blot holds");
+
+        String out = ExecutionTrace.render(calls, Map.of(), 40);
+
+        assertThat(out).as("the first round, which asked whether a note was due").contains("Tally.due(count = 1) -> false")
+                .as("the rounds after it made one call fewer: a group of their own, shown once")
+                .contains("Tally.note(round = \"round-2\", what = \"blot\") -> void")
+                .contains("... the same 1 call 10 more times")
+                .as("what differed between them, in order -- and not what stayed the same")
+                .contains("Tally.note, round: \"round-2\", \"round-3\", \"round-4\", ... , \"round-12\" (11 in all)")
+                .doesNotContain("Tally.note, what:")
+                .as("what the object held after the last round").contains("after the last of them, Tally holds: seen={blot=1}, thisRound=[blot]")
+                .doesNotContain("round-7\", what").doesNotContain("more call(s)");
+        assertThat(out.lines().count()).isLessThan(10);
+    }
+
+    @Test
+    void aCallMadeOnceShowsWhatItsObjectHeldAfterIt_andCallsThatDifferAreNotFolded() {
+        List<ExecutionTrace.Call> calls = List.of(
+                new ExecutionTrace.Call(0, "org.ink.Tally", "note", List.of("what = \"blot\""), "void", false, 5, List.of(),
+                        List.of("seen={blot=1}")),
+                new ExecutionTrace.Call(0, "org.ink.Tally", "total", List.of(), "1", false, 9, List.of(), List.of("seen={blot=1}")));
+
+        String out = ExecutionTrace.render(calls, Map.of(), 40);
+
+        assertThat(out).contains("Tally.note(what = \"blot\") -> void", "Tally.total() -> 1",
+                "after it, Tally holds: seen={blot=1}").doesNotContain("the same");
+    }
+
     @Test
     void aCallThatThrewSaysSoAndALongTraceIsCountedNotCut() {
         List<ExecutionTrace.Call> calls = List.of(

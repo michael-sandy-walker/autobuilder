@@ -79,6 +79,11 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
     private final FileService fileService;
     private final Map<String, Pattern> compiledPatterns = new HashMap<>();
 
+    /** T6-T: what the project's classpath declares; optional in narrow tests. */
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private PackageDiscoveryService classpathDiscovery;
+
     public IdiomSkeletonResolver(SymbolGroundingService groundingService,
                                  IdiomSkeletonConfigProperties config,
                                  SymbolImportLookupService symbolImportLookup,
@@ -120,6 +125,23 @@ public class IdiomSkeletonResolver implements CompileFixResolver, Ordered {
             log.debug("IdiomSkeletonResolver: token {} resolves as an import — deferring to SymbolImportResolver",
                     missingToken);
             return Optional.empty();
+        }
+
+        // T6-T: a name the project's classpath already declares is not a class the project lacks. Ladder-grind
+        // run 2026-10-13_01-53-56: a candidate used the parser library's Node and ClassOrInterfaceDeclaration
+        // without importing them, an empty class of each name was created beside the file that used them, and
+        // from then on the project's own empty Node stood where the library's was meant.
+        if (classpathDiscovery != null) {
+            try {
+                if (!classpathDiscovery.classpathTypes(missingToken, fileService.resolveSecurePath("output")).isEmpty()) {
+                    log.info("IdiomSkeletonResolver: {} is declared on the project's classpath -- no class of that"
+                            + " name is created", missingToken);
+                    return Optional.empty();
+                }
+            } catch (java.io.IOException | RuntimeException e) {
+                log.debug("IdiomSkeletonResolver: the classpath could not be asked about {}: {}", missingToken,
+                        e.getMessage());
+            }
         }
 
         Set<String> defined = groundingService.definedSymbolsInOutput();

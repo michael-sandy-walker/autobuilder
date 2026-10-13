@@ -443,4 +443,21 @@ class IdiomSkeletonResolverTest {
         assertThat(out.get().mutations().get(0).content()).doesNotContain("findByBookId");
     }
 
+    /**
+     * T6-T, ladder-grind 2026-10-13_01-53-56: a candidate used a library class without importing it, an empty
+     * class of that name was created in the project, and it then stood where the library's was meant. A name the
+     * project's classpath declares is not a class the project lacks.
+     */
+    @Test
+    void aNameTheProjectsClasspathDeclares_getsNoClassOfItsOwn() {
+        IdiomSkeletonResolver r = resolver();
+        PackageDiscoveryService classpath = mock(PackageDiscoveryService.class);
+        org.mockito.Mockito.when(classpath.classpathTypes(org.mockito.ArgumentMatchers.eq("Blot"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Map.of("org.inkwell.ast.Blot", "/repo/inkwell.jar"));
+        r.setClasspathDiscovery(classpath);
+
+        assertThat(r.resolve(cls(Kind.CANNOT_FIND_SYMBOL), "Blot",
+                "[ERROR] /x/Quill.java:[3,5] cannot find symbol\n  symbol:   class Blot\n", ctx("com.example.library")))
+                .isEmpty();
+    }
 }

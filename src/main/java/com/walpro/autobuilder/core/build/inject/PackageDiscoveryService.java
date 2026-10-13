@@ -334,6 +334,15 @@ public class PackageDiscoveryService {
 
     // ── source 1: classpath jars ─────────────────────────────────────────────
 
+    /**
+     * T6-T: every class named {@code simpleName} on the project's resolved classpath -- fully qualified name to
+     * the jar providing it. Empty when there is none, or when the classpath cannot be resolved.
+     */
+    public Map<String, String> classpathTypes(String simpleName, Path projectRoot) {
+        if (simpleName == null || simpleName.isBlank() || projectRoot == null) return Map.of();
+        return scanJarsForType(classpathJars(projectRoot), simpleName);
+    }
+
     private List<String> classpathJars(Path projectRoot) {
         String classpath = classpathService.resolveClasspath(projectRoot, CLASSPATH_TIMEOUT_MS);
         if (classpath == null || classpath.isBlank()) return List.of();

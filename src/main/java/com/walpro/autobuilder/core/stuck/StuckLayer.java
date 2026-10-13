@@ -239,7 +239,7 @@ public class StuckLayer {
         List<StuckLedger.Entry> standing = ledger.delivered().stream()
                 .filter(e -> aboutTheTree(e.source()) || e.subGoalId() == null || e.subGoalId().equals(subGoal))
                 .toList();
-        if (standing.isEmpty()) return correctedBlock(maxTokens);
+        if (standing.isEmpty()) return correctedBlock(maxTokens, live, types);
         // T6-T: an answer left out of an earlier prompt is given room before one already read.
         standing = standing.stream().sorted(java.util.Comparator.comparing((StuckLedger.Entry e) -> !e.withheld())).toList();
         StringBuilder sb = new StringBuilder("--- ANSWERS TO WHAT KEPT FAILING (read from the sources, not advice) ---\n")
@@ -258,7 +258,7 @@ public class StuckLayer {
             }
             byAnswer.computeIfAbsent(shown, k -> new ArrayList<>()).add(e);
         }
-        if (byAnswer.isEmpty()) return correctedBlock(maxTokens);
+        if (byAnswer.isEmpty()) return correctedBlock(maxTokens, live, types);
         int left = 0;
         boolean anyShown = false;
         for (Map.Entry<String, List<StuckLedger.Entry>> a : byAnswer.entrySet()) {
@@ -285,24 +285,36 @@ public class StuckLayer {
             for (StuckLedger.Entry e : a.getValue()) ledger.withheld(e, false);
         }
         if (left > 0) sb.append("  (").append(left).append(" more answer(s) left out: no room in this prompt)\n");
-        String corrected = correctedBlock(maxTokens - PromptTokenBudget.estimateTokens(sb));
+        String corrected = correctedBlock(maxTokens - PromptTokenBudget.estimateTokens(sb), live, types);
         if (corrected != null) sb.append('\n').append(corrected);
         return sb.toString().stripTrailing();
     }
 
     /**
-     * T6-T: the names this run already wrote, was corrected on and stopped writing -- said before they are written
+     * T6-T: the calls this run already wrote, was corrected on and stopped writing -- said before they are written
      * again, one line each, within {@code maxTokens}. Null when there is none, or no room for the first.
+     *
+     * <p><b>Only what is still true of the tree.</b> The register keeps what happened; whether "X has no m()"
+     * holds is asked of the sources each time, never remembered. Field68 run 1 (2026-10-13, stopped for it): the
+     * first version listed every corrected build failure, and one of them had been put right by ADDING the member
+     * the ticket asks for -- the prompt then said of a method the code needs and has: "do not write it again".
      */
-    String correctedBlock(int maxTokens) {
-        List<StuckLedger.Entry> corrected = ledger.corrected();
-        if (corrected.isEmpty()) return null;
+    String correctedBlock(int maxTokens, Map<String, String> live, StuckQuestions.TypeAuthority types) {
+        List<String> lines = new ArrayList<>();
+        for (StuckLedger.Entry e : ledger.corrected()) {
+            var now = StuckQuestions.answer(e.signature(), live, types == null ? StuckQuestions.TypeAuthority.platform() : types);
+            if (now.isEmpty() || now.get().kind() != StuckQuestions.Kind.MEMBERS || now.get().member() == null) continue;
+            String member = now.get().member();
+            if (now.get().declared().stream().anyMatch(d -> d.startsWith(member + "("))) continue;   // it is declared now
+            lines.add("  - " + now.get().type() + " has no " + member + "()"
+                    + (now.get().meant() == null ? "" : " -- it declares " + now.get().meant()) + '\n');
+        }
+        if (lines.isEmpty()) return null;
         StringBuilder sb = new StringBuilder("--- CORRECTED EARLIER IN THIS RUN ---\n")
-                .append("Each of these was written in this run, failed the build, and was put right; the code as it"
-                        + " stands does not do it. Do not write it again:\n");
+                .append("Each of these calls was written in this run, failed the build, and was put right. The type still"
+                        + " does not declare it; do not write it again:\n");
         int shown = 0;
-        for (StuckLedger.Entry e : corrected) {
-            String line = "  - " + e.signature().replaceFirst("^the build fails: ", "") + '\n';
+        for (String line : lines) {
             if (PromptTokenBudget.estimateTokens(sb) + PromptTokenBudget.estimateTokens(line) > maxTokens) break;
             sb.append(line);
             shown++;

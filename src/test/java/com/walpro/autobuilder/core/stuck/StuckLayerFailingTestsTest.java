@@ -103,12 +103,36 @@ class StuckLayerFailingTestsTest {
         for (String c : List.of("c1", "c2", "c3")) {
             ledger.observe(new StuckObservation(StuckObservation.Source.BUILD, "the build fails: Quill has no getInk()", "sg", c, List.of()));
         }
-        assertThat(layer.correctedBlock(10_000)).as("still failing: nothing is corrected yet").isNull();
+        Map<String, String> tree = Map.of("src/main/java/org/sample/Quill.java",
+                "package org.sample;\npublic class Quill { public String ink() { return \"black\"; } }\n");
+        var types = com.walpro.autobuilder.core.build.StuckQuestions.TypeAuthority.platform();
+        assertThat(layer.correctedBlock(10_000, tree, types)).as("still failing: nothing is corrected yet").isNull();
         ledger.recordAsked(ledger.pending().get(0), new StuckDiagnosis.Asked("q", "structure", "Quill declares: ink().", false), "c3", "sg");
         ledger.buildSucceeded("c4");
 
-        assertThat(layer.correctedBlock(10_000)).contains("CORRECTED EARLIER IN THIS RUN", "  - Quill has no getInk()")
+        assertThat(layer.correctedBlock(10_000, tree, types)).contains("CORRECTED EARLIER IN THIS RUN", "  - Quill has no getInk()")
                 .doesNotContain("the build fails:");
-        assertThat(layer.correctedBlock(5)).as("no room for a line: nothing, never a heading alone").isNull();
+        assertThat(layer.correctedBlock(5, tree, types)).as("no room for a line: nothing, never a heading alone").isNull();
+    }
+
+    /**
+     * Field68 run 1 (2026-10-13): a failure "X has no m()" was put right by ADDING m to X, which the work asked
+     * for -- and the register went on saying "do not write it again" of a method the code needs and has. Whether a
+     * type declares a member is asked of the tree each time; the register only remembers that it was once asked.
+     */
+    @Test
+    void aMemberThatWasPutRightByDeclaringItIsNoLongerNamed() {
+        StuckLayer layer = new StuckLayer();
+        StuckLedger ledger = layer.ledger();
+        for (String c : List.of("c1", "c2", "c3")) {
+            ledger.observe(new StuckObservation(StuckObservation.Source.BUILD, "the build fails: Quill has no getInk()", "sg", c, List.of()));
+        }
+        ledger.recordAsked(ledger.pending().get(0), new StuckDiagnosis.Asked("q", "structure", "Quill declares: ink().", false), "c3", "sg");
+        ledger.buildSucceeded("c4");
+        Map<String, String> withIt = Map.of("src/main/java/org/sample/Quill.java",
+                "package org.sample;\npublic class Quill { public String getInk() { return \"black\"; } }\n");
+
+        assertThat(layer.correctedBlock(10_000, withIt, com.walpro.autobuilder.core.build.StuckQuestions.TypeAuthority.platform()))
+                .isNull();
     }
 }

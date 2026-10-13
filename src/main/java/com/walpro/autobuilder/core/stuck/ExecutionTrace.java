@@ -61,6 +61,8 @@ public final class ExecutionTrace {
 
     /** Most calls recorded per run: enough for one failing call's path, bounded for a loop that does not end. */
     static final int CALL_LIMIT = 400;
+    /** How much of a JDK value inside another object is shown: room for one sentence a library wrote. */
+    static final int NESTED_VALUE_CHARS = 300;
     /** How long past its deadline a trace's test JVM is let live before the watchdog ends it. */
     static final long WATCHDOG_GRACE_MS = 10_000;
 
@@ -426,9 +428,35 @@ public final class ExecutionTrace {
                 } finally {
                     quiet.forEach(EventRequest::enable);
                 }
-                if (s instanceof StringReference str) return simple(o.referenceType().name()) + "(" + crop(str.value(), 120) + ")";
+                if (s instanceof StringReference str) {
+                    return simple(o.referenceType().name()) + "(" + crop(str.value(), depth == 0 ? 120 : NESTED_VALUE_CHARS) + ")";
+                }
             } catch (Exception e) {
                 // fall through to the fields
+            }
+        }
+        // An object of the project's or a library's: its fields, and a JDK value among them by what it SAYS, one
+        // level down. Ladder-grind, every run from 2026-10-10 to 2026-10-13: a parse result came back as
+        // "ParseResult{result=CompilationUnit, problems=ArrayList, ...}"; inside that list the parser said that the
+        // source's syntax is not read at the configured language level and that the level must be configured. Shown
+        // only its type, the model changed the accessor it had already been corrected on -- three runs of three,
+        // some fifty minutes after the correction.
+        if (v instanceof ObjectReference o && !(v instanceof StringReference) && !(v instanceof ArrayReference)
+                && depth == 0 && thread != null && !isPlatform(o.referenceType().name())) {
+            try {
+                StringBuilder sb = new StringBuilder(simple(o.referenceType().name())).append('{');
+                int shown = 0;
+                for (Field f : o.referenceType().allFields()) {
+                    if (f.isStatic()) continue;
+                    if (shown++ == 4) {
+                        sb.append(", ...");
+                        break;
+                    }
+                    sb.append(shown > 1 ? ", " : "").append(f.name()).append('=').append(value(o.getValue(f), 1, thread, quiet));
+                }
+                return sb.append('}').toString();
+            } catch (Exception e) {
+                // fall through to the fields by type
             }
         }
         return value(v, depth);

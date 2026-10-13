@@ -148,6 +148,38 @@ class ExecutionTraceTest {
                 .contains("Rows.of(name = \"org.ink.Quill\") -> null");
     }
     /**
+     * T6-T, ladder-grind 2026-10-10 to 2026-10-13: a result object's list of complaints was shown as "ArrayList", and
+     * the sentence that named the fix was inside it. A JDK value inside a returned object is shown by what it says.
+     */
+    @Test
+    void aCollectionInsideAReturnedObjectIsShownByWhatItHolds(@TempDir Path project) throws Exception {
+        Assumptions.assumeTrue(Boolean.getBoolean("execution.trace.live"), "live: -Dexecution.trace.live=true");
+        Files.writeString(project.resolve("pom.xml"), POM);
+        Path main = Files.createDirectories(project.resolve("src/main/java/org/ink"));
+        Path test = Files.createDirectories(project.resolve("src/test/java/org/ink"));
+        Files.writeString(main.resolve("Reading.java"), """
+                package org.ink;
+                class Reading {
+                  static class Outcome { String text; java.util.List<String> complaints = new java.util.ArrayList<>(); }
+                  static Outcome read(String page) {
+                    Outcome o = new Outcome();
+                    o.complaints.add("the page is written in an ink this pen is not set to; set the pen first");
+                    return o;
+                  }
+                }""");
+        Files.writeString(test.resolve("ReadingTest.java"), """
+                package org.ink;
+                class ReadingTest {
+                  @org.junit.jupiter.api.Test void reads() { org.junit.jupiter.api.Assertions.assertEquals("a", Reading.read("a").text); }
+                }""");
+
+        var calls = ExecutionTrace.trace(project, "org.ink.ReadingTest", "reads", 240_000).orElseThrow();
+
+        assertThat(ExecutionTrace.render(calls, Map.of(), 10))
+                .contains("complaints=ArrayList([the page is written in an ink this pen is not set to; set the pen first])");
+    }
+
+    /**
      * receiver-questions run 2026-10-02_14-55-46 hung 945 s: a JDK list of the project's records, rendered by its
      * own toString(), called the records' toString() -- a method entry the trace suspended inside its own call.
      */

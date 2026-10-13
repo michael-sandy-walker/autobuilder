@@ -179,7 +179,7 @@ public class EndpointSurfaceQuery {
             if (e.getKey() == null || !JAVA_FILE.matcher(e.getKey()).matches()) continue;
             if (e.getValue() == null || e.getValue().isBlank()) continue;
             try {
-                Optional<CompilationUnit> cu = new JavaParser().parse(e.getValue()).getResult();
+                Optional<CompilationUnit> cu = com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(e.getValue()).getResult();
                 if (cu.isPresent() && !collectBuiltEndpoints(cu.get(), built)) {
                     return Optional.empty();
                 }

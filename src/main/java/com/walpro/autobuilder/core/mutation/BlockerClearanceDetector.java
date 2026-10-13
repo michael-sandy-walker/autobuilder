@@ -69,7 +69,7 @@ public class BlockerClearanceDetector {
 
     private void collectFingerprintsFromJava(String path, String content, Set<String> sink) {
         try {
-            CompilationUnit cu = new JavaParser().parse(content).getResult().orElse(null);
+            CompilationUnit cu = com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(content).getResult().orElse(null);
             if (cu == null) return;
             for (TypeDeclaration<?> type : cu.getTypes()) {
                 String typeName = type.getNameAsString();

@@ -12,7 +12,7 @@ import java.util.*;
 
 public class JavaStructureParser {
 
-    private static final JavaParser parser = new JavaParser();
+    private static final JavaParser parser = com.walpro.autobuilder.analysis.structure.JavaSources.parser();
 
     /** Every non-blank {@code .java} file in {@code files} that parses, by path, in iteration order. */
     public static Map<String, ParsedElement> parseJavaFiles(Map<String, String> files) {

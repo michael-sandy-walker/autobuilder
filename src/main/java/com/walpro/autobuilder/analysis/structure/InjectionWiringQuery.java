@@ -82,7 +82,7 @@ public final class InjectionWiringQuery {
             if (e.getKey() == null || !e.getKey().endsWith(".java")) continue;
             if (e.getValue() == null || e.getValue().isBlank()) continue;
             try {
-                new JavaParser().parse(e.getValue()).getResult().ifPresent(units::add);
+                com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(e.getValue()).getResult().ifPresent(units::add);
             } catch (RuntimeException ex) {
                 log.debug("T4-BW: skipping unparseable {}: {}", e.getKey(), ex.getMessage());
             }

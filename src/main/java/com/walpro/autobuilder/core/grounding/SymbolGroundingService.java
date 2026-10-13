@@ -452,7 +452,7 @@ public class SymbolGroundingService {
             return;
         }
         try {
-            CompilationUnit cu = new JavaParser().parse(content).getResult().orElse(null);
+            CompilationUnit cu = com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(content).getResult().orElse(null);
             if (cu == null) {
                 throw new IllegalArgumentException("JavaParser returned no result");
             }

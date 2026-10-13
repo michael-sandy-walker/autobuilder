@@ -280,7 +280,7 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
     private CompilationUnit parse(String source) {
         if (source == null || source.isBlank()) return null;
         try {
-            return new JavaParser().parse(source).getResult().orElse(null);
+            return com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(source).getResult().orElse(null);
         } catch (RuntimeException e) {
             return null;
         }

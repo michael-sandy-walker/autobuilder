@@ -124,7 +124,7 @@ public class WiringFactsAnalyzer {
             if (e.getKey() == null || !JAVA_FILE.matcher(e.getKey()).matches()) continue;
             if (e.getValue() == null || e.getValue().isBlank()) continue;
             try {
-                new JavaParser().parse(e.getValue()).getResult().ifPresent(units::add);
+                com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(e.getValue()).getResult().ifPresent(units::add);
             } catch (RuntimeException ex) {
                 log.debug("T4-BS: skipping unparseable {}: {}", e.getKey(), ex.getMessage());
             }
@@ -384,7 +384,7 @@ public class WiringFactsAnalyzer {
             if (e.getKey() == null || !JAVA_FILE.matcher(e.getKey()).matches()) continue;
             if (e.getValue() == null || e.getValue().isBlank()) continue;
             try {
-                new JavaParser().parse(e.getValue()).getResult().ifPresent(units::add);
+                com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(e.getValue()).getResult().ifPresent(units::add);
             } catch (RuntimeException ex) {
                 log.debug("skipping unparseable {}: {}", e.getKey(), ex.getMessage());
             }

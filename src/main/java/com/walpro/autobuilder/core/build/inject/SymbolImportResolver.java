@@ -634,7 +634,7 @@ public class SymbolImportResolver implements CompileFixResolver {
 
     private static CompilationUnit tryParse(String content) {
         try {
-            return new JavaParser().parse(content).getResult().orElse(null);
+            return com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(content).getResult().orElse(null);
         } catch (RuntimeException e) {
             return null;
         }

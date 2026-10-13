@@ -316,7 +316,7 @@ public class ColdReadService {
 
     private Optional<CompilationUnit> parse(String source) {
         try {
-            return new JavaParser().parse(source).getResult();
+            return com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(source).getResult();
         } catch (RuntimeException e) {
             return Optional.empty();
         }

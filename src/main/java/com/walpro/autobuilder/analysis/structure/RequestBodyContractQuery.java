@@ -213,7 +213,7 @@ public final class RequestBodyContractQuery {
 
     private static Optional<CompilationUnit> parse(Path source) {
         try {
-            return new JavaParser().parse(Files.readString(source)).getResult();
+            return com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(Files.readString(source)).getResult();
         } catch (IOException | RuntimeException e) {
             return Optional.empty();
         }

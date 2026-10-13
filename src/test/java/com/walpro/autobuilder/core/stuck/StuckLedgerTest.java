@@ -155,4 +155,41 @@ class StuckLedgerTest {
         assertThat(t.status()).isEqualTo(StuckLedger.Status.ENDED);
         assertThat(l.delivered()).isEmpty();
     }
+
+    /**
+     * T6-T, ladder-grind 2026-10-13, three runs of three: a call a library type does not declare was answered at
+     * minute 2, the build went green on it, and some fifty minutes later the same call was written again -- and
+     * met the entry two questions further on, neither with an answer. An answer that ended the failure is the
+     * answer to the same failure made anew.
+     */
+    @Test
+    void aFailureThatComesBackAfterItsAnswerEndedIt_isAskedTheQuestionThatAnsweredIt() {
+        StuckLedger l = new StuckLedger();
+        for (String c : List.of("c1", "c2", "c3")) l.observe(build(c));
+        StuckLedger.Entry e = l.pending().get(0);
+        l.recordAsked(e, answered(), "c3", "sg");
+        int answeredAt = e.rung();
+        assertThat(l.buildSucceeded("c4")).containsExactly(e);
+        assertThat(l.corrected()).as("the register of what was put right").containsExactly(e);
+
+        assertThat(l.observe(build("c9"))).isEqualTo(StuckLedger.Change.RECURRED_AFTER_DELIVERY);
+
+        assertThat(e.rung()).as("the same question, not the next").isEqualTo(answeredAt);
+        assertThat(e.status()).isEqualTo(StuckLedger.Status.PENDING);
+        assertThat(l.corrected()).as("failing again: it is an open question, not a corrected one").isEmpty();
+    }
+
+    /** An answer that was shown and did NOT end the failure still gives way to the next question. */
+    @Test
+    void aFailureThatPersistsThroughItsAnswerStillMovesOn() {
+        StuckLedger l = new StuckLedger();
+        for (String c : List.of("c1", "c2", "c3")) l.observe(build(c));
+        StuckLedger.Entry e = l.pending().get(0);
+        l.recordAsked(e, answered(), "c3", "sg");
+        int answeredAt = e.rung();
+
+        l.observe(build("c4"));
+
+        assertThat(e.rung()).isEqualTo(answeredAt + 1);
+    }
 }

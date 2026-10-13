@@ -178,8 +178,18 @@ public final class StuckLedger {
                 // An answer nobody was shown cannot have failed: it stays due, at the same question.
                 if (e.status == Status.DELIVERED && e.withheld) return Change.COUNTED;
                 e.recurrencesAfterDelivery++;
-                // A question that repeats is asked again at the same place: it has more than one thing to say.
-                if (!StuckDiagnosis.repeats(e.source)) e.rung++;
+                if (e.status == Status.ENDED && lastAnsweredRung(e) >= 0) {
+                    // T6-T: an answer that ENDED the failure was right; the failure made anew is the same mistake
+                    // made again, and it is given the same answer -- not the next question, which is for an answer
+                    // that did not help. Ladder-grind, three runs of three (2026-10-13): a call a library type
+                    // does not declare was answered at minute 2 and corrected; when it was written again some
+                    // fifty minutes later the entry stood two questions further on, both without an answer for
+                    // a library type, and the fact that had worked was not said again.
+                    e.rung = lastAnsweredRung(e);
+                } else if (!StuckDiagnosis.repeats(e.source)) {
+                    // A question that repeats is asked again at the same place: it has more than one thing to say.
+                    e.rung++;
+                }
                 e.status = Status.PENDING;
                 e.endedCycle = null;
                 return Change.RECURRED_AFTER_DELIVERY;
@@ -188,6 +198,27 @@ public final class StuckLedger {
             }
         }
         return Change.COUNTED;
+    }
+
+    private static int lastAnsweredRung(Entry e) {
+        for (int i = e.asked.size() - 1; i >= 0; i--) {
+            if (e.asked.get(i).answer() != null) return e.asked.get(i).rung();
+        }
+        return -1;
+    }
+
+    /**
+     * T6-T, the user's "a register of corrected method names" (2026-10-13): the build failures of this run that
+     * were about a NAME the code does not declare, were answered with what it does declare, and ended -- most
+     * recently answered first. What the loop already put right once, kept where the next prompt can say it
+     * before the name is written again.
+     */
+    public synchronized List<Entry> corrected() {
+        List<Entry> out = new ArrayList<>(entries.values().stream()
+                .filter(e -> e.source == StuckObservation.Source.BUILD && e.status == Status.ENDED)
+                .filter(e -> e.asked.stream().anyMatch(q -> q.rung() == 0 && q.answer() != null)).toList());
+        out.sort((a, b) -> Long.compare(b.deliveredSeq, a.deliveredSeq));
+        return out;
     }
 
     /** Entries with a question due, oldest first. */

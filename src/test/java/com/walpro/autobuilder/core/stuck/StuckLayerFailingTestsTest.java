@@ -90,4 +90,25 @@ class StuckLayerFailingTestsTest {
         assertThat(StuckLayer.shownAnswer(e, Optional.empty())).as("the tree's tests unknown: nothing is withheld")
                 .contains(ledgerTrace).contains(quillTrace);
     }
+
+    /**
+     * T6-T, the user's "a register of corrected method names" (2026-10-13): what the run already wrote, was
+     * corrected on and stopped writing is said in the prompt before it is written again -- one line each, and only
+     * while there is room.
+     */
+    @Test
+    void whatWasPutRightEarlierInTheRunIsNamedBeforeItIsWrittenAgain() {
+        StuckLayer layer = new StuckLayer();
+        StuckLedger ledger = layer.ledger();
+        for (String c : List.of("c1", "c2", "c3")) {
+            ledger.observe(new StuckObservation(StuckObservation.Source.BUILD, "the build fails: Quill has no getInk()", "sg", c, List.of()));
+        }
+        assertThat(layer.correctedBlock(10_000)).as("still failing: nothing is corrected yet").isNull();
+        ledger.recordAsked(ledger.pending().get(0), new StuckDiagnosis.Asked("q", "structure", "Quill declares: ink().", false), "c3", "sg");
+        ledger.buildSucceeded("c4");
+
+        assertThat(layer.correctedBlock(10_000)).contains("CORRECTED EARLIER IN THIS RUN", "  - Quill has no getInk()")
+                .doesNotContain("the build fails:");
+        assertThat(layer.correctedBlock(5)).as("no room for a line: nothing, never a heading alone").isNull();
+    }
 }

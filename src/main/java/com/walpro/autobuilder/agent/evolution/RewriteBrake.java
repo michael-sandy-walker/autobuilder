@@ -42,11 +42,20 @@ public class RewriteBrake {
 
     private final Map<String, Integer> held = new LinkedHashMap<>();
 
+    /**
+     * The operator's protected paths: never held. Field72 run 1 (2026-10-15, stopped for it): a rewrite had carried a
+     * spec test along with the class, the test was held, and the prompt asked for edits to a file no change may touch.
+     */
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.build.ProtectedPaths protectedPaths;
+
     /** A candidate was tested against the tree it was written over. */
     public synchronized void tested(Map<String, String> tree, List<FileMutation> files, boolean better) {
         if (files == null) return;
         for (FileMutation f : files) {
             if (f == null || f.path() == null) continue;
+            if (protectedPaths != null && protectedPaths.isProtected(f.path())) continue;
             if (better) {
                 if (held.remove(f.path()) != null) log.info("T6-T: {} is changed by any means again -- a change to it made the tests better", f.path());
                 continue;

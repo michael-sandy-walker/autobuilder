@@ -64,4 +64,19 @@ class RewriteBrakeTest {
         brake.refused(PATH);
         assertThat(brake.held()).isEmpty();
     }
+
+    /** Field72 run 1: a rewrite carried a spec test along; the test was held and the prompt asked for edits to it. */
+    @Test
+    void aProtectedPathIsNeverHeld() {
+        RewriteBrake brake = new RewriteBrake();
+        com.walpro.autobuilder.core.build.ProtectedPaths protectedPaths = org.mockito.Mockito.mock(com.walpro.autobuilder.core.build.ProtectedPaths.class);
+        String test = "src/test/java/zeta/QuillTest.java";
+        org.mockito.Mockito.when(protectedPaths.isProtected(test)).thenReturn(true);
+        brake.setProtectedPaths(protectedPaths);
+
+        brake.tested(Map.of(PATH, quill(0, 20), test, quill(0, 20)),
+                List.of(new FileMutation(PATH, quill(50, 70)), new FileMutation(test, quill(50, 70))), false);
+
+        assertThat(brake.held()).containsExactly(PATH);
+    }
 }

@@ -316,7 +316,51 @@ public final class SubgoalSourcePromptBlock {
             used += cost;
             shown.add(new int[]{from, to});
         }
-        return used == header ? null : sb.append('\n').toString();
+        if (used == header) return null;
+        // T6-T: and everything else the file declares, by signature -- a file shown in parts hides the members the
+        // work does not name, and a member the model cannot see is one it writes again. Ladder-grind run
+        // 2026-10-14_00-22-30: 15 of the 17 candidates after minute 72 failed on a second copy of a helper the
+        // 1,121-line file already had ("method isInAnonymousClass(...) is already defined"); 28% of that run's
+        // compiler errors were duplicate definitions, and they appeared in all six runs of that case that week.
+        if (!readOnly) {
+            String rest = notShown(unit, shown, true);
+            if (rest != null && used + PromptTokenBudget.estimateTokens(rest) > tokens) rest = notShown(unit, shown, false);
+            if (rest != null && used + PromptTokenBudget.estimateTokens(rest) <= tokens) {
+                sb.append(rest);
+                used += PromptTokenBudget.estimateTokens(rest);
+            }
+        }
+        return sb.append('\n').toString();
+    }
+
+    /**
+     * The members of a file's types that no shown part contains, as one line each -- with their signatures, or by name
+     * when {@code signatures} is false; null when every member was shown.
+     */
+    private static String notShown(CompilationUnit unit, List<int[]> shown, boolean signatures) {
+        List<String> out = new ArrayList<>();
+        for (BodyDeclaration<?> member : unit.findAll(BodyDeclaration.class)) {
+            if (!(member instanceof CallableDeclaration<?> || member instanceof FieldDeclaration
+                    || member instanceof TypeDeclaration<?>)) continue;
+            if (member.getParentNode().filter(n -> n instanceof TypeDeclaration<?>).isEmpty()) continue;
+            int from = startLine(member);
+            int to = member.getEnd().map(e -> e.line).orElse(0);
+            if (shown.stream().anyMatch(r -> r[0] <= from && to <= r[1])) continue;
+            String owner = member.getParentNode().map(n -> ((TypeDeclaration<?>) n).getNameAsString()).orElse("");
+            String what;
+            if (member instanceof CallableDeclaration<?> c) {
+                what = signatures ? c.getDeclarationAsString(false, false, true) : c.getNameAsString() + "()";
+            } else if (member instanceof FieldDeclaration f) {
+                what = String.join(", ", f.getVariables().stream().map(v -> signatures
+                        ? v.getTypeAsString() + " " + v.getNameAsString() : v.getNameAsString()).toList());
+            } else {
+                what = ((TypeDeclaration<?>) member).getNameAsString();
+            }
+            out.add("  " + owner + ": " + what + " (line " + from + ")");
+        }
+        if (out.isEmpty()) return null;
+        return "The rest of this file, not shown -- it exists already: use it as it is, and never write a second copy of any of it:\n"
+                + String.join("\n", out) + "\n";
     }
 
     /**

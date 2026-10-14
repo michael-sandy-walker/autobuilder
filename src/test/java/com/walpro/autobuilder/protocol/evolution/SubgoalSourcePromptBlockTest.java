@@ -335,4 +335,29 @@ class SubgoalSourcePromptBlockTest {
             return com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(file);
         }
     }
+
+    /**
+     * T6-T, ladder-grind 2026-10-14_00-22-30: a 1,121-line file shown in parts hid the helpers the work did not name, and
+     * 15 of 17 late candidates failed on a second copy of one ("method isInAnonymousClass(...) is already defined").
+     * What a part does not show is listed by signature, so the model knows it exists.
+     */
+    @Test
+    void aFileShownInParts_listsEverythingElseItDeclaresBySignature() {
+        StringBuilder big = new StringBuilder("package zeta;\npublic class Ledger {\n");
+        for (int i = 0; i < 60; i++) {
+            big.append("    /** Entry ").append(i).append(". */\n    int entry").append(i).append("(int page) {\n");
+            for (int k = 0; k < 6; k++) big.append("        page = page + ").append(k).append(";\n");
+            big.append("        return page;\n    }\n");
+        }
+        big.append("    private static boolean isBlotted(String ink, int nib) { return ink == null; }\n}\n");
+        String ledger = big.toString();
+
+        String block = SubgoalSourcePromptBlock.parts("src/main/java/zeta/Ledger.java", ledger,
+                "Fix entry7() so the page count is right", 2_000, false);
+
+        assertThat(block).contains("int entry7(int page)")
+                .contains("The rest of this file, not shown", "Ledger: int entry0(int page) (line 3)", "Ledger: int entry59(int page)")
+                .as("shown in a part, so not listed again: the named member and the end of the type")
+                .doesNotContain("Ledger: int entry7(int page)", "Ledger: boolean isBlotted");
+    }
 }

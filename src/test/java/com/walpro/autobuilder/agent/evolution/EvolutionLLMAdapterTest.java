@@ -273,4 +273,44 @@ class EvolutionLLMAdapterTest {
                 .registerEvolution(eq("StaticEvolutionAgent"), eq(context), eq(consolidated));
         verify(graphFacade).recordEvolution(eq(context), eq(consolidated));
     }
+
+    /**
+     * T6-T, ladder-rows 2026-10-14_18-10-40: twelve of 43 answers were the class exactly as it stood, one ten times over
+     * 90 minutes. An answer that changes nothing is asked again, and told so.
+     */
+    @Test
+    void anAnswerIdenticalToTheFileAsItStandsIsAskedAgain_andToldItChangesNothing() {
+        String path = "src/main/java/zeta/Quill.java";
+        String quill = "package zeta;\n\npublic class Quill {\n    int nib() { return 1; }\n}\n";
+        com.walpro.autobuilder.core.lifecycle.CycleContextData ctx = com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .previousOutput(java.util.Map.of(path, quill)).build();
+
+        String same = "```java [" + path + "]\n" + quill + "```\n";
+        String changed = "```java [" + path + "]\n" + quill.replace("return 1;", "return 2;") + "```\n";
+
+        assertThat(agent.whatItChangesNot(same, ctx, false)).contains("identical to " + path, "changes nothing", "#NoDiff");
+        assertThat(agent.whatItChangesNot(changed, ctx, false)).isNull();
+        assertThat(agent.whatItChangesNot("#NoDiff\nalready done", ctx, false)).as("a declared no-op is its own case").isNull();
+    }
+
+    /** A file the brake holds, rewritten again, is asked again for edits; an edit of it goes through. */
+    @Test
+    void aRewriteOfAFileTheBrakeHoldsIsAskedAgainForEdits() {
+        String path = "src/main/java/zeta/Quill.java";
+        StringBuilder sb = new StringBuilder("package zeta;\n\npublic class Quill {\n");
+        for (int i = 0; i < 20; i++) sb.append("    int nib").append(i).append("() { return ").append(i).append("; }\n");
+        String quill = sb.append("}\n").toString();
+        RewriteBrake brake = new RewriteBrake();
+        brake.tested(java.util.Map.of(path, quill), List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation(path,
+                quill.replaceAll("return (\\d+);", "return -$1;"))), false);
+        org.springframework.test.util.ReflectionTestUtils.setField(agent, "rewriteBrake", brake);
+        com.walpro.autobuilder.core.lifecycle.CycleContextData ctx = com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .previousOutput(java.util.Map.of(path, quill)).build();
+
+        String rewrite = "```java [" + path + "]\n" + quill.replaceAll("return (\\d+);", "return $1 * 2;") + "```\n";
+        String edit = "```java [" + path + "]\n" + quill.replace("return 3;", "return 33;") + "```\n";
+
+        assertThat(agent.whatItChangesNot(rewrite, ctx, false)).contains("rewrites " + path + " again", "edit blocks");
+        assertThat(agent.whatItChangesNot(edit, ctx, false)).isNull();
+    }
 }

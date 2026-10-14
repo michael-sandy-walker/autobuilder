@@ -177,13 +177,18 @@ public class EvolutionLLMAdapter {
         userPrompt = com.walpro.autobuilder.protocol.evolution.ServedPrefixPromptBlock.appendTo(
                 userPrompt, servedPrefixOf(refreshed));
 
+        // T6-T: a file rewritten whole to no effect on the failing tests is changed by edits next (RewriteBrake).
+        String editsFirst = editsFirstBlock(refreshed);
+        if (editsFirst != null) userPrompt = userPrompt + "\n\n" + editsFirst;
+
         LLMResponseResult<EvolutionOutcome> response = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,
                 systemPrompt,
                 userPrompt,
                 raw -> EvolutionProtocolContract.isValidResponse(raw)
                         && EditHunks.apply(com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser.normalizeFileHeaders(raw),
-                                currentTree(refreshed)).problems().isEmpty(),
+                                currentTree(refreshed)).problems().isEmpty()
+                        && whatItChangesNot(raw, refreshed, false) == null,
                 raw -> parser.parse(raw, currentTree(refreshed)),
                 raw -> {
                     // T4-EB: an edit whose SEARCH text does not occur exactly once is asked again, with where.
@@ -192,7 +197,8 @@ public class EvolutionLLMAdapter {
                     List<String> problems = EditHunks.apply(
                             com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser.normalizeFileHeaders(raw),
                             currentTree(refreshed)).problems();
-                    return problems.isEmpty() ? null : "an edit could not be applied: " + String.join("; ", problems);
+                    if (!problems.isEmpty()) return "an edit could not be applied: " + String.join("; ", problems);
+                    return whatItChangesNot(raw, refreshed, true);
                 }
         );
 
@@ -228,6 +234,75 @@ public class EvolutionLLMAdapter {
 
         return context
                 .withEvolutionOutcome(outcome);
+    }
+
+    /** T6-T: what the brake holds; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private RewriteBrake rewriteBrake;
+
+    /**
+     * T6-T: why an answer that is otherwise well-formed is asked again, or null when it is not. Two reasons, both read
+     * against the files as they are now:
+     * <ul>
+     *   <li>Every file it writes says exactly what the file says already -- it changes nothing. Ladder-rows run
+     *       2026-10-14_18-10-40: twelve of 43 answers were the class as it stood, one of them ten times over 90 minutes;
+     *       each cost a call, some a test run, and with the prompt nearly the same each time the answer did not move.
+     *       Saying so changes the next request, which is what breaks the repetition.</li>
+     *   <li>It rewrites a file {@link RewriteBrake} holds -- one rewritten before to no effect on the failing tests.</li>
+     * </ul>
+     * {@code counted}: the answer is being asked again for it (the brake counts that), not only checked.
+     */
+    String whatItChangesNot(String raw, CycleContextData ctx, boolean counted) {
+        EvolutionOutcome parsed;
+        try {
+            parsed = parser.parse(raw, currentTree(ctx));
+        } catch (RuntimeException e) {
+            return null;
+        }
+        if (parsed == null || parsed.noOp()) return null;
+        java.util.Map<String, String> tree = currentTree(ctx);
+        List<com.walpro.autobuilder.agent.evolution.model.FileMutation> files =
+                parsed.addedOrChangedFiles() == null ? List.of() : parsed.addedOrChangedFiles();
+        boolean deletes = parsed.deletedFiles() != null && !parsed.deletedFiles().isEmpty();
+        if (!files.isEmpty() && !deletes && files.stream().allMatch(f -> f != null && f.path() != null
+                && tree.get(f.path()) != null && tree.get(f.path()).strip().equals(f.content() == null ? "" : f.content().strip()))) {
+            return "it is identical to " + String.join(", ", files.stream().map(f -> f.path()).toList())
+                    + " as the file stands now, so it changes nothing. Write the change the failing tests need -- an"
+                    + " edit block of the part to change -- or answer #NoDiff if nothing needs to change";
+        }
+        if (rewriteBrake != null) {
+            for (var f : files) {
+                if (f == null || f.path() == null) continue;
+                if (rewriteBrake.holds(f.path(), tree.get(f.path()), f.content())) {
+                    if (counted) rewriteBrake.refused(f.path());
+                    return "it rewrites " + f.path() + " again, and its last rewrite left the failing tests as they"
+                            + " were. Change it with edit blocks -- each SEARCH part copied from the file as it stands --"
+                            + " in the parts the failing tests run through";
+                }
+            }
+        }
+        return null;
+    }
+
+    /** T6-T: the prompt block for the files {@link RewriteBrake} holds that this tree has; null when none. */
+    private String editsFirstBlock(CycleContextData ctx) {
+        if (rewriteBrake == null) return null;
+        java.util.Map<String, String> tree = currentTree(ctx);
+        List<String> held = rewriteBrake.held().stream().filter(tree::containsKey).sorted().toList();
+        if (held.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder("--- CHANGE THESE FILES BY EDITS ---\n")
+                .append("The last new version of each of these files replaced much of it and left the failing tests as"
+                        + " they were. Change them with edit blocks this time, in the parts the failing tests run through;"
+                        + " a version that replaces much of one again is asked again, until a change to it makes the"
+                        + " tests better:\n");
+        for (String path : held) {
+            String name = path.substring(path.lastIndexOf('/') + 1).replace(".java", "");
+            List<String> methods = stuckLayer == null ? List.of() : stuckLayer.methodsOnFailingPath(name);
+            sb.append("  - ").append(path)
+                    .append(methods.isEmpty() ? "" : " -- the failing tests run through " + String.join("(), ", methods) + "()")
+                    .append('\n');
+        }
+        return sb.toString().stripTrailing();
     }
 
     /** T4-EB: the files as they are now, which an edit block's SEARCH text is matched against. */

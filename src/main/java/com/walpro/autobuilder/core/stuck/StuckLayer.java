@@ -507,12 +507,34 @@ public class StuckLayer {
             return new StuckDiagnosis.Asked("", "", null, false);
         }
         String test = chosen.testClass() + "." + chosen.method();
+        tracedCalls.put(test, calls.get());
         String answer = "The failing test " + test + " was run again under the debugger. It failed with: "
                 + (chosen.message() == null || chosen.message().isBlank() ? "(no message)" : chosen.message().replace('\n', ' '))
                 + "\n    The calls into the project's own code, in the order they returned -- a call's own calls come before it, indented one step more:\n"
                 + ExecutionTrace.render(calls.get(), live, TRACE_LINES).replace("\n", "\n    ");
         log.warn("T4-DY: traced {} under the debugger -- {} call(s) into the project's own code", test, calls.get().size());
         return new StuckDiagnosis.Asked("", "", answer, false);
+    }
+
+    /** T6-T: the calls each traced test made, by test, as last traced. */
+    private final Map<String, List<ExecutionTrace.Call>> tracedCalls = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * T6-T: the methods of the project type named {@code simpleType} that the traces of the tests still failing on the
+     * tree went through, in the order they returned, constructors left out; empty when none was traced.
+     */
+    public List<String> methodsOnFailingPath(String simpleType) {
+        java.util.Optional<java.util.Set<String>> failing = failingOnTree();
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        for (Map.Entry<String, List<ExecutionTrace.Call>> t : tracedCalls.entrySet()) {
+            if (failing.isPresent() && !failing.get().contains(t.getKey())) continue;
+            for (ExecutionTrace.Call c : t.getValue()) {
+                String type = c.type().substring(c.type().lastIndexOf('.') + 1);
+                if (type.contains("$")) type = type.substring(0, type.indexOf('$'));
+                if (type.equals(simpleType) && !c.method().startsWith("<")) out.add(c.method());
+            }
+        }
+        return List.copyOf(out);
     }
 
     StuckLedger.Entry find(StuckObservation o) {

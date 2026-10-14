@@ -123,6 +123,10 @@ public class EvaluationAgent implements ExecutionAgent {
     @Setter
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
+    /** T6-T: records the files rewritten whole to no effect on the failing tests; null in unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.agent.evolution.RewriteBrake rewriteBrake;
     @Setter
     @Autowired(required = false)
     private com.walpro.autobuilder.goal.DeclaredTestSuite declaredTestSuite;
@@ -862,6 +866,9 @@ public class EvaluationAgent implements ExecutionAgent {
         // suite needs in several classes at once is then kept one class at a time (ladder-grind, field44).
         var delta = report.isPresent() ? testRunGate.compareWithTree(report.get()) : testRunGate.compareUncompiledWithTree();
         if (report.isEmpty() && "UNKNOWN".equals(delta.verdict())) return outcome;
+        if (rewriteBrake != null && report.isPresent() && context.evolutionOutcome() != null) {
+            rewriteBrake.tested(context.previousOutput(), context.evolutionOutcome().addedOrChangedFiles(), delta.better());
+        }
         boolean defects = negotiationResult.criticalOpinions() != null && negotiationResult.criticalOpinions().stream()
                 .anyMatch(HeuristicOpinion::defectFinding);
         EvaluationOutcome decided = outcome;

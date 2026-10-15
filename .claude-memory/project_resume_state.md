@@ -11,7 +11,17 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-15 (Opus 5.5, session 14 cont.) -- THE STALL FIXED FROM THE LOGS (NO-OP ANSWERS, REWRITE BRAKE) + CHECK 17'S A AND B BUILT; NOT FIELD-RUN -- START HERE
+## 2026-10-15 LATER (Opus 5.5, session 14 cont.) -- SHORT VERIFICATION field73: LADDER-ROWS 25, 26 (NOT CLOSED, CHECK 15); LADDER-GRIND 51 FULFILLED, 49 -- START HERE
+
+- **Head `57436a21` + this record; nothing pushed. Suite 3900/0. No run is live.**
+- **field72 was stopped at minute 55 of its first run:** the rewrite brake held a protected spec test that a rewrite had carried along, and the prompt asked for edits to it. Fixed in `57436a21` (the brake never holds a protected path). Run discarded.
+- **field73 (`~/.autobuilder/field73/run.sh`, the user's "2 ladder-rows and 2 ladder-grind runs"):** ladder-rows v3 **25 {5,15,28} and 26 {15,28}, neither fulfilled** (good 28, 28, 26, 0/1; field66 28, 28, 26, 28; field71 25, 21, 26). ladder-grind v1 **51 GOAL_FULFILLED at 77 min, then 49 {6,51} at the deadline** (field69 51, 49, 51; field67 51, 46, 46).
+- **The mechanisms fired as built:** ladder-rows identical answers asked again 13 and 14, the brake held the class 4 times per run and asked 10 and 11 rewrites again (released once and twice), duplicate-method repairs 2 per run; the failing count kept falling (7 -> 6 -> 5 -> 3) instead of standing at 7. ladder-grind: the large-file outline in 32 and 53 prompts, duplicate-method repairs 1 and 2, check 17 passed in both runs.
+- **What they did NOT do: bring ladder-rows' closures back.** Both runs ended on check 15, `TestRunGateTest.failingSuite_aParameterizedInvocation_carriesTheRowItRanWith`: the test wants `dries[2] (ran with: green, Map<String,Nib>)` -- the short method name, and the row as written with a comma inside the generic; the model's `TestRunGate` has a "ran with" branch, but the failure is reported through the root-cause summary path that never reaches it. The exact expected and actual text was in 22 failure messages of one run: not missing information, model capability on a two-part detail. The good build also failed it once in four.
+- **ladder-grind since the fixes of 10-13/14: closures in 4 of the last 7 scored runs (51, 51, 51, 51 against 49, 46, 46... see field67/69/73), none in 28 before.** Check 17 passed in both field73 runs (its A: outline; B: duplicate repair).
+- **Next, not decided:** whether to address check 15 (ladder-rows) and how, or stop optimising for these two cases.
+
+## 2026-10-15 (Opus 5.5, session 14 cont.) -- THE STALL FIXED FROM THE LOGS (NO-OP ANSWERS, REWRITE BRAKE) + CHECK 17'S A AND B BUILT; NOT FIELD-RUN
 
 - **Head `6400cbc1` + this record; nothing pushed. Suite 3899/0. No run is live. None of the four changes below has had a field run.**
 - **The user (2026-10-15): "we have done enough long runs for now ... find out what is the problem here ... by analysing the logs, etc. of the already passed runs"; then "Look at the stall first, from the logs"; then "Build A and B, then consider building the other builds regarding the 17 check".**

@@ -423,6 +423,16 @@ public class StuckLayer {
     /** Most trace lines one answer carries. */
     static final int TRACE_LINES = 40;
 
+    /**
+     * T6-T: after the trace, the methods whose empty, false or null answer the failure turned on are walked line by
+     * line ({@link StepTrace}) -- a second run of the test under the debugger, about as long as the first.
+     */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.stuck.step-trace.enabled:true}")
+    private boolean stepTrace = true;
+
+    /** Most walked lines one answer carries. */
+    static final int STEP_LINES = 40;
+
     /** A failing test named by the stuck observation's evidence: {@code Class.method} and the message after " -- ". */
     record FailingTest(String testClass, String method, String message) {}
 
@@ -511,9 +521,25 @@ public class StuckLayer {
         String answer = "The failing test " + test + " was run again under the debugger. It failed with: "
                 + (chosen.message() == null || chosen.message().isBlank() ? "(no message)" : chosen.message().replace('\n', ' '))
                 + "\n    The calls into the project's own code, in the order they returned -- a call's own calls come before it, indented one step more:\n"
-                + ExecutionTrace.render(calls.get(), live, TRACE_LINES).replace("\n", "\n    ");
+                + ExecutionTrace.render(calls.get(), live, TRACE_LINES).replace("\n", "\n    ")
+                + walked(project, chosen, calls.get(), live);
         log.warn("T4-DY: traced {} under the debugger -- {} call(s) into the project's own code", test, calls.get().size());
         return new StuckDiagnosis.Asked("", "", answer, false);
+    }
+
+    /** T6-T: the deciding methods of a traced failure, walked line by line; empty when there are none or the walk failed. */
+    private String walked(java.nio.file.Path project, FailingTest chosen, List<ExecutionTrace.Call> calls, Map<String, String> live) {
+        if (!stepTrace) return "";
+        List<String[]> deciding = StepTrace.decidingMethods(calls);
+        if (deciding.isEmpty()) return "";
+        var walks = StepTrace.walk(project, chosen.testClass(), chosen.method(), deciding, executionTraceBudgetMs);
+        if (walks.isEmpty()) {
+            log.info("T6-T: no walk of {} in {}.{}", deciding.stream().map(d -> d[1]).toList(), chosen.testClass(), chosen.method());
+            return "";
+        }
+        log.warn("T6-T: walked {} invocation(s) of {} line by line", walks.get().size(), deciding.stream().map(d -> d[1]).toList());
+        return "\n    Where the answer was empty, false or null, the method run again line by line:\n"
+                + StepTrace.render(walks.get(), live, STEP_LINES).replace("\n", "\n    ");
     }
 
     /** T6-T: the calls each traced test made, by test, as last traced. */

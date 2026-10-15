@@ -36,6 +36,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -89,6 +90,22 @@ public final class ExecutionTrace {
         if (project == null || !Files.exists(project.resolve("pom.xml"))) return Optional.empty();
         List<String> mainTypes = mainTypes(project);
         if (mainTypes.isEmpty()) return Optional.empty();
+        return underDebugger(project, testClass, testMethod, budgetMs, (vm, deadline) -> record(vm, mainTypes, deadline))
+                .filter(l -> !l.isEmpty());
+    }
+
+    /** What is done with a test JVM attached to, before its deadline. */
+    @FunctionalInterface
+    interface DebuggedRun<T> {
+        T run(VirtualMachine vm, long deadline) throws InterruptedException;
+    }
+
+    /**
+     * Runs {@code testClass#testMethod} in a copy of {@code project}, suspended until the debugger attaches, and hands
+     * the attached JVM to {@code body}; empty when the test did not build or could not be attached to.
+     */
+    static <T> Optional<T> underDebugger(Path project, String testClass, String testMethod, long budgetMs,
+                                         DebuggedRun<T> body) {
         Path copy = null;
         Process mvn = null;
         VirtualMachine vm = null;
@@ -126,7 +143,7 @@ public final class ExecutionTrace {
                             testClass, testMethod, firstError(copy.resolve("trace-build.log")));
                     return Optional.empty();
                 }
-                return Optional.of(record(vm, mainTypes, deadline)).filter(l -> !l.isEmpty());
+                return Optional.ofNullable(body.run(vm, deadline));
             } finally {
                 watchdog.interrupt();
             }
@@ -317,7 +334,7 @@ public final class ExecutionTrace {
         }
     }
 
-    private static boolean isProject(String type, List<String> mainTypes) {
+    static boolean isProject(String type, List<String> mainTypes) {
         if (type.contains("$$Lambda")) return false;   // the JVM's generated lambda classes: plumbing, not calls
         for (String t : mainTypes) if (type.equals(t) || type.startsWith(t + "$")) return true;
         return false;
@@ -339,7 +356,7 @@ public final class ExecutionTrace {
         return "";
     }
 
-    private static List<String> arguments(ThreadReference thread, com.sun.jdi.Method method, List<EventRequest> quiet) {
+    static List<String> arguments(ThreadReference thread, com.sun.jdi.Method method, List<EventRequest> quiet) {
         List<String> out = new ArrayList<>();
         try {
             StackFrame frame = thread.frame(0);
@@ -360,17 +377,37 @@ public final class ExecutionTrace {
     }
 
     /** The values in scope where the call returned, other than its arguments. */
-    private static List<String> locals(ThreadReference thread, int argumentCount, List<EventRequest> quiet) {
+    static List<String> locals(ThreadReference thread, int argumentCount, List<EventRequest> quiet) {
         List<String> out = new ArrayList<>();
+        frameValues(thread, quiet).forEach((v, text) -> {
+            if (!v.isArgument() && out.size() < 6) out.add(v.name() + " = " + text);
+        });
+        return out;
+    }
+
+    /**
+     * The variables in scope in the top frame, each with its value as {@link #value} shows it. All values are fetched
+     * before any is shown: showing an object runs a method in the test's JVM, and that leaves the frame it was read
+     * from unusable -- read one by one, every variable after the first object was lost (check 15's walk showed no
+     * value at all inside a method whose first variable was a path).
+     */
+    static Map<LocalVariable, String> frameValues(ThreadReference thread, List<EventRequest> quiet) {
+        Map<LocalVariable, String> out = new LinkedHashMap<>();
+        List<LocalVariable> visible;
+        Map<LocalVariable, Value> values;
         try {
             StackFrame frame = thread.frame(0);
-            for (LocalVariable v : frame.visibleVariables()) {
-                if (v.isArgument()) continue;
-                out.add(v.name() + " = " + value(frame.getValue(v), 0, thread, quiet));
-                if (out.size() >= 6) break;
-            }
+            visible = frame.visibleVariables();
+            values = frame.getValues(visible);
         } catch (Exception e) {
-            // no debug information, or the frame is gone: no locals
+            return out;   // no debug information, or the frame is gone: no locals
+        }
+        for (LocalVariable v : visible) {
+            try {
+                out.put(v, value(values.get(v), 0, thread, quiet));
+            } catch (RuntimeException e) {
+                out.put(v, "?");
+            }
         }
         return out;
     }
@@ -402,7 +439,7 @@ public final class ExecutionTrace {
      * enumeration coming into being: its constants' constructors and its values()/valueOf() took 16 of the 43
      * lines of a trace whose point was in the rest (ladder-grind 2026-10-13_01-53-56).
      */
-    private static boolean skipped(com.sun.jdi.Method m) {
+    static boolean skipped(com.sun.jdi.Method m) {
         if (m.isSynthetic() || m.isStaticInitializer() || m.name().startsWith("lambda$")) return true;
         return m.declaringType() instanceof com.sun.jdi.ClassType c && c.isEnum()
                 && (m.isConstructor() || m.name().equals("values") || m.name().equals("valueOf"));
@@ -651,7 +688,7 @@ public final class ExecutionTrace {
                 + " (" + values.size() + " in all)";
     }
 
-    private static String lineText(Map<String, String> sources, String type, int line) {
+    static String lineText(Map<String, String> sources, String type, int line) {
         if (sources == null || line < 1) return null;
         String top = type.contains("$") ? type.substring(0, type.indexOf('$')) : type;
         String path = "src/main/java/" + top.replace('.', '/') + ".java";
@@ -661,12 +698,12 @@ public final class ExecutionTrace {
         return line <= all.length ? crop(all[line - 1].strip(), 120) : null;
     }
 
-    private static String simple(String name) {
+    static String simple(String name) {
         String n = name.substring(name.lastIndexOf('.') + 1);
         return n.replace('$', '.');
     }
 
-    private static String crop(String s, int max) {
+    static String crop(String s, int max) {
         String one = s.replace('\n', ' ');
         return one.length() <= max ? one : one.substring(0, max) + "...";
     }

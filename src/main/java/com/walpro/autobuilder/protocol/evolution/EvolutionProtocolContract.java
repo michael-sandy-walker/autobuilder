@@ -255,6 +255,16 @@ public class EvolutionProtocolContract {
      */
     public static String getUserPrompt(CycleContextData input, InterpretationResult result, boolean divergent,
             int promptHeadroomTokens, java.util.function.Predicate<String> isProtected, boolean treeTestsRan) {
+        return getUserPrompt(input, result, divergent, promptHeadroomTokens, isProtected, treeTestsRan, java.util.Map.of());
+    }
+
+    /**
+     * @param failingPath T6-T: the project types the failing tests' traces ran through, with the methods they ran --
+     *                    so the files the trace points into are shown (SubgoalSourcePromptBlock).
+     */
+    public static String getUserPrompt(CycleContextData input, InterpretationResult result, boolean divergent,
+            int promptHeadroomTokens, java.util.function.Predicate<String> isProtected, boolean treeTestsRan,
+            java.util.Map<String, List<String>> failingPath) {
         // T4-BN-3: while TEST_REPAIR_FOCUS is active, replace the full ~15-section prompt with a
         // trimmed one so a test-only compile break gets high salience instead of competing as one
         // diagnostic among many (low-salience diagnostics measured at ~0.08 adherence). Sits ON
@@ -594,7 +604,7 @@ public class EvolutionProtocolContract {
         // told to keep a file's declarations only their names (see SubgoalSourcePromptBlock).
         String subgoalSource = SubgoalSourcePromptBlock.render(input,
                 promptHeadroomTokens - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(prompt), isProtected,
-                treeTestsRan);
+                treeTestsRan, failingPath);
         if (subgoalSource != null) {
             prompt.append("\n").append(subgoalSource).append("\n");
         }

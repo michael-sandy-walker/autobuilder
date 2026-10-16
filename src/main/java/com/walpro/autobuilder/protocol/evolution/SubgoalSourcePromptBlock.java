@@ -89,6 +89,15 @@ public final class SubgoalSourcePromptBlock {
      */
     public static String render(CycleContextData input, int headroomTokens, Predicate<String> isProtected,
             boolean treeTestsRan) {
+        return render(input, headroomTokens, isProtected, treeTestsRan, Map.of());
+    }
+
+    /**
+     * @param failingPath T6-T: the project types the traces of the tests still failing went through (simple name to
+     *                    the methods they ran), so a file the trace in the same prompt points into is not left out.
+     */
+    public static String render(CycleContextData input, int headroomTokens, Predicate<String> isProtected,
+            boolean treeTestsRan, Map<String, List<String>> failingPath) {
         if (!enabled) return null;
         if (input == null || input.previousOutput() == null || input.previousOutput().isEmpty()) return null;
         StringBuilder text = new StringBuilder();
@@ -168,6 +177,20 @@ public final class SubgoalSourcePromptBlock {
                     .forEach(add);
             add.accept(p);
         }
+        // T6-T: and the files the failing tests' traces ran through, by the methods they ran. Ladder-rows run
+        // 2026-10-15_22-42-37: the item was about one class's test, the trace and the line-by-line walk in the same
+        // prompt were about another failing test whose fault was in a second class -- shown only as an outline. The
+        // model wrote its edits to that class from memory: 11 were refused (the SEARCH text was not in the file), two
+        // whole-file answers did not compile, and the right change never reached a test in the run's last hour.
+        Map<String, String> traced = new LinkedHashMap<>();
+        if (aboutItsTests && failingPath != null) {
+            byClass.forEach((name, path) -> {
+                List<String> ran = failingPath.get(name);
+                if (ran == null || ran.isEmpty() || isProtected.test(path) || named.containsKey(path)) return;
+                traced.put(path, String.join("() ", ran) + "()");
+                add.accept(path);
+            });
+        }
         List<String> rest = aboutItsTests ? byRejection : mentioned;
         rest.stream().filter(p -> !isProtected.test(p)).forEach(add);
         rest.stream().filter(isProtected).forEach(add);
@@ -196,11 +219,15 @@ public final class SubgoalSourcePromptBlock {
         for (Map.Entry<String, String> e : named.entrySet()) {
             // A file the work may only read is there for the cases the work names (the failing test's own),
             // not to be edited: those parts, when it names any, and the budget stays for the files to change.
-            String block = isProtected.test(e.getKey()) ? parts(e.getKey(), e.getValue(), memberText, budget - used, true) : null;
+            String block = isProtected.test(e.getKey()) ? parts(e.getKey(), e.getValue(), memberText, budget - used, true)
+                    : traced.containsKey(e.getKey()) ? parts(e.getKey(), e.getValue(), traced.get(e.getKey()), budget - used,
+                            false, TRACED_MEMBERS) : null;
             if (block == null) block = "```java [" + e.getKey() + "]\n" + e.getValue().stripTrailing() + "\n```\n\n";
             int cost = PromptTokenBudget.estimateTokens(block);
             if (used + cost > budget) {
-                block = parts(e.getKey(), e.getValue(), memberText, budget - used, isProtected.test(e.getKey()));
+                block = traced.containsKey(e.getKey())
+                        ? parts(e.getKey(), e.getValue(), traced.get(e.getKey()), budget - used, false, TRACED_MEMBERS)
+                        : parts(e.getKey(), e.getValue(), memberText, budget - used, isProtected.test(e.getKey()));
                 cost = block == null ? 0 : PromptTokenBudget.estimateTokens(block);
                 if (block == null || used + cost > budget) {
                     leftOut.add(e.getKey());
@@ -254,6 +281,13 @@ public final class SubgoalSourcePromptBlock {
     }
 
     static String parts(String path, String content, String text, int tokens, boolean readOnly) {
+        return parts(path, content, text, tokens, readOnly, NAMED_MEMBERS);
+    }
+
+    private static final String NAMED_MEMBERS = "the members this work names";
+    static final String TRACED_MEMBERS = "the members the failing tests ran through (the trace below follows them)";
+
+    static String parts(String path, String content, String text, int tokens, boolean readOnly, String which) {
         if (tokens <= 0) return null;
         CompilationUnit unit = new JavaParser(new ParserConfiguration()
                 .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17)).parse(content).getResult().orElse(null);
@@ -274,8 +308,8 @@ public final class SubgoalSourcePromptBlock {
             if (called || qualified || codeShaped) words.add(word);
         }
         String[] lines = content.split("\n", -1);
-        StringBuilder sb = new StringBuilder("Only parts of ").append(path).append(" are shown here: the members this work"
-                + " names, each exactly as the file has it.").append(readOnly ? " This file is not yours to change.\n"
+        StringBuilder sb = new StringBuilder("Only parts of ").append(path).append(" are shown here: ").append(which)
+                .append(", each exactly as the file has it.").append(readOnly ? " This file is not yours to change.\n"
                 : " Change this file ONLY with edit blocks whose SEARCH parts are copied from these parts; a whole-file"
                 + " answer would lose everything not shown.\n");
         int header = PromptTokenBudget.estimateTokens(sb);

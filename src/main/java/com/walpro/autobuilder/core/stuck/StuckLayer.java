@@ -550,17 +550,27 @@ public class StuckLayer {
      * tree went through, in the order they returned, constructors left out; empty when none was traced.
      */
     public List<String> methodsOnFailingPath(String simpleType) {
+        return failingPath().getOrDefault(simpleType, List.of());
+    }
+
+    /**
+     * T6-T: every project type the traces of the tests still failing on the tree went through (by simple name, a
+     * nested type under its top-level one), each with its methods in the order they returned, constructors left out.
+     */
+    public Map<String, List<String>> failingPath() {
         java.util.Optional<java.util.Set<String>> failing = failingOnTree();
-        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        Map<String, java.util.LinkedHashSet<String>> out = new LinkedHashMap<>();
         for (Map.Entry<String, List<ExecutionTrace.Call>> t : tracedCalls.entrySet()) {
             if (failing.isPresent() && !failing.get().contains(t.getKey())) continue;
             for (ExecutionTrace.Call c : t.getValue()) {
                 String type = c.type().substring(c.type().lastIndexOf('.') + 1);
                 if (type.contains("$")) type = type.substring(0, type.indexOf('$'));
-                if (type.equals(simpleType) && !c.method().startsWith("<")) out.add(c.method());
+                if (!c.method().startsWith("<")) out.computeIfAbsent(type, k -> new java.util.LinkedHashSet<>()).add(c.method());
             }
         }
-        return List.copyOf(out);
+        Map<String, List<String>> copy = new LinkedHashMap<>();
+        out.forEach((k, v) -> copy.put(k, List.copyOf(v)));
+        return copy;
     }
 
     StuckLedger.Entry find(StuckObservation o) {

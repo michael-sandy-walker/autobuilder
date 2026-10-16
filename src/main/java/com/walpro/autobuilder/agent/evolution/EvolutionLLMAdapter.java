@@ -130,7 +130,8 @@ public class EvolutionLLMAdapter {
         boolean treeTestsRan = gate != null
                 && gate.treeTests() == com.walpro.autobuilder.core.build.TestRunGate.TreeTests.RAN;
         String userPrompt = EvolutionProtocolContract.getUserPrompt(refreshed, result, recombined,
-                promptTokenBudget.promptHeadroomTokens(), isProtected, treeTestsRan);
+                promptTokenBudget.promptHeadroomTokens(), isProtected, treeTestsRan,
+                stuckLayer == null ? java.util.Map.of() : stuckLayer.failingPath());
         // T4-CQ: the paths the operator protected, and every write refused since the last prompt --
         // a refusal the model never hears about is a move it will make again.
         if (protectedPaths != null) {

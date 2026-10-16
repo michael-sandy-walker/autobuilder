@@ -249,6 +249,43 @@ class SubgoalSourcePromptBlockTest {
                 .doesNotContain("These files belong to the same change");
     }
 
+    /**
+     * T6-T, ladder-rows 2026-10-15_22-42-37: the item was about one class's test, and the trace in the same prompt was
+     * about another failing test whose fault was in a second class, shown as an outline only; 11 edits to it were
+     * refused because their SEARCH text was not in the file. A file the failing tests' traces ran through is shown,
+     * by the methods they ran -- and a file only the goal names still is not.
+     */
+    @Test
+    void anItemAboutItsFailingTestAlsoShowsTheMethodsTheFailingTracesRanThrough() {
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("src/main/java/zeta/Inkwell.java", INKWELL);
+        files.put("src/main/java/zeta/Quill.java", quill(3));
+        files.put("src/main/java/zeta/Gate.java", String.join("\n",
+                "package zeta;",
+                "public class Gate {",
+                "    public String verify() { return lines(\"x\") + fresh(); }",
+                "    String lines(String raw) { return raw.strip(); }",
+                "    String fresh() { return \"\"; }",
+                "    int unrelated() { return 7; }",
+                "}", ""));
+        files.put("src/test/java/zeta/QuillTest.java", "package zeta;\nclass QuillTest { Quill q = new Quill(); }\n");
+        CycleContextData c = CycleContextData.builder()
+                .currentSubGoalDescription("Make the suite pass: QuillTest.drainsToZero fails")
+                .currentGoalDescription("The classes to change are Inkwell, Gate and Quill.").previousOutput(files).build();
+
+        String block = SubgoalSourcePromptBlock.render(c, 200_000, p -> p.startsWith("src/test/"), true,
+                Map.of("Gate", List.of("lines", "verify"), "QuillTest", List.of("drainsToZero")));
+
+        assertThat(block).contains("```java [src/main/java/zeta/Quill.java]")
+                .contains("Only parts of src/main/java/zeta/Gate.java are shown here: " + SubgoalSourcePromptBlock.TRACED_MEMBERS)
+                .contains("    public String verify() { return lines(\"x\") + fresh(); }",
+                        "    String lines(String raw) { return raw.strip(); }")
+                .as("a method no trace ran is listed, not shown").contains("Gate: String fresh() (line 5)")
+                .as("only the goal names Inkwell").doesNotContain("```java [src/main/java/zeta/Inkwell.java]");
+        assertThat(SubgoalSourcePromptBlock.render(c, 200_000, p -> p.startsWith("src/test/"), true))
+                .as("without traces, as before").doesNotContain("Only parts of src/main/java/zeta/Gate.java");
+    }
+
     /** A file whose signatures do not fit is still named, by its members' names or at least by its path. */
     @Test
     void aLeftOutFileTooLargeForItsSignatures_isStillNamed() {

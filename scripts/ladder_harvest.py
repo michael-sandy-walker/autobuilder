@@ -28,6 +28,7 @@ PACKAGE = re.compile(r'^\s*package\s+([\w.]+)\s*;', re.M)
 LIGHT_LIBRARIES = ('com.github.javaparser', 'lombok', 'org.slf4j', 'org.junit', 'org.assertj', 'org.mockito',
                    'com.fasterxml.jackson', 'org.w3c.dom', 'org.xml.sax')
 WORD = re.compile(r'\b[A-Z]\w*\b')
+QUALIFIED = re.compile(r'(?<![\w.])' + re.escape(ROOT_PKG) + r'(?:\.\w+)+')
 # comments and literals name classes without using them: a Javadoc mentioning TestRunGate is no dependency
 NOISE = re.compile(r'/\*.*?\*/|//[^\n]*|"""(?:.|\n)*?"""|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\])\'', re.S)
 
@@ -99,8 +100,16 @@ class Tree:
                             unresolved.add(imp)
                     elif not imp.startswith(('java.', 'javax.')):
                         external.add('.'.join(parts[:3]))
+        code = NOISE.sub(' ', source)
+        # A project class written out in full where it is used, with no import: GoalGraphService names
+        # com.walpro.autobuilder.goal.GoalTransition so, and the cut of 355c6ecb left it out and did not compile.
+        for q in QUALIFIED.findall(code):
+            parts = q.split('.')
+            for k in range(len(parts), 3, -1):
+                if '.'.join(parts[:k]) in fqns:
+                    out.add(fqns['.'.join(parts[:k])]); break
         same = pkgs.get(pkg, {})
-        for w in set(WORD.findall(NOISE.sub(' ', source))):
+        for w in set(WORD.findall(code)):
             # a sibling test class named in a test is no helper of it
             if w in same and (same[w].startswith(MAIN) or not re.search(r'Tests?$', w)):
                 out.add(same[w])

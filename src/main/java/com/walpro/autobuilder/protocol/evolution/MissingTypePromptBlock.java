@@ -97,6 +97,21 @@ public final class MissingTypePromptBlock {
         return parts.length <= 2 ? common : parts[0] + "." + parts[1];
     }
 
+    /**
+     * The simple name of the class javac looked for the type in, when that is not the referencing file's own class
+     * (or a class nested in it) -- javac names the enclosing class for an unqualified type too; null otherwise.
+     */
+    static String askedOf(MissingTypeExtractor.Entry e) {
+        if (e.insideClass() == null) return null;
+        String[] parts = e.insideClass().replace('$', '.').split("\\.");
+        String file = e.referencedBy() == null ? null : e.referencedBy().replace('\\', '/');
+        String fileClass = file == null ? null : file.substring(file.lastIndexOf('/') + 1).replace(".java", "");
+        for (String part : parts) {
+            if (part.equals(fileClass)) return null;   // looked in the file's own scope: an unqualified name
+        }
+        return parts[parts.length - 1];
+    }
+
     public static String render(CycleContextData ctx) {
         if (ctx == null) return null;
 
@@ -146,8 +161,17 @@ public final class MissingTypePromptBlock {
         }
 
         List<MissingTypeExtractor.Entry> ours = new ArrayList<>();
+        List<MissingTypeExtractor.Entry> nested = new ArrayList<>();
         for (MissingTypeExtractor.Entry e : entries) {
             String type = e.typeName();
+            // T6-T, field77 (rule-extraction): javac looked for the type INSIDE another class the tree has -- the code
+            // wrote Owner.T, and Owner declares no T. "Create T" was the wrong instruction: the model created the
+            // top-level T it had already written, every cycle for 17 minutes, and the one reference never changed.
+            String owner = askedOf(e);
+            if (owner != null && defined.contains(owner)) {
+                nested.add(e);
+                continue;
+            }
             if (defined.contains(type)) continue;
             // An import is evidence a LIBRARY supplies the type — unless it points back into the
             // project's own tree. The model routinely writes `import com.example.demo.model.Loan;`
@@ -160,9 +184,26 @@ public final class MissingTypePromptBlock {
             if (annotations.contains(type)) continue;
             ours.add(e);
         }
-        if (ours.isEmpty()) return null;
+        if (ours.isEmpty() && nested.isEmpty()) return null;
 
         StringBuilder sb = new StringBuilder();
+        if (!nested.isEmpty()) {
+            sb.append("--- A TYPE ASKED OF A CLASS THAT DOES NOT DECLARE IT ---\n")
+              .append("The previous compile probe failed because code names a type as a member of another class, and that"
+                      + " class declares no such type. Change the reference where it is made: name the type where it is"
+                      + " declared now (its own file, if the work moves it there), or declare it in that class if it belongs"
+                      + " there. Do not create the type again elsewhere -- the reference is what is wrong.\n");
+            for (MissingTypeExtractor.Entry e : nested) {
+                String owner = askedOf(e);
+                sb.append("  - ").append(owner).append('.').append(e.typeName());
+                if (e.referencedBy() != null) sb.append(" -- written in ").append(projectRelative(e.referencedBy()));
+                sb.append("; ").append(owner).append(" declares no type ").append(e.typeName())
+                  .append(defined.contains(e.typeName()) ? ", and " + e.typeName() + " exists as a class of its own" : "")
+                  .append('\n');
+            }
+            if (ours.isEmpty()) return sb.toString().stripTrailing();
+            sb.append('\n');
+        }
         sb.append("--- MISSING TYPE — CREATE IN THIS PROPOSAL ---\n");
         sb.append("The previous compile probe failed because the following ")
           .append(ours.size() == 1 ? "type is" : "types are")

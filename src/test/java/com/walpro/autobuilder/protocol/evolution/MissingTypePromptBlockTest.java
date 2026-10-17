@@ -173,4 +173,45 @@ class MissingTypePromptBlockTest {
         assertThat(block).contains("- LoanNotFoundException");
         assertThat(block.split("--- MISSING TYPE")).hasSize(2);
     }
+
+    /** field77 (rule-extraction, 2026-10-17): the error lines as javac wrote them. */
+    private static final String ASKED_OF_ANOTHER_CLASS = String.join("\n",
+            "[ERROR] /home/u/data/rule-extraction/output/src/main/java/com/walpro/autobuilder/core/coldread/ColdReadService.java:[78,42] cannot find symbol",
+            "[ERROR]   symbol:   class Endpoint",
+            "[ERROR]   location: class com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery");
+
+    /**
+     * T6-T, field77: the code named EndpointSurfaceQuery.Endpoint, which the change moves out to a record of its own;
+     * the block said "create Endpoint", the model did, every cycle, and the reference never changed.
+     */
+    @Test
+    void aTypeAskedOfAnotherClassThatLacksIt_isNotProposedForCreation_theReferenceIsNamed() {
+        Map<String, String> prev = new LinkedHashMap<>();
+        prev.put("src/main/java/com/walpro/autobuilder/core/coldread/ColdReadService.java", "class ColdReadService {}");
+        prev.put("src/main/java/com/walpro/autobuilder/analysis/structure/EndpointSurfaceQuery.java", "class EndpointSurfaceQuery {}");
+        CycleContextData ctx = CycleContextData.builder().cycleName("c")
+                .lastProbeOutcome(probeFailure(ASKED_OF_ANOTHER_CLASS)).previousOutput(prev).build();
+
+        String block = MissingTypePromptBlock.render(ctx);
+
+        assertThat(block).contains("--- A TYPE ASKED OF A CLASS THAT DOES NOT DECLARE IT ---")
+                .contains("- EndpointSurfaceQuery.Endpoint -- written in src/main/java/com/walpro/autobuilder/core/coldread/ColdReadService.java; EndpointSurfaceQuery declares no type Endpoint")
+                .doesNotContain("CREATE IN THIS PROPOSAL");
+    }
+
+    /** javac names the enclosing class for an unqualified type too: that is a type to create, as before. */
+    @Test
+    void anUnqualifiedTypeLookedUpInTheFilesOwnClass_isStillProposedForCreation() {
+        Map<String, String> prev = new LinkedHashMap<>();
+        prev.put("src/main/java/com/example/LoanController.java", "class LoanController {}");
+        CycleContextData ctx = CycleContextData.builder().cycleName("c")
+                .lastProbeOutcome(probeFailure(String.join("\n",
+                        "[ERROR] /out/src/main/java/com/example/LoanController.java:[20,9] cannot find symbol",
+                        "[ERROR]   symbol:   class LoanService",
+                        "[ERROR]   location: class com.example.LoanController")))
+                .previousOutput(prev).build();
+
+        assertThat(MissingTypePromptBlock.render(ctx)).contains("--- MISSING TYPE — CREATE IN THIS PROPOSAL ---", "- LoanService")
+                .doesNotContain("ASKED OF A CLASS");
+    }
 }

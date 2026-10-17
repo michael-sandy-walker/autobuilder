@@ -397,4 +397,46 @@ class SubgoalSourcePromptBlockTest {
                 .as("shown in a part, so not listed again: the named member and the end of the type")
                 .doesNotContain("Ledger: int entry7(int page)", "Ledger: boolean isBlotted");
     }
+
+    /**
+     * T6-T, field77 (rule-extraction, 2026-10-17): every candidate failed on two lines of a file it never wrote and no
+     * prompt showed. The member the build broke in is shown, as the file has it; a file the answer wrote is not (its
+     * version is the model's own, and the line numbers are of that).
+     */
+    @Test
+    void theMemberTheLastBuildBrokeIn_inAFileTheAnswerDidNotWrite_isShown() {
+        String cold = String.join("\n",
+                "package zeta;",
+                "class ColdRead {",
+                "    int read(String text) {",
+                "        int n = text.length();",
+                "        Set<Surface.Endpoint> served = surface.served();",
+                "        return n + served.size();",
+                "    }",
+                "    int other() { return 1; }",
+                "}", "");
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("src/main/java/zeta/ColdRead.java", cold);
+        files.put("src/main/java/zeta/Surface.java", "package zeta;\nclass Surface {}\n");
+        files.put("src/main/java/zeta/Quill.java", quill(3));
+        String stderr = "[ERROR] /home/u/output/src/main/java/zeta/ColdRead.java:[5,21] cannot find symbol\n"
+                + "[ERROR] /home/u/output/src/main/java/zeta/Surface.java:[2,1] class, interface, enum, or record expected\n";
+        CycleContextData c = CycleContextData.builder()
+                .currentSubGoalDescription("Move Endpoint out of Surface into a record of its own")
+                .lastProbeOutcome(new com.walpro.autobuilder.core.build.BuildOutcome(
+                        com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR, stderr, 1L, "mvn", "c"))
+                .lastEvolutionOutcome(new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
+                        List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation("src/main/java/zeta/Surface.java", "x")),
+                        List.of(), "moved", "raw"))
+                .previousOutput(files).build();
+
+        String block = SubgoalSourcePromptBlock.render(c, 200_000, p -> p.startsWith("src/test/"), true);
+
+        assertThat(block).contains("Only parts of src/main/java/zeta/ColdRead.java are shown here: where the last build failed in it (lines 5)")
+                .contains("```java [src/main/java/zeta/ColdRead.java, lines 3-7, the build failed at line 5]",
+                        "        Set<Surface.Endpoint> served = surface.served();")
+                .doesNotContain("int other()")
+                .as("the answer wrote Surface: its own version is the model's").doesNotContain("where the last build failed in src/main/java/zeta/Surface.java")
+                .doesNotContain("Only parts of src/main/java/zeta/Surface.java are shown here: where the last build");
+    }
 }

@@ -26,8 +26,16 @@ import java.util.regex.Pattern;
  */
 public final class MissingTypeExtractor {
 
-    /** A type the compiler could not resolve, and one file that referenced it. */
-    public record Entry(String typeName, String referencedBy) {}
+    /**
+     * A type the compiler could not resolve, one file that referenced it, and -- when javac looked for it INSIDE a
+     * class ({@code location: class a.b.Owner}, the code wrote {@code Owner.T}) -- that class's name; null when it
+     * looked in a package or the scope of the file.
+     */
+    public record Entry(String typeName, String referencedBy, String insideClass) {
+        public Entry(String typeName, String referencedBy) {
+            this(typeName, referencedBy, null);
+        }
+    }
 
     private static final Pattern ERROR_FILE_LINE = Pattern.compile(
             "(\\S+\\.java):\\[?\\d+");
@@ -35,6 +43,10 @@ public final class MissingTypeExtractor {
     private static final Pattern CLASS_SYMBOL_LINE = Pattern.compile(
             "symbol:\\s*class\\s+([A-Za-z_$][\\w$]*)",
             Pattern.CASE_INSENSITIVE);
+
+    /** The line after the symbol: where javac looked. A class here means a nested type was asked of it. */
+    private static final Pattern LOCATION_CLASS_LINE = Pattern.compile(
+            "location:\\s*(?:class|interface|enum|record)\\s+([\\w.$]+)");
 
     private MissingTypeExtractor() {}
 
@@ -48,6 +60,7 @@ public final class MissingTypeExtractor {
 
         Map<String, Entry> dedup = new LinkedHashMap<>();
         String currentFile = null;
+        String lastType = null;
         for (String line : plain.split("\\R")) {
             Matcher fm = ERROR_FILE_LINE.matcher(line);
             if (fm.find()) {
@@ -59,7 +72,17 @@ public final class MissingTypeExtractor {
             if (sm.find()) {
                 String type = sm.group(1);
                 dedup.putIfAbsent(type, new Entry(type, currentFile));
+                lastType = type;
+                continue;
             }
+            // field77 (rule-extraction, 2026-10-17): "symbol: class Endpoint / location: class ...EndpointSurfaceQuery"
+            // -- the code named EndpointSurfaceQuery.Endpoint, a nested type the change moves out to a record of its own.
+            Matcher lm = LOCATION_CLASS_LINE.matcher(line);
+            if (lm.find() && lastType != null) {
+                Entry e = dedup.get(lastType);
+                if (e != null && e.insideClass() == null) dedup.put(lastType, new Entry(e.typeName(), e.referencedBy(), lm.group(1)));
+            }
+            if (!line.isBlank()) lastType = null;
         }
         return new ArrayList<>(dedup.values());
     }

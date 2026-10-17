@@ -122,7 +122,11 @@ public final class SubgoalSourcePromptBlock {
                 if (path.endsWith(".java") && discarded.contains(path.replace('\\', '/'))) refused.add(path);
             }
         }
-        if (text.isEmpty() && refused.isEmpty()) return null;
+        // T6-T: the files the last build broke in that its answer did not write -- shown by the members the errors are
+        // in. field77 (rule-extraction, 2026-10-17): every candidate failed on two lines of ColdReadService, a file
+        // no work item named and no prompt showed; for 17 minutes no answer touched it.
+        Map<String, java.util.TreeSet<Integer>> broken = brokenIn(input, isProtected);
+        if (text.isEmpty() && refused.isEmpty() && broken.isEmpty()) return null;
 
         Map<String, String> byClass = new LinkedHashMap<>();
         for (String path : input.previousOutput().keySet()) {
@@ -165,6 +169,7 @@ public final class SubgoalSourcePromptBlock {
             String content = input.previousOutput().get(path);
             if (content != null && !content.isBlank()) named.putIfAbsent(path, content);
         };
+        broken.keySet().forEach(add);
         refused.forEach(add);
         bySubgoal.stream().filter(p -> !isProtected.test(p)).forEach(add);
         for (String p : bySubgoal) {
@@ -219,7 +224,8 @@ public final class SubgoalSourcePromptBlock {
         for (Map.Entry<String, String> e : named.entrySet()) {
             // A file the work may only read is there for the cases the work names (the failing test's own),
             // not to be edited: those parts, when it names any, and the budget stays for the files to change.
-            String block = isProtected.test(e.getKey()) ? parts(e.getKey(), e.getValue(), memberText, budget - used, true)
+            String block = broken.containsKey(e.getKey()) ? brokenParts(e.getKey(), e.getValue(), broken.get(e.getKey()), budget - used)
+                    : isProtected.test(e.getKey()) ? parts(e.getKey(), e.getValue(), memberText, budget - used, true)
                     : traced.containsKey(e.getKey()) ? parts(e.getKey(), e.getValue(), traced.get(e.getKey()), budget - used,
                             false, TRACED_MEMBERS) : null;
             if (block == null) block = "```java [" + e.getKey() + "]\n" + e.getValue().stripTrailing() + "\n```\n\n";
@@ -441,6 +447,75 @@ public final class SubgoalSourcePromptBlock {
     private static int startLine(BodyDeclaration<?> member) {
         return member.getComment().flatMap(c -> c.getBegin()).map(b -> b.line)
                 .orElse(member.getBegin().map(b -> b.line).orElse(0));
+    }
+
+    private static final Pattern COMPILE_ERROR_AT = Pattern.compile("(\\S+\\.java):\\[(\\d+),\\d+\\]");
+
+    /**
+     * The files the last compile probe failed in, by the lines it failed at -- only the ones the answer it probed did
+     * not write (for those its own version is the model's; the line numbers are of the tree as it stands), that the
+     * tree has, and that the work may change.
+     */
+    static Map<String, java.util.TreeSet<Integer>> brokenIn(CycleContextData input, Predicate<String> isProtected) {
+        Map<String, java.util.TreeSet<Integer>> out = new LinkedHashMap<>();
+        var probe = input.lastProbeOutcome();
+        if (probe == null || probe.result() != com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR
+                || probe.stderrTail() == null || input.previousOutput() == null) return out;
+        Set<String> written = new java.util.HashSet<>();
+        EvolutionOutcome last = input.lastEvolutionOutcome();
+        if (last != null && last.addedOrChangedFiles() != null) {
+            last.addedOrChangedFiles().forEach(f -> { if (f != null && f.path() != null) written.add(f.path().replace('\\', '/')); });
+        }
+        Matcher m = COMPILE_ERROR_AT.matcher(com.walpro.autobuilder.core.build.BuildErrorClassifier.ANSI_ESCAPE
+                .matcher(probe.stderrTail()).replaceAll(""));
+        while (m.find()) {
+            String abs = m.group(1).replace('\\', '/');
+            int src = abs.indexOf("src/main/java/");
+            if (src < 0) continue;
+            String rel = abs.substring(src);
+            if (written.contains(rel) || isProtected.test(rel) || !input.previousOutput().containsKey(rel)) continue;
+            out.computeIfAbsent(rel, k -> new java.util.TreeSet<>()).add(Integer.parseInt(m.group(2)));
+        }
+        return out;
+    }
+
+    /** The members of a file the build broke in that hold the lines it broke at, each exactly as the file has it. */
+    static String brokenParts(String path, String content, java.util.TreeSet<Integer> at, int tokens) {
+        if (tokens <= 0) return null;
+        String[] lines = content.split("\n", -1);
+        CompilationUnit unit = new JavaParser(new ParserConfiguration()
+                .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17)).parse(content).getResult().orElse(null);
+        StringBuilder sb = new StringBuilder("Only parts of ").append(path).append(" are shown here: where the last build"
+                + " failed in it (lines ").append(at.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(", ")))
+                .append("), each exactly as the file has it. No answer has changed this file; change it ONLY with edit"
+                        + " blocks whose SEARCH parts are copied from these parts.\n");
+        int header = PromptTokenBudget.estimateTokens(sb);
+        int used = header;
+        List<int[]> shown = new ArrayList<>();
+        for (int line : at) {
+            if (shown.stream().anyMatch(r -> r[0] <= line && line <= r[1])) continue;
+            int from = Math.max(1, line - 2), to = Math.min(lines.length, line + 2);
+            if (unit != null) {
+                BodyDeclaration<?> inner = null;
+                for (BodyDeclaration<?> member : unit.findAll(BodyDeclaration.class)) {
+                    if (!(member instanceof CallableDeclaration<?> || member instanceof FieldDeclaration)) continue;
+                    int b = startLine(member), e = member.getEnd().map(x -> x.line).orElse(0);
+                    if (b <= line && line <= e && (inner == null || b >= startLine(inner))) inner = member;
+                }
+                if (inner != null) {
+                    from = startLine(inner);
+                    to = inner.getEnd().map(x -> x.line).orElse(to);
+                }
+            }
+            String block = lines(path, lines, from, to, "the build failed at line " + line);
+            int cost = block == null ? 0 : PromptTokenBudget.estimateTokens(block);
+            if (block == null || used + cost > tokens) continue;
+            sb.append(block);
+            used += cost;
+            final int f = from, t = to;
+            shown.add(new int[]{f, t});
+        }
+        return used == header ? null : sb.append('\n').toString();
     }
 
     /** Lines {@code from..to} of the file as one fenced part; null when the range is not in the file. */

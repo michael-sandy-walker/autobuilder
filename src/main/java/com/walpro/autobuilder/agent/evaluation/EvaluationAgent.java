@@ -867,7 +867,10 @@ public class EvaluationAgent implements ExecutionAgent {
         var delta = report.isPresent() ? testRunGate.compareWithTree(report.get()) : testRunGate.compareUncompiledWithTree();
         if (report.isEmpty() && "UNKNOWN".equals(delta.verdict())) return outcome;
         if (rewriteBrake != null && report.isPresent() && context.evolutionOutcome() != null) {
-            rewriteBrake.tested(context.previousOutput(), context.evolutionOutcome().addedOrChangedFiles(), delta.better());
+            // A rewrite that leaves fewer tests failing did something, though one newly failing keeps it from being
+            // BETTER: ladder-rows run 2026-10-16_04-11-22 held the row reader after the rewrite that took 7 failing to 5.
+            rewriteBrake.tested(context.previousOutput(), context.evolutionOutcome().addedOrChangedFiles(),
+                    delta.better() || delta.fewerFailing());
         }
         boolean defects = negotiationResult.criticalOpinions() != null && negotiationResult.criticalOpinions().stream()
                 .anyMatch(HeuristicOpinion::defectFinding);

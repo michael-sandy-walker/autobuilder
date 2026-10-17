@@ -57,7 +57,7 @@ class StepTraceTest {
     }
 
     @Test
-    void theDecidingMethodsAreTheNothingAnswersOfTheLastTopLevelCallInTheOrderTheyReturned() {
+    void theDecidingMethodsAreTheNothingAnswersOfTheLastTopLevelCall_latestReturnedFirst() {
         List<ExecutionTrace.Call> calls = List.of(
                 // an earlier top-level call: its empty answers did not decide the failure
                 new ExecutionTrace.Call(1, "org.ink.Shelf", "early", List.of(), "null", false, 3, List.of()),
@@ -71,7 +71,24 @@ class StepTraceTest {
                 new ExecutionTrace.Call(0, "org.ink.Gate", "verify", List.of(), "\"blocked\"", false, 20, List.of()));
 
         assertThat(StepTrace.decidingMethods(calls)).extracting(t -> t[0] + "#" + t[1])
-                .containsExactly("org.ink.Shelf#pick", "org.ink.Gate#fresh");
+                .containsExactly("org.ink.Gate#fresh", "org.ink.Shelf#pick");
+    }
+
+    /**
+     * Ladder-rows 2026-10-17_13-08-25: four methods answered nothing; the three that returned first were on paths the
+     * code no longer took to its answer, and the walk left out the lookup that returned empty last.
+     */
+    @Test
+    void ofMoreNothingAnswersThanAreWalked_theLatestReturnedAreKept() {
+        List<ExecutionTrace.Call> calls = List.of(
+                new ExecutionTrace.Call(2, "org.ink.Reports", "read", List.of(), "Optional(Optional.empty)", false, 40, List.of()),
+                new ExecutionTrace.Call(1, "org.ink.Gate", "fresh", List.of(), "Optional(Optional.empty)", false, 30, List.of()),
+                new ExecutionTrace.Call(1, "org.ink.Gate", "namesIn", List.of(), "ArrayList([])", false, 33, List.of()),
+                new ExecutionTrace.Call(2, "org.ink.Rows", "of", List.of("method = \"dries\""), "Optional(Optional.empty)", false, 23, List.of()),
+                new ExecutionTrace.Call(1, "org.ink.Gate", "causes", List.of(), "ArrayList([\"dries[2]: x\"])", false, 60, List.of()),
+                new ExecutionTrace.Call(0, "org.ink.Gate", "verify", List.of(), "\"blocked\"", false, 20, List.of()));
+
+        assertThat(StepTrace.decidingMethods(calls)).extracting(t -> t[1]).containsExactly("of", "namesIn", "fresh");
     }
 
     @Test

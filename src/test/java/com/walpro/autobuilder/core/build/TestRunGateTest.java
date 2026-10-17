@@ -379,6 +379,8 @@ class TestRunGateTest {
         assertThat(g.compareWithTree(report("NibTest.widens")).verdict()).isEqualTo("BETTER");
         assertThat(g.compareWithTree(report("NibTest.widens", "QuillTest.dries")).verdict()).as("a trade").isEqualTo("SAME");
         assertThat(g.compareWithTree(report("QuillTest.dries")).verdict()).as("fewer, but one newly broken").isEqualTo("SAME");
+        assertThat(g.compareWithTree(report("QuillTest.dries")).fewerFailing()).as("but fewer fail all the same").isTrue();
+        assertThat(g.compareWithTree(report("NibTest.widens", "QuillTest.dries")).fewerFailing()).as("a trade").isFalse();
         assertThat(g.compareWithTree(report("NibTest.widens", "InkwellTest.pours", "QuillTest.dries")).verdict()).isEqualTo("WORSE");
     }
 

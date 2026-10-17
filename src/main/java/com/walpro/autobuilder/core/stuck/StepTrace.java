@@ -40,7 +40,7 @@ import java.util.Set;
  * for. Both are conditions inside a method the trace showed only the outcome of.
  *
  * <p><b>Which methods.</b> The project methods that answered nothing within the test's last top-level call, distinct,
- * in the order they returned -- the answers the failure turned on -- at most {@link #METHODS}. Each is walked at most
+ * the latest returned first -- the answers the failure turned on -- at most {@link #METHODS}. Each is walked at most
  * {@link #WALKS_PER_METHOD} times, keeping only invocations that again answer nothing by a path through the method not
  * walked yet (check 17's first two invocations took the same path, and the one the failure turned on took another),
  * each cut at {@link #STEP_LIMIT}
@@ -92,7 +92,10 @@ public final class StepTrace {
         }
         Set<String> seen = new LinkedHashSet<>();
         List<String[]> out = new ArrayList<>();
-        for (int i = from; i <= last && out.size() < METHODS; i++) {
+        // Latest returned first: the answers nearest the failure. Ladder-rows run 2026-10-17_13-08-25: in return order
+        // the first three were on paths the code no longer took to its answer, and the fourth -- the lookup that
+        // returned empty for the method name it was given -- was left out of the walk.
+        for (int i = last; i >= from && out.size() < METHODS; i--) {
             ExecutionTrace.Call c = calls.get(i);
             if (c.method().startsWith("<") || !nothing(c.result())) continue;
             if (seen.add(c.type() + "#" + c.method())) out.add(new String[]{c.type(), c.method()});

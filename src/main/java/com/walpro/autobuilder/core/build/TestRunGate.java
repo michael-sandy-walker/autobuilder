@@ -473,6 +473,9 @@ public class TestRunGate {
 
         public boolean better() { return "BETTER".equals(verdict); }
 
+        /** Fewer tests fail with the candidate than without it -- whether or not one of them newly fails. */
+        public boolean fewerFailing() { return treeFailing != null && candidateFailing < treeFailing; }
+
         public String describe() {
             if (byCompilation) {
                 return newlyPassing + " test file(s) that did not compile do now; " + candidateFailing

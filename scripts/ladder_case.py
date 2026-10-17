@@ -20,11 +20,14 @@ import ladder_harvest as h  # noqa: E402
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
 
-def cut(commit, max_closure, any_library):
+
+BOOTS_THE_APPLICATION = re.compile(r'@SpringBootTest\b')
+
+def cut(commit, max_closure, any_library, before_rev=None):
     c = next((x for x in h.candidates(2000) if x['hash'].startswith(commit)), None)
     if c is None:
         sys.exit(f'{commit}: not a commit that changed main code and tests')
-    before = h.Tree(c['hash'] + '^')
+    before = h.Tree(before_rev or c['hash'] + '^')
     light = (lambda ext: True) if any_library else (lambda ext: all(x.startswith(h.LIGHT_LIBRARIES) for x in ext))
     core, closure = [], set()
     for p in c['main']:
@@ -43,6 +46,11 @@ def cut(commit, max_closure, any_library):
         (fixtures, harnesses) shipped beside it, and no import of the project the tree cannot resolve but the
         cut's new classes -- the first cut dropped such an import in silence and shipped a test without its
         fixture (ladder-grind v1)."""
+        # A test that boots the whole application needs all of it, which no cut is: d7439316's IT
+        # (@SpringBootTest, with a Neo4j container) was shipped as a helper and refused the case.
+        if BOOTS_THE_APPLICATION.search(h.NOISE.sub(' ', text)):
+            print(f'left out {t}: it boots the whole application, which a cut does not contain', file=sys.stderr)
+            return False
         unresolved = set()
         files, ext = before.closure([text], tests=True, unresolved=unresolved)
         unresolved = {u for u in unresolved if u not in core_fqns and not any(u.startswith(f + '.') for f in core_fqns)}
@@ -51,7 +59,7 @@ def cut(commit, max_closure, any_library):
             print(f'left out {t}: it imports {", ".join(sorted(unresolved))}, which the tree before the commit lacks',
                   file=sys.stderr)
         if main <= allowed and light(ext) and not unresolved:
-            helpers.update(files - main)
+            helpers.update(files - main - {t})   # a test that names its own class is not its own helper
             return True
         return False
 
@@ -127,15 +135,18 @@ def main():
     a.add_argument('--max-closure', type=int, default=60)
     a.add_argument('--any-library', action='store_true')
     a.add_argument('--withheld', action='store_true')
+    # The tree the cut starts from, when the commit's parent is not it: d7439316 completed deletions that had
+    # landed one commit early (d3e8c4de), so its parent did not compile; d3e8c4de^ is the source it started from.
+    a.add_argument('--before')
     o = a.parse_args()
-    c, before, core, files, spec, existing = cut(o.commit, o.max_closure, o.any_library)
+    c, before, core, files, spec, existing = cut(o.commit, o.max_closure, o.any_library, o.before)
     if not core or not spec:
         sys.exit('no cut: the commit has no light core with tests of its own')
     b = os.path.join(ROOT, 'data', o.name, 'bootstrap')
     if os.path.exists(b):
         sys.exit(f'{b} exists; a toy case is versioned, never overwritten')
     os.makedirs(os.path.join(b, 'module'))
-    rev = h.git('rev-parse', c['hash'] + '^').strip()
+    rev = h.git('rev-parse', o.before or c['hash'] + '^').strip()
     open(os.path.join(b, 'origin-rev'), 'w').write(rev + '\n')
     open(os.path.join(b, 'module', 'files.txt'), 'w').write(
         f"# The cut of {c['hash'][:10]} ({c['subject'][:80]}): main sources and their existing tests as they were\n"

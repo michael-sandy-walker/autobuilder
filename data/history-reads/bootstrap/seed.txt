@@ -1,0 +1,32 @@
+  An existing project, adopted, and now asked to change. It was written by someone else and it already
+  builds; its existing behaviour is characterised by the tests in src/test/java.
+  The change wanted is written in the ticket that asked for it. In the ticket's own words:
+
+    feat(T2-ER): every graph read declares how much history it spans and what it may decide
+
+    @HistoryRead(span, use, note[, crossLineageBecause]) on all 36 methods that
+    hold the 46 read queries; HistoryReadContractTest finds reads in the source,
+    fails the build for an undeclared one, rejects a binding all-lineage read
+    without a stated reason, and checks a RUN/LINEAGE span against the query's
+    own runId/lineageId filter.
+
+    The one violation: the deferred-mutation ledger stamped lineageId and never
+    read it, so a fresh lineage's first sweep could rewrite another lineage's
+    parked mutations as dropped. Now lineage-scoped, with an IT.
+
+    The dead Agent-node surface is deleted (registerAgent had no caller, so no
+    Agent node was ever written). NOTE: its four file deletions were staged early
+    and landed in d3e8c4de by mistake, so d3e8c4de alone does not compile; this
+    commit completes that change.
+
+  For orientation: the change that answered this ticket touched AgentGraphService, DiagnosticScanService, Neo4jAgentGraphService, Neo4jCheckpointGraphService, Neo4jDeferredMutationGraphService, Neo4jGoalGraphService, Neo4jScoreHistoryService and OrchestrationGraphExplorerService. Which classes you change is yours to decide; the specification's tests are the requirement.
+  Add the new classes HistoryRead, HistorySpan and HistoryUse in package com.walpro.autobuilder.graph.
+  They already work as their class comments say, and their existing tests must keep passing.
+
+  The specification is HistoryReadContractTest in src/test/java: its tests say exactly what the
+  code must do, and they fail until the code provides it.
+
+  OBJECTIVE: every test in HistoryReadContractTest passes, and the whole suite passes.
+
+  DO NOT modify the existing tests under src/test: they are the operator's, and if one of them fails, the
+  code is what is wrong. Keep the project's packages, classes and naming.

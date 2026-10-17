@@ -135,4 +135,30 @@ class StuckLayerFailingTestsTest {
         assertThat(layer.correctedBlock(10_000, withIt, com.walpro.autobuilder.core.build.StuckQuestions.TypeAuthority.platform()))
                 .isNull();
     }
+
+    /**
+     * T6-T, ladder-rows 2026-10-16_04-11-22: the files a failing trace ran through were shown in the prompt, and the
+     * test's setup objects came along with the class the fault was in. Of a trace whose answer was decided by a
+     * method answering nothing, only that method's types count -- with every method the trace ran in them.
+     */
+    @Test
+    void theFailingPathIsTheTypesOfTheMethodsWhoseEmptyAnswerDecidedIt_withEveryMethodTheTraceRanInThem() {
+        StuckLayer layer = layerWhereFail("GateTest.carriesTheRow", "RowsTest.reads");
+        layer.recordTrace("GateTest.carriesTheRow", List.of(
+                new ExecutionTrace.Call(1, "org.ink.Runner", "isEnabled", List.of(), "false", false, 3, List.of()),
+                new ExecutionTrace.Call(0, "org.ink.Runner", "<init>", List.of(), "void", false, 2, List.of()),
+                new ExecutionTrace.Call(2, "org.ink.Outcome", "result", List.of(), "\"FAILED\"", false, 5, List.of()),
+                new ExecutionTrace.Call(2, "org.ink.Reports", "read", List.of(), "Optional(Optional.empty)", false, 40, List.of()),
+                new ExecutionTrace.Call(2, "org.ink.Gate$Lines", "failureLines", List.of(), "ArrayList([\"x\"])", false, 70, List.of()),
+                new ExecutionTrace.Call(1, "org.ink.Gate", "fresh", List.of(), "Optional(Optional.empty)", false, 30, List.of()),
+                new ExecutionTrace.Call(0, "org.ink.Gate", "verify", List.of(), "\"blocked\"", false, 20, List.of())));
+        // a failure no method answered nothing in: every type its trace ran through, as before
+        layer.recordTrace("RowsTest.reads", List.of(
+                new ExecutionTrace.Call(0, "org.ink.Rows", "of", List.of(), "\"one\"", false, 9, List.of())));
+
+        assertThat(layer.failingPath()).containsOnlyKeys("Reports", "Gate", "Rows");
+        assertThat(layer.failingPath().get("Gate")).containsExactly("failureLines", "fresh", "verify");
+        assertThat(layer.methodsOnFailingPath("Runner")).as("the edits block still names every traced method")
+                .containsExactly("isEnabled");
+    }
 }

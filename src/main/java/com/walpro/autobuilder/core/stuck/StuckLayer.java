@@ -517,7 +517,7 @@ public class StuckLayer {
             return new StuckDiagnosis.Asked("", "", null, false);
         }
         String test = chosen.testClass() + "." + chosen.method();
-        tracedCalls.put(test, calls.get());
+        recordTrace(test, calls.get());
         String answer = "The failing test " + test + " was run again under the debugger. It failed with: "
                 + (chosen.message() == null || chosen.message().isBlank() ? "(no message)" : chosen.message().replace('\n', ' '))
                 + "\n    The calls into the project's own code, in the order they returned -- a call's own calls come before it, indented one step more:\n"
@@ -545,32 +545,53 @@ public class StuckLayer {
     /** T6-T: the calls each traced test made, by test, as last traced. */
     private final Map<String, List<ExecutionTrace.Call>> tracedCalls = new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** The calls the test {@code Class.method} made, as just traced. */
+    void recordTrace(String test, List<ExecutionTrace.Call> calls) {
+        tracedCalls.put(test, calls);
+    }
+
     /**
      * T6-T: the methods of the project type named {@code simpleType} that the traces of the tests still failing on the
      * tree went through, in the order they returned, constructors left out; empty when none was traced.
      */
     public List<String> methodsOnFailingPath(String simpleType) {
-        return failingPath().getOrDefault(simpleType, List.of());
+        return tracedPath(false).getOrDefault(simpleType, List.of());
     }
 
     /**
-     * T6-T: every project type the traces of the tests still failing on the tree went through (by simple name, a
-     * nested type under its top-level one), each with its methods in the order they returned, constructors left out.
+     * T6-T: the project types the traces of the tests still failing on the tree went through (by simple name, a
+     * nested type under its top-level one), each with its methods in the order they returned, constructors left out --
+     * of each trace, only the types of the methods whose empty, false or null answer decided it
+     * ({@link StepTrace#decidingMethods}), when it has any. Ladder-rows run 2026-10-16_04-11-22: every type the trace
+     * went through brought the test's setup objects ({@code BuildExecutor}, {@code BuildOutcome}) into six prompts
+     * beside the class the fault was in.
      */
     public Map<String, List<String>> failingPath() {
+        return tracedPath(true);
+    }
+
+    private Map<String, List<String>> tracedPath(boolean decidingTypesOnly) {
         java.util.Optional<java.util.Set<String>> failing = failingOnTree();
         Map<String, java.util.LinkedHashSet<String>> out = new LinkedHashMap<>();
         for (Map.Entry<String, List<ExecutionTrace.Call>> t : tracedCalls.entrySet()) {
             if (failing.isPresent() && !failing.get().contains(t.getKey())) continue;
+            java.util.Set<String> deciding = new java.util.HashSet<>();
+            if (decidingTypesOnly) StepTrace.decidingMethods(t.getValue()).forEach(d -> deciding.add(topLevel(d[0])));
             for (ExecutionTrace.Call c : t.getValue()) {
-                String type = c.type().substring(c.type().lastIndexOf('.') + 1);
-                if (type.contains("$")) type = type.substring(0, type.indexOf('$'));
+                String type = topLevel(c.type());
+                if (!deciding.isEmpty() && !deciding.contains(type)) continue;
                 if (!c.method().startsWith("<")) out.computeIfAbsent(type, k -> new java.util.LinkedHashSet<>()).add(c.method());
             }
         }
         Map<String, List<String>> copy = new LinkedHashMap<>();
         out.forEach((k, v) -> copy.put(k, List.copyOf(v)));
         return copy;
+    }
+
+    /** The simple name of a type's top-level type: {@code a.b.Outer$Inner} -> {@code Outer}. */
+    private static String topLevel(String type) {
+        String simple = type.substring(type.lastIndexOf('.') + 1);
+        return simple.contains("$") ? simple.substring(0, simple.indexOf('$')) : simple;
     }
 
     StuckLedger.Entry find(StuckObservation o) {

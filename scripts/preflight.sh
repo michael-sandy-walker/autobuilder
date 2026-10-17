@@ -309,6 +309,7 @@ run_live() {
         ${PREFLIGHT_EXTRA_FLAGS:-} \
         > "$run_dir/console.log" 2>&1 &
     pid=$!
+    echo "$pid" > "$run_dir/jvm.pid"   # scripts/stop_run.sh stops the run by this pid, and says so in STOPPED.txt
     say "pid $pid — run_dir $run_dir"
     sleep 30
     kill -0 "$pid" 2>/dev/null || { FAILURES+=("jvm-died-at-startup (see $run_dir/console.log)"); fail_out; }
@@ -323,7 +324,8 @@ run_live() {
     local terminal="deadline"
     while [ "$(date +%s)" -lt "$t_end" ]; do
         sleep 60
-        kill -0 "$pid" 2>/dev/null || { terminal="jvm-died"; break; }
+        # A JVM stopped on purpose (scripts/stop_run.sh writes STOPPED.txt first) is recorded as stopped, not died.
+        kill -0 "$pid" 2>/dev/null || { if [ -f "$run_dir/STOPPED.txt" ]; then terminal="jvm-stopped"; else terminal="jvm-died"; fi; break; }
         if grep -qE 'Result: GOAL_FULFILLED|root .* marked COMPLETED' "$applog"; then
             terminal="GOAL_FULFILLED"
             # Let the framework FINISH its terminal processing before the kill: the fulfilled

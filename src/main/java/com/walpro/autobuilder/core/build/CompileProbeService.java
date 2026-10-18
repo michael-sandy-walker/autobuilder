@@ -402,6 +402,16 @@ public class CompileProbeService {
             Optional<FixProposal> proposalOpt = compileFixInjector.inject(currentOutcome.stderrTail(), context);
             if (proposalOpt.isEmpty()) break;
             FixProposal proposal = proposalOpt.get();
+            // T4-CQ: a path the operator protected is not the loop's to write -- that file is left out, and the rest of
+            // the fix is made. field78 (rule-extraction, 2026-10-18): the import a corrected candidate needed was
+            // proposed for four files, one the protected specification test; the whole fix was dropped, the file that
+            // needed the import never got it, and the right candidate was rolled back.
+            if (protectedPaths != null) {
+                List<FileMutation> allowed = proposal.mutations().stream().filter(m -> m == null
+                        || !protectedPaths.refuse("the compile-fix injector", m.path())).toList();
+                if (allowed.stream().noneMatch(m -> m != null && m.path() != null)) break;
+                if (allowed.size() < proposal.mutations().size()) proposal = new FixProposal(allowed, proposal.record());
+            }
             java.util.List<String> writes = proposal.mutations().stream()
                     .filter(m -> m != null && m.path() != null && m.content() != null)
                     .map(m -> m.path() + "\n" + m.content()).sorted().toList();
@@ -410,14 +420,6 @@ public class CompileProbeService {
                         proposal.record().rule());
                 break;
             }
-            // T4-CQ: an injector fix that would write a protected path is not the loop's to make;
-            // on an adopted project a missing symbol is far likelier a wrong reference than a
-            // missing class, and the operator has said which paths are off-limits.
-            if (protectedPaths != null && proposal.mutations().stream().anyMatch(m -> m != null
-                    && protectedPaths.refuse("the compile-fix injector", m.path()))) {
-                break;
-            }
-
             try {
                 for (FileMutation m : proposal.mutations()) {
                     if (m == null || m.path() == null || m.content() == null) continue;

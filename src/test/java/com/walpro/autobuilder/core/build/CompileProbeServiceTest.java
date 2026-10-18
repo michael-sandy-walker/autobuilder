@@ -588,4 +588,31 @@ class CompileProbeServiceTest {
         assertThat(result.outcome().result()).isEqualTo(BuildResult.COMPILE_ERROR);
         assertThat(fileService.exists("output/" + stub)).isFalse();
     }
+
+    /**
+     * T4-CQ, field78 (rule-extraction, 2026-10-18): the import a corrected candidate needed was proposed for four
+     * files, one of them the protected specification test, and the whole fix was dropped. The protected file is left
+     * out; the rest of the fix is made.
+     */
+    @Test
+    void injectorFix_leavesOutOnlyTheProtectedFile_andMakesTheRest() throws IOException {
+        String spec = "src/test/java/com/example/demo/SpecTest.java";
+        String service = "src/main/java/com/example/demo/ColdRead.java";
+        fileService.writeFile(ProtectedPaths.PATH, "src/test/**\n");
+        ReflectionTestUtils.setField(probe, "protectedPaths", new ProtectedPaths(fileService));
+        fileService.writeFile("output/" + spec, "package com.example.demo; class SpecTest {}");
+        FixProposal importing = new FixProposal(
+                List.of(new FileMutation(spec, "package com.example.demo; import x.Endpoint; class SpecTest {}"),
+                        new FileMutation(service, "package com.example.demo; import x.Endpoint; class ColdRead {}")),
+                new InjectorFixRecord("symbol-import:local", Kind.CANNOT_FIND_SYMBOL, "Endpoint",
+                        List.of(spec, service), "added import x.Endpoint to 2 file(s)"));
+        when(injector.inject(any(), any())).thenReturn(Optional.of(importing), Optional.empty());
+        fileService.writeFile("mutations/cycle-current/" + MEMBER_CONTROLLER, LLM_CONTENT);
+
+        CompileProbeService.ProbeResult result = probe.probe(baseContext().evolutionRanThisCycle(true).build(), true);
+
+        assertThat(result.appliedFixes()).hasSize(1);
+        assertThat(result.appliedFixes().get(0).mutations()).extracting(FileMutation::path).containsExactly(service);
+        assertThat(fileService.readString("output/" + spec)).isEqualTo("package com.example.demo; class SpecTest {}");
+    }
 }

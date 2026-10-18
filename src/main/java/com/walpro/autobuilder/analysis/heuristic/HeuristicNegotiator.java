@@ -32,6 +32,11 @@ public class HeuristicNegotiator {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
+    /** T6-T: a veto recognised as a grind abstains instead of deciding. */
+    @Setter
+    @Autowired(required = false)
+    private VetoGrind vetoGrind;
+
     public HeuristicNegotiator(HeuristicConfigProperties config, ApplicationContext context) {
         this.scoreAdjustmentStrategy = context.getBean(config.getScoreStrategy(), ScoreAdjustmentStrategy.class);
     }
@@ -54,6 +59,14 @@ public class HeuristicNegotiator {
                     return o != null ? o : HeuristicOpinion.none(h.getClass().getSimpleName()); // guard if we have a null opinion
                 })
                 .filter(o -> o.level() != ConfidenceLevel.NONE)
+                // T6-T: a veto recognised as a grind no longer decides -- it abstains, and the evaluator's verdict stands
+                // unless another heuristic objects. Demoted to a vote it still won alone (rule-extraction run
+                // 2026-10-18_19-33-28: the only other opinion was LOW, so a 0.9 REJECTED vote carried every time).
+                .map(o -> o.level() == ConfidenceLevel.CRITICAL && vetoGrind != null && vetoGrind.yielded(VetoGrind.finding(o))
+                        ? new HeuristicOpinion(o.name(), o.confidence(), ConfidenceLevel.LOW, MutationAcceptanceState.NOT_EVALUATED,
+                                GoalProgressState.NOT_EVALUATED, "(abstains: this veto kept deciding while the work did not move) "
+                                + o.rationale(), null, false, o.defect())
+                        : o)
                 .toList();
 
         if (!opinions.isEmpty()) {
@@ -95,6 +108,11 @@ public class HeuristicNegotiator {
         Optional<HeuristicOpinion> critical = criticalOpinions.stream()
                 .max(Comparator.comparing(HeuristicOpinion::defectFinding)
                         .thenComparingDouble(HeuristicOpinion::confidence));
+
+        if (vetoGrind != null) {
+            vetoGrind.decided(input == null ? null : input.cycleName(),
+                    critical.filter(o -> o.mutationState() == MutationAcceptanceState.REJECTED).map(VetoGrind::finding).orElse(null));
+        }
 
         if (critical.isPresent()) {
             HeuristicOpinion o = critical.get();

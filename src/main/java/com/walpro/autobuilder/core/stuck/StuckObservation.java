@@ -48,6 +48,12 @@ public record StuckObservation(Source source, String signature, String subGoalId
          * from 00:12 to the cut at 00:61 -- merges and completions kept the root moving, the project had no
          * tests, and nothing counted the repeated observation as stuck.
          */
-        BOOT
+        BOOT,
+        /**
+         * VetoGrind: one heuristic's veto decides negotiation after negotiation with the same finding, judged
+         * persistent by ratios over the run. Rule-extraction run 2026-10-18_19-33-28: 22 of 27 candidates rejected
+         * for the same lost annotations the ticket asked to remove, for 80 minutes, and nothing counted it.
+         */
+        VETO
     }
 }

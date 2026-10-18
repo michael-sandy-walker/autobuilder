@@ -92,6 +92,11 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService criteriaVerificationService;
 
+    /** T6-T: the objective met by the project's own tests, with the criteria still open no longer moving. */
+    @Setter
+    @Autowired(required = false)
+    private ObjectiveMetClosure objectiveMetClosure;
+
     /** Spec-grounding of authored criteria (run 19) — optional, wired by Spring if present. */
     @Setter
     @Autowired(required = false)
@@ -4578,6 +4583,13 @@ public class GoalPlannerService {
                     return;
                 }
                 java.util.Optional<String> unconfirmed = completionVerification.unconfirmed();
+                if (unconfirmed.isPresent() && objectiveMetClosure != null && objectiveMetClosure.objectiveMet()
+                        && objectiveMetClosure.allStalled(completionVerification.unconfirmedCriteria())) {
+                    String reason = ObjectiveMetClosure.reason(completionVerification.unconfirmedCriteria());
+                    markGoalCompleted(root.getId(), "root goal satisfied: " + reason);
+                    log.info("T2-DR: root '{}' marked COMPLETED — {}", root.getId(), reason);
+                    return;
+                }
                 if (unconfirmed.isPresent()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                             "[BUILD_FIX] Implement the unconfirmed acceptance criteria against the current code — " + unconfirmed.get()));
@@ -5402,9 +5414,18 @@ public class GoalPlannerService {
                     if (!criteria.isEmpty() && output != null && !output.isEmpty()) {
                         var check = criteriaVerificationService.verifyCompletion(g.getDescription(), criteria, output);
                         if (check.answered() && check.unconfirmed().isPresent()) {
-                            log.warn("T6-T: refusing FULFILLED for criteria-gate work item [{}] -- the verifier that raised it"
-                                    + " still does not confirm: {}", goalId, check.unconfirmed().get());
-                            return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
+                            // T6-T: unless the same criteria keep being refused and the project's own tests show the
+                            // objective met -- then the item goes, and the root closes with them named open.
+                            boolean stalled = objectiveMetClosure != null
+                                    && objectiveMetClosure.refused(check.unconfirmedCriteria())
+                                    && objectiveMetClosure.objectiveMet();
+                            if (!stalled) {
+                                log.warn("T6-T: refusing FULFILLED for criteria-gate work item [{}] -- the verifier that raised it"
+                                        + " still does not confirm: {}", goalId, check.unconfirmed().get());
+                                return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
+                            }
+                            log.warn("T6-T: criteria-gate work item [{}] let go -- the objective is met by the project's own"
+                                    + " tests and the same criteria are refused again and again: {}", goalId, check.unconfirmed().get());
                         }
                     }
                 }

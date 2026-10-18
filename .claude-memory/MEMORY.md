@@ -172,6 +172,7 @@ Watchers:
 
 Writing:
 - `feedback_curly_quotes.md`: no curly quotes/stray non-Latin chars; enforced by `scripts/charset_guard.py`. No `jq`; use python3. (reviewed 2026-08-28)
+- `feedback_name_outcomes_for_what_they_are.md`: name an outcome for what happened -- a run I stop is `jvm-stopped`, never `jvm-died`; stop runs via the recording mechanism. (reviewed 2026-10-17)
 - `feedback_neutral_vocabulary.md`: no courtroom/military wording, no emoji; `rehabilitationVotes` kept (persisted key). (reviewed 2026-09-15)
 - `feedback_no_symbolic_enumerations.md`: never use circled-number characters anywhere; name each item instead -- positional tokens carry no meaning on re-read. (reviewed 2026-07-30)
 - `feedback_no_invented_labels.md`: no invented structural labels or role-nouns; use participles and descriptions. Do not silently truncate criteria for cost. (reviewed 2026-07-09)

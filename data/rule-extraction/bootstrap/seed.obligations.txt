@@ -1,0 +1,30 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 16acb502118bee8426adcdcefd76b5b25534b1b0ac76129d2f23d3b142f2012d
+# body-sha256: e80c66f8be95c641f2e92a54666ca69e6817bc5db050c4c8df9404aa1443a01d
+EndpointPaths is a class in package com.walpro.autobuilder.analysis.structure
+EndpointPaths contains a method named normalizePath
+EndpointPaths contains a method named discardedInput
+EndpointPaths contains a method named declaredIn
+EndpointPaths contains a method or constant related to the MENTION grammar
+Endpoint is a record in package com.walpro.autobuilder.analysis.structure
+SeedStatusSupport is a class in package com.walpro.autobuilder.core.build
+SeedStatusSupport contains only signature and contract, with no implementation logic
+SpecEndpointBehaviourQuery is a plain class
+SpecEndpointBehaviourQuery is registered in AppConfig
+EndpointSurfaceQuery no longer contains the EndpointPaths logic
+EndpointSurfaceQuery no longer contains the Endpoint record
+The criterion parser has a Spring-free closure of 3 classes
+The spec status reader has a Spring-free closure of 3 classes
+The extractable share in module_closures.py is 18%
+The line count in module_closures.py is 14,814
+There is no behaviour change
+All tests in EndpointSurfaceQueryTest pass
+All tests in SpecEndpointBehaviourQueryTest pass
+The whole test suite passes with 3335 passing tests and 0 failures
+rule: Do not modify the existing tests under src/test
+rule: Keep the project's packages, classes and naming

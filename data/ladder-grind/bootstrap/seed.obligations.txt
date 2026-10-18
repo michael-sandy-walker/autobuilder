@@ -1,0 +1,21 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: b9a617ea5532a5312d50a16eb5c44af150f896f775ed25e0d39bb4b33e304f17
+# body-sha256: 063d25b84579238e7d5be90a0567b3aa309622bc769ad173d4c4da1e7b218405
+every test in DeclaredMembersTest passes
+every test in GrindDetectorTest passes
+every test in ProtectedPathsPromptTest passes
+every test in WiringFactsAnalyzerTest passes
+gate: tests the whole suite passes
+rule: DO NOT modify the existing tests under src/test
+rule: if one of the existing tests fails, the code is what is wrong
+rule: Keep the project's packages, classes and naming
+Add the new classes DeclaredMembers and GrindDetector in package com.walpro.autobuilder.core.build
+DeclaredMembers works as its class comments say
+GrindDetector works as its class comments say
+the existing tests for DeclaredMembers keep passing
+the existing tests for GrindDetector keep passing

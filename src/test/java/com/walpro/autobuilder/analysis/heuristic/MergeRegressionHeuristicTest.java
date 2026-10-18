@@ -409,4 +409,27 @@ class MergeRegressionHeuristicTest {
         assertThat(evaluate(Map.of(PATH, before), Map.of(PATH, after)).rationale())
                 .contains("@Thingummy");
     }
+
+    /**
+     * T6-T, rule-extraction run 2026-10-18_19-33-28: the ticket moved a class out of the framework's scanning into a
+     * configuration class's factory method. The annotation is off the class and the class is made elsewhere in the same
+     * change: moved, not lost. Without the factory method, it is still a loss.
+     */
+    @Test
+    void anAnnotationTakenOffAClassThatAnotherChangedFileNowMakes_isNotALoss() {
+        String query = "src/main/java/a/SpecQuery.java";
+        String config = "src/main/java/a/AppConfig.java";
+        String annotated = "package a;\n@Component\npublic class SpecQuery {\n    public int count() { return 1; }\n}\n";
+        String plain = "package a;\npublic class SpecQuery {\n    public int count() { return 1; }\n}\n";
+        String configBefore = "package a;\n@Configuration\npublic class AppConfig {\n    @Bean public Clock clock() { return null; }\n}\n";
+        String configAfter = "package a;\n@Configuration\npublic class AppConfig {\n    @Bean public Clock clock() { return null; }\n"
+                + "    @Bean public SpecQuery specQuery() { return new SpecQuery(); }\n}\n";
+
+        HeuristicOpinion moved = evaluate(Map.of(query, annotated, config, configBefore), Map.of(query, plain, config, configAfter));
+        HeuristicOpinion lost = evaluate(Map.of(query, annotated, config, configBefore), Map.of(query, plain, config, configBefore + "\n"));
+
+        assertThat(moved.mutationState()).isEqualTo(ABSTAIN);
+        assertThat(lost.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(lost.rationale()).contains("SpecQuery loses @Component");
+    }
 }

@@ -114,7 +114,7 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
             if (path == null || !path.endsWith(".java")) continue;
             String before = established.get(path);
             if (before == null || before.isBlank()) continue; // a new file establishes, it cannot revert
-            collectLosses(path, before, changed.getValue(), losses);
+            collectLosses(path, before, changed.getValue(), losses, diff.changedFiles(), established);
         }
         losses.addAll(endpointCoverageLosses(input, established, diff.changedFiles()));
         if (losses.isEmpty()) return HeuristicOpinion.none(NAME);
@@ -170,7 +170,8 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
     }
 
     /** Per type declared in both versions, what the candidate drops without replacing it. */
-    private void collectLosses(String path, String before, String after, List<String> losses) {
+    private void collectLosses(String path, String before, String after, List<String> losses,
+                               Map<String, String> changed, Map<String, String> established0) {
         Map<String, TypeProfile> established = profileByType(before);
         Map<String, TypeProfile> candidate = profileByType(after);
         if (established == null || candidate == null) return; // unparseable: the compile gate owns it
@@ -187,12 +188,41 @@ public class MergeRegressionHeuristic implements EvaluationHeuristic {
             Set<String> gainedAnnotations = new LinkedHashSet<>(now.annotations());
             gainedAnnotations.removeAll(was.annotations());
             if (!lostAnnotations.isEmpty() && gainedAnnotations.isEmpty()
-                    && !anythingGained(was, now)) {
+                    && !anythingGained(was, now) && !takenUpElsewhere(typeName, path, changed, established0)) {
                 for (String annotation : lostAnnotations) {
                     losses.add(typeName + " loses @" + annotation + " (" + path + ")");
                 }
             }
         }
+    }
+
+    /**
+     * T6-T: whether another file this candidate changes gains a method that returns {@code typeName} or constructs it
+     * -- the type is now made there, so what its annotations did has moved, not gone. Rule-extraction run
+     * 2026-10-18_19-33-28: the ticket moved a class out of the framework's scanning into a configuration class's
+     * factory method; every candidate that did so -- the annotations off the class, the method in the configuration --
+     * was rejected as a loss, 22 of 27 in the run's last 80 minutes.
+     */
+    private boolean takenUpElsewhere(String typeName, String ownPath, Map<String, String> changed,
+                                     Map<String, String> established) {
+        java.util.regex.Pattern constructs = java.util.regex.Pattern.compile("\\bnew\\s+" + java.util.regex.Pattern.quote(typeName) + "\\s*\\(");
+        for (Map.Entry<String, String> other : changed.entrySet()) {
+            if (other.getKey() == null || other.getKey().equals(ownPath) || !other.getKey().endsWith(".java")) continue;
+            CompilationUnit now = parse(other.getValue());
+            if (now == null) continue;
+            CompilationUnit was = parse(established.get(other.getKey()));
+            Set<String> before = new java.util.HashSet<>();
+            if (was != null) was.findAll(com.github.javaparser.ast.body.MethodDeclaration.class).forEach(m -> before.add(m.getNameAsString()));
+            for (var m : now.findAll(com.github.javaparser.ast.body.MethodDeclaration.class)) {
+                if (before.contains(m.getNameAsString())) continue;
+                String returns = m.getType().asString().replaceAll("<.*$", "");
+                returns = returns.substring(returns.lastIndexOf('.') + 1);
+                if (returns.equals(typeName) || m.getBody().map(b -> constructs.matcher(b.toString()).find()).orElse(false)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

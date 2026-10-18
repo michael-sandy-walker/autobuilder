@@ -35,7 +35,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 ## Roadmap
 - `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-10-05)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-10-15)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-10-19)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: live ordering is the 2026-08-23 REORDER section at the end; S1-S6 kept for reasoning only. Never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-10-15)
+- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-10-19)
 - `project_wave2_structure.md`: wave 2's five layers and gate-driven sequence; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
@@ -98,7 +98,7 @@ False completions and diagnosis lenses:
 - `project_meta_concrete_target_hint_idea.md`: historical note; read only if reintroducing a concrete-target hint via a non-LLM path. (reviewed 2026-07-09)
 
 Operations:
-- `project_run_lifecycle_runbook.md`: start/stop/monitor runs; watcher traps; adopted-target runs, `early_stop.sh`, `bundle.py`. Prove a monitor STREAMS first: `scripts/prove_watcher_streams.sh`. Toy cases are versioned (`toycase_version.py`). (reviewed 2026-10-05)
+- `project_run_lifecycle_runbook.md`: start/stop/monitor runs; watcher traps; adopted-target runs, `early_stop.sh`, `bundle.py`. Prove a monitor STREAMS first: `scripts/prove_watcher_streams.sh`. Toy cases are versioned (`toycase_version.py`). (reviewed 2026-10-19)
 - `project_log_and_backup_conventions.md`: current run is UNSUFFIXED `logs/behaviour.ndjson`; files are concatenated pretty JSON, not line-JSON. (reviewed 2026-09-08)
 - `project_tests_rotate_live_logs.md`: SUPERSEDED: redirect `FILE_BASE_PATH` to a scratch dir instead of stopping the app. (reviewed 2026-09-08)
 

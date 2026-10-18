@@ -26,6 +26,14 @@ public final class BuildResultPromptBlock {
 
     private BuildResultPromptBlock() {}
 
+    /** The files the change behind the failed build wrote: this cycle's answer, else the last one. */
+    static List<String> changedFiles(CycleContextData ctx) {
+        var outcome = ctx.evolutionOutcome() != null && ctx.evolutionOutcome().addedOrChangedFiles() != null
+                && !ctx.evolutionOutcome().addedOrChangedFiles().isEmpty() ? ctx.evolutionOutcome() : ctx.lastEvolutionOutcome();
+        if (outcome == null || outcome.addedOrChangedFiles() == null) return List.of();
+        return outcome.addedOrChangedFiles().stream().filter(f -> f != null && f.path() != null).map(f -> f.path()).toList();
+    }
+
     public static String render(CycleContextData ctx, Audience audience) {
         // T4-BD: when the post-merge buildOutcome is absent or clean, fall back to the latest
         // compile-probe outcome — represents the same "build is broken" ground truth that was
@@ -46,8 +54,12 @@ public final class BuildResultPromptBlock {
         sb.append("Duration: ").append(outcome.durationMs()).append("ms\n");
 
         if (outcome.stderrTail() != null && !outcome.stderrTail().isBlank()) {
+            // Cause first: errors in files the failed change did not write follow from the ones in its own files, and
+            // a tail of twenty lines once held only those (rule-extraction 2026-10-18_18-30-42; CompileErrorCauses).
+            com.walpro.autobuilder.core.build.CompileErrorCauses.Split split =
+                    com.walpro.autobuilder.core.build.CompileErrorCauses.of(outcome.stderrTail(), changedFiles(ctx));
             List<String> relevant = BuildStderrLines.errorLines(
-                    outcome.stderrTail(),
+                    split.causes(),
                     BuildStderrLines.Options.promptBlockTail(STDERR_LINE_LIMIT));
             if (!relevant.isEmpty()) {
                 sb.append("Compiler errors (").append(relevant.size()).append(" lines):\n");
@@ -55,6 +67,7 @@ public final class BuildResultPromptBlock {
                     sb.append("  ").append(line).append("\n");
                 }
             }
+            if (split.note() != null) sb.append(split.note()).append("\n");
         }
 
         // T4-AN-5: surface the build tool's own diagnostic (captured on the failed probe) to the

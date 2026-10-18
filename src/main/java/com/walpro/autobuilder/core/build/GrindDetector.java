@@ -212,12 +212,6 @@ public class GrindDetector {
      * the five places per build that the real errors needed.
      */
     static List<String> signaturesOf(BuildOutcome outcome, java.util.Collection<String> changed) {
-        java.util.Set<String> changedNames = new java.util.HashSet<>();
-        if (changed != null) {
-            for (String path : changed) {
-                if (path != null) changedNames.add(path.substring(path.replace('\\', '/').lastIndexOf('/') + 1));
-            }
-        }
         List<String> out = new ArrayList<>();
         if (outcome == null || outcome.result() != BuildResult.COMPILE_ERROR || outcome.stderrTail() == null) {
             return out;
@@ -230,9 +224,8 @@ public class GrindDetector {
             if (!out.contains(s)) out.add(s);
         }
         if (!out.isEmpty()) return out;
-        String plain = BuildErrorClassifier.ANSI_ESCAPE.matcher(outcome.stderrTail()).replaceAll("");
-        String[] lines = plain.split("\\R");
-        List<String> inChanged = new ArrayList<>();
+        // Cause first: what the change's own files report, the rest set aside (CompileErrorCauses, the one home of it).
+        String[] lines = CompileErrorCauses.of(outcome.stderrTail(), changed).causes().split("\\R");
         for (int i = 0; i < lines.length; i++) {
             // "[ERROR] /abs/path/File.java:[12,5] message" -> "File.java: message"
             var m = java.util.regex.Pattern.compile("([A-Za-z0-9_]+\\.java):\\[\\d+,\\d+]\\s*(.+)$").matcher(lines[i]);
@@ -241,9 +234,7 @@ public class GrindDetector {
             if (message.equals("cannot find symbol")) message += symbolAndLocation(lines, i + 1);
             String s = "the build fails: " + m.group(1) + ": " + message;
             if (!out.contains(s)) out.add(s);
-            if (changedNames.contains(m.group(1)) && !inChanged.contains(s)) inChanged.add(s);
         }
-        if (!inChanged.isEmpty()) out = inChanged;
         return out.size() > 5 ? new ArrayList<>(out.subList(0, 5)) : out;
     }
 

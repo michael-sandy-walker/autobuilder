@@ -148,4 +148,31 @@ class BuildResultPromptBlockTest {
         String evo = BuildResultPromptBlock.render(ctx, BuildResultPromptBlock.Audience.EVOLUTION);
         assertThat(evo).isNotNull().doesNotContain("BUILD DIAGNOSTIC");
     }
+
+    /**
+     * Rule-extraction run 2026-10-18_18-30-42: one real error, then follow-on errors in classes the change never
+     * touched; the last twenty lines held only those, and the planner made a work item of them. The block shows the
+     * cause and counts the rest.
+     */
+    @Test
+    void theCauseIsShown_andTheErrorsInFilesTheChangeDidNotWriteAreCounted() {
+        StringBuilder err = new StringBuilder("[ERROR] /o/src/main/java/z/Surface.java:[312,36] method read(java.lang.String) is already defined in class z.Surface\n");
+        for (int i = 0; i < 25; i++) {
+            err.append("[ERROR] /o/src/main/java/z/Other").append(i).append(".java:[81,13] cannot find symbol\n")
+               .append("[ERROR]   symbol:   variable log\n")
+               .append("[ERROR]   location: class z.Other").append(i).append('\n');
+        }
+        CycleContextData ctx = CycleContextData.builder().cycleName("c")
+                .buildOutcome(new BuildOutcome(BuildResult.COMPILE_ERROR, err.toString(), 100L, "mvn compile", "c"))
+                .evolutionOutcome(new com.walpro.autobuilder.agent.evolution.model.EvolutionOutcome(
+                        java.util.List.of(new com.walpro.autobuilder.agent.evolution.model.FileMutation("src/main/java/z/Surface.java", "x")),
+                        java.util.List.of(), "s", "raw"))
+                .build();
+
+        String block = BuildResultPromptBlock.render(ctx, BuildResultPromptBlock.Audience.PLANNER);
+
+        assertThat(block).contains("Surface.java:[312,36] method read(java.lang.String) is already defined")
+                .doesNotContain("variable log")
+                .contains("25 more error(s) in 25 file(s) the change did not write");
+    }
 }

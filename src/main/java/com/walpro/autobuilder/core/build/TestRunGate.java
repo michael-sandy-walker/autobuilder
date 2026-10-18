@@ -322,6 +322,27 @@ public class TestRunGate {
      * the tree does makes the operator's suite worse (TestRegressionHeuristic).
      */
     private volatile Set<String> treeFailing;
+
+    /** Whether the last objective line logged said the suite passes on the tree; null before any. */
+    private volatile Boolean objectiveLogged;
+
+    /**
+     * T6-T: the tree's failing tests, as the one place they change -- logging the objective's state when it changes, in
+     * one wording a run's harness reads at its end: a run that ends with the suite passing on its own tree but the
+     * root not closed is "objective-met", not just "deadline" (rule-extraction run 2026-10-18_19-33-28; the user:
+     * "call it what it is").
+     */
+    private void setTreeFailing(Set<String> failing) {
+        treeFailing = failing;
+        if (failing != null) logObjective(failing.isEmpty(), failing.size() + " test(s) fail on the tree as merged");
+    }
+
+    private void logObjective(boolean met, String whyNot) {
+        if (objectiveLogged != null && objectiveLogged == met) return;
+        objectiveLogged = met;
+        if (met) log.info("T6-T: OBJECTIVE MET -- the whole suite passes on the tree as merged");
+        else log.info("T6-T: OBJECTIVE NOT MET -- {}", whyNot);
+    }
     private volatile Set<String> candidateFailing;
 
     /** The failing tests of {@code report}, one name per test ({@code Class.method}). */
@@ -395,7 +416,7 @@ public class TestRunGate {
     /** A run of the tree as merged (not a candidate): its failing tests are now the baseline. */
     public void treeRan(TestRunReport report) {
         if (report != null) {
-            treeFailing = failingNames(report);
+            setTreeFailing(failingNames(report));
             treeNotCompiling = false;
             treeUncompiled = null;
         }
@@ -411,11 +432,13 @@ public class TestRunGate {
         if (report.isPresent()) {
             treeRan(report.get());
         } else if (lastRunDidNotCompile) {
-            treeFailing = null;
+            setTreeFailing(null);
+            logObjective(false, "the tests do not compile on the tree as merged");
             treeNotCompiling = true;
             treeUncompiled = lastUncompiled;
         } else if (lastRunTimedOut) {
-            treeFailing = null;       // a tree whose suite hangs has no baseline to be compared with
+            setTreeFailing(null);       // a tree whose suite hangs has no baseline to be compared with
+            logObjective(false, "the suite did not finish on the tree as merged");
             treeNotCompiling = false;
         }
         return blocker;
@@ -448,7 +471,7 @@ public class TestRunGate {
      * Unknown, the next evolution runs the suite on the restored tree before any candidate (EvolutionLLMAdapter).
      */
     public void forgetTree() {
-        treeFailing = null;
+        setTreeFailing(null);
         treeNotCompiling = false;
         treeUncompiled = null;
         candidateFailing = null;
@@ -518,7 +541,7 @@ public class TestRunGate {
      * files that do not. A merge with no candidate run leaves it unknown.
      */
     public void candidateMerged() {
-        treeFailing = candidateFailing;
+        setTreeFailing(candidateFailing);
         treeNotCompiling = candidateUncompiled != null;
         treeUncompiled = candidateUncompiled;
         candidateFailing = null;

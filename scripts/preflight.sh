@@ -426,6 +426,13 @@ run_live() {
         [ "$age" -gt 900 ] && { terminal="silent-${age}s"; break; }
     done
 
+    # T6-T: a deadline reached with the loop's own test run passing on its tree, and the root not closed, is
+    # "objective-met" -- the last objective line the loop logged decides (the user, 2026-10-18: "call it what it is").
+    if [ "$terminal" = "deadline" ] \
+        && [ "$(grep -oE 'T6-T: OBJECTIVE (NOT )?MET' "$applog" | tail -1)" = "T6-T: OBJECTIVE MET" ]; then
+        terminal="objective-met"
+    fi
+
     say "terminal: $terminal — preserving run_dir + stopping JVM"
     cp "$applog" "$run_dir/autobuilder.log" 2>/dev/null
     cp "$behlog" "$run_dir/behaviour.ndjson" 2>/dev/null
@@ -737,7 +744,7 @@ PYSTART
 
     case "$terminal" in
         GOAL_FULFILLED) pass_out "(terminal=GOAL_FULFILLED smoke=$smoke smoke_preserved=$smoke_preserved run=$run_dir)";;
-        GOAL_EXHAUSTED|PAUSED|deadline|honest-halt*|operator-stop)
+        GOAL_EXHAUSTED|PAUSED|deadline|objective-met|honest-halt*|operator-stop)
             # Honest terminals are DATA, not failures — the driver reports them for analysis.
             pass_out "(terminal=$terminal smoke=$smoke smoke_preserved=$smoke_preserved run=$run_dir — run completed for analysis)";;
         model-unavailable)

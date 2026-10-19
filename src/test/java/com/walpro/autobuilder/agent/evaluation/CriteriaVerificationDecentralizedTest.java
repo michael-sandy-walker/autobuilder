@@ -163,8 +163,10 @@ class CriteriaVerificationDecentralizedTest {
 
     @Test
     void absentNeedsKeepsOnlyNamesNoFileOfTheTreeHas() {
-        String raw = "1. ? needs tally_tool.py\n2. ? needs Nib.java\n3. ? needs " + A;
-        assertThat(CriteriaVerificationService.absentNeeds(raw, 3, files)).containsOnlyKeys(1);
-        assertThat(CriteriaVerificationService.parseNeeds(raw, 3, files)).containsOnlyKeys(2, 3);
+        String raw = "1. ? needs tally_tool.py\n2. ? needs Nib.java\n3. ? needs " + A
+                + "\n4. ? needs src/main/java/\n5. ? needs zeta";
+        assertThat(CriteriaVerificationService.absentNeeds(raw, 5, files)).as("a folder of the tree is not absent")
+                .containsOnlyKeys(1);
+        assertThat(CriteriaVerificationService.parseNeeds(raw, 5, files)).containsOnlyKeys(2, 3);
     }
 }

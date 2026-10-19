@@ -480,9 +480,10 @@ public class CriteriaVerificationService {
     }
 
     /**
-     * "N. ? needs a, b" lines, keeping only the names that are no file of the tree -- neither a path of it nor the
-     * file name of any of its files. A name that matches some file by its name alone is not absent: it is a file the
-     * model did not spell out, never a sign the criterion is about something outside the tree.
+     * "N. ? needs a, b" lines, keeping only the names that are no file of the tree -- neither a path of it, nor the
+     * file name of any of its files, nor a folder holding any of them. A name that matches some file by its name alone
+     * is a file the model did not spell out, and a folder of the tree ("? needs src/test", rule-extraction run
+     * 2026-10-19_09-42-46) is files it did not list -- neither is a sign the criterion is about something outside.
      */
     static Map<Integer, List<String>> absentNeeds(String raw, int count, Map<String, String> files) {
         return needs(raw, count, files, false);
@@ -502,13 +503,24 @@ public class CriteriaVerificationService {
                 if (present) {
                     if (files.containsKey(path)) paths.add(path);
                     else if (byName.size() == 1) paths.add(byName.get(0));
-                } else if (!files.containsKey(path) && byName.isEmpty()) {
+                } else if (!files.containsKey(path) && byName.isEmpty() && !holdsFiles(path, files)) {
                     paths.add(path);
                 }
             }
             if (!paths.isEmpty()) out.put(k, paths);
         }
         return out;
+    }
+
+    /** Whether {@code path} is a folder of the tree: some file of it lies under that path. */
+    private static boolean holdsFiles(String path, Map<String, String> files) {
+        String dir = path.replace('\\', '/').replaceAll("^\\./", "").replaceAll("/+$", "") + "/";
+        if (dir.equals("/")) return true;
+        for (String f : files.keySet()) {
+            String q = f.replace('\\', '/');
+            if (q.startsWith(dir) || q.contains("/" + dir)) return true;
+        }
+        return false;
     }
 
     /** The tree's files whose file name is {@code path}'s file name. */

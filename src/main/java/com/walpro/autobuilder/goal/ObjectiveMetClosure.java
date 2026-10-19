@@ -36,6 +36,8 @@ public class ObjectiveMetClosure {
 
     private final Recurrence recurrence;
     private final Set<String> stalled = ConcurrentHashMap.newKeySet();
+    /** Refusals per (criteria, tree): the same criteria refused on a tree that has not changed since. */
+    private final java.util.Map<String, Integer> refusalsOnTree = new ConcurrentHashMap<>();
 
     @Lazy
     @Autowired(required = false)
@@ -73,6 +75,26 @@ public class ObjectiveMetClosure {
                     set.size(), String.join("; ", set));
         }
         return persistent;
+    }
+
+    /**
+     * T6-T: the same criteria refused again on a tree that has not changed -- true from the second refusal. No new
+     * evidence can arrive while the tree stays as it is, so waiting for persistence by the run's ratios only lets the
+     * loop spin: rule-extraction run 2026-10-19_12-46-09 refused one cached verdict thirteen times in five seconds,
+     * read that as a grind, rewound and halted with the objective met.
+     */
+    public boolean refusedOnUnchangedTree(Collection<String> unconfirmed, String treeDigest) {
+        if (unconfirmed == null || unconfirmed.isEmpty() || treeDigest == null) return false;
+        String key = String.join("\n", new TreeSet<>(unconfirmed)) + "@" + treeDigest;
+        return refusalsOnTree.merge(key, 1, Integer::sum) >= 2;
+    }
+
+    /** The criteria refused on an unchanged tree, a second reading not confirming them: stalled from now on. */
+    public void stalledOnUnchangedTree(Collection<String> unconfirmed) {
+        if (unconfirmed != null && stalled.addAll(unconfirmed)) {
+            log.warn("T6-T: GRIND -- the same {} criteria are refused again on a tree that has not changed, and a second"
+                    + " reading does not confirm them: {}", unconfirmed.size(), String.join("; ", unconfirmed));
+        }
     }
 
     /** Whether every one of {@code unconfirmed} was among criteria refused persistently. */

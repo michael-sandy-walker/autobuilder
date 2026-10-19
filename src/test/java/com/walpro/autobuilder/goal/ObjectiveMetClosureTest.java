@@ -68,4 +68,18 @@ class ObjectiveMetClosureTest {
         assertThat(ObjectiveMetClosure.reason(EIGHT)).startsWith("objective met by the project's own tests")
                 .contains("AppConfig registers SpecEndpointBehaviourQuery as a bean");
     }
+
+    /** Rule-extraction run 2026-10-19_12-46-09: one cached verdict refused thirteen times in five seconds. */
+    @Test
+    void theSameCriteriaRefusedAgainOnAnUnchangedTree_countFromTheSecondRefusal_aChangedTreeStartsAfresh() {
+        ObjectiveMetClosure c = new ObjectiveMetClosure(new Recurrence(0));
+        assertThat(c.refusedOnUnchangedTree(EIGHT, "tree-1")).isFalse();
+        assertThat(c.refusedOnUnchangedTree(EIGHT, "tree-1")).isTrue();
+        assertThat(c.refusedOnUnchangedTree(EIGHT, "tree-2")).as("the tree changed").isFalse();
+        assertThat(c.refusedOnUnchangedTree(List.of(EIGHT.get(0)), "tree-2")).as("other criteria").isFalse();
+
+        assertThat(c.allStalled(EIGHT)).isFalse();
+        c.stalledOnUnchangedTree(EIGHT);
+        assertThat(c.allStalled(EIGHT)).isTrue();
+    }
 }

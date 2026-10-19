@@ -631,6 +631,22 @@ public class CriteriaVerificationService {
 
     public CompletionVerification verifyCompletion(String rootDescription, List<String> requiredCriteria,
                                                    Map<String, String> outputFiles) {
+        return verifyCompletion(rootDescription, requiredCriteria, outputFiles, true);
+    }
+
+    /**
+     * T6-T: the same check asked afresh, the cache of this code state left unread -- a second reading of criteria
+     * refused again and again on an unchanged tree. Rule-extraction run 2026-10-19_12-46-09: one reading judged a
+     * criterion unmet on whole and correct evidence, the verdict was cached for that tree, and every later check
+     * repeated it without asking. A complete fresh verdict replaces the cached one.
+     */
+    public CompletionVerification verifySecondOpinion(String rootDescription, List<String> requiredCriteria,
+                                                      Map<String, String> outputFiles) {
+        return verifyCompletion(rootDescription, requiredCriteria, outputFiles, false);
+    }
+
+    private CompletionVerification verifyCompletion(String rootDescription, List<String> requiredCriteria,
+                                                    Map<String, String> outputFiles, boolean readCache) {
         if (requiredCriteria == null || requiredCriteria.isEmpty()
                 || outputFiles == null || outputFiles.isEmpty()) {
             // Nothing to verify — a vacuous all-clear, not an abstain (preserves the
@@ -644,7 +660,9 @@ public class CriteriaVerificationService {
 
         // T4-BR: consult the graph for results already recorded at this exact code state.
         Map<String, Boolean> cachedByKey;
-        try {
+        if (!readCache) {
+            cachedByKey = Map.of();
+        } else try {
             Set<String> keys = new LinkedHashSet<>();
             for (String c : requiredCriteria) keys.add(CriterionResultEntity.keyOf(c));
             Map<String, Boolean> found = agentGraphService.findCriterionResults(keys, codeDigest);

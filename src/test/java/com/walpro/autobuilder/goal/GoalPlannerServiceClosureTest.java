@@ -1468,4 +1468,56 @@ public class GoalPlannerServiceClosureTest {
 
         assertThat(service.getGoalById("C").getStatus()).isEqualTo(GoalStatus.ACTIVE);
     }
+
+    /**
+     * T6-T, rule-extraction run 2026-10-19_12-46-09: with the objective met, the same criteria refused again on an
+     * unchanged tree are asked once more without the cache; still refused, the item is let go (and they are stalled);
+     * confirmed, it is fulfilled as any confirmed item.
+     */
+    @Test
+    void aCriteriaGateItemRefusedAgainOnAnUnchangedTree_getsASecondReading_thenIsLetGoOrFulfilled() throws IOException {
+        for (boolean secondConfirms : new boolean[] {false, true}) {
+            lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+            GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+            GoalEntity root = new GoalEntity("G", "root spec", "system", GoalType.GOAL, null);
+            root.setStatus(GoalStatus.ACTIVE);
+            GoalEntity item = new GoalEntity("C", "[BUILD_FIX] Implement the unconfirmed acceptance criteria", "planner",
+                    GoalType.SUBGOAL, "G");
+            item.setStatus(GoalStatus.ACTIVE);
+            item.getMetadata().put(com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                    com.walpro.autobuilder.core.build.BlockerTypes.GATE_CRITERIA);
+            Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+            goalMap.put("G", root);
+            goalMap.put("C", item);
+            ReflectionTestUtils.setField(service, "goalMap", goalMap);
+            ReflectionTestUtils.setField(service, "rootGoalId", "G");
+            ReflectionTestUtils.setField(service, "currentSubGoalId", "C");
+            ReflectionTestUtils.setField(service, "currentCycleContext", com.walpro.autobuilder.core.lifecycle.CycleContextData
+                    .builder().previousOutput(Map.of("src/main/java/zeta/Nib.java", "class Nib {}")).build());
+            service.setAcceptanceCriteria("C", java.util.List.of("Nib is one unit wide"));
+            var verifier = mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+            service.setCriteriaVerificationService(verifier);
+            var blocked = com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.blocked(
+                    "1 acceptance criterion(s) not confirmed: Nib is one unit wide", java.util.List.of("Nib is one unit wide"));
+            when(verifier.verifyCompletion(anyString(), anyList(), anyMap())).thenReturn(blocked);
+            when(verifier.verifySecondOpinion(anyString(), anyList(), anyMap())).thenReturn(secondConfirms
+                    ? com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.allClear()
+                    : blocked);
+            ObjectiveMetClosure objective = new ObjectiveMetClosure(new com.walpro.autobuilder.core.stuck.Recurrence(0));
+            com.walpro.autobuilder.core.build.TestRunGate gate = mock(com.walpro.autobuilder.core.build.TestRunGate.class);
+            when(gate.treeTests()).thenReturn(com.walpro.autobuilder.core.build.TestRunGate.TreeTests.RAN);
+            when(gate.treeFailing()).thenReturn(java.util.Optional.of(java.util.Set.of()));
+            objective.setTestRunGate(gate);
+            ReflectionTestUtils.setField(service, "objectiveMetClosure", objective);
+
+            service.applyGoalProgress("C", com.walpro.autobuilder.model.GoalProgressState.FULFILLED, "score-based closure");
+            assertThat(service.getGoalById("C").getStatus()).as("first refusal").isEqualTo(GoalStatus.ACTIVE);
+            verify(verifier, never()).verifySecondOpinion(anyString(), anyList(), anyMap());
+
+            service.applyGoalProgress("C", com.walpro.autobuilder.model.GoalProgressState.FULFILLED, "score-based closure");
+            assertThat(service.getGoalById("C").getStatus()).as("second refusal, same tree").isNotEqualTo(GoalStatus.ACTIVE);
+            verify(verifier).verifySecondOpinion(anyString(), anyList(), anyMap());
+            assertThat(objective.allStalled(java.util.List.of("Nib is one unit wide"))).isEqualTo(!secondConfirms);
+        }
+    }
 }

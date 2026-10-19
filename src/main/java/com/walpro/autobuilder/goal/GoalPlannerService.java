@@ -4071,6 +4071,19 @@ public class GoalPlannerService {
         }
     }
 
+    /** The tree as files and contents, for "has it changed since": path order, each content by its hash. */
+    private static String treeDigest(Map<String, String> output) {
+        StringBuilder sb = new StringBuilder();
+        new java.util.TreeMap<>(output).forEach((path, content) ->
+                sb.append(path).append('=').append(content == null ? 0 : content.hashCode()).append(';'));
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return sb.toString(); // every JVM ships SHA-256; the raw text is a correct fallback
+        }
+    }
+
     public void autoCompleteRootIfSatisfied() {
         // Replan atomicity: while the planner is mid-execution (prune already applied, injection
         // not yet), the active set is transiently empty — completing the root here is the
@@ -5439,13 +5452,32 @@ public class GoalPlannerService {
                             boolean stalled = objectiveMetClosure != null
                                     && objectiveMetClosure.refused(check.unconfirmedCriteria())
                                     && objectiveMetClosure.objectiveMet();
-                            if (!stalled) {
+                            // T6-T: refused again on a tree that has not changed -- no new evidence can come, so ask
+                            // once more without the cache; a second reading that still does not confirm lets it go.
+                            boolean confirmedOnSecondReading = false;
+                            if (!stalled && objectiveMetClosure != null && objectiveMetClosure.objectiveMet()
+                                    && objectiveMetClosure.refusedOnUnchangedTree(check.unconfirmedCriteria(), treeDigest(output))) {
+                                var second = criteriaVerificationService.verifySecondOpinion(
+                                        g.getDescription(), check.unconfirmedCriteria(), output);
+                                if (second.answered() && second.unconfirmed().isEmpty() && second.outsideTree().isEmpty()) {
+                                    confirmedOnSecondReading = true;
+                                    log.warn("T6-T: criteria-gate work item [{}] confirmed on a second reading -- refused"
+                                            + " again on an unchanged tree, then asked afresh: {}", goalId,
+                                            String.join("; ", check.unconfirmedCriteria()));
+                                } else {
+                                    objectiveMetClosure.stalledOnUnchangedTree(check.unconfirmedCriteria());
+                                    stalled = true;
+                                }
+                            }
+                            if (!stalled && !confirmedOnSecondReading) {
                                 log.warn("T6-T: refusing FULFILLED for criteria-gate work item [{}] -- the verifier that raised it"
                                         + " still does not confirm: {}", goalId, check.unconfirmed().get());
                                 return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
                             }
-                            log.warn("T6-T: criteria-gate work item [{}] let go -- the objective is met by the project's own"
-                                    + " tests and the same criteria are refused again and again: {}", goalId, check.unconfirmed().get());
+                            if (stalled) {
+                                log.warn("T6-T: criteria-gate work item [{}] let go -- the objective is met by the project's own"
+                                        + " tests and the same criteria are refused again and again: {}", goalId, check.unconfirmed().get());
+                            }
                         }
                     }
                 }

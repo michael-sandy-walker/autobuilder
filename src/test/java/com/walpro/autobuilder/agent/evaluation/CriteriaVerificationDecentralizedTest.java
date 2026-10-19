@@ -174,4 +174,21 @@ class CriteriaVerificationDecentralizedTest {
         assertThat(CriteriaVerificationService.looksLikeFile(".gitignore")).isFalse();
         assertThat(CriteriaVerificationService.parseNeeds(raw, 9, files)).containsOnlyKeys(2, 3);
     }
+
+    /** A second opinion leaves the cache of this code state unread: rule-extraction run 2026-10-19_12-46-09. */
+    @Test
+    void aSecondOpinionIsAskedAfresh_theCachedVerdictUnread() {
+        service.setFileBudgetChars(100_000);
+        when(graph.findCriterionResults(org.mockito.ArgumentMatchers.anyCollection(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Map.of(com.walpro.autobuilder.graph.evaluation.CriterionResultEntity.keyOf("Nib is one wide"), false));
+        answer(p -> "1. ✓ ok");
+
+        assertThat(service.verifyCompletion("ink", List.of("Nib is one wide"), files).unconfirmed()).isPresent();
+        assertThat(prompts).as("answered by the cache").isEmpty();
+
+        var second = service.verifySecondOpinion("ink", List.of("Nib is one wide"), files);
+        assertThat(second.answered()).isTrue();
+        assertThat(second.unconfirmed()).isEmpty();
+        assertThat(prompts).hasSize(1);
+    }
 }

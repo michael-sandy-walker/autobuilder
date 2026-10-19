@@ -484,6 +484,10 @@ public class CriteriaVerificationService {
      * file name of any of its files, nor a folder holding any of them. A name that matches some file by its name alone
      * is a file the model did not spell out, and a folder of the tree ("? needs src/test", rule-extraction run
      * 2026-10-19_09-42-46) is files it did not list -- neither is a sign the criterion is about something outside.
+     * Only a name written as a file path counts at all: "? needs PROJECT TEST RUN" (run 2026-10-19_12-13-46) asks
+     * for evidence, not a file, and says nothing about what the tree lacks. And a file missing from one of the
+     * tree's own folders is the project's gap -- a class not written yet -- never something outside it: only a
+     * path none of whose folders the tree has (a bare name, or another repository's layout) counts.
      */
     static Map<Integer, List<String>> absentNeeds(String raw, int count, Map<String, String> files) {
         return needs(raw, count, files, false);
@@ -503,13 +507,30 @@ public class CriteriaVerificationService {
                 if (present) {
                     if (files.containsKey(path)) paths.add(path);
                     else if (byName.size() == 1) paths.add(byName.get(0));
-                } else if (!files.containsKey(path) && byName.isEmpty() && !holdsFiles(path, files)) {
+                } else if (looksLikeFile(path) && !files.containsKey(path) && byName.isEmpty() && !holdsFiles(path, files)
+                        && !inTreeFolder(path, files)) {
                     paths.add(path);
                 }
             }
             if (!paths.isEmpty()) out.put(k, paths);
         }
         return out;
+    }
+
+    /** Whether {@code name} is written as a file path: no spaces, and a file name with an extension. */
+    private static final Pattern FILE_PATH = Pattern.compile("[^\\s]*[^/\\s.][^/\\s]*\\.[A-Za-z0-9]{1,8}");
+
+    static boolean looksLikeFile(String name) {
+        return FILE_PATH.matcher(name).matches();
+    }
+
+    /** Whether some folder {@code path} names on the way to its file is a folder of the tree. */
+    private static boolean inTreeFolder(String path, Map<String, String> files) {
+        String p = path.replace('\\', '/').replaceAll("^\\./", "");
+        for (int i = p.indexOf('/'); i > 0; i = p.indexOf('/', i + 1)) {
+            if (holdsFiles(p.substring(0, i), files)) return true;
+        }
+        return false;
     }
 
     /** Whether {@code path} is a folder of the tree: some file of it lies under that path. */

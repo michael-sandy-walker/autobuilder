@@ -133,4 +133,38 @@ class CriteriaVerificationDecentralizedTest {
         assertThat(result.answered()).isFalse();
         assertThat(prompts).isEmpty();
     }
+
+    /** A criterion asking only for a file the tree does not have is outside the tree: named, never a deferral. */
+    @Test
+    void aCriterionAskingOnlyForAFileTheTreeLacksIsNamedOutsideTheTree_notLeftUnanswered() {
+        answer(p -> p.contains("Inkwell holds three drops") ? "1. ✓ ok" : "1. ? needs tally_tool.py");
+
+        var result = service.verifyCompletion("ink",
+                List.of("Inkwell holds three drops", "the share measured by tally_tool.py is 18%"), files);
+
+        assertThat(result.answered()).isTrue();
+        assertThat(result.unconfirmed()).isEmpty();
+        assertThat(result.outsideTree()).singleElement().asString()
+                .contains("the share measured by tally_tool.py is 18%", "tally_tool.py", "does not have");
+    }
+
+    /** A bare file name of a file the tree has is that file, asked again whole -- never "outside the tree". */
+    @Test
+    void aBareNameOfATreeFileIsThatFile_askedAgainWhole() {
+        answer(p -> p.contains("=== " + B + " ===") ? "1. ✓ ok" : "1. ? needs Nib.java");
+
+        var result = service.verifyCompletion("ink", List.of("Inkwell pours through the tip"),
+                Map.of(A, files.get(A), B, "package zeta;\npublic class Nib {}\n"));
+
+        assertThat(result.answered()).isTrue();
+        assertThat(result.outsideTree()).isEmpty();
+        assertThat(prompts).anyMatch(p -> p.contains("=== " + B + " ==="));
+    }
+
+    @Test
+    void absentNeedsKeepsOnlyNamesNoFileOfTheTreeHas() {
+        String raw = "1. ? needs tally_tool.py\n2. ? needs Nib.java\n3. ? needs " + A;
+        assertThat(CriteriaVerificationService.absentNeeds(raw, 3, files)).containsOnlyKeys(1);
+        assertThat(CriteriaVerificationService.parseNeeds(raw, 3, files)).containsOnlyKeys(2, 3);
+    }
 }

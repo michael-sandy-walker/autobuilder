@@ -1168,6 +1168,51 @@ public class GoalPlannerServiceClosureTest {
     }
 
     @Test
+    void autoCompleteRoot_criteriaOutsideTheTree_closeOnlyOnTheObjectiveMet_namedOpen() throws IOException {
+        // T6-T, rule-extraction run 2026-10-19_01-35-23: three criteria were measurements of another repository
+        // copied from the ticket ("the line count in module_closures.py is 14,814"); the verifier asked for a file the
+        // tree does not have, and every closure deferred for an hour with the whole suite passing.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).markCompleted(anyString());
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService verifier =
+                mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        String outside = "the tally measured by tally_tool.py is 18% (asks for tally_tool.py, which this tree does not have)";
+        when(verifier.verifyCompletion(any(), any(), any())).thenReturn(
+                com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.allClear(
+                        java.util.List.of(outside)));
+        service.setCriteriaVerificationService(verifier);
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .previousOutput(Map.of("A.java", "public class A {}")).build());
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "Move the parser", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.SUBSUMED);
+        done.getMetadata().put("acceptanceCriteria", java.util.List.of("the tally measured by tally_tool.py is 18%"));
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        ObjectiveMetClosure objective = new ObjectiveMetClosure(new com.walpro.autobuilder.core.stuck.Recurrence(0));
+        ReflectionTestUtils.setField(service, "objectiveMetClosure", objective);
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).as("no test run of the tree: defer").isEqualTo(GoalStatus.ACTIVE);
+
+        com.walpro.autobuilder.core.build.TestRunGate gate = mock(com.walpro.autobuilder.core.build.TestRunGate.class);
+        when(gate.treeTests()).thenReturn(com.walpro.autobuilder.core.build.TestRunGate.TreeTests.RAN);
+        when(gate.treeFailing()).thenReturn(java.util.Optional.of(java.util.Set.of()));
+        objective.setTestRunGate(gate);
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(service.getGoalById("G").getResolution()).contains("cannot be judged in this tree", "tally_tool.py");
+    }
+
+    @Test
     void autoCompleteRoot_nonSpecBoundGoalCriteria_doNotGateRootCompletion() throws IOException {
         // Run 11 (2026-07-04): a planner-authored structural stepping-stone ("Create ... package",
         // origin-stamped REQUIRED, T4-BT binding UNKNOWN) carried the state-snapshot criterion

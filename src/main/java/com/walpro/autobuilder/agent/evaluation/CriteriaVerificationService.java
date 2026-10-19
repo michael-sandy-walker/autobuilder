@@ -269,7 +269,7 @@ public class CriteriaVerificationService {
         if (passMap.isEmpty()) {
             log.warn("T4-BP-1: unparseable verification response — no observation recorded");
         }
-        return new Assessment(passMap, evidence.complete(), evidence.describeGaps());
+        return new Assessment(passMap, evidence.complete(), evidence.describeGaps(), Map.of());
     }
 
     /**
@@ -302,6 +302,7 @@ public class CriteriaVerificationService {
         }
 
         Map<Integer, Boolean> counted = new LinkedHashMap<>();
+        Map<Integer, List<String>> outsideTree = new LinkedHashMap<>();
         List<String> gaps = new ArrayList<>();
         List<Integer> pending = new ArrayList<>(home.keySet());
         for (int round = 0; round < MAX_ROUNDS && !pending.isEmpty(); round++) {
@@ -314,6 +315,7 @@ public class CriteriaVerificationService {
                 if (response == null) continue;
                 Map<Integer, Boolean> verdicts = parse(response, batch.size());
                 Map<Integer, List<String>> needs = parseNeeds(response, batch.size(), files);
+                Map<Integer, List<String>> absent = absentNeeds(response, batch.size(), files);
                 for (int k = 1; k <= batch.size(); k++) {
                     int criterion = batch.get(k - 1);
                     Boolean v = verdicts.get(k);
@@ -321,6 +323,12 @@ public class CriteriaVerificationService {
                         counted.put(criterion, v);
                     } else if (needs.containsKey(k) && home.get(criterion).addAll(needs.get(k))) {
                         again.add(criterion);
+                    } else if (v == null && !needs.containsKey(k) && absent.containsKey(k)) {
+                        // T6-T: it asks only for files this tree does not have -- the criterion is about something
+                        // outside the tree (rule-extraction run 2026-10-19_01-35-23: "the line count in
+                        // module_closures.py is 14,814", a measurement of another repository copied from the
+                        // ticket). Asking again cannot answer it, and leaving it unanswered deferred every closure.
+                        outsideTree.put(criterion, absent.get(k));
                     } else if (Boolean.TRUE.equals(v)) {
                         gaps.add("criterion " + criterion + " passed on cropped files (" + ev.describeGaps() + ")");
                     }
@@ -329,11 +337,12 @@ public class CriteriaVerificationService {
             pending = again;
         }
         List<Integer> unanswered = new ArrayList<>();
-        for (int i : home.keySet()) if (!counted.containsKey(i)) unanswered.add(i);
+        for (int i : home.keySet()) if (!counted.containsKey(i) && !outsideTree.containsKey(i)) unanswered.add(i);
         if (!unanswered.isEmpty()) gaps.add("no counted verdict for criteria " + unanswered);
+        if (!outsideTree.isEmpty()) gaps.add("criteria " + outsideTree.keySet() + " ask only for files this tree does not have");
         log.info("T6-T: decentralized verification -- {} of {} criteria answered on whole files{}", counted.size(),
                 features.size(), gaps.isEmpty() ? "" : " (" + String.join("; ", gaps) + ")");
-        return new Assessment(counted, unanswered.isEmpty(), String.join("; ", gaps));
+        return new Assessment(counted, unanswered.isEmpty(), String.join("; ", gaps), outsideTree);
     }
 
     /** The files whose class a criterion names, as a word -- main sources before tests. */
@@ -465,8 +474,21 @@ public class CriteriaVerificationService {
         }
     }
 
-    /** "N. ? needs a, b" lines, keeping only paths that are files of the tree. */
+    /** "N. ? needs a, b" lines, keeping only paths that are files of the tree (a bare file name naming exactly one). */
     static Map<Integer, List<String>> parseNeeds(String raw, int count, Map<String, String> files) {
+        return needs(raw, count, files, true);
+    }
+
+    /**
+     * "N. ? needs a, b" lines, keeping only the names that are no file of the tree -- neither a path of it nor the
+     * file name of any of its files. A name that matches some file by its name alone is not absent: it is a file the
+     * model did not spell out, never a sign the criterion is about something outside the tree.
+     */
+    static Map<Integer, List<String>> absentNeeds(String raw, int count, Map<String, String> files) {
+        return needs(raw, count, files, false);
+    }
+
+    private static Map<Integer, List<String>> needs(String raw, int count, Map<String, String> files, boolean present) {
         Map<Integer, List<String>> out = new LinkedHashMap<>();
         Matcher m = NEEDS_LINE.matcher(raw);
         while (m.find()) {
@@ -475,9 +497,28 @@ public class CriteriaVerificationService {
             List<String> paths = new ArrayList<>();
             for (String part : m.group(2).split(",")) {
                 String path = part.strip().replaceAll("^`|`$", "");
-                if (files.containsKey(path)) paths.add(path);
+                if (path.isEmpty()) continue;
+                List<String> byName = sameName(path, files);
+                if (present) {
+                    if (files.containsKey(path)) paths.add(path);
+                    else if (byName.size() == 1) paths.add(byName.get(0));
+                } else if (!files.containsKey(path) && byName.isEmpty()) {
+                    paths.add(path);
+                }
             }
             if (!paths.isEmpty()) out.put(k, paths);
+        }
+        return out;
+    }
+
+    /** The tree's files whose file name is {@code path}'s file name. */
+    private static List<String> sameName(String path, Map<String, String> files) {
+        String p = path.replace('\\', '/');
+        String name = p.substring(p.lastIndexOf('/') + 1);
+        List<String> out = new ArrayList<>();
+        for (String f : files.keySet()) {
+            String q = f.replace('\\', '/');
+            if (q.substring(q.lastIndexOf('/') + 1).equals(name)) out.add(f);
         }
         return out;
     }
@@ -505,9 +546,10 @@ public class CriteriaVerificationService {
      * thing about a complete view of the code and something quite different about a cropped one, and
      * separating them is how the second fact went missing for as long as it did.
      */
-    private record Assessment(Map<Integer, Boolean> passMap, boolean evidenceComplete, String gaps) {
+    private record Assessment(Map<Integer, Boolean> passMap, boolean evidenceComplete, String gaps,
+                              Map<Integer, List<String>> outsideTree) {
         static Assessment none() {
-            return new Assessment(Map.of(), true, "");
+            return new Assessment(Map.of(), true, "", Map.of());
         }
     }
 
@@ -538,11 +580,19 @@ public class CriteriaVerificationService {
      * earlier collapsed into a pass and the root completed without one).
      */
     public record CompletionVerification(boolean answered, Optional<String> unconfirmed,
-                                         List<String> unconfirmedCriteria) {
-        public static CompletionVerification abstained() { return new CompletionVerification(false, Optional.empty(), List.of()); }
-        public static CompletionVerification allClear() { return new CompletionVerification(true, Optional.empty(), List.of()); }
+                                         List<String> unconfirmedCriteria, List<String> outsideTree) {
+        public static CompletionVerification abstained() { return new CompletionVerification(false, Optional.empty(), List.of(), List.of()); }
+        public static CompletionVerification allClear() { return allClear(List.of()); }
+        /**
+         * T6-T: every criterion confirmed except {@code outsideTree} -- criteria that ask only for files this tree does
+         * not have, each named with what it asked for. No reading of this tree can answer them; the caller decides
+         * whether that may close (empty: a plain all-clear).
+         */
+        public static CompletionVerification allClear(List<String> outsideTree) {
+            return new CompletionVerification(true, Optional.empty(), List.of(), List.copyOf(outsideTree));
+        }
         public static CompletionVerification blocked(String summary, List<String> unconfirmedCriteria) {
-            return new CompletionVerification(true, Optional.of(summary), List.copyOf(unconfirmedCriteria));
+            return new CompletionVerification(true, Optional.of(summary), List.copyOf(unconfirmedCriteria), List.of());
         }
     }
 
@@ -593,6 +643,7 @@ public class CriteriaVerificationService {
                     && !testClaimsWithoutRun.contains(c)) uncached.add(c);
         }
         Map<String, Boolean> freshByCriterion = new java.util.HashMap<>();
+        Map<String, List<String>> outsideByCriterion = new LinkedHashMap<>();
         boolean evidenceComplete = true;
         String evidenceGaps = "";
         if (uncached.isEmpty()) {
@@ -610,11 +661,12 @@ public class CriteriaVerificationService {
             Map<Integer, Boolean> passMap = assessment.passMap();
             evidenceComplete = assessment.evidenceComplete();
             evidenceGaps = assessment.gaps();
+            assessment.outsideTree().forEach((i, asked) -> outsideByCriterion.put(uncached.get(i - 1), asked));
             int n = completionVerificationCalls.incrementAndGet();
             log.info("T4-BP-3: completion verification LLM call #{} this run ({} verified, {} cached, {} output files, evidence={})",
                     n, uncached.size(), requiredCriteria.size() - uncached.size(), outputFiles.size(),
                     evidenceComplete ? "complete" : "INCOMPLETE");
-            if (passMap.isEmpty()) {
+            if (passMap.isEmpty() && outsideByCriterion.isEmpty()) {
                 // No answer (LLM failure / unparseable). Previously an all-clear ("no observation
                 // is never treated as failure") — after false completion #2 the completion edge
                 // distinguishes abstain from pass: the caller defers the closure attempt.
@@ -624,6 +676,7 @@ public class CriteriaVerificationService {
             // this code state. Caching it would let one incomplete prompt speak for every later
             // closure at the same digest, long after the file that was cut has been forgotten.
             if (evidenceComplete) {
+                // Outside-tree criteria are absent from passMap, so they stay uncached: no verdict was formed on them.
                 recordCompletionResults(uncached, passMap, codeDigest);
             } else {
                 log.warn("T2-FI: not caching {} completion verdict(s) — they were formed on incomplete evidence ({})",
@@ -640,7 +693,13 @@ public class CriteriaVerificationService {
         // whole files defers the closure rather than raising a work item about code nobody judged).
         List<String> unconfirmed = new ArrayList<>();
         List<String> unanswered = new ArrayList<>();
+        List<String> outside = new ArrayList<>();
         for (String c : requiredCriteria) {
+            if (outsideByCriterion.containsKey(c) && !recordedByCriterion.containsKey(c)
+                    && !cachedByKey.containsKey(CriterionResultEntity.keyOf(c))) {
+                outside.add(c + " (asks for " + String.join(", ", outsideByCriterion.get(c)) + ", which this tree does not have)");
+                continue;
+            }
             Boolean ok = cachedByKey.containsKey(CriterionResultEntity.keyOf(c))
                     ? cachedByKey.get(CriterionResultEntity.keyOf(c))
                     : freshByCriterion.get(c);
@@ -674,7 +733,7 @@ public class CriteriaVerificationService {
                         + "than completing on an unexamined requirement", evidenceGaps);
                 return CompletionVerification.abstained();
             }
-            return CompletionVerification.allClear();
+            return CompletionVerification.allClear(outside);
         }
         String head = unconfirmed.stream().limit(5).reduce((a, b) -> a + "; " + b).orElse("");
         String tail = unconfirmed.size() > 5 ? " …and " + (unconfirmed.size() - 5) + " more" : "";

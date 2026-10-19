@@ -4059,6 +4059,9 @@ public class GoalPlannerService {
             }
             sb.append(';');
         });
+        // T6-T: whether the project's own tests meet the objective decides closure too (criteria refused persistently,
+        // criteria outside the tree) -- and it can change with the tree unchanged, when the gate's run lands later.
+        sb.append("|objective=").append(objectiveMetClosure != null && objectiveMetClosure.objectiveMet());
         try {
             byte[] d = java.security.MessageDigest.getInstance("SHA-256")
                     .digest(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -4579,10 +4582,27 @@ public class GoalPlannerService {
                     log.warn("T4-CQ: root closure refused by the test sources -- {}", completionVerification.unconfirmed().orElse(""));
                 }
                 if (!completionVerification.answered()) {
-                    log.warn("T4-BP-3: completion verification returned no answer (LLM failure) — deferring completion; an unanswered check must not complete the root");
+                    log.warn("T4-BP-3: completion verification gave no verdict (no answer, or criteria it could not settle"
+                            + " on whole files) — deferring completion; an unanswered check must not complete the root");
                     return;
                 }
                 java.util.Optional<String> unconfirmed = completionVerification.unconfirmed();
+                if (unconfirmed.isEmpty() && !completionVerification.outsideTree().isEmpty()) {
+                    // T6-T: everything this tree can answer is confirmed; what is left asks only for files the tree does
+                    // not have (rule-extraction run 2026-10-19_01-35-23: measurements of another repository copied
+                    // from the ticket deferred every closure for an hour). Close only on the objective met by the
+                    // project's own tests, and name them open; without that, defer as before.
+                    if (objectiveMetClosure == null || !objectiveMetClosure.objectiveMet()) {
+                        log.warn("T6-T: {} criterion(s) cannot be judged in this tree and the objective is not met by the"
+                                + " project's own tests -- deferring completion: {}", completionVerification.outsideTree().size(),
+                                String.join("; ", completionVerification.outsideTree()));
+                        return;
+                    }
+                    String reason = ObjectiveMetClosure.outsideTreeReason(completionVerification.outsideTree());
+                    markGoalCompleted(root.getId(), "root goal satisfied: " + reason);
+                    log.info("T2-DR: root '{}' marked COMPLETED — {}", root.getId(), reason);
+                    return;
+                }
                 if (unconfirmed.isPresent() && objectiveMetClosure != null && objectiveMetClosure.objectiveMet()
                         && objectiveMetClosure.allStalled(completionVerification.unconfirmedCriteria())) {
                     String reason = ObjectiveMetClosure.reason(completionVerification.unconfirmedCriteria());

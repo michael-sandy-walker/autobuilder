@@ -85,4 +85,10 @@ public class ObjectiveMetClosure {
         return "objective met by the project's own tests (the whole suite passes on the tree as merged); open from the"
                 + " ticket's text, refused again and again with nothing moving: " + String.join("; ", open);
     }
+
+    /** The closing reason when what is left asks only for files the tree does not have. */
+    public static String outsideTreeReason(List<String> outside) {
+        return "objective met by the project's own tests (the whole suite passes on the tree as merged); every other"
+                + " criterion confirmed; open, as they cannot be judged in this tree: " + String.join("; ", outside);
+    }
 }

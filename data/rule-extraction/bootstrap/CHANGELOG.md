@@ -8,3 +8,8 @@
 
 - reason: the seed's obligations as the first run wrote them (bootstrap/seed.obligations.txt), committed like every other case's; content otherwise unchanged
 - bootstrap digest: `0c2bcedfd0ddd872`
+
+## v3 -- 2026-10-19
+
+- reason: obligations: two measurements of the autobuilder repository (module_closures.py share and line count) removed and the 3335-test count dropped from the suite obligation -- the target has neither the script nor that suite; they deferred every closure of field83 run 2
+- bootstrap digest: `4420cb84027bd70d`

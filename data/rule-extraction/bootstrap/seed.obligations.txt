@@ -20,11 +20,9 @@ EndpointSurfaceQuery no longer contains the EndpointPaths logic
 EndpointSurfaceQuery no longer contains the Endpoint record
 The criterion parser has a Spring-free closure of 3 classes
 The spec status reader has a Spring-free closure of 3 classes
-The extractable share in module_closures.py is 18%
-The line count in module_closures.py is 14,814
 There is no behaviour change
 All tests in EndpointSurfaceQueryTest pass
 All tests in SpecEndpointBehaviourQueryTest pass
-The whole test suite passes with 3335 passing tests and 0 failures
+The whole test suite passes with 0 failures
 rule: Do not modify the existing tests under src/test
 rule: Keep the project's packages, classes and naming

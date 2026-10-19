@@ -144,4 +144,55 @@ class EditHunksTest {
         String file = "```java [src/main/java/org/ink/Nib.java]\npackage org.ink;\nclass Nib {\n";
         assertThat(EvolutionProtocolContract.isValidResponse(file)).isFalse();
     }
+
+    private static final String DESK = """
+            package org.ink;
+
+            class Desk {
+                int pens(int n) {
+                    if (n > 0) {
+                        return n;
+                    }
+                    return 0;
+                }
+            }""";
+
+    /** Rule-extraction runs 2026-10-18 and 2026-10-19: the file's own lines, written four spaces too deep. */
+    @Test
+    void theSameLinesIndentedTooDeep_applyAtTheFilesIndentation() {
+        var applied = EditHunks.apply(edit(
+                "                if (n > 0) {\n                    return n;\n                }",
+                "                if (n > 1) {\n                    return n * 2;\n                }"), Map.of(PATH, DESK));
+
+        assertThat(applied.problems()).isEmpty();
+        assertThat(applied.files().get(PATH)).contains("        if (n > 1) {\n            return n * 2;\n        }\n        return 0;")
+                .doesNotContain("if (n > 0)");
+    }
+
+    @Test
+    void theSameLinesIndentedTooShallow_applyAtTheFilesIndentation() {
+        var applied = EditHunks.apply(edit("return n;", "return n + 1;"), Map.of(PATH, DESK));
+        assertThat(applied.problems()).as("an exact substring still matches as written").isEmpty();
+
+        applied = EditHunks.apply(edit("if (n > 0) {\n    return n;\n}", "if (n >= 0) {\n    return n;\n}"), Map.of(PATH, DESK));
+        assertThat(applied.problems()).isEmpty();
+        assertThat(applied.files().get(PATH)).contains("        if (n >= 0) {\n            return n;\n        }");
+    }
+
+    @Test
+    void linesWhoseNestingDiffersFromTheFile_areRefused() {
+        var applied = EditHunks.apply(edit(
+                "            if (n > 0) {\n            return n;\n            }", "x"), Map.of(PATH, DESK));
+
+        assertThat(applied.problems()).singleElement().asString().contains("is not in the file");
+    }
+
+    @Test
+    void twoPlacesWithTheSameShiftedLines_areRefused_neverAGuess() {
+        String twice = DESK.replace("    return 0;", "    if (n > 0) {\n            return n;\n        }\n        return 0;");
+        var applied = EditHunks.apply(edit("    if (n > 0) {\n        return n;\n    }", "x"), Map.of(PATH, twice));
+
+        assertThat(applied.problems()).singleElement().asString().contains("is not in the file");
+        assertThat(applied.files()).isEmpty();
+    }
 }

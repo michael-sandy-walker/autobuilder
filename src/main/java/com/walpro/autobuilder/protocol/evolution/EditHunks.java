@@ -31,6 +31,14 @@ import java.util.regex.Pattern;
  * refusal with the reason, never a guess about which place was meant, and nothing outside the matched
  * text is touched. An edit names an existing file; a new file is a whole-file block.
  *
+ * <p>One exception to "as written", and only one: the same whole lines indented by one constant amount
+ * more or less than the file has them. Rule-extraction runs 2026-10-18_19-33-28 and 2026-10-19_00-39-56
+ * refused seven answers whose SEARCH text was the file's own lines at 12 spaces where the file has 8, and
+ * the file left out of the candidate broke the build every time. When nothing matches exactly, the lines
+ * are compared without their leading whitespace; a place counts only when every non-blank line is off by
+ * the SAME amount (a hunk whose nesting differs from the file's is not the same lines), and only a single
+ * such place is applied -- the replacement shifted by that amount, so it lands at the file's indentation.
+ *
  * <p>A block is an edit by what it SAYS, not only by its tag: one whose body opens with a SEARCH marker
  * is an edit whatever language it is labelled with. participation-totals run 2026-09-30_12-48-02 sent
  * both of its hunks in a {@code ```java [path]} fence -- the tag the prompt's own source listings use --
@@ -44,6 +52,8 @@ public final class EditHunks {
 
     private static final Pattern BLOCK = Pattern.compile("(?ms)```(\\w*) \\[([^\\]\\n]+)\\][ \\t]*\\r?\\n(.*?)\\r?\\n?"
             + com.walpro.autobuilder.protocol.FencedBlocks.CLOSING_FENCE);
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EditHunks.class);
 
     private static final String SEARCH_MARKER = "<<<<<<< SEARCH";
     private static final Pattern HUNK = Pattern.compile(
@@ -121,9 +131,69 @@ public final class EditHunks {
 
     /** The content with the hunk's SEARCH replaced, or null when it does not occur exactly once. */
     private static String replaceOnce(String content, Hunk h) {
-        if (h.search().isEmpty() || count(content, h.search()) != 1) return null;
+        if (h.search().isEmpty()) return null;
+        int n = count(content, h.search());
+        if (n == 0) return shiftedOnce(content, h);
+        if (n != 1) return null;
         int at = content.indexOf(h.search());
         return content.substring(0, at) + h.replace() + content.substring(at + h.search().length());
+    }
+
+    /**
+     * The content with the hunk applied where the file has the SEARCH lines indented by one constant amount
+     * more or less, the replacement shifted by the same amount; null unless exactly one such place exists.
+     */
+    static String shiftedOnce(String content, Hunk h) {
+        String[] lines = content.split("\n", -1);
+        String[] search = h.search().split("\n", -1);
+        if (search.length == 0 || java.util.Arrays.stream(search).allMatch(String::isBlank)) return null;
+        int at = -1;
+        String shift = null;
+        int delta = 0;
+        for (int i = 0; i + search.length <= lines.length; i++) {
+            Integer d = null;
+            boolean same = true;
+            for (int j = 0; j < search.length && same; j++) {
+                String f = strip(lines[i + j]), q = strip(search[j]);
+                if (f.isBlank() || q.isBlank()) { same = f.isBlank() && q.isBlank(); continue; }
+                if (!f.stripLeading().equals(q.stripLeading())) { same = false; continue; }
+                int dj = indent(f).length() - indent(q).length();
+                if (d == null) d = dj; else same = d == dj;
+            }
+            if (!same || d == null || d == 0) continue;
+            if (at >= 0) return null; // a second place: never a guess about which one was meant
+            at = i;
+            delta = d;
+            // What a line gains: the file's own indentation beyond the SEARCH's, taken from the first non-blank line.
+            for (int j = 0; j < search.length; j++) {
+                if (strip(search[j]).isBlank()) continue;
+                String fi = indent(strip(lines[i + j]));
+                shift = d > 0 ? fi.substring(0, d) : "";
+                break;
+            }
+        }
+        if (at < 0) return null;
+        List<String> out = new ArrayList<>(java.util.Arrays.asList(lines).subList(0, at));
+        for (String r : h.replace().split("\n", -1)) {
+            if (r.isBlank()) { out.add(r); continue; }
+            if (delta > 0) out.add(shift + r);
+            else if (indent(r).length() >= -delta) out.add(r.substring(-delta));
+            else return null; // the replacement is less indented than the shift takes away: not a uniform shift
+        }
+        out.addAll(java.util.Arrays.asList(lines).subList(at + search.length, lines.length));
+        log.info("T6-T: an edit's SEARCH lines matched at line {} with their indentation shifted by {} -- applied at the"
+                + " file's indentation", at + 1, delta);
+        return String.join("\n", out);
+    }
+
+    private static String strip(String line) {
+        return line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;
+    }
+
+    private static String indent(String line) {
+        int k = 0;
+        while (k < line.length() && (line.charAt(k) == ' ' || line.charAt(k) == '\t')) k++;
+        return line.substring(0, k);
     }
 
     private static int count(String haystack, String needle) {

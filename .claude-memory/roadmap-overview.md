@@ -396,7 +396,7 @@
 - [x] `T4-CL` — End of the per-run-disposable graph contract CLOSED 2026-09-28: both halves shipped long ago (20e91e3 + canary proof); the audit is T4-CJ slice 2.
 - [>] `T4-CM` — Knowledge-base merge workbench (cross-run/seed graph merging)
 - [>] `T4-CN` — Cross-graph node-compatibility model (cross-run/seed)
-- [~] `T4-BA` — Package-fragmentation detection
+- [x] `T4-BA` — Package-fragmentation detection
 - [x] `T4-BP` — Positive-measurements gate for `#NoDiff`→FULFILLED promotion
 - [>] `T4-AQ` — Stub-body detection and automatic follow-up injection
 - [>] `T4-AV` — LLM coherence reviewer

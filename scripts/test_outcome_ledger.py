@@ -254,5 +254,52 @@ class PerAttemptTest(unittest.TestCase):
         self.assertIn("  0%", out.getvalue())
 
 
+class IdentityTest(unittest.TestCase):
+    """Which case and which build a row measures."""
+    setUp = OutcomeLedgerTest.setUp
+    tearDown = OutcomeLedgerTest.tearDown
+    _run_dir = OutcomeLedgerTest._run_dir
+    _append = OutcomeLedgerTest._append
+
+    def _target_txt(self, run_dir, text):
+        with open(os.path.join(run_dir, "target.txt"), "w") as fh:
+            fh.write(text)
+
+    def test_append_carries_target_toycase_and_build(self):
+        run_dir = self._run_dir("r1", {"terminal": "deadline", "smoke": "SMOKE: 46/51"})
+        self._target_txt(run_dir, "target=ladder-grind\ntoycase=ladder-grind v2\nbuild=54eba8bb\n")
+        row = self._append(run_dir)
+        self.assertEqual((row["target"], row["toycase"], row["build"]),
+                         ("ladder-grind", "ladder-grind v2", "54eba8bb"))
+
+    def test_a_run_without_target_txt_has_no_identity_rather_than_a_guessed_one(self):
+        row = self._append(self._run_dir("r1", {"smoke": "SMOKE: 23/23"}))
+        for key in ol.IDENTITY:
+            self.assertNotIn(key, row)
+
+    def test_backfill_adds_target_only_and_leaves_the_rest_of_the_row_alone(self):
+        archive = os.path.join(self.dir, "archive")
+        old = os.path.join(archive, "r1")
+        os.makedirs(old)
+        self._target_txt(old, "target=firestarter\ntoycase=firestarter v1\nbuild=abc123\n")
+        ol.save({"runs": {"r1": {"smoke": "SMOKE: 23/23", "recorded": "2026-08-01"},
+                          "r2": {"smoke": "SMOKE: 1/23", "recorded": "2026-08-02"}}})
+        with contextlib.redirect_stdout(io.StringIO()):
+            runs = ol.backfill_targets(archive)["runs"]
+        self.assertEqual(runs["r1"], {"smoke": "SMOKE: 23/23", "recorded": "2026-08-01",
+                                      "target": "firestarter", "toycase": "firestarter v1"})
+        self.assertNotIn("target", runs["r2"])
+
+    def test_report_counts_full_scores_per_target(self):
+        out = io.StringIO()
+        ol.report({"runs": {
+            "a": {"target": "edit-hunks", "smoke_pass": 11, "smoke_total": 11},
+            "b": {"target": "edit-hunks", "smoke_pass": 9, "smoke_total": 11},
+            "c": {"smoke_pass": 23, "smoke_total": 23}}}, out)
+        text = out.getvalue()
+        self.assertRegex(text, r"edit-hunks\s+2 run\(s\),\s+1 at full score")
+        self.assertRegex(text, r"\(unknown\)\s+1 run\(s\),\s+1 at full score")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

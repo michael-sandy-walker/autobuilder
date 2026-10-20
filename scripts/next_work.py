@@ -321,8 +321,8 @@ def find_dead_deps(tickets):
     A prerequisite that is closed AND BUILT is satisfied — the common case, and not reported. Two
     cases are hazards:
       blocked-on-deferred      the precondition is `[>]`, so the gate cannot open without reviving it
-      closed-without-building  the precondition is `[x]` but was closed won't-do / gate-negative, so
-                               a plan resting on it is dead as written (T4-E -> T4-CE slice 2)
+      closed-without-building  the precondition is `[n]`, `[o]` or `[r]`, so a plan resting on it
+                               is dead as written
     """
     by_id = {t["id"]: t for t in tickets}
     out = []
@@ -343,10 +343,12 @@ def find_dead_deps(tickets):
                 if dep["marker"] == ">":
                     kind = "blocked-on-deferred"
                 elif dep["marker"] in NOTHING_BUILT:
-                    # The marker now states this directly; no prose guessing needed.
-                    kind = "closed-without-building"
-                elif dep["marker"] == "x" and declines_build(dep["body"]):
-                    # Fallback for tickets not yet retrofitted to a closure kind.
+                    # The marker states this directly; no prose guessing. A prose fallback for
+                    # `[x]` tickets ran here until 2026-10-20, from before the closure kinds were
+                    # retrofitted; by then it misread 11 built tickets, and all three warnings it
+                    # alone raised were false (T4-CE declined only its slice 2; T4-CQ's "do not
+                    # build" sat inside a design question). A dependency on one declined SLICE of
+                    # a built ticket is the dependent's body to state.
                     kind = "closed-without-building"
                 else:
                     continue                      # closed and built = precondition satisfied

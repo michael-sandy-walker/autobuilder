@@ -294,6 +294,12 @@ run_live() {
     mvn -q package -DskipTests > "$run_dir/build.log" 2>&1 \
         || { FAILURES+=("jar-build (log: $run_dir/build.log)"); fail_out; }
     jar=$(ls target/autobuilder-*-SNAPSHOT.jar | head -1)
+    # Which BUILD this run measures, beside the target and toy-case version above, so the ledger
+    # can compare runs of one build on one case instead of mixing builds and cases by month.
+    # "-dirty" marks a jar built with uncommitted product code: such a run is not reproducible
+    # from the hash alone.
+    echo "build=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)$(git -C "$REPO" diff --quiet HEAD -- src pom.xml 2>/dev/null || echo -dirty)" \
+        >> "$run_dir/target.txt"
 
     say "launching capped live run (${minutes} min): defaults${PREFLIGHT_EXTRA_FLAGS:+ + extra: $PREFLIGHT_EXTRA_FLAGS}"
     # The run uses the code's defaults: the flags this used to pass (depth-first decomposition, admission

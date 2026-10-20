@@ -34,12 +34,12 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-10-05)
+- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-10-20)
 - `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-10-20)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
-- `meta_process.md` — how YOU+ME divide/sequence/staff the work. "Model" = which Claude runs a session; advisory. (reviewed 2026-09-27)
+- `meta_process.md` — how YOU+ME divide/sequence/staff the work. "Model" = which Claude runs a session; advisory. (reviewed 2026-10-20)
 
 ## Project insights
 

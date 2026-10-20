@@ -171,3 +171,24 @@ overall development too much regarding the capabilities of the local model."
   over time." Each toy case carries a version and a changelog; every run records the version it faced.
 - **The two open retro reviews** (criterion-status, stuck-questions): treated as ordinary code in `src/`; the
   stuck-questions assessor's fixes are ordinary ticket work (T4-DY), criterion-status closes as reviewed.
+
+## M-G -- Archive old resume-state blocks: orientation reads the newest few, the file holds them all
+
+- [ ] **M-G: `project_resume_state.md` keeps every session's block since early July -- 2,438 lines, 0.94 MB,
+  179 `##` blocks on 2026-10-20 -- while a session reads only the newest one or two.**
+  - **Filed 2026-10-20** from the progress review of that day (recommendation "archive the resume state"),
+    placed on this axis rather than the roadmap because it is about how a session orients, not about the product
+    ([[feedback-process-apart-from-product]]).
+  - **The move:** keep the newest three dated blocks live; move the rest, in order and unedited, to a dated
+    archive file that nothing loads by default; the live file says where the archive is. The trailing undated
+    sections (`Next lever`, `Tools added this session`, `CRITICAL infra gotcha`) are read once and either kept
+    or folded into the newest block.
+  - **Check first:** `scripts/orientation_check.py` and its tests name `project_resume_state.md`; run them after
+    the move. Memory files and the roadmap link into the resume state by date; an archived block keeps its
+    heading text so those references still resolve by search.
+  - **DoD:** the live file holds three dated blocks; the archive holds the rest byte-for-byte;
+    `orientation_check.py` is quiet; the MEMORY.md index line names the archive.
+  - **Related, same day:** `scripts/next_work.py` lost the prose fallback M-D's residue note describes ("keeps a
+    prose fallback for any ticket not yet carrying a kind") from its dead-dependency check -- by 2026-10-20 it
+    misread 11 built tickets, and every warning it alone raised was false. Its other use (skipping the
+    residual warning on a body that declines its build) stays.

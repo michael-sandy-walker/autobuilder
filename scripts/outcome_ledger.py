@@ -25,6 +25,7 @@ silent about them and says so.
 Usage:
   outcome_ledger.py --append <run-dir>     record one run (idempotent; safe to re-run)
   outcome_ledger.py --seed <path>...       scan for run directories, record every scored one
+  outcome_ledger.py --backfill-targets <archive>   add target/toycase to rows from archived target.txt
   outcome_ledger.py --report               coverage, outcome mix, and what is still missing
   outcome_ledger.py --json                 machine-readable
 Exit 0 always: a bookkeeping step must never fail the run it is recording.
@@ -114,6 +115,30 @@ CARRIED = ("terminal", "smoke", "smoke_preserved", "preserved_source", "score_de
            # Absent on earlier rows. First row carrying it: 2026-09-09_23-39-58 (21 of 33).
            "criteria_elaboration")
 
+# Which case and which build a row measures, read from the run's target.txt rather than
+# summary.txt. Without them a monthly rate mixes case difficulty with build effects: in October
+# 181 of 187 runs were adopted ladder and band-4 cases, and the ledger could not say so.
+# `build` exists only from 2026-10-20 and is never backfilled (the commit a jar was built from,
+# uncommitted changes included, cannot be recovered after the fact); `target` and `toycase` are
+# backfilled from archived target.txt files with --backfill-targets, which are measurements.
+IDENTITY = ("target", "toycase", "build")
+
+
+def read_identity(run_dir):
+    """`target`, `toycase` and `build` from the run's target.txt; missing keys stay absent."""
+    path = os.path.join(run_dir, "target.txt")
+    out = {}
+    try:
+        with open(path, errors="replace") as fh:
+            for line in fh:
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    if k.strip() in IDENTITY and v.strip():
+                        out[k.strip()] = v.strip()
+    except OSError:
+        return {}
+    return out
+
 
 def read_summary(run_dir):
     path = os.path.join(run_dir, "summary.txt")
@@ -196,6 +221,7 @@ def append(run_dir, payload=None, quiet=False):
     # the "unknown read as zero" this ledger's own field comments warn against. Dropping empties
     # here fixes it for every field at once, including the ones added before this line existed.
     row = {k: summary[k] for k in CARRIED if summary.get(k, "").strip() != ""}
+    row.update(read_identity(run_dir))
     row["recorded"] = dt.datetime.now().strftime("%Y-%m-%d")
     passes, total = smoke_pass(summary.get("smoke")), smoke_total(summary.get("smoke"))
     if passes is not None and total:
@@ -226,6 +252,27 @@ def seed(paths):
     print("outcome_ledger: scanned %d run director%s, ledger now holds %d run(s) (+%d)"
           % (seen, "y" if seen == 1 else "ies", len(payload["runs"]),
              len(payload["runs"]) - before))
+    return payload
+
+
+def backfill_targets(archive):
+    """Add `target` and `toycase` to existing rows from the archive's target.txt files.
+
+    Only those two keys, only where a row lacks them; nothing else on the row changes, `recorded`
+    included. `build` is never backfilled (see IDENTITY).
+    """
+    payload = load()
+    filled = 0
+    for run_id, row in payload["runs"].items():
+        found = read_identity(os.path.join(archive, run_id))
+        added = {k: v for k, v in found.items() if k != "build" and k not in row}
+        if added:
+            row.update(added)
+            filled += 1
+    save(payload)
+    missing = sum(1 for row in payload["runs"].values() if "target" not in row)
+    print("outcome_ledger: target added to %d row(s); %d of %d row(s) still have no target"
+          % (filled, missing, len(payload["runs"])))
     return payload
 
 
@@ -287,6 +334,16 @@ def report(payload, out):
         t = (row.get("terminal") or "?").split(":")[0]
         terms[t] = terms.get(t, 0) + 1
     out.write(" · ".join("%s %d" % kv for kv in sorted(terms.items(), key=lambda kv: -kv[1])) + "\n")
+    # Per case: a rate across cases mixes their difficulty, so the comparable unit is one case.
+    by_target = {}
+    for row in runs.values():
+        t = row.get("target") or "(unknown)"
+        full = row.get("smoke_pass") is not None and row.get("smoke_pass") == row.get("smoke_total")
+        n, f = by_target.get(t, (0, 0))
+        by_target[t] = (n + 1, f + (1 if full else 0))
+    out.write("\n  by target (full score = every check passed):\n")
+    for t, (n, f) in sorted(by_target.items(), key=lambda kv: -kv[1][0]):
+        out.write("    %-24s %3d run(s), %3d at full score\n" % (t[:24], n, f))
     # T6-J: DURATION IS PART OF THE OUTCOME, not a footnote. On 2026-07-30 short measurement
     # probes (18-30 min, launched to time a per-cycle quantity) wrote rows alongside 90-minute
     # runs, and this table showed an 18-minute probe's "9/23" beside a full run's "23/23" with
@@ -314,10 +371,14 @@ def main(argv):
     ap = argparse.ArgumentParser(description="T6-E durable run-outcome ledger.")
     ap.add_argument("--append", metavar="RUN_DIR")
     ap.add_argument("--seed", nargs="+", metavar="PATH")
+    ap.add_argument("--backfill-targets", metavar="ARCHIVE")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
+    if args.backfill_targets:
+        backfill_targets(args.backfill_targets)
+        return 0
     if args.append:
         append(args.append)
         return 0

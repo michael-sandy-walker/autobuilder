@@ -310,16 +310,14 @@ class NextWorkTest(unittest.TestCase):
 
     # --- dead dependencies (the T4-E -> T4-CE trap) -------------------------
 
-    def test_precondition_closed_without_building_is_flagged(self):
+    def test_a_built_ticket_that_declined_one_slice_still_reads_as_built(self):
+        # The marker is authoritative. Until 2026-10-20 decline prose on an [x] body overrode it,
+        # and every warning that alone raised was false: T4-CF rests on T4-CE's BUILT slice 1.
         ts = self._parse(
-            ticket(" ", "T4-E", "Dynamic heuristics",
-                   "**DEFERRED — re-entry condition: T4-CE slice 2's replay machinery exists.**"),
+            ticket(" ", "T4-CF", "Self-hosting", "**Preconditions:** T4-CE slice 1."),
             ticket("x", "T4-CE", "Outer-loop internalization",
                    "**SLICE-2 GATE MEASURED: NO-BUILD — the negative result is the deliverable.**"))
-        deps = nw.find_dead_deps(ts)
-        self.assertEqual(len(deps), 1)
-        self.assertEqual((deps[0]["id"], deps[0]["depends_on"]), ("T4-E", "T4-CE"))
-        self.assertEqual(deps[0]["kind"], "closed-without-building")
+        self.assertEqual(nw.find_dead_deps(ts), [])
 
     def test_precondition_closed_and_built_is_satisfied_and_silent(self):
         ts = self._parse(

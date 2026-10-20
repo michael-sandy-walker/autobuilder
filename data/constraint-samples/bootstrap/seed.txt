@@ -1,0 +1,45 @@
+  An existing project, adopted, and now asked to change. It was written by someone else and it already
+  builds; its existing behaviour is characterised by the tests in src/test/java.
+  The change wanted is written in the ticket that asked for it. In the ticket's own words:
+
+    feat(T4-DB): probe creates for success — the ingredient, not another shape
+
+    The 201 abstention was never a missing probe shape. It was one missing
+    ingredient: a request body the application will accept. derivedBody filled
+    placeholders — {"title":"value","isbn":"value"} — which a spec requiring
+    \d{13} refuses, so asserting 201 against it would have reported a
+    contradiction the application never committed.
+
+    FieldConstraintDiscovery reads the constraints the artifact's OWN code
+    enforces before it throws (length() > N, a Pattern.compile constant resolved
+    to the identifier it is matched against, inline matches("...")).
+    RegexSampleGenerator samples a narrow subset and returns empty for
+    alternation, negated classes and back-references rather than approximate;
+    every sample is verified against its own pattern before return.
+
+    BootGate.Unobserved.BODY_REFUSED is what makes probing safe: a 4xx to the
+    ASSERTED request of a success probe is an abstention, not a contradiction —
+    the body was derived on this side and no derivation can be sure it satisfies
+    validation it never discovered. A 5xx is still reported; that is the
+    application breaking, not declining.
+
+    Verified on run 2026-08-23_02-12-34's own artifact: the old placeholder body
+    draws 400 (refused, hence silent), the new one draws 200 (accepted), and 200
+    against a criterion demanding 201 is what all five failing smoke checks
+    report. Replay over 8 preserved trees: 74 body-carrying 2xx criteria all
+    abstained before, 61 (82%) probeable now, coverage 71.4% -> 86.3%.
+
+    Field DoD met 3/3 with the rule fixed in advance — each run independently
+    produced "POST /loans -> 201, but the running application answered 500".
+
+  For orientation: the change that answered this ticket touched RequestBodySynthesizer. Which classes you change is yours to decide; the specification's tests are the requirement.
+  Add the new classes FieldConstraintDiscovery and RegexSampleGenerator in package com.walpro.autobuilder.core.build.
+  They already work as their class comments say, and their existing tests must keep passing.
+
+  The specification is FieldConstraintDiscoveryTest, RegexSampleGeneratorTest and RequestBodySynthesizerTest in src/test/java: their tests say exactly what the
+  code must do, and they fail until the code provides it.
+
+  OBJECTIVE: every test in FieldConstraintDiscoveryTest, RegexSampleGeneratorTest and RequestBodySynthesizerTest passes, and the whole suite passes.
+
+  DO NOT modify the existing tests under src/test: they are the operator's, and if one of them fails, the
+  code is what is wrong. Keep the project's packages, classes and naming.

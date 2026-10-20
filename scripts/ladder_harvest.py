@@ -168,6 +168,8 @@ def main():
     light = (lambda ext: True) if o.any_library else (lambda ext: all(x.startswith(LIGHT_LIBRARIES) for x in ext))
     print('\t'.join(['commit', 'date', 'band', 'core', 'left_out', 'new', 'tests', 'closure', 'external', 'subject']))
     for c in candidates(o.commits):
+        if not git('rev-list', '--parents', '-n', '1', c['hash']).split()[1:]:
+            continue                    # the root commit: no tree before it to cut from
         before = Tree(c['hash'] + '^')
         core, left, closure, external = [], [], set(), set()
         for p in c['main']:

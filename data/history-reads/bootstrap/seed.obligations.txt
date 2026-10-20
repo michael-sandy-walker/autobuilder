@@ -1,0 +1,27 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: c2920a0bc20681279f552ddadd756fe7811529cf4dea3819e090e4291cad90ba
+# body-sha256: 4f1f59a5a6c63e8e565be2fcbf1e20b6848ef6cae6fcbfb5b1e3e4f6790fc16b
+Add the new classes HistoryRead, HistorySpan and HistoryUse in package com.walpro.autobuilder.graph.
+The existing tests for HistoryRead, HistorySpan and HistoryUse must keep passing.
+HistoryReadContractTest finds reads in the source.
+HistoryReadContractTest fails the build for an undeclared read.
+HistoryReadContractTest rejects a binding all-lineage read without a stated reason.
+HistoryReadContractTest checks a RUN/LINEAGE span against the query's own runId/lineageId filter.
+The deferred-mutation ledger is lineage-scoped.
+The deferred-mutation ledger reads the stamped lineageId.
+A fresh lineage's first sweep does not rewrite another lineage's parked mutations as dropped.
+An integration test (IT) exists for the lineage-scoped deferred-mutation ledger behavior.
+The dead Agent-node surface is deleted.
+The registerAgent method is removed.
+The four file deletions associated with the Agent-node surface are completed.
+The project compiles successfully.
+Every test in HistoryReadContractTest passes.
+The whole test suite passes.
+rule: Do not modify the existing tests under src/test.
+rule: If a test fails, the code is what is wrong.
+rule: Keep the project's packages, classes and naming.

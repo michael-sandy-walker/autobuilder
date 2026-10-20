@@ -1,0 +1,18 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: d00bcda4f4a8087058bca2f5e5be660ff0649c9ead7b8ac8a0bf9cb8f6143f84
+# body-sha256: 0fe9db3849e1457596973f135dd9467a915f4540ad2915cd8d888cf4bb6f1000
+every test in FieldConstraintDiscoveryTest passes
+every test in RegexSampleGeneratorTest passes
+every test in RequestBodySynthesizerTest passes
+gate: tests the whole suite passes
+rule: DO NOT modify the existing tests under src/test
+rule: if one of the existing tests fails, the code is what is wrong
+rule: Keep the project's packages, classes and naming
+Add the new classes FieldConstraintDiscovery and RegexSampleGenerator in package com.walpro.autobuilder.core.build
+FieldConstraintDiscovery and RegexSampleGenerator work as their class comments say
+existing tests for FieldConstraintDiscovery and RegexSampleGenerator keep passing

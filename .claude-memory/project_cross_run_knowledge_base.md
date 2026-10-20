@@ -9,7 +9,9 @@ metadata:
 
 # Cross-run knowledge base — the vision, the chain, and the drift trap
 
-## STATUS: CHAIN DEFERRED 2026-07-23 (user decision) — too advanced for the current state
+## STATUS 2026-10-20: T4-CN and T4-CM SUBSUMED by `T4-EC` (project merge -- code, goal tree and criteria as one operation; user direction). The whole-tree altitude below still applies to T4-EC's matching and view stages.
+
+## (earlier) STATUS: CHAIN DEFERRED 2026-07-23 (user decision) — too advanced for the current state
 T4-CN and T4-CM are both `[>]` deferred as of 2026-07-23. On picking up T4-CN slice 1, a design pass narrowed "compatibility" to Goal×Goal terminal-node status reconciliation (a reconciliation-kind table). At Checkpoint A the user clarified this narrowing is NOT the intent: **the real mechanism is matching the ENTIRETY of two graphs and reconciling them structurally** — approximate cross-graph subgraph matching + cross-graph entity resolution + provenance-preserving union — which is near-research-grade, not a bounded ticket at the project's current state. Two independent reasons to defer: (1) the general mechanism is too advanced to build well now; (2) the HARD PREREQUISITE T4-CJ slice 2 (end purge-per-run) is still open, so no coexisting graphs exist to merge — only synthetic fixtures. **Re-entry:** revisit only after retention (T4-CJ slice 2) exists AND the whole-graph reconciliation approach is de-risked to a bounded design. Do NOT rebuild the goal-node approximation — the user explicitly rejected it as off-intent. T4-CJ slice 2 (retention alone) stays the one tractable, self-contained sub-piece if progress toward the substrate is wanted.
 
 ## The vision (user, confirmed 2026-07-23; sharpened at the 2026-07-23 deferral)

@@ -1,0 +1,37 @@
+  A new project, adopted as it stands. Its tree holds only its build file (pom.xml), a README, and the
+  operator's specification under src/test/java; nothing exists under src/main/java yet. In its own words,
+  from its README:
+
+    "linetokens -- Reads `name=value; name=value` lines into tokens: bare or quoted values, escapes inside
+    quotes, and an error that says where in the line it went wrong."
+
+  It is a library, in package org.linekit.tokens, with no dependencies beyond the JDK.
+
+  - Token is a record of a name and a value (both String).
+  - LineTokenizer.tokenize(String line) returns the line's pairs as a List of Token, in line order; the list
+    cannot be modified.
+  - Pairs are separated by ';'. A separator at the very end of the line is allowed. An empty or blank line
+    has no tokens.
+  - A pair is name=value. Spaces around the name and around a bare value are not part of them.
+  - A name starts with a letter and holds only letters, digits and underscores.
+  - A bare value is everything up to the next ';' (it may be empty).
+  - A quoted value starts with '"' (spaces before the quote are skipped) and ends at the next '"' that is not
+    escaped. Inside it ';', '=' and spaces are part of the value; a backslash followed by '"' or by a
+    backslash stands for that character. After the closing quote only spaces may come before the next ';'.
+  - A line that breaks these rules raises TokenizeException, an IllegalArgumentException with a position()
+    -- the 0-based index in the line where the problem is -- and a message that names it:
+      a pair without '='                 -> "missing '='", at the pair's first character
+      a name that is not a name          -> "invalid name", where the name starts (position 0 for "=x")
+      a quote that is never closed       -> "unterminated quote", at the opening quote
+      anything after a closing quote     -> "after closing quote", where that text starts
+      a name already used in the line    -> "duplicate name", where the second one starts
+  - TokenizeException has a constructor TokenizeException(String message, int position).
+
+  The specification is LineTokensSpecTest in src/test/java: its tests say exactly what the library must
+  return, and they fail until the code provides it.
+
+  OBJECTIVE: every test in LineTokensSpecTest passes, and the whole suite passes.
+
+  The classes to change are Token, TokenizeException and LineTokenizer -- none exists yet: create them under
+  src/main/java in package org.linekit.tokens. DO NOT modify anything under src/test: the specification is
+  the operator's, and if one of its tests fails, the code is what is wrong.

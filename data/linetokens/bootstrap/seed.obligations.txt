@@ -1,0 +1,23 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: eba3ce73aaa18165d30d4bf2528542da4c0c99386770c0f446c5d3949556d538
+# body-sha256: 59cd96f70d07612488e70796b8a6847fd933e096b26a6e6807cf46ac47aa5a4c
+LineTokenizer.tokenize(line) returns the line's name=value pairs as Tokens in line order, in a list that cannot be modified
+Pairs are separated by ';', a separator at the end of the line is allowed, and an empty or blank line has no tokens
+Spaces around a name and around a bare value are not part of them, and a bare value may be empty
+A name starts with a letter and holds only letters, digits and underscores
+A quoted value keeps ';', '=' and spaces, and a backslash before '"' or a backslash stands for that character
+A pair without '=' raises TokenizeException "missing '='" at the pair's first character
+A name that is not a name raises TokenizeException "invalid name" where the name starts
+A quote that is never closed raises TokenizeException "unterminated quote" at the opening quote
+Text after a closing quote raises TokenizeException "after closing quote" where that text starts
+A name already used in the line raises TokenizeException "duplicate name" where the second one starts
+TokenizeException is an IllegalArgumentException whose position() is the 0-based index of the problem
+gate: tests Every test in LineTokensSpecTest passes
+gate: tests The whole test suite passes
+rule: Create Token, TokenizeException and LineTokenizer under src/main/java in package org.linekit.tokens
+rule: Do not modify anything under src/test

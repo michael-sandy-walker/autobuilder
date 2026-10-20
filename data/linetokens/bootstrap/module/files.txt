@@ -1,0 +1,1 @@
+# T4-EC stage 2: a NEW project -- no source is taken from git; the tree starts as pom.xml, README.md and the specification.

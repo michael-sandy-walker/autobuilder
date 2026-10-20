@@ -1,0 +1,31 @@
+  A new project, adopted as it stands. Its tree holds only its build file (pom.xml), a README, and the
+  operator's specification under src/test/java; nothing exists under src/main/java yet. In its own words,
+  from its README:
+
+    "cashbook -- An append-only ledger of entries in cents, per account: append, transfer between accounts,
+    balances, the accounts in use."
+
+  It is a library, in package org.cashbook.ledger, with no dependencies beyond the JDK.
+
+  - Entry is a record of an account (String), an amount in cents (long, amountCents) and a memo (String).
+    An entry needs an account that is not null or blank and an amount that is not zero, else it raises
+    IllegalArgumentException; a null memo becomes the empty string.
+  - Ledger is a class with a no-argument constructor; it starts empty.
+  - append(Entry) adds the entry at the end and returns its number, counting from 1.
+  - transfer(String from, String to, long cents, String memo) appends two entries with that memo: first
+    from's debit (-cents), then to's credit (+cents), and returns the number of the credit. It raises
+    IllegalArgumentException, appending nothing, when cents is not positive or from and to are the same.
+  - entries() returns every entry in the order appended, as a List that cannot be modified and does not change
+    when more are appended later.
+  - balance(String account) returns the sum of that account's amounts as a long, 0 for an account with no entries.
+  - accounts() returns the accounts that have entries, each once, in alphabetical order, as a List that cannot
+    be modified.
+
+  The specification is LedgerSpecTest in src/test/java: its tests say exactly what the ledger must return,
+  and they fail until the code provides it.
+
+  OBJECTIVE: every test in LedgerSpecTest passes, and the whole suite passes.
+
+  The classes to change are Entry and Ledger -- neither exists yet: create them under src/main/java in package
+  org.cashbook.ledger. DO NOT modify anything under src/test: the specification is the operator's, and if one
+  of its tests fails, the code is what is wrong.

@@ -13,10 +13,12 @@ B="$ROOT/data/$TGT/bootstrap"
 REV="$(cat "$B/origin-rev")"
 [ -e "$DEST" ] && [ -n "$(ls -A "$DEST" 2>/dev/null)" ] && { echo "refusing: $DEST is not empty" >&2; exit 1; }
 mkdir -p "$DEST"
-grep -vE '^\s*(#|$)' "$B/module/files.txt" | while read -r f; do
+# A new project lists no files: grep then exits 1, which pipefail must not take for a failure.
+{ grep -vE '^\s*(#|$)' "$B/module/files.txt" || true; } | while read -r f; do
     mkdir -p "$DEST/$(dirname "$f")"
     git -C "$ROOT" show "$REV:$f" > "$DEST/$f"
 done
 cp "$B/module/pom.xml" "$B/module/README.md" "$DEST/"
+mkdir -p "$DEST/src/main/java" "$DEST/src/test"   # a new project (no files.txt entries) has no src/ of its own
 cp -a "$B/spec/src/test/." "$DEST/src/test/"
 echo "prepared $TGT: $(find "$DEST/src/test" -name '*.java' | wc -l) test sources into $DEST"

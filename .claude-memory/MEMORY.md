@@ -35,7 +35,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 ## Roadmap
 - `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-10-05)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-10-19)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-10-20)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: live ordering is the 2026-08-23 REORDER section at the end; S1-S6 kept for reasoning only. Never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-10-19)
+- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-10-20)
 - `project_wave2_structure.md`: wave 2's five layers and gate-driven sequence; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
@@ -133,7 +133,8 @@ Evidence discipline:
 - `feedback_verify_diff_is_substantive.md`: prove which input now yields different output; green tests on a no-op diff is not progress. (reviewed 2026-09-08)
 - `feedback_verify_at_decision_timestamp.md`: diagnose against the state AT decision time (per-cycle snapshots), not the final artifact. (reviewed 2026-07-09)
 - `feedback_activity_not_progress.md`: a mechanism firing is not helping; validate the outcome moved. (reviewed 2026-07-09)
-- `feedback_replay_over_batches.md`: validate with deterministic corpus replay + watch items, not small live batches; a DoD names its instrument. (reviewed 2026-09-08)
+- `feedback_replay_over_batches.md`: validate with deterministic corpus replay + watch items, not small live batches; a DoD names its instrument; a rule reading model answers is checked against the archive's real answers first (2026-10-19). (reviewed 2026-10-20)
+- `feedback_measure_before_widening_a_working_rule.md`: a gap seen in a run that still closes is evidence to measure, not a reason to widen the rule (user, 2026-10-19). (reviewed 2026-10-20)
 - `feedback_short_field_run_after_context_change.md`: do a short live run after any cycle-context or persisted-record change. (reviewed 2026-07-30)
 - `feedback_llm_probe_realistic_context.md`: synthetic probe contexts must match the real run distribution or they manufacture false findings. (reviewed 2026-07-24)
 - `feedback_runs_are_variant_by_design.md`: runs are variant BY DESIGN; keep cross-run resemblances family-level, never "same as run N". (reviewed 2026-07-09)

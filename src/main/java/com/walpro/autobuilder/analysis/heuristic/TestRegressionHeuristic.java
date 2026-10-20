@@ -101,4 +101,10 @@ public class TestRegressionHeuristic implements EvaluationHeuristic {
         return HeuristicOpinion.ofDefectWithScore(NAME, 0.9, MutationAcceptanceState.REJECTED,
                 GoalProgressState.STAGNATING, rationale, Math.max(0.0, outcome.score() - 0.10));
     }
+
+    /** T6-T: the veto is a measurement -- the suite run with and without the candidate -- so a veto grind never silences it. */
+    @Override
+    public boolean measured() {
+        return true;
+    }
 }

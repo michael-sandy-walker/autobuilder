@@ -83,4 +83,47 @@ class VetoGrindTest {
         assertThat(otherVeto.outcome().mutationState()).as("a finding not yet a grind still decides")
                 .isEqualTo(MutationAcceptanceState.REJECTED);
     }
+
+    /**
+     * Stuck-questions run 2026-10-20_10-44-59: TestRegressionHeuristic vetoed 29 candidates that each broke a passing spec
+     * row; silenced as a grind, it let the next such candidate merge (27 -> 26 of 29). A measured veto is reported as a
+     * grind and keeps deciding.
+     */
+    @Test
+    void aMeasuredVetoIsReportedAsAGrind_butKeepsDeciding() {
+        String rationale = "This change makes the project's own suite worse: 2 test(s) fail with it, 1 without it. It breaks"
+                + " StuckQuestionsSpecTest.everyArchivedSignatureIsAnsweredFromItsOwnTree[4].";
+        HeuristicOpinion regression = HeuristicOpinion.of("TestRegressionHeuristic", 0.95, MutationAcceptanceState.REJECTED,
+                GoalProgressState.REGRESSING, rationale);
+        EvaluationHeuristic measuredHeuristic = new HeuristicNegotiatorTest.StaticHeuristic(regression) {
+            @Override
+            public boolean measured() {
+                return true;
+            }
+        };
+        VetoGrind grind = new VetoGrind(new Recurrence(START));
+        HeuristicNegotiator negotiator = new HeuristicNegotiator(new NoOpScoreAdjustmentStrategy());
+        negotiator.setVetoGrind(grind);
+        CycleContextData ctx = CycleContextData.builder().cycleName("c").build();
+        EvaluationOutcome accepted = new EvaluationOutcome(0.8, MutationAcceptanceState.ACCEPTED, GoalProgressState.PROGRESSING, "ok", null);
+        String finding = VetoGrind.finding(regression);
+        for (int minute = 0; minute <= 40; minute += 2) grind.decided("c", finding, true, START + minute * MIN);
+
+        assertThat(grind.yielded(finding)).as("a measurement is never silenced").isFalse();
+        assertThat(negotiator.negotiate(ctx, accepted, List.of(measuredHeuristic)).outcome().mutationState())
+                .as("the evaluator's ACCEPTED does not let a regressing candidate through")
+                .isEqualTo(MutationAcceptanceState.REJECTED);
+
+        // The same finding from a heuristic that only infers yields, as before.
+        VetoGrind inferred = new VetoGrind(new Recurrence(START));
+        for (int minute = 0; minute <= 40; minute += 2) inferred.decided("c", finding, false, START + minute * MIN);
+        assertThat(inferred.yielded(finding)).isTrue();
+        negotiator.setVetoGrind(inferred);
+        assertThat(negotiator.negotiate(ctx, accepted, List.of(measuredHeuristic)).outcome().mutationState())
+                .as("even a yielded finding still decides when a measured heuristic raises it")
+                .isEqualTo(MutationAcceptanceState.REJECTED);
+        assertThat(negotiator.negotiate(ctx, accepted, List.of(new HeuristicNegotiatorTest.StaticHeuristic(regression)))
+                .outcome().mutationState()).as("raised by a heuristic that only infers, it abstains")
+                .isEqualTo(MutationAcceptanceState.ACCEPTED);
+    }
 }

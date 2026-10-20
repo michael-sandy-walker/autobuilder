@@ -15,10 +15,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -53,16 +56,21 @@ public class HeuristicNegotiator {
 
     public NegotiationResult negotiate(CycleContextData input, EvaluationOutcome original, List<EvaluationHeuristic> heuristics) {
 
+        // T6-T: the opinions of heuristics whose veto is a measurement of the candidate -- never silenced by a veto grind.
+        Set<HeuristicOpinion> measured = Collections.newSetFromMap(new IdentityHashMap<>());
         List<HeuristicOpinion> opinions = heuristics.stream()
                 .map(h -> {
                     HeuristicOpinion o = h.evaluate(input, original);
-                    return o != null ? o : HeuristicOpinion.none(h.getClass().getSimpleName()); // guard if we have a null opinion
+                    o = o != null ? o : HeuristicOpinion.none(h.getClass().getSimpleName()); // guard if we have a null opinion
+                    if (h.measured()) measured.add(o);
+                    return o;
                 })
                 .filter(o -> o.level() != ConfidenceLevel.NONE)
                 // T6-T: a veto recognised as a grind no longer decides -- it abstains, and the evaluator's verdict stands
                 // unless another heuristic objects. Demoted to a vote it still won alone (rule-extraction run
                 // 2026-10-18_19-33-28: the only other opinion was LOW, so a 0.9 REJECTED vote carried every time).
-                .map(o -> o.level() == ConfidenceLevel.CRITICAL && vetoGrind != null && vetoGrind.yielded(VetoGrind.finding(o))
+                .map(o -> o.level() == ConfidenceLevel.CRITICAL && vetoGrind != null && !measured.contains(o)
+                        && vetoGrind.yielded(VetoGrind.finding(o))
                         ? new HeuristicOpinion(o.name(), o.confidence(), ConfidenceLevel.LOW, MutationAcceptanceState.NOT_EVALUATED,
                                 GoalProgressState.NOT_EVALUATED, "(abstains: this veto kept deciding while the work did not move) "
                                 + o.rationale(), null, false, o.defect())
@@ -110,8 +118,9 @@ public class HeuristicNegotiator {
                         .thenComparingDouble(HeuristicOpinion::confidence));
 
         if (vetoGrind != null) {
-            vetoGrind.decided(input == null ? null : input.cycleName(),
-                    critical.filter(o -> o.mutationState() == MutationAcceptanceState.REJECTED).map(VetoGrind::finding).orElse(null));
+            Optional<HeuristicOpinion> veto = critical.filter(o -> o.mutationState() == MutationAcceptanceState.REJECTED);
+            vetoGrind.decided(input == null ? null : input.cycleName(), veto.map(VetoGrind::finding).orElse(null),
+                    veto.map(measured::contains).orElse(false));
         }
 
         if (critical.isPresent()) {

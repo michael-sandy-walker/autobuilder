@@ -6,7 +6,7 @@ R=/home/anugeshtu/IdeaProjects/autobuilder
 declare -A seen m
 KEYS=("T6-T: GRIND" "T6-T: OBJECTIVE MET" "marked COMPLETED" "marked GIVEN_UP" "Result: GOAL_EXHAUSTED" "moved-nested-type --" "second reading")
 cnt() { local c; c=$(grep -c -- "$1" "$APP" 2>/dev/null || true); echo "${c:-0}"; }
-cur_target() { ls -t $D/launch-*.log 2>/dev/null | head -1 | sed -E 's/.*launch-(.*)-1\.log/\1/'; }
+cur_target() { ls -t $D/launch-*.log 2>/dev/null | head -1 | sed -E 's/.*launch-(.*)-[0-9]+\.log/\1/'; }
 T=""; APP=""; ino=""; envbad=0; silent=0
 if [ "$1" = rearm ]; then
   for f in $D/results.txt $D/early-*.log $D/driver.log; do [ -f "$f" ] && seen[$f]=$(wc -l < "$f"); done

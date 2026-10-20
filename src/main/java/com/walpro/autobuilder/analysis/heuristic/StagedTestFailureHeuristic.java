@@ -161,4 +161,10 @@ public class StagedTestFailureHeuristic implements EvaluationHeuristic {
         }
         return sb.toString();
     }
+
+    /** T6-T: the veto is a measurement -- the candidate's own test classes, run -- so a veto grind never silences it. */
+    @Override
+    public boolean measured() {
+        return true;
+    }
 }

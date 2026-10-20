@@ -27,3 +27,11 @@ metadata:
    **How to apply:** for any non-trivial capability, name 2-4 distinct mechanisms with their trade-offs (and what each
    would need), recommend one, and build only after the user picks. Related: [[feedback-flag-ceremony-cost-early]],
    [[feedback-ship-full-scope]].
+
+3. **Options must be ALTERNATIVES, not stages of one plan (user, 2026-10-20).** Asked how to merge goal trees and
+   criteria across lineages, I offered "one umbrella ticket / un-defer T4-CN and T4-CM / interface first" as three
+   options; the user: "Aren't those options one plan as a whole?" -- they were (matching, view and merge are stages
+   of one operation), and the result was filed as one ticket with stages (`T4-EC`).
+   **How to apply:** before posing options, check each pair: could both be done, one after the other, toward the same
+   end? Then they are stages -- present them as an ordered plan and ask only about what genuinely competes (which
+   stage first, which mechanism for a stage).

@@ -16,7 +16,8 @@ metadata:
 - **No run is live. Code UNCOMMITTED** (ProjectMerge, ProjectMergeService + `POST /autobuilder/merge-projects`, BuildClaims, SignatureClaims, TestRunClaims.answerGuard, verifier `structuralAnswer`/`verifyWithTestRun`, docs/technical.md). Committed: `78f650ca` (T6-U `[ ]`: withheld-tests rung enterable, whole-repository rung gated; T4-EC stays next).
 - **User's choices this session:** T4-EC stage 1 from the parents' own snapshots ("greenfield" = no pre-merged data; the old child only as the check); the "middle lane" (in the app, structure-then-model verdicts with source, tree in Neo4j; the multi-graph view "maybe too fast"); after the criteria check (0 of 34 answered by existing structure) "widen, one home".
 - **Result:** see the T4-EC append (2026-10-20). Child `~/.autobuilder/merged/participation-roles2+totals2-ec1`; driver `run_merge.sh` lived in the session scratchpad (boot jar with `FILE_BASE_PATH=<empty child>`, `--autobuilder.goal.sync-from-graph=false`, POST, kill). A field-found parse defect (records) fixed before the second run; full suite not yet re-run after that fix (targeted tests green).
-- **NEXT:** commit (user's word); full suite; a short field run for the new closure authorities (they change the live loop's completion check); then T4-EC stage 2 options (two projects, no common base).
+- **Committed `2cc5ebf8` + `11516e57`** (user: "Yes, please"); full suite 3955/0 on them. **field95** (`~/.autobuilder/field95`): participation-roles x1 GOAL_FULFILLED 9/9 in ~3 min; the guard authority fired once, correctly (checked by hand); the compile and signature authorities not exercised in the field (they were in the merge).
+- **NEXT:** T4-EC stage 2 options (two projects, no common base) -- options before building.
 
 ## 2026-10-20 (Opus 5.5, session 16 cont.) -- field94: CONSTRAINT-SAMPLES v2 3 OF 3, STUCK-QUESTIONS GOAL_FULFILLED (RULE-LINE FIX CONFIRMED); T6-T CLOSED; T6-U AND T4-EC FILED
 

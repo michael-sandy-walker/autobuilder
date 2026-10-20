@@ -4531,6 +4531,15 @@ public class GoalPlannerService {
                 // and no HUD. Requirements already covered by a banked criterion are skipped, so
                 // the verifier is not asked the same question twice.
                 List<String> toVerify = new ArrayList<>(passingCriteria);
+                // T6-T: a banked criterion that restates a rule: line guides the work and never blocks it -- the
+                // obligations file says so, and the root's own obligations already leave rule lines out.
+                List<String> rules = SeedRequirements.rules(root.getDescription(), writtenObligations());
+                List<String> restated = toVerify.stream().filter(c -> SeedRequirements.restatesRule(c, rules)).toList();
+                if (!restated.isEmpty()) {
+                    toVerify.removeAll(restated);
+                    log.info("T6-T: {} banked criterion(s) restate a rule: line -- they guide the work, closure does not"
+                            + " check them: {}", restated.size(), String.join("; ", restated));
+                }
                 List<String> uncoveredSeed = uncoveredSeedAtClosure(root, toVerify);
                 if (!uncoveredSeed.isEmpty()) {
                     log.info("T4-DK: {} seed requirement(s) are covered by no banked criterion — "
@@ -4665,6 +4674,12 @@ public class GoalPlannerService {
             }
             String rationale = "closure ledger clear: " + passing + " subgoal(s) accounted for"
                     + (subsumed > 0 ? " (" + subsumed + " subsumed)" : "");
+            // T6-T: criteria let go earlier are banked as met once their work item is fulfilled, so the ledger
+            // reads clear; the reason still names them (rung1 run 2026-10-19_19-40-28 said "ledger clear").
+            if (objectiveMetClosure != null && !objectiveMetClosure.stalledCriteria().isEmpty()) {
+                rationale += "; let go earlier with the objective met by the project's own tests, open: "
+                        + String.join("; ", objectiveMetClosure.stalledCriteria());
+            }
             markGoalCompleted(root.getId(), "root goal satisfied: " + rationale);
             log.info("T2-DR: root '{}' marked COMPLETED — {}", root.getId(), rationale);
         } else {

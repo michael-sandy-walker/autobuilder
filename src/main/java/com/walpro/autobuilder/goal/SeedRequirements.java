@@ -417,6 +417,31 @@ public final class SeedRequirements {
         return strict;
     }
 
+    /** The written obligations marked {@code rule:}, markers removed. Empty without a file. */
+    public static List<String> rules(String specText, String obligationsFileText) {
+        if (obligationsFileText == null || obligationsFileText.isBlank()) return List.of();
+        List<String> out = new ArrayList<>();
+        for (String r : written(specText, obligationsFileText, List::of)) {
+            if (isRule(r)) out.add(withoutRuleMarker(r));
+        }
+        return out;
+    }
+
+    /**
+     * T6-T: whether a criterion restates a {@code rule:} line -- each shares at least half of the other's
+     * distinctive words. Stuck-questions run 2026-10-19_20-38-46: the planner wrote "Only StuckQuestions under
+     * src/main/java/... is changed" from the seed's prose, which repeats the rule line "Change only
+     * StuckQuestions under src/main/java"; banked, it reached the root's check as a blocking criterion, which a
+     * rule never is. Both directions, so a criterion sharing a few words with a short rule is not taken for it.
+     */
+    public static boolean restatesRule(String criterion, List<String> rules) {
+        if (criterion == null || rules == null) return false;
+        for (String rule : rules) {
+            if (overlaps(criterion, rule) && overlaps(rule, criterion)) return true;
+        }
+        return false;
+    }
+
     /** {@link #notAlreadyCoveredVerifiable} over the written obligations when they exist. */
     public static List<String> notAlreadyCoveredVerifiable(String specText, List<String> bankedCriteria,
                                                            String obligationsFileText) {

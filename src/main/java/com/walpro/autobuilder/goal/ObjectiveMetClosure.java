@@ -97,6 +97,11 @@ public class ObjectiveMetClosure {
         }
     }
 
+    /** The criteria stalled so far -- refused persistently or on an unchanged tree -- in a stable order. */
+    public java.util.List<String> stalledCriteria() {
+        return java.util.List.copyOf(new TreeSet<>(stalled));
+    }
+
     /** Whether every one of {@code unconfirmed} was among criteria refused persistently. */
     public boolean allStalled(Collection<String> unconfirmed) {
         return unconfirmed != null && !unconfirmed.isEmpty() && stalled.containsAll(unconfirmed);

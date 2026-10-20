@@ -1520,4 +1520,77 @@ public class GoalPlannerServiceClosureTest {
             assertThat(objective.allStalled(java.util.List.of("Nib is one unit wide"))).isEqualTo(!secondConfirms);
         }
     }
+
+    /** T6-T: a banked criterion restating a rule: line is not put to the closure's verifier. */
+    @Test
+    void autoCompleteRoot_aBankedCriterionRestatingARule_isNotVerified() throws IOException {
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).markCompleted(anyString());
+        String seed = "root spec";
+        when(fileService.readFile(SeedObligationsFile.PATH)).thenReturn(SeedObligationsFile.render(seed, java.util.List.of(
+                "WidgetQuery answers every route with its widget count",
+                "rule: Change only WidgetQuery under src/main/java")));
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        var verifier = mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        when(verifier.verifyCompletion(any(), any(), any())).thenReturn(
+                com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.allClear());
+        service.setCriteriaVerificationService(verifier);
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .previousOutput(Map.of("A.java", "public class A {}")).build());
+        GoalEntity root = new GoalEntity("G", seed, "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "Count widgets", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.SUBSUMED);
+        done.getMetadata().put("acceptanceCriteria", java.util.List.of(
+                "WidgetQuery answers every route with its widget count",
+                "Only WidgetQuery under src/main/java/org/ink is changed"));
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.List<String>> asked = org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        verify(verifier).verifyCompletion(any(), asked.capture(), any());
+        assertThat(asked.getValue()).contains("WidgetQuery answers every route with its widget count")
+                .noneMatch(c -> c.startsWith("Only WidgetQuery"));
+    }
+
+    /** T6-T: rung1 run 2026-10-19_19-40-28 -- after a let-go the ledger reads clear; the reason still names it. */
+    @Test
+    void autoCompleteRoot_afterALetGo_theClosingReasonNamesTheStalledCriteria() throws IOException {
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).markCompleted(anyString());
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        var verifier = mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        when(verifier.verifyCompletion(any(), any(), any())).thenReturn(
+                com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.allClear());
+        service.setCriteriaVerificationService(verifier);
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .previousOutput(Map.of("A.java", "public class A {}")).build());
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "Cover the routes", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.SUBSUMED);
+        done.getMetadata().put("acceptanceCriteria", java.util.List.of("Every widget route is covered by a test"));
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+        ObjectiveMetClosure objective = new ObjectiveMetClosure(new com.walpro.autobuilder.core.stuck.Recurrence(0));
+        objective.stalledOnUnchangedTree(java.util.List.of("Every widget route is covered by a test"));
+        ReflectionTestUtils.setField(service, "objectiveMetClosure", objective);
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+        assertThat(service.getGoalById("G").getResolution()).contains("closure ledger clear", "let go earlier",
+                "Every widget route is covered by a test");
+    }
 }

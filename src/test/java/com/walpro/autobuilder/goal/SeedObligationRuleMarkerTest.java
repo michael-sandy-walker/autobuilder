@@ -96,4 +96,19 @@ class SeedObligationRuleMarkerTest {
                 .containsExactly("The widget code is tidy.");
         assertThat(SeedRequirements.answeredByGate(SEED, file, SeedRequirements.GATE_TESTS)).isEmpty();
     }
+
+    /** T6-T: stuck-questions run 2026-10-19_20-38-46 -- planner criteria restating a rule line, in two wordings. */
+    @Test
+    void aCriterionRestatingARuleIsRecognised_aCriterionAboutTheResultIsNot() {
+        String file = fileWith(List.of(
+                "Every widget route is covered by a test.",
+                "rule: Change only WidgetQuery under src/main/java"));
+        List<String> rules = SeedRequirements.rules(SEED, file);
+
+        assertThat(rules).containsExactly("Change only WidgetQuery under src/main/java");
+        assertThat(SeedRequirements.restatesRule("Only WidgetQuery under src/main/java/org/ink/widget is changed", rules)).isTrue();
+        assertThat(SeedRequirements.restatesRule("Only `WidgetQuery.java` under `src/main/java` is modified.", rules)).isTrue();
+        assertThat(SeedRequirements.restatesRule("WidgetQuery answers every route with its widget count", rules)).isFalse();
+        assertThat(SeedRequirements.restatesRule("Every widget route is covered by a test.", rules)).isFalse();
+    }
 }

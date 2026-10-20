@@ -85,4 +85,20 @@ class TestRunClaimsTest {
         assertThat(TestRunClaims.answer("The full test suite (CoilSpecTest, PlasmaTest) passes", GREEN)).isNull();
         assertThat(TestRunClaims.answer("The suite passes and covers every route", red)).as("compound").isNull();
     }
+
+    @Test
+    void aGuardIsAnsweredByTheRunAndTheChangesSinceAdoption() {
+        String guard = "All existing tests in `src/test/java` pass without modification.";
+        AdoptionManifest.Changes onlyMain = new AdoptionManifest.Changes(
+                List.of("src/main/java/org/warp/Coil.java"), List.of("src/test/java/org/warp/NewSpecTest.java"), List.of());
+        AdoptionManifest.Changes testEdited = new AdoptionManifest.Changes(
+                List.of("src/test/java/org/warp/CoilSpecTest.java"), List.of(), List.of());
+        TestRunReport red = new TestRunReport(3, 1, 0, 0, List.of(), GREEN.byClass());
+        assertThat(TestRunClaims.answerGuard(guard, GREEN, onlyMain)).isTrue();
+        assertThat(TestRunClaims.answerGuard(guard, GREEN, testEdited)).isFalse();
+        assertThat(TestRunClaims.answerGuard(guard, red, onlyMain)).isFalse();
+        assertThat(TestRunClaims.answerGuard(guard, GREEN, null)).isNull();
+        assertThat(TestRunClaims.answerGuard("The existing tests continue to pass", GREEN, null)).isTrue();
+        assertThat(TestRunClaims.answerGuard("CoilSpecTest passes", GREEN, onlyMain)).isNull();
+    }
 }

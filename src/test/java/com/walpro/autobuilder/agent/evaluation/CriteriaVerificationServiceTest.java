@@ -382,4 +382,21 @@ class CriteriaVerificationServiceTest {
         assertThat(verification.answered()).isFalse();
         assertThat(verification.unconfirmed()).isEmpty();
     }
+
+    @Test
+    void aSignatureClaimIsAnsweredFromTheAdoptedTextWithoutAModel() throws Exception {
+        String path = "src/main/java/org/warp/Coil.java";
+        String adopted = "package org.warp;\npublic class Coil {\n    public int turns() { return 1; }\n}\n";
+        var files = mock(com.walpro.autobuilder.core.service.FileService.class);
+        when(files.exists(com.walpro.autobuilder.core.build.ProtectedPaths.BASELINE_DIR)).thenReturn(true);
+        when(files.listAllRelativeFilePathsUnder(com.walpro.autobuilder.core.build.ProtectedPaths.BASELINE_DIR)).thenReturn(List.of(path));
+        when(files.readString(com.walpro.autobuilder.core.build.ProtectedPaths.BASELINE_DIR + "/" + path)).thenReturn(adopted);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "fileService", files);
+        String claim = "No existing public method in Coil.java has been renamed, removed, or had its signature changed";
+
+        assertThat(service.structuralAnswer(claim, "Grow the coil", Map.of(path, adopted.replace("public int turns() { return 1; }", ""))))
+                .isFalse();
+        assertThat(service.structuralAnswer(claim, "Grow the coil", Map.of(path, adopted))).isTrue();
+        verifyNoInteractions(llmClient);
+    }
 }

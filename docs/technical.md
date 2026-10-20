@@ -434,6 +434,16 @@ combined into a child: `LineageTestMerge` merges test layers over identical libr
 `LineageCodeMerge` merges differing library code three-way against the tree both started from, with the
 declaration as the unit (`scripts/merge_lineages.sh`).
 
+**Merging projects** (`core.merge.ProjectMerge`, `ProjectMergeService`, `POST /autobuilder/merge-projects`). Two
+parents -- target directories as their runs left them -- become one child in one operation: code (the two merges
+above, against the adopted text both share), goal tree (a new root over both parents' trees, every node with a new
+id and its parent, run, lineage and former id kept), every criterion and every non-rule obligation of both parents
+(listed once per distinct text with all its origins), seed, obligations and protected paths. The child is written
+under `file.base-path`, which must hold no code; its test gate runs, and each criterion is answered against it --
+structure first (`CriteriaVerificationService.structuralAnswer`: the test run, the changes since adoption, the
+declarations as adopted), a model for the rest -- with who answered kept beside each verdict (`MERGE-REPORT.tsv`,
+and per node in `meta/GoalStack.json`). The child's goal tree is written to the graph.
+
 ---
 
 ## 11. The stuck layer

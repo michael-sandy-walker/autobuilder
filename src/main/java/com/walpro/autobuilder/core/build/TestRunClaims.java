@@ -67,6 +67,27 @@ public final class TestRunClaims {
         return CONTINUES.matcher(lower).matches() && GUARD.matcher(lower).find();
     }
 
+    /**
+     * T4-EC: the record's answer to a GUARD claim ({@link #isGuardClaim}) -- "All existing tests in src/test/java pass
+     * without modification". Both halves have an authority: the run of this tree says whether the tests pass, the
+     * changes since adoption whether an existing test file was modified (a test file added since is not an existing
+     * one). TRUE when both hold, FALSE when either is contradicted, null when not such a claim, or when the claim
+     * says "without modification" and no changes since adoption are known.
+     */
+    public static Boolean answerGuard(String criterion, TestRunReport report, AdoptionManifest.Changes changes) {
+        if (report == null || !isGuardClaim(criterion)) return null;
+        if (!report.passes()) return Boolean.FALSE;
+        if (!normalise(criterion).toLowerCase(Locale.ROOT).contains("without")) return Boolean.TRUE;
+        if (changes == null) return null;
+        boolean touched = changes.modified().stream().anyMatch(TestRunClaims::isTestSource)
+                || changes.removed().stream().anyMatch(TestRunClaims::isTestSource);
+        return !touched;
+    }
+
+    private static boolean isTestSource(String path) {
+        return path.replace('\\', '/').startsWith("src/test/");
+    }
+
     private static String normalise(String criterion) {
         return LISTED_CLASSES.matcher(criterion.strip().replaceAll("`", "")).replaceAll("")
                 .replaceAll("\\s*\\([^()]*\\)\\s*$", "")

@@ -321,6 +321,42 @@ public class AutobuilderController {
         ));
     }
 
+    /** T4-EC: merges two parent projects into a child written under {@code file.base-path}; optional. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.merge.ProjectMergeService projectMergeService;
+
+    /** One parent of a merge: its label, the run that grew it, and its target directory as that run left it. */
+    public record MergeParent(String label, String runId, String dir) {
+    }
+
+    /** The two parents of a merge, the first one's other files kept where they differ. */
+    public record MergeRequest(MergeParent first, MergeParent second) {
+    }
+
+    /**
+     * T4-EC stage 1: two parents that grew one adopted project into ONE child -- code, goal tree, criteria and seed --
+     * written under {@code file.base-path} (which must hold no code), every parent criterion answered against the
+     * child (structure first, a model for the rest, who answered kept), and the child's goal tree put in the graph.
+     */
+    @PostMapping("/merge-projects")
+    public ResponseEntity<?> mergeProjects(@RequestBody MergeRequest request) {
+        if (projectMergeService == null) return ResponseEntity.status(503).body(Map.of("error", "merge is not enabled in this context"));
+        try {
+            return ResponseEntity.ok(projectMergeService.merge(parent(request.first()), parent(request.second())));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private static com.walpro.autobuilder.core.merge.ProjectMerge.Parent parent(MergeParent p) {
+        if (p == null || p.label() == null || p.runId() == null || p.dir() == null) {
+            throw new IllegalArgumentException("each parent needs a label, a runId and a dir");
+        }
+        return new com.walpro.autobuilder.core.merge.ProjectMerge.Parent(p.label(), p.runId(), java.nio.file.Path.of(p.dir()));
+    }
+
     /**
      * Injects a permanent SYSTEM_PAUSED signal so the scheduler halts after the current cycle
      * (or immediately if no cycle is running). Use {@code /resume} to clear it.

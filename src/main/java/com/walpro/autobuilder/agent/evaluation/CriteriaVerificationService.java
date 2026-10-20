@@ -797,6 +797,42 @@ public class CriteriaVerificationService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
 
+    /**
+     * T4-EC: the record's answer to {@code criterion} -- the test run of this tree, the changes since adoption, the
+     * declarations as adopted -- or null when no record answers it and only a reading could. The same answer the
+     * completion check takes before asking a model; a project merge asks it of every criterion its parents carried.
+     */
+    public Boolean structuralAnswer(String criterion, String goalText, Map<String, String> files) {
+        return recordAnswer(criterion, goalText, files);
+    }
+
+    /**
+     * T4-EC: a model's verdicts on {@code criteria} against {@code files}, with this tree's test run in the prompt as
+     * the completion check gives it. 1-based index to met; empty when the evidence did not fit or the model gave no
+     * usable answer -- no observation, never a failure. Nothing is cached.
+     */
+    public Map<Integer, Boolean> verifyWithTestRun(String subject, List<String> criteria, Map<String, String> files) {
+        if (criteria == null || criteria.isEmpty() || files == null || files.isEmpty()) return Map.of();
+        Assessment a = verifyFeatures(subject, criteria, files, testRunEvidence(files));
+        return a.evidenceComplete() ? a.passMap() : Map.of();
+    }
+
+    /** T4-EC: the text of the tree's files as adopted, where recorded ({@code ProtectedPaths.BASELINE_DIR}); optional. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.service.FileService fileService;
+
+    private Map<String, String> adoptedText() {
+        String dir = com.walpro.autobuilder.core.build.ProtectedPaths.BASELINE_DIR;
+        Map<String, String> out = new LinkedHashMap<>();
+        try {
+            if (fileService == null || !fileService.exists(dir)) return out;
+            for (String rel : fileService.listAllRelativeFilePathsUnder(dir)) out.put(rel, fileService.readString(dir + "/" + rel));
+        } catch (Exception e) {
+            log.debug("T4-EC: adopted text unreadable: {}", e.getMessage());
+        }
+        return out;
+    }
+
     /** T4-DK: what changed since adoption, for claims that something was not changed; optional. */
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.AdoptionManifest adoptionManifest;
@@ -821,6 +857,12 @@ public class CriteriaVerificationService {
     Boolean recordAnswer(String criterion, String goalText, Map<String, String> files) {
         Boolean answered = recordAnswerFromRuns(criterion, goalText);
         if (answered != null || files == null) return answered;
+        Boolean signatures = com.walpro.autobuilder.core.build.SignatureClaims.answer(criterion, adoptedText(), files);
+        if (signatures != null) {
+            log.info("T4-EC: [{}] {} by the class's declarations as adopted and now, not by a reading",
+                    criterion, signatures ? "confirmed" : "contradicted");
+            return signatures;
+        }
         var changes = adoptionManifest == null ? null : adoptionManifest.changes().orElse(null);
         Boolean contradicted = com.walpro.autobuilder.core.build.ChangeClaims.answer(criterion, changes, files);
         if (contradicted != null) {
@@ -844,6 +886,16 @@ public class CriteriaVerificationService {
         }
         var changes = adoptionManifest == null ? java.util.Optional.<com.walpro.autobuilder.core.build.AdoptionManifest.Changes>empty()
                 : adoptionManifest.changes();
+        if (report.isPresent()) {
+            Boolean guard = com.walpro.autobuilder.core.build.TestRunClaims.answerGuard(criterion, report.get(), changes.orElse(null));
+            Boolean compiles = guard != null ? null : com.walpro.autobuilder.core.build.BuildClaims.answer(criterion, report.get());
+            Boolean answer = guard != null ? guard : compiles;
+            if (answer != null) {
+                log.info("T4-EC: [{}] {} by the project's test run of this tree{}, not by a reading", criterion,
+                        answer ? "confirmed" : "contradicted", guard != null ? " and the changes since adoption" : "");
+                return answer;
+            }
+        }
         if (changes.isPresent()) {
             Boolean unchanged = com.walpro.autobuilder.core.build.UnchangedClaims.answer(criterion, changes.get(), goalText);
             if (unchanged != null) {

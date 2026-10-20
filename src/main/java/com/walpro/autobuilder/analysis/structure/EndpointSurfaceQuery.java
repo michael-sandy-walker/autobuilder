@@ -10,7 +10,10 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.walpro.autobuilder.core.build.AdoptionManifest;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -149,10 +152,25 @@ public class EndpointSurfaceQuery {
         return specText != null && !specText.isBlank() && !declaredInSpec(specText).isEmpty();
     }
 
-    /** Verb-qualified endpoint mentions in the spec text, normalized. Also consumed by T4-BT. */
+    /**
+     * Verb-qualified endpoint mentions in the spec text, normalized. Also consumed by T4-BT.
+     *
+     * <p>T6-T: none on an ADOPTED project whose tree as adopted served no request mapping -- it is not an HTTP
+     * application, and a verb and path in its specification is prose about something else (constraint-samples run
+     * 2026-10-20_18-04-44: a quoted past field result, "POST /loans -> 201 ...", refused closure at 27/27 and had the
+     * model invent the handler). Every consumer reads the intended surface here, so the gate has one home.
+     */
     public Set<Endpoint> declaredInSpec(String specText) {
+        if (adoptionManifest != null && adoptionManifest.servedAtAdoption().filter(served -> !served).isPresent()) {
+            return Set.of();
+        }
         return EndpointPaths.declaredIn(specText);
     }
+
+    /** T6-T: what the adopted tree served; absent outside Spring and for a project the loop wrote itself. */
+    @Setter
+    @Autowired(required = false)
+    private AdoptionManifest adoptionManifest;
 
     /**
      * Endpoints served by the output sources' request-mapping annotations, normalized.

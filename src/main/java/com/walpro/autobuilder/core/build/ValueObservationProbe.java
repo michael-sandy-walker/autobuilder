@@ -171,7 +171,7 @@ public class ValueObservationProbe {
         Path probeFile = project.resolve(probeRel);
         String pkg = packageOf(source.getValue());
         String fqcn = (pkg.isEmpty() ? "" : pkg + ".") + cls + PROBE_SUFFIX;
-        Path reportDir = project.resolve("target/surefire-reports");
+        Path reportDir = ProjectLayout.moduleOf(project, probeFile).resolve("target/surefire-reports");   // T4-EC: its module's
         try {
             Files.writeString(probeFile, probeSource.get());
             buildExecutor.execute(fileBasePath, cycleId + "-observe",

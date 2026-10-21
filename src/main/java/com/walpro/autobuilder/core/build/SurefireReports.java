@@ -106,6 +106,29 @@ public final class SurefireReports {
     }
 
     /**
+     * T4-EC: the reports of one run spread over several directories -- one per module of a multi-module build -- read
+     * as one report. Empty when none of them holds a report of this run.
+     */
+    public static Optional<TestRunReport> readAll(List<Path> reportDirs, long runStartedAtMillis, Path projectRoot) {
+        int run = 0, failures = 0, errors = 0, skipped = 0;
+        boolean any = false;
+        List<TestRunReport.Failure> failing = new ArrayList<>();
+        Map<String, List<TestRunReport.Case>> byClass = new LinkedHashMap<>();
+        for (Path dir : reportDirs) {
+            Optional<TestRunReport> r = read(dir, runStartedAtMillis, projectRoot);
+            if (r.isEmpty()) continue;
+            any = true;
+            run += r.get().run();
+            failures += r.get().failures();
+            errors += r.get().errors();
+            skipped += r.get().skipped();
+            failing.addAll(r.get().failing());
+            r.get().byClass().forEach((cls, cases) -> byClass.computeIfAbsent(cls, k -> new ArrayList<>()).addAll(cases));
+        }
+        return any ? Optional.of(new TestRunReport(run, failures, errors, skipped, List.copyOf(failing), byClass)) : Optional.empty();
+    }
+
+    /**
      * The failure's message, every line of it joined onto one. It was the first line only, and an
      * assertion message's first line is often not the observation: AssertJ puts "expected: X" first and
      * "but was: Y" second, and a described assertion puts its description first -- receiver-questions run

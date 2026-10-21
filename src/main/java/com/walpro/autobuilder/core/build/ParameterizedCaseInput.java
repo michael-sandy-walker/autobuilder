@@ -137,8 +137,9 @@ public final class ParameterizedCaseInput {
 
     private static Optional<CompilationUnit> parse(Path projectRoot, String className) {
         String outer = className.contains("$") ? className.substring(0, className.indexOf('$')) : className;
-        for (String root : TEST_SOURCE_ROOTS) {
-            Path file = projectRoot.resolve(root).resolve(outer.replace('.', '/') + ".java");
+        for (Path root : java.util.Arrays.stream(TEST_SOURCE_ROOTS)
+                .flatMap(r -> ProjectLayout.underEveryModule(projectRoot, r).stream()).toList()) {   // T4-EC: every module's
+            Path file = root.resolve(outer.replace('.', '/') + ".java");
             if (!Files.isRegularFile(file)) continue;
             try {
                 JavaParser parser = new JavaParser(new ParserConfiguration()

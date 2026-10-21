@@ -173,20 +173,27 @@ public class TestRunGate {
         long since = lastRunStartedAt;
         if (since < 0) return Optional.empty();
         Path out = Path.of(fileBasePath, "output");
-        try (Stream<Path> tree = Files.walk(out.resolve("src"))) {
-            boolean changed = tree.filter(Files::isRegularFile).anyMatch(p -> {
-                try {
-                    return Files.getLastModifiedTime(p).toMillis() > since;
-                } catch (Exception e) {
-                    return true;
-                }
-            });
-            if (changed) return Optional.empty();
-        } catch (Exception e) {
-            return Optional.empty();
+        // T4-EC: every module's sources, and every module's reports -- a multi-module build has no src/ or reports of
+        // its own at the root (ProjectLayout).
+        List<Path> sources = ProjectLayout.underEveryModule(out, "src");
+        if (sources.isEmpty()) return Optional.empty();
+        for (Path src : sources) {
+            try (Stream<Path> tree = Files.walk(src)) {
+                boolean changed = tree.filter(Files::isRegularFile).anyMatch(p -> {
+                    try {
+                        return Files.getLastModifiedTime(p).toMillis() > since;
+                    } catch (Exception e) {
+                        return true;
+                    }
+                });
+                if (changed) return Optional.empty();
+            } catch (Exception e) {
+                return Optional.empty();
+            }
         }
+        // The first report location that holds a report of this run wins, as before -- now per module, merged.
         for (String dir : TEST_REPORT_DIRS) {
-            Optional<TestRunReport> r = SurefireReports.read(out.resolve(dir), since, out);
+            Optional<TestRunReport> r = SurefireReports.readAll(ProjectLayout.underEveryModule(out, dir), since, out);
             if (r.isPresent()) return r;
         }
         return Optional.empty();
@@ -379,15 +386,16 @@ public class TestRunGate {
     private String suiteDidNotFinish(long durationMs) {
         Path out = Path.of(fileBasePath, "output");
         java.util.TreeSet<String> all = new java.util.TreeSet<>();
-        try (Stream<Path> walk = Files.walk(out.resolve("src/test/java"))) {
-            walk.filter(p -> p.toString().endsWith("Test.java") || p.toString().endsWith("Tests.java"))
-                    .forEach(p -> all.add(p.getFileName().toString().replace(".java", "")));
-        } catch (Exception e) {
-            // no test sources readable: the message says only that the suite did not finish
+        for (Path tests : ProjectLayout.underEveryModule(out, "src/test/java")) {
+            try (Stream<Path> walk = Files.walk(tests)) {
+                walk.filter(p -> p.toString().endsWith("Test.java") || p.toString().endsWith("Tests.java"))
+                        .forEach(p -> all.add(p.getFileName().toString().replace(".java", "")));
+            } catch (Exception e) {
+                // no test sources readable: the message says only that the suite did not finish
+            }
         }
         java.util.TreeSet<String> finished = new java.util.TreeSet<>();
-        for (String dir : TEST_REPORT_DIRS) {
-            Path reports = out.resolve(dir);
+        for (Path reports : TEST_REPORT_DIRS.stream().flatMap(d -> ProjectLayout.underEveryModule(out, d).stream()).toList()) {
             if (!Files.isDirectory(reports)) continue;
             try (Stream<Path> files = Files.list(reports)) {
                 files.filter(p -> p.toString().endsWith(".txt")).forEach(p -> {
@@ -636,8 +644,8 @@ public class TestRunGate {
      */
     private List<String> rootCausesFromReports() {
         List<String> causes = new ArrayList<>();
-        for (String dir : TEST_REPORT_DIRS) {
-            Path reportDir = Path.of(fileBasePath, "output").resolve(dir);
+        for (Path reportDir : TEST_REPORT_DIRS.stream()
+                .flatMap(d -> ProjectLayout.underEveryModule(Path.of(fileBasePath, "output"), d).stream()).toList()) {
             if (!Files.isDirectory(reportDir)) continue;
             try (Stream<Path> files = Files.list(reportDir)) {
                 files.filter(p -> p.toString().endsWith(".txt")).sorted().forEach(report -> {

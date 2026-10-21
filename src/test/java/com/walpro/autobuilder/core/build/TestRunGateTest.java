@@ -470,4 +470,46 @@ class TestRunGateTest {
         assertThat(g.freshReport()).as("the class that finished is not the suite").isEmpty();
         assertThat(g.lastBlocker()).contains(blocker);
     }
+
+    /**
+     * T4-EC: a multi-module build writes its reports per module. ledger-import-modules run 2026-10-21_15-48-14 scored
+     * 40/40 and never closed: the gate read only the root's target/surefire-reports and so never had a report of the tree.
+     */
+    @Test
+    void aMultiModuleBuildsReportsAreReadFromEveryModule(@org.junit.jupiter.api.io.TempDir java.nio.file.Path base)
+            throws Exception {
+        java.nio.file.Path out = base.resolve("output");
+        java.nio.file.Files.createDirectories(out);
+        java.nio.file.Files.writeString(out.resolve("pom.xml"),
+                "<project><packaging>pom</packaging><modules><module>wick</module><module>lamp</module></modules></project>");
+        for (String m : new String[] {"wick", "lamp"}) {
+            java.nio.file.Files.createDirectories(out.resolve(m + "/src/test/java/zeta"));
+            java.nio.file.Files.writeString(out.resolve(m + "/src/test/java/zeta/" + m + "Test.java"), "class T {}");
+            java.nio.file.Files.writeString(out.resolve(m + "/pom.xml"), "<project/>");
+            java.nio.file.Files.setLastModifiedTime(out.resolve(m + "/src/test/java/zeta/" + m + "Test.java"),
+                    java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() - 60_000));
+        }
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.execute(eq(base.toString()), any(), eq("mvn test"))).thenAnswer(inv -> {
+            for (String m : new String[] {"wick", "lamp"}) {
+                java.nio.file.Path reports = out.resolve(m + "/target/surefire-reports");
+                java.nio.file.Files.createDirectories(reports);
+                java.nio.file.Path xml = reports.resolve("TEST-zeta." + m + "Test.xml");
+                java.nio.file.Files.writeString(xml, "<testsuite name=\"zeta." + m + "Test\" tests=\"2\"><testcase classname=\"zeta."
+                        + m + "Test\" name=\"a\"/><testcase classname=\"zeta." + m + "Test\" name=\"b\"/></testsuite>");
+                java.nio.file.Files.setLastModifiedTime(xml,
+                        java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 1_000));
+            }
+            return new BuildOutcome(BuildResult.COMPILE_OK, "", 1000L, "mvn test", "c");
+        });
+        TestRunGate g = new TestRunGate(true, "mvn test", buildExecutor);
+        g.setFileBasePath(base.toString());
+
+        g.verifyTestsPass("c");
+
+        TestRunReport report = g.freshReport().orElseThrow();
+        assertThat(report.run()).isEqualTo(4);
+        assertThat(report.passes()).isTrue();
+        assertThat(report.byClass()).containsKeys("zeta.wickTest", "zeta.lampTest");
+    }
 }

@@ -11,7 +11,13 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 2 PARENTS: linetokens 19/19 AND cashbook 13/13 TRUE COMPLETIONS; CLOSURE STALE-VIEW FIX 4c93e4b0 -- START HERE
+## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 2 DONE: THREE LAYOUTS x3, 9 OF 9 TRUE COMPLETIONS; PACKAGES BEST, DEPENDENCY WORST; FIXES 10ed8cf7 (LET-GO FINAL) AND 91ecd2df (MODULE REPORTS) -- START HERE
+
+- **No run is live.** Head `91ecd2df` + docs, suite 3961/0. Batches field98-101. Full record on the T4-EC ticket (2026-10-21 stage 2 append): results table, the two fixes, the reading.
+- **Stage 2's DoD met** (packages, modules). T4-EC stays open: stage 3 (matching what in A and B denotes the same thing) and stage 4 (the view) remain. Open points recorded there: the reopen-at-boot side effect of the merge's verdict stamping; DEPENDENCY's carried criteria (merge option B, not built); an exit for a criteria item answered #NoDiff (not built).
+- **NEXT:** options for T4-EC stage 3, or what the user names.
+
+## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 2 PARENTS: linetokens 19/19 AND cashbook 13/13 TRUE COMPLETIONS; CLOSURE STALE-VIEW FIX 4c93e4b0
 
 - **No run is live.** Head `4c93e4b0` + docs (suite 3956/0). User's choices: stage 2 case = option A (two NEW toy projects), parents built by the loop, pair tokens + ledger; fix A for the stale closure view.
 - **Parents (snapshots for the merge):** `~/.autobuilder/linetokens-after-run1` (run `2026-10-21_00-42-59`, 19/19, tree 10/29) and `~/.autobuilder/cashbook-after-run1` (run `2026-10-21_14-04-07`, 13/13, tree 3/5). Batches `~/.autobuilder/field96`, `field97`. Details on the T4-EC ticket (2026-10-21 append).

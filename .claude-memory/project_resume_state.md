@@ -11,7 +11,13 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-20 (Opus 5.5, session 17) -- T4-EC STAGE 1 BUILT AND RUN: TWO PARENTS -> ONE CHILD (CODE IDENTICAL TO THE OLD CHILD, 43 CRITERIA, 10 STRUCTURE / 33 MODEL / 0 UNMET, TREE IN NEO4J); T6-U RE-MARKED OPEN -- START HERE
+## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 2 PARENTS: linetokens 19/19 AND cashbook 13/13 TRUE COMPLETIONS; CLOSURE STALE-VIEW FIX 4c93e4b0 -- START HERE
+
+- **No run is live.** Head `4c93e4b0` + docs (suite 3956/0). User's choices: stage 2 case = option A (two NEW toy projects), parents built by the loop, pair tokens + ledger; fix A for the stale closure view.
+- **Parents (snapshots for the merge):** `~/.autobuilder/linetokens-after-run1` (run `2026-10-21_00-42-59`, 19/19, tree 10/29) and `~/.autobuilder/cashbook-after-run1` (run `2026-10-21_14-04-07`, 13/13, tree 3/5). Batches `~/.autobuilder/field96`, `field97`. Details on the T4-EC ticket (2026-10-21 append).
+- **NEXT:** stage 2 merge -- options before building (no common base: how the child is laid out, who writes the integration spec, how the loop is given the integration goal).
+
+## 2026-10-20 (Opus 5.5, session 17) -- T4-EC STAGE 1 BUILT AND RUN: TWO PARENTS -> ONE CHILD (CODE IDENTICAL TO THE OLD CHILD, 43 CRITERIA, 10 STRUCTURE / 33 MODEL / 0 UNMET, TREE IN NEO4J); T6-U RE-MARKED OPEN
 
 - **No run is live. Code UNCOMMITTED** (ProjectMerge, ProjectMergeService + `POST /autobuilder/merge-projects`, BuildClaims, SignatureClaims, TestRunClaims.answerGuard, verifier `structuralAnswer`/`verifyWithTestRun`, docs/technical.md). Committed: `78f650ca` (T6-U `[ ]`: withheld-tests rung enterable, whole-repository rung gated; T4-EC stays next).
 - **User's choices this session:** T4-EC stage 1 from the parents' own snapshots ("greenfield" = no pre-merged data; the old child only as the check); the "middle lane" (in the app, structure-then-model verdicts with source, tree in Neo4j; the multi-graph view "maybe too fast"); after the criteria check (0 of 34 answered by existing structure) "widen, one home".

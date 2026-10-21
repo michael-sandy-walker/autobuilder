@@ -1536,7 +1536,7 @@ public class GoalPlannerServiceClosureTest {
             ReflectionTestUtils.setField(service, "currentSubGoalId", "C");
             ReflectionTestUtils.setField(service, "currentCycleContext", com.walpro.autobuilder.core.lifecycle.CycleContextData
                     .builder().previousOutput(Map.of("src/main/java/zeta/Nib.java", "class Nib {}")).build());
-            service.setAcceptanceCriteria("C", java.util.List.of("Nib is one unit wide"));
+            service.setAcceptanceCriteria("C", java.util.List.of("Nib is one unit wide", "Nib is blue"));
             var verifier = mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
             service.setCriteriaVerificationService(verifier);
             var blocked = com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.blocked(
@@ -1560,7 +1560,35 @@ public class GoalPlannerServiceClosureTest {
             assertThat(service.getGoalById("C").getStatus()).as("second refusal, same tree").isNotEqualTo(GoalStatus.ACTIVE);
             verify(verifier).verifySecondOpinion(anyString(), anyList(), anyMap());
             assertThat(objective.allStalled(java.util.List.of("Nib is one unit wide"))).isEqualTo(!secondConfirms);
+            // T4-EC: a let-go stalls ALL the item's criteria -- the reading refused one of two; the root may refuse both
+            // (ledger-import-dependency run 2026-10-21_14-42-26: 23 refused by the item's check, 24 by the root's).
+            assertThat(objective.allStalled(java.util.List.of("Nib is one unit wide", "Nib is blue"))).isEqualTo(!secondConfirms);
+            assertThat(service.getGoalById("C").getMetadata().get(GoalPlannerService.LET_GO_KEY))
+                    .isEqualTo(secondConfirms ? null : Boolean.TRUE);
         }
+    }
+
+    /** T4-EC: the coverage review never reopens a work item that was let go with the objective met. */
+    @Test
+    void coverageReview_doesNotReopenAnItemLetGoWithTheObjectiveMet() throws IOException {
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        GoalEntity root = new GoalEntity("G", "root spec", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        String gap = "[BUILD_FIX] Implement the unconfirmed acceptance criteria against the current code -- 1 criterion: Nib is blue";
+        GoalEntity letGo = new GoalEntity("C", gap, "planner", GoalType.SUBGOAL, "G");
+        letGo.setStatus(GoalStatus.COMPLETED);
+        letGo.getMetadata().put(GoalPlannerService.LET_GO_KEY, Boolean.TRUE);
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put("G", root);
+        goalMap.put("C", letGo);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        CoverageReviewResult result = service.injectCoverageGaps(root, java.util.List.of(gap));
+
+        assertThat(result.injected()).isEmpty();
+        assertThat(service.getGoalById("C").getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
     /** T6-T: a banked criterion restating a rule: line is not put to the closure's verifier. */

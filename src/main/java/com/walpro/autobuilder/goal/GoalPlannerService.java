@@ -4061,6 +4061,9 @@ public class GoalPlannerService {
         }
     }
 
+    /** T4-EC: metadata mark of a criteria-gate work item let go with the objective met; it is never reopened. */
+    static final String LET_GO_KEY = "letGoWithObjectiveMet";
+
     /** T4-CQ: inputs of the last closure attempt that left the root ACTIVE; derived, not restored. */
     private String lastIncompleteClosureInputs;
     private boolean closureRepeatReported;
@@ -5119,6 +5122,10 @@ public class GoalPlannerService {
                 blocking.add(desc);
             } else if (twin.getStatus() == GoalStatus.GIVEN_UP) {
                 dropped++;
+            } else if (Boolean.TRUE.equals(twin.getMetadata().get(LET_GO_KEY))) {
+                // T4-EC: let go with the objective met -- its completion is not contradicted by the same refusal again.
+                dropped++;
+                log.info("coverage-review: [{}] was let go with the objective met -- not reopened: {}", twin.getId(), desc);
             } else { // COMPLETED or SUBSUMED — contradicted by the re-detected gap
                 twin.setStatus(GoalStatus.ACTIVE);
                 twin.setCompleted(null);
@@ -5512,6 +5519,13 @@ public class GoalPlannerService {
                                 return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
                             }
                             if (stalled) {
+                                // T4-EC: a let-go is final. ALL of the item's criteria are stalled, not only the ones this
+                                // reading refused -- ledger-import-dependency run 2026-10-21_14-42-26 let its item go on 23
+                                // of 24, the root then refused all 24, allStalled did not hold, and the closure's coverage
+                                // review reopened the very item it had let go (it is the gap's exact twin); the loop ground
+                                // on it until stopped. The mark keeps the review from reopening it (injectCoverageGaps).
+                                objectiveMetClosure.stalledOnUnchangedTree(acceptanceCriteriaOf(g));
+                                g.getMetadata().put(LET_GO_KEY, Boolean.TRUE);
                                 log.warn("T6-T: criteria-gate work item [{}] let go -- the objective is met by the project's own"
                                         + " tests and the same criteria are refused again and again: {}", goalId, check.unconfirmed().get());
                             }

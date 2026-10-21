@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 3 DONE (MATCHING, STRUCTURE THEN MODEL: 8 PAIRS, STABLE x3, NO FALSE UNIFY); MODULES CHOSEN AS DEFAULT LAYOUT; T4-ED (OPERATOR CONSOLE) FILED -- START HERE
+## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 4 = A MERGE CANVAS (THE USER'S ARCHITECTURE); SLICE 1 BUILT: HEADLESS MERGE SESSION (FILES), REPLAYABLE, DRIVEN THROUGH THE API -- START HERE
+
+- **No run is live.** Suite 3968/0. The user redefined stage 4: not a review list but a canvas -- graphs side by side, direct editing of links and metadata, prompt operations on a selection producing SUPER NODES that build upward (their notebook sketch; recorded in words on T4-EC). Storage: files first, Neo4j kept in view (user).
+- **Slice 1** (session = fold of an edit log; store interface; service; three endpoints) and its field check on invoicer + pettycash: see the T4-EC append. A boot-breaking defect (two constructors, no @Autowired) was caught by booting it and fixed with a container test.
+- **User's idea recorded:** one criterion clustered into a super criterion connected to several goals (works now via super nodes; open: matcher-proposed clusters; criteria as first-class nodes in the loop's goal model).
+- **NEXT:** options for slice 2 (the canvas: what draws it, how it edits through the API).
+
+## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 3 DONE (MATCHING, STRUCTURE THEN MODEL: 8 PAIRS, STABLE x3, NO FALSE UNIFY); MODULES CHOSEN AS DEFAULT LAYOUT; T4-ED (OPERATOR CONSOLE) FILED
 
 - **No run is live.** Code head = this session's last commit (suite 3964/0). User's choices since the last block: layout MODULES as the default (`0f2dbc24`); stage 3 option B and "design the pair"; an operator console as a NEW ticket `T4-ED` (answers T4-DP's wrapper question; hosts T4-EC stage 4's view).
 - **Stage 3:** parents invoicer/pettycash (field102, both GOAL_FULFILLED run 1); `ProjectMatcher` + `ProjectMatchService` (`/match-projects`); result and DoD on the T4-EC ticket (2026-10-21 stage 3 append).

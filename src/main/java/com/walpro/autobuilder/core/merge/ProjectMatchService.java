@@ -148,7 +148,7 @@ public class ProjectMatchService {
     }
 
     /** A parent's library sources: every src/main of every module of its tree. */
-    static Map<String, String> main(ProjectMerge.Parent p) throws IOException {
+    public static Map<String, String> main(ProjectMerge.Parent p) throws IOException {
         Path out = p.dir().resolve("output");
         Map<String, String> all = ProjectMerge.files(out);
         Map<String, String> main = new LinkedHashMap<>();
@@ -159,7 +159,7 @@ public class ProjectMatchService {
     }
 
     /** A parent's criteria: every node's, and its non-rule obligations, each text once. */
-    static List<String> criteria(ProjectMerge.Parent p) throws IOException {
+    public static List<String> criteria(ProjectMerge.Parent p) throws IOException {
         Set<String> out = new LinkedHashSet<>();
         JsonNode stack = MAPPER.readTree(p.dir().resolve("meta/GoalStack.json").toFile());
         collect(stack.path("goalTree"), out);

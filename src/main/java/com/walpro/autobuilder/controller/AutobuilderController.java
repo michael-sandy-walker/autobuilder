@@ -376,6 +376,56 @@ public class AutobuilderController {
         }
     }
 
+    /** T4-EC stage 4: merge sessions -- the graph an operator merges on; optional. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.merge.session.MergeSessionService mergeSessionService;
+
+    /** A new merge session over two projects, the stage-3 match list optional (its pairs become proposed links). */
+    public record SessionRequest(String id, MergeParent first, MergeParent second, String matches) {
+    }
+
+    @PostMapping("/merge-sessions")
+    public ResponseEntity<?> createMergeSession(@RequestBody SessionRequest request) {
+        if (mergeSessionService == null) return ResponseEntity.status(503).body(Map.of("error", "merge sessions are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(mergeSessionService.create(request.id(), parent(request.first()), parent(request.second()),
+                    request.matches() == null ? null : java.nio.file.Path.of(request.matches())));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/merge-sessions/{id}")
+    public ResponseEntity<?> mergeSession(@PathVariable String id) {
+        if (mergeSessionService == null) return ResponseEntity.status(503).body(Map.of("error", "merge sessions are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(mergeSessionService.graph(id));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * One act on a session: {@code {"op": "addEdge|removeEdge|setMeta|addSuper|removeSuper|addNode", "by": "operator",
+     * "args": {...}}}. Refused with the reason when it does not fit the session as it stands.
+     */
+    @PostMapping("/merge-sessions/{id}/edits")
+    public ResponseEntity<?> editMergeSession(@PathVariable String id,
+                                              @RequestBody com.walpro.autobuilder.core.merge.session.MergeSession.Edit edit) {
+        if (mergeSessionService == null) return ResponseEntity.status(503).body(Map.of("error", "merge sessions are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(mergeSessionService.apply(id, edit));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     private static com.walpro.autobuilder.core.merge.ProjectMerge.Parent parent(MergeParent p) {
         if (p == null || p.label() == null || p.runId() == null || p.dir() == null) {
             throw new IllegalArgumentException("each parent needs a label, a runId and a dir");

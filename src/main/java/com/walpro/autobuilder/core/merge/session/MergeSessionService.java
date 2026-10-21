@@ -1,0 +1,210 @@
+package com.walpro.autobuilder.core.merge.session;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.core.merge.ProjectMatchService;
+import com.walpro.autobuilder.core.merge.ProjectMatcher;
+import com.walpro.autobuilder.core.merge.ProjectMerge;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * T4-EC stage 4, slice 1: merge sessions over two projects -- made from their snapshots (and, optionally, the stage-3
+ * match list as proposed links), then edited one validated act at a time. Headless on purpose: the canvas (slice 2) and
+ * a scripted operator both use this, so a session is testable by replay before any page draws it.
+ */
+@Service
+public class MergeSessionService {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
+
+    private final MergeSessionStore store;
+
+    @org.springframework.beans.factory.annotation.Autowired   // two constructors: this one is Spring's
+    public MergeSessionService(@Value("${autobuilder.merge.sessions-dir:${user.home}/.autobuilder/merge-sessions}") String root) {
+        this(new FileMergeSessionStore(Path.of(root)));
+    }
+
+    MergeSessionService(MergeSessionStore store) {
+        this.store = store;
+    }
+
+    /** What a reader gets: the session's nodes and edges after {@code applied} edits. */
+    public record Graph(String sessionId, int applied, List<MergeSession.Node> nodes, List<MergeSession.Edge> edges) {
+    }
+
+    /**
+     * A new session over {@code first} and {@code second}: both projects -- goal trees, criteria, obligations, types and
+     * their public operations -- written into the log as nodes and STRUCTURE edges by "structure"; and each pair of
+     * {@code matchesJson} (MATCHES.json of stage 3), when given, as a proposed LINK by whoever decided it.
+     */
+    public synchronized Graph create(String sessionId, ProjectMerge.Parent first, ProjectMerge.Parent second, Path matchesJson)
+            throws IOException {
+        Instant now = Instant.now();
+        List<MergeSession.Edit> edits = new ArrayList<>();
+        for (ProjectMerge.Parent p : List.of(first, second)) project(p, now, edits);
+        Set<String> ids = new LinkedHashSet<>();   // a criterion a goal lists twice is one edge
+        edits.removeIf(e -> !ids.add(e.op() + ":" + e.args().get("id")));
+        if (matchesJson != null) proposals(first.label(), second.label(), matchesJson, now, edits);
+        MergeSession check = MergeSession.replay(edits);   // refuses an inconsistent start before anything is written
+        store.create(sessionId);
+        store.append(sessionId, edits);
+        return publish(sessionId, check);
+    }
+
+    /** Applies one act -- refused, with the reason, when it does not fit the session as it stands. */
+    public synchronized Graph apply(String sessionId, MergeSession.Edit edit) throws IOException {
+        requireSession(sessionId);
+        MergeSession s = MergeSession.replay(store.log(sessionId));
+        MergeSession.Edit stamped = new MergeSession.Edit(edit.op(), edit.by(), edit.at() == null ? Instant.now() : edit.at(),
+                edit.args());
+        String why = s.refusal(stamped);
+        if (why != null) throw new IllegalArgumentException(why);
+        s.apply(stamped);
+        store.append(sessionId, List.of(stamped));
+        return publish(sessionId, s);
+    }
+
+    public synchronized Graph graph(String sessionId) throws IOException {
+        requireSession(sessionId);
+        return view(sessionId, MergeSession.replay(store.log(sessionId)));
+    }
+
+    public List<MergeSession.Edit> log(String sessionId) throws IOException {
+        requireSession(sessionId);
+        return store.log(sessionId);
+    }
+
+    private void requireSession(String sessionId) {
+        if (!store.exists(sessionId)) throw new IllegalArgumentException("no such session: " + sessionId);
+    }
+
+    private Graph publish(String sessionId, MergeSession s) throws IOException {
+        Graph g = view(sessionId, s);
+        store.publish(sessionId, MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(g));
+        return g;
+    }
+
+    private static Graph view(String sessionId, MergeSession s) {
+        return new Graph(sessionId, s.applied(), List.copyOf(s.nodes().values()), List.copyOf(s.edges().values()));
+    }
+
+    // --- materialising a project ---------------------------------------------------------------------------------
+
+    private static void project(ProjectMerge.Parent p, Instant now, List<MergeSession.Edit> edits) throws IOException {
+        String label = p.label();
+        add(edits, now, "addNode", Map.of("id", label, "kind", "PROJECT", "project", label, "title", label,
+                "metadata", Map.of("runId", p.runId())));
+        JsonNode root = MAPPER.readTree(p.dir().resolve("meta/GoalStack.json").toFile()).path("goalTree");
+        Set<String> criteriaSeen = new LinkedHashSet<>();
+        goal(label, root, label, now, edits, criteriaSeen);
+        Path seed = p.dir().resolve("bootstrap/seed.txt"), obl = p.dir().resolve("bootstrap/seed.obligations.txt");
+        if (Files.isRegularFile(seed)) {
+            List<String> criteria = ProjectMatchService.criteria(p);
+            for (String c : criteria) {
+                String id = criterionId(label, c);
+                if (criteriaSeen.contains(id)) continue;
+                criteriaSeen.add(id);
+                add(edits, now, "addNode", Map.of("id", id, "kind", "CRITERION", "project", label, "title", c,
+                        "metadata", Map.of("from", "obligations")));
+                add(edits, now, "addEdge", Map.of("id", label + "->" + id, "from", label, "to", id, "kind", "STRUCTURE"));
+            }
+        }
+        for (ProjectMatcher.Surface t : ProjectMatcher.surfaces(ProjectMatchService.main(p)).values()) {
+            String typeId = label + ":type:" + t.name();
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("kind", t.kind());
+            meta.put("members", List.copyOf(t.members()));
+            if (!t.components().isEmpty()) meta.put("components", t.components());
+            add(edits, now, "addNode", Map.of("id", typeId, "kind", "TYPE", "project", label, "title", t.name(), "metadata", meta));
+            add(edits, now, "addEdge", Map.of("id", label + "->" + typeId, "from", label, "to", typeId, "kind", "STRUCTURE"));
+            for (Map.Entry<String, String> op : t.returns().entrySet()) {
+                String opId = label + ":op:" + t.name() + "." + op.getKey();
+                add(edits, now, "addNode", Map.of("id", opId, "kind", "OPERATION", "project", label,
+                        "title", t.name() + "." + op.getKey(), "metadata", Map.of("returns", op.getValue())));
+                add(edits, now, "addEdge", Map.of("id", typeId + "->" + opId, "from", typeId, "to", opId, "kind", "STRUCTURE"));
+            }
+        }
+    }
+
+    private static void goal(String label, JsonNode g, String parentId, Instant now, List<MergeSession.Edit> edits,
+                             Set<String> criteriaSeen) {
+        String id = label + ":goal:" + g.path("id").asText();
+        String description = g.path("description").asText().strip();
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("status", g.path("status").asText());
+        meta.put("description", description);
+        meta.put("sourceGoalId", g.path("id").asText());
+        add(edits, now, "addNode", Map.of("id", id, "kind", "GOAL", "project", label, "title", firstLine(description), "metadata", meta));
+        add(edits, now, "addEdge", Map.of("id", parentId + "->" + id, "from", parentId, "to", id, "kind", "STRUCTURE"));
+        for (JsonNode c : g.path("metadata").path("acceptanceCriteria")) {
+            String cid = criterionId(label, c.asText().strip());
+            if (criteriaSeen.add(cid)) {
+                add(edits, now, "addNode", Map.of("id", cid, "kind", "CRITERION", "project", label, "title", c.asText().strip()));
+            }
+            add(edits, now, "addEdge", Map.of("id", id + "->" + cid, "from", id, "to", cid, "kind", "STRUCTURE"));
+        }
+        for (JsonNode s : g.path("subGoals")) goal(label, s, id, now, edits, criteriaSeen);
+    }
+
+    // --- the matcher's proposals --------------------------------------------------------------------------------
+
+    private static void proposals(String labelA, String labelB, Path matchesJson, Instant now, List<MergeSession.Edit> edits)
+            throws IOException {
+        MergeSession sofar = MergeSession.replay(edits);
+        int n = 0;
+        for (JsonNode m : MAPPER.readTree(matchesJson.toFile()).path("matches")) {
+            String kind = m.path("kind").asText();
+            String a = nodeFor(labelA, kind, m.path("a").asText()), b = nodeFor(labelB, kind, m.path("b").asText());
+            if (!sofar.nodes().containsKey(a) || !sofar.nodes().containsKey(b)) continue;   // a pair the session has no node for
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("status", "proposed");
+            meta.put("structure", m.path("level").asText());
+            for (String k : List.of("verdict", "action", "reason")) if (!m.path(k).isNull()) meta.put(k, m.path(k).asText());
+            String by = m.path("source").asText("structure");
+            edits.add(new MergeSession.Edit("addEdge", by.equals("none") ? "structure" : by, now,
+                    Map.of("id", "link:proposed:" + (++n), "from", a, "to", b, "kind", "LINK", "metadata", meta)));
+        }
+    }
+
+    private static String nodeFor(String label, String kind, String text) {
+        return switch (kind) {
+            case "TYPE" -> label + ":type:" + text;
+            case "OPERATION" -> label + ":op:" + text;
+            case "CRITERION" -> criterionId(label, text.strip());
+            default -> label + ":?:" + text;
+        };
+    }
+
+    private static String criterionId(String label, String text) {
+        try {
+            byte[] d = MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8));
+            return label + ":criterion:" + HexFormat.of().formatHex(d).substring(0, 12);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static String firstLine(String s) {
+        String l = s.lines().map(String::strip).filter(x -> !x.isEmpty()).findFirst().orElse("");
+        return l.length() > 140 ? l.substring(0, 137) + "..." : l;
+    }
+
+    private static void add(List<MergeSession.Edit> edits, Instant at, String op, Map<String, Object> args) {
+        edits.add(new MergeSession.Edit(op, "structure", at, args));
+    }
+}

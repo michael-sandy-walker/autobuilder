@@ -55,7 +55,7 @@ public final class ProjectMatcher {
     }
 
     /** A type's comparable surface. */
-    record Surface(String name, String kind, Set<String> members, List<String> components, Map<String, String> returns) {
+    public record Surface(String name, String kind, Set<String> members, List<String> components, Map<String, String> returns) {
     }
 
     /** Below this share of common members two differently named types are not put to anyone. */
@@ -123,7 +123,7 @@ public final class ProjectMatcher {
     }
 
     /** Every public top-level type of {@code sources}, by simple name. */
-    static Map<String, Surface> surfaces(Map<String, String> sources) {
+    public static Map<String, Surface> surfaces(Map<String, String> sources) {
         Map<String, Surface> out = new LinkedHashMap<>();
         for (Map.Entry<String, String> e : sources.entrySet()) {
             if (!e.getKey().endsWith(".java")) continue;

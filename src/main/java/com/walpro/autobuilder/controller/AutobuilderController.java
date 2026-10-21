@@ -350,6 +350,32 @@ public class AutobuilderController {
         }
     }
 
+    /** T4-EC stage 3: matching two projects; optional. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.merge.ProjectMatchService projectMatchService;
+
+    /** Two projects to match, and where the match list is written. */
+    public record MatchRequest(MergeParent first, MergeParent second, String out) {
+    }
+
+    /**
+     * T4-EC stage 3: what in two projects denotes the same thing -- structure first, a model for the pairs structure leaves
+     * open, each with a proposed decision (unify, adapt one, keep both) and who gave it. Writes MATCHES.json and
+     * MATCHES.tsv under {@code out}; changes neither project.
+     */
+    @PostMapping("/match-projects")
+    public ResponseEntity<?> matchProjects(@RequestBody MatchRequest request) {
+        if (projectMatchService == null) return ResponseEntity.status(503).body(Map.of("error", "matching is not enabled in this context"));
+        try {
+            return ResponseEntity.ok(projectMatchService.match(parent(request.first()), parent(request.second()),
+                    request.out() == null ? null : java.nio.file.Path.of(request.out())));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     private static com.walpro.autobuilder.core.merge.ProjectMerge.Parent parent(MergeParent p) {
         if (p == null || p.label() == null || p.runId() == null || p.dir() == null) {
             throw new IllegalArgumentException("each parent needs a label, a runId and a dir");

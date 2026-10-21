@@ -450,6 +450,13 @@ default layout is `MODULES` -- each project a module of one reactor build, keepi
 tests; `PACKAGES` (one build, both projects' packages) suits two small libraries with compatible builds; `DEPENDENCY`
 (the receiving build depends on the other's artifact) uses a library rather than merging it.
 
+What two projects share is matched by `ProjectMatcher` and `ProjectMatchService` (`POST /autobuilder/match-projects`):
+structure first -- top-level types by public surface (each type's own name read as "self"), one operation name on two
+types, criteria by text -- and a model only for the pairs structure leaves open, each verdict (same / related /
+different) with a proposed action (unify / adapt one / keep both) and who gave it, written to `MATCHES.json` and
+`MATCHES.tsv`. Neither project is changed; the list is for the operator to confirm and for an integration goal to work
+from.
+
 ---
 
 ## 11. The stuck layer

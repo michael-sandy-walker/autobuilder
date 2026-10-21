@@ -11,7 +11,13 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 2 DONE: THREE LAYOUTS x3, 9 OF 9 TRUE COMPLETIONS; PACKAGES BEST, DEPENDENCY WORST; FIXES 10ed8cf7 (LET-GO FINAL) AND 91ecd2df (MODULE REPORTS) -- START HERE
+## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 3 DONE (MATCHING, STRUCTURE THEN MODEL: 8 PAIRS, STABLE x3, NO FALSE UNIFY); MODULES CHOSEN AS DEFAULT LAYOUT; T4-ED (OPERATOR CONSOLE) FILED -- START HERE
+
+- **No run is live.** Code head = this session's last commit (suite 3964/0). User's choices since the last block: layout MODULES as the default (`0f2dbc24`); stage 3 option B and "design the pair"; an operator console as a NEW ticket `T4-ED` (answers T4-DP's wrapper question; hosts T4-EC stage 4's view).
+- **Stage 3:** parents invoicer/pettycash (field102, both GOAL_FULFILLED run 1); `ProjectMatcher` + `ProjectMatchService` (`/match-projects`); result and DoD on the T4-EC ticket (2026-10-21 stage 3 append).
+- **NEXT (options to the user):** T4-EC stage 4 -- the operator confirms/corrects the match list and an integration goal works from it -- versus starting `T4-ED`'s supervisor first (the view would live in its console).
+
+## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 2 DONE: THREE LAYOUTS x3, 9 OF 9 TRUE COMPLETIONS; PACKAGES BEST, DEPENDENCY WORST; FIXES 10ed8cf7 (LET-GO FINAL) AND 91ecd2df (MODULE REPORTS)
 
 - **No run is live.** Head `91ecd2df` + docs, suite 3961/0. Batches field98-101. Full record on the T4-EC ticket (2026-10-21 stage 2 append): results table, the two fixes, the reading.
 - **Stage 2's DoD met** (packages, modules). T4-EC stays open: stage 3 (matching what in A and B denotes the same thing) and stage 4 (the view) remain. Open points recorded there: the reopen-at-boot side effect of the merge's verdict stamping; DEPENDENCY's carried criteria (merge option B, not built); an exit for a criteria item answered #NoDiff (not built).

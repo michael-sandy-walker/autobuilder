@@ -32,7 +32,9 @@
   #status { font-size: 12px; color: var(--muted); }
   #status.err { color: var(--different); }
   .prompt { display: flex; gap: 6px; padding: 6px 14px; background: var(--panel-2); border-bottom: 1px solid var(--rule); }
-  .prompt input { flex: 1; background: var(--bg); color: var(--dim); border: 1px dashed #374151; padding: 3px 8px; border-radius: 4px; }
+  .prompt input { flex: 1; background: var(--bg); color: var(--ink); border: 1px solid #374151; padding: 3px 8px; border-radius: 4px; }
+  .prompt input:disabled { color: var(--dim); border-style: dashed; }
+  .node.proposed circle { stroke: var(--super); stroke-width: 3px; stroke-dasharray: 4 3; fill-opacity: 0.45; }
   text { fill: var(--ink); font-size: 10px; pointer-events: none; }
   .node circle { stroke: #0f172a; stroke-width: 1.5px; cursor: pointer; }
   .node.selected circle { stroke: #fff; stroke-width: 4px; }
@@ -72,7 +74,8 @@
   <span id="status"></span>
 </header>
 <div class="prompt">
-  <input type="text" disabled placeholder="prompt on the selection -- &quot;merge/refine selected nodes&quot;, &quot;materialize additional graph ...&quot; (next slice)">
+  <input type="text" id="prompt" disabled placeholder="select two or more nodes, then ask -- e.g. &quot;merge/refine selected nodes&quot;">
+  <button id="ask" disabled>Ask the model</button>
 </div>
 <div id="hint">Selected: nothing</div>
 <div id="menu"></div>
@@ -239,7 +242,11 @@
 
   // What selecting changes: highlighting, the side panel and the buttons -- never the layout.
   function restyle() {
-    nodeLayer.selectAll('g.node').classed('selected', d => state.selection.has(d.id)).classed('folded', d => state.folded.has(d.id));
+    nodeLayer.selectAll('g.node').classed('selected', d => state.selection.has(d.id)).classed('folded', d => state.folded.has(d.id))
+        .classed('proposed', d => C.proposed(state.model.nodes.get(d.id)));
+    const canAsk = state.selection.size >= 2 && !state.asking;
+    document.getElementById('prompt').disabled = !canAsk;
+    document.getElementById('ask').disabled = !canAsk;
     linkLayer.selectAll('line.edge').classed('selected', d => d.id === state.edge);
     document.getElementById('hint').textContent = C.statusLine(state.model, state.selection, state.edge);
     placeHandle();
@@ -305,18 +312,43 @@
       return send(C.titleEdit(n.id, title));
     }
     if (act === 'edit') { const k = document.getElementById('new-key'); if (k) k.focus(); return; }
+    if (act === 'confirm') return send(C.confirmEdit(state.edge || sel[0]));
+    if (act === 'refine') { const p = document.getElementById('prompt'); p.focus(); if (p.value.trim()) return ask(); return; }
     if (act === 'fold') {
       if (state.folded.has(sel[0])) state.folded.delete(sel[0]); else state.folded.add(sel[0]);
       return draw();
     }
   }
 
+  // --- slice 3: the prompt operation -- the model proposes one super node over the selection ---------------------
+  async function ask() {
+    const request = document.getElementById('prompt').value.trim() || 'merge/refine the selected nodes';
+    const selection = [...state.selection];
+    state.asking = true; restyle();
+    status('asking the model about ' + selection.length + ' nodes ...');
+    try {
+      const r = await fetch(API + '/' + encodeURIComponent(state.session) + '/refine',
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ selection, prompt: request }) });
+      const body = await r.json();
+      if (!r.ok) return status('not recorded: ' + (body.error || r.statusText), true);
+      accept(body.graph);
+      state.selection.clear(); state.selection.add(body.nodeId); state.edge = null;
+      status('the model proposed "' + (state.model.nodes.get(body.nodeId) || {}).title + '" -- confirm (C), edit, rename or remove it');
+    } catch (e) {
+      status('not recorded: ' + e, true);
+    } finally {
+      state.asking = false; restyle();
+    }
+  }
+  document.getElementById('ask').onclick = () => ask();
+  document.getElementById('prompt').addEventListener('keydown', ev => { if (ev.key === 'Enter') ask(); });
+
   // --- the right-click menu: every act, the unavailable ones greyed with their reason ------------------------
   function menu(x, y) {
     const box = document.getElementById('menu');
     box.innerHTML = '';
     for (const a of C.actions(state.model, state.selection, state.edge)) {
-      if (a.why && (a.act === 'removeLink' || a.act === 'removeSuper' || a.act === 'rename' || a.act === 'fold')) continue;
+      if (a.why && (a.act === 'removeLink' || a.act === 'removeSuper' || a.act === 'rename' || a.act === 'fold' || a.act === 'confirm')) continue;
       const row = document.createElement('div');
       row.className = a.why ? 'off' : '';
       row.title = a.why || '';
@@ -337,7 +369,7 @@
     if (!state.model || ev.target.tagName === 'INPUT') return;
     const key = ev.key;
     const act = key === 'Delete' || key === 'Backspace' ? (state.edge ? 'removeLink' : 'removeSuper')
-        : key === 'F2' ? 'rename' : { l: 'link', s: 'super', e: 'edit', f: 'fold' }[key.toLowerCase()];
+        : key === 'F2' ? 'rename' : { l: 'link', s: 'super', e: 'edit', f: 'fold', c: 'confirm', p: 'refine' }[key.toLowerCase()];
     if (key === 'Escape') { hideMenu(); state.selection.clear(); state.edge = null; return restyle(); }
     if (!act || ev.ctrlKey || ev.metaKey || ev.altKey) return;
     ev.preventDefault();

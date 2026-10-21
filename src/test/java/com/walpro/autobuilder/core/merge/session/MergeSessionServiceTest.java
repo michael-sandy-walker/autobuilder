@@ -86,4 +86,30 @@ class MergeSessionServiceTest {
             assertThat(ctx.getBean(MergeSessionService.class)).isNotNull();
         }
     }
+
+    /** A prompt operation records the model's super node, proposed; an answer that is not a proposal records nothing. */
+    @Test
+    void aRefineRecordsTheModelsProposalAndAMalformedAnswerRecordsNothing() throws IOException {
+        Path a = project("wick", "Flame", "public record Flame(int heat) { }", "A flame burns");
+        Path b = project("lamp", "Glow", "public record Glow(int heat) { }", "A glow lights");
+        MergeSessionService svc = new MergeSessionService(tmp.resolve("sessions").toString());
+        svc.create("r", new ProjectMerge.Parent("wick", "r1", a), new ProjectMerge.Parent("lamp", "r2", b), null);
+        List<String> sel = List.of("wick:type:Flame", "lamp:type:Glow");
+
+        MergeSessionService.Refined r = svc.refine("r", sel, "merge these", q -> {
+            assertThat(q).contains("merge these", "Flame", "Glow");
+            return "TITLE: Light\nDESCRIPTION: what gives light\nCRITERIA:\n- carries heat\nACTION: ADAPT_ONE\nREASON: two shapes";
+        });
+        MergeSession.Node n = r.graph().nodes().stream().filter(x -> x.id().equals(r.nodeId())).findFirst().orElseThrow();
+        assertThat(n.kind()).isEqualTo(MergeSession.NodeKind.SUPER);
+        assertThat(n.title()).isEqualTo("Light");
+        assertThat(n.metadata()).containsEntry("by", "model").containsEntry("status", "proposed").containsEntry("action", "ADAPT_ONE")
+                .containsEntry("request", "merge these").containsEntry("criteria", List.of("carries heat"));
+
+        int before = svc.log("r").size();
+        assertThatThrownBy(() -> svc.refine("r", sel, "again", q -> "I would merge them.")).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("nothing recorded");
+        assertThat(svc.log("r")).hasSize(before);
+        assertThatThrownBy(() -> svc.refine("r", List.of("wick:type:Flame"), "x", q -> "")).isInstanceOf(IllegalArgumentException.class);
+    }
 }

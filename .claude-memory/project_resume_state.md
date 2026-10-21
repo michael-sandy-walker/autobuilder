@@ -16,7 +16,8 @@ metadata:
 - **No run is live.** Suite 3968/0. The user redefined stage 4: not a review list but a canvas -- graphs side by side, direct editing of links and metadata, prompt operations on a selection producing SUPER NODES that build upward (their notebook sketch; recorded in words on T4-EC). Storage: files first, Neo4j kept in view (user).
 - **Slice 1** (session = fold of an edit log; store interface; service; three endpoints) and its field check on invoicer + pettycash: see the T4-EC append. A boot-breaking defect (two constructors, no @Autowired) was caught by booting it and fixed with a container test.
 - **User's idea recorded:** one criterion clustered into a super criterion connected to several goals (works now via super nodes; open: matcher-proposed clusters; criteria as first-class nodes in the loop's goal model).
-- **NEXT:** options for slice 2 (the canvas: what draws it, how it edits through the API).
+- **Since:** slice 2 the canvas (d3 by hand, user's choice) + fixes after the user's try (a click shook the graph; links unhittable) + direct editing (handle, right-click menu, keys, status line, rename via `setTitle`) + slice 3 the prompt operation (model's super node recorded proposed; Confirm). All driven in headless Firefox (`src/test/browser/drive.py`) before the user tried them. Suite 3972/0.
+- **NEXT:** slice 4, the bridge -- a confirmed session becomes an integration goal and a loop run (first measure: invoicer + pettycash integrated through a session) -- options first.
 
 ## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 3 DONE (MATCHING, STRUCTURE THEN MODEL: 8 PAIRS, STABLE x3, NO FALSE UNIFY); MODULES CHOSEN AS DEFAULT LAYOUT; T4-ED (OPERATOR CONSOLE) FILED
 

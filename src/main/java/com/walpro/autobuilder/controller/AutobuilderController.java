@@ -426,6 +426,25 @@ public class AutobuilderController {
         }
     }
 
+    /** T4-EC slice 3: a prompt operation on a selection of a session. */
+    public record RefineRequest(java.util.List<String> selection, String prompt) {
+    }
+
+    /** The model proposes one super node over the selection, recorded at once by "model", marked proposed. */
+    @PostMapping("/merge-sessions/{id}/refine")
+    public ResponseEntity<?> refineMergeSession(@PathVariable String id, @RequestBody RefineRequest request) {
+        if (mergeSessionService == null) return ResponseEntity.status(503).body(Map.of("error", "merge sessions are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(mergeSessionService.refine(id, request.selection(), request.prompt()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(503).body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     private static com.walpro.autobuilder.core.merge.ProjectMerge.Parent parent(MergeParent p) {
         if (p == null || p.label() == null || p.runId() == null || p.dir() == null) {
             throw new IllegalArgumentException("each parent needs a label, a runId and a dir");

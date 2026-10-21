@@ -84,6 +84,10 @@ test('one list of acts serves the menu, the keys and the status line', () => {
   assert.match(C.statusLine(m, new Set(), 'l1'), /a link -- Delete remove this link/);
   assert.match(C.statusLine(m, new Set(['s2']), null), /F2 rename/);
   assert.equal(C.titleEdit('s1', 'Light').op, 'setTitle');
+  assert.equal(C.actions(m, new Set(), 'l1').find(a => a.act === 'confirm').why, null);   // l1 is a proposed link
+  assert.notEqual(C.actions(m, new Set(['wick']), null).find(a => a.act === 'confirm').why, null);
+  assert.equal(C.actions(m, new Set(['wick', 'lamp']), null).find(a => a.act === 'refine').why, null);
+  assert.deepEqual(C.confirmEdit('l1').args, { target: 'l1', key: 'status', value: 'confirmed' });
 });
 
 test('a real session graph reads without loss', { skip: !process.env.MERGE_SESSION_GRAPH }, () => {

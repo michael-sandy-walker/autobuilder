@@ -84,6 +84,64 @@ public class MergeSessionService {
         return view(sessionId, MergeSession.replay(store.log(sessionId)));
     }
 
+    /** T4-EC slice 3: the model that answers a prompt operation; optional -- without it a refine is refused. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.client.LLMClient llmClient;
+
+    /** What a refine produced: the graph, and the id of the super node the model proposed. */
+    public record Refined(Graph graph, String nodeId) {
+    }
+
+    /**
+     * T4-EC slice 3: "merge/refine selected nodes" -- the model is shown the selection and the request and proposes one
+     * node above them, recorded at once as the model's super node, marked proposed (the user's choice of three). An
+     * answer that is not a proposal records nothing.
+     */
+    public Refined refine(String sessionId, List<String> selection, String request) throws IOException {
+        if (llmClient == null) throw new IllegalStateException("no model is configured to answer a prompt operation");
+        return refine(sessionId, selection, request, this::ask);
+    }
+
+    synchronized Refined refine(String sessionId, List<String> selection, String request,
+                                java.util.function.Function<String, String> model) throws IOException {
+        requireSession(sessionId);
+        MergeSession s = MergeSession.replay(store.log(sessionId));
+        List<String> chosen = selection == null ? List.of() : selection.stream().distinct().toList();
+        if (chosen.size() < 2 || !chosen.stream().allMatch(s.nodes()::containsKey)) {
+            throw new IllegalArgumentException("select two or more nodes of the session");
+        }
+        String answer = model.apply(MergeRefine.question(s, chosen, request));
+        MergeRefine.Proposal p = MergeRefine.read(answer);
+        if (p == null) {
+            throw new IllegalArgumentException("the model's answer was not a proposal (no title or action) -- nothing recorded");
+        }
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("status", "proposed");
+        meta.put("description", p.description());
+        meta.put("criteria", p.criteria());
+        meta.put("action", p.action());
+        meta.put("reason", p.reason());
+        meta.put("request", request == null || request.isBlank() ? "merge/refine the selected nodes" : request.strip());
+        String id = freshId(s, "super:model:");
+        Graph g = apply(sessionId, new MergeSession.Edit("addSuper", "model", null,
+                Map.of("id", id, "title", p.title(), "children", chosen, "metadata", meta)));
+        return new Refined(g, id);
+    }
+
+    private String ask(String question) {
+        try (var purpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("merge-refine")) {
+            var r = llmClient.ask(List.of(new com.walpro.autobuilder.client.dto.Message("system", MergeRefine.SYSTEM),
+                    new com.walpro.autobuilder.client.dto.Message("user", question)));
+            return r.getBody() == null ? null : r.getBody().getFirstContent();
+        } catch (Exception e) {
+            throw new IllegalStateException("the model did not answer: " + e.getMessage(), e);
+        }
+    }
+
+    private static String freshId(MergeSession s, String prefix) {
+        for (int i = 1; ; i++) if (!s.nodes().containsKey(prefix + i) && !s.edges().containsKey(prefix + i)) return prefix + i;
+    }
+
     public List<MergeSession.Edit> log(String sessionId) throws IOException {
         requireSession(sessionId);
         return store.log(sessionId);

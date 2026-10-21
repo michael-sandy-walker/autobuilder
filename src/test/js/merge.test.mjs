@@ -75,6 +75,17 @@ test('acts become the edits the session takes, by the operator', () => {
   assert.deepEqual(C.linkStyle(g.edges[4]), { dashed: true, colour: 'related' });
 });
 
+test('one list of acts serves the menu, the keys and the status line', () => {
+  const m = C.model(g);
+  const two = C.actions(m, new Set(['wick', 'lamp']), null);
+  assert.equal(two.find(a => a.act === 'link').why, null);
+  assert.notEqual(two.find(a => a.act === 'removeLink').why, null);
+  assert.match(C.statusLine(m, new Set(['wick', 'lamp']), null), /2 nodes -- L link/);
+  assert.match(C.statusLine(m, new Set(), 'l1'), /a link -- Delete remove this link/);
+  assert.match(C.statusLine(m, new Set(['s2']), null), /F2 rename/);
+  assert.equal(C.titleEdit('s1', 'Light').op, 'setTitle');
+});
+
 test('a real session graph reads without loss', { skip: !process.env.MERGE_SESSION_GRAPH }, () => {
   const real = JSON.parse(fs.readFileSync(process.env.MERGE_SESSION_GRAPH, 'utf8'));
   const m = C.model(real);

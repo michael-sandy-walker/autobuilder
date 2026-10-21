@@ -61,4 +61,15 @@ class MergeSessionTest {
         assertThat(s.refusal(e("removeSuper", "operator", Map.of("id", "s1")))).contains("removed after that one");
         assertThatThrownBy(() -> s.apply(e("removeSuper", "operator", Map.of("id", "s1")))).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void onlyASuperNodeIsRenamed() {
+        MergeSession s = MergeSession.replay(base());
+        s.apply(e("addSuper", "operator", Map.of("id", "s1", "title", "x", "children", List.of("wick:type:Flame", "lamp:type:Flame"))));
+        s.apply(e("setTitle", "operator", Map.of("target", "s1", "title", " Light ")));
+        assertThat(s.nodes().get("s1").title()).isEqualTo("Light");
+        assertThat(s.nodes().get("s1").metadata()).containsEntry("lastEditedBy", "operator");
+        assertThat(s.refusal(e("setTitle", "operator", Map.of("target", "wick:type:Flame", "title", "Fire")))).contains("only a super node");
+        assertThat(s.refusal(e("setTitle", "operator", Map.of("target", "s1", "title", " ")))).contains("not blank");
+    }
 }

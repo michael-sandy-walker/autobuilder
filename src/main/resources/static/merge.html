@@ -20,7 +20,7 @@
   button { background: var(--panel-2); color: var(--ink); border: 1px solid #374151; padding: 3px 9px; border-radius: 4px; cursor: pointer; }
   button:disabled { opacity: 0.4; cursor: default; }
   label.k { color: var(--muted); font-size: 12px; }
-  main { display: grid; grid-template-columns: 1fr 360px; height: calc(100vh - 82px); }
+  main { display: grid; grid-template-columns: 1fr 360px; height: calc(100vh - 108px); }
   #canvas { position: relative; overflow: hidden; }
   svg { width: 100%; height: 100%; display: block; cursor: grab; }
   aside { border-left: 1px solid var(--rule); background: var(--panel); overflow: auto; padding: 12px 14px; }
@@ -47,6 +47,16 @@
   line.hit { stroke: transparent; stroke-width: 14px; cursor: pointer; pointer-events: stroke; }
   rect.box { fill: rgba(59, 130, 246, 0.12); stroke: var(--accent); stroke-dasharray: 4 3; }
   .legend span { margin-right: 10px; font-size: 11px; }
+  #hint { padding: 4px 14px; font-size: 12px; color: var(--muted); background: var(--panel); border-bottom: 1px solid var(--rule); }
+  #menu { position: fixed; display: none; z-index: 10; background: var(--panel-2); border: 1px solid #374151; border-radius: 6px;
+    padding: 4px 0; min-width: 260px; box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+  #menu div { padding: 4px 12px; cursor: pointer; display: flex; justify-content: space-between; gap: 16px; }
+  #menu div:hover { background: #1f2937; }
+  #menu div.off { color: var(--dim); cursor: default; }
+  #menu div.off:hover { background: none; }
+  #menu kbd { color: var(--muted); font-size: 11px; }
+  circle.handle { fill: var(--accent); stroke: #fff; stroke-width: 1.5px; cursor: crosshair; }
+  line.drawing { stroke: var(--operator); stroke-width: 2px; stroke-dasharray: 4 3; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -64,10 +74,13 @@
 <div class="prompt">
   <input type="text" disabled placeholder="prompt on the selection -- &quot;merge/refine selected nodes&quot;, &quot;materialize additional graph ...&quot; (next slice)">
 </div>
+<div id="hint">Selected: nothing</div>
+<div id="menu"></div>
 <main>
   <div id="canvas"><svg id="svg"></svg></div>
-  <aside id="side"><p class="muted">Click a node or a link. Shift-drag to select several, ctrl-click to add one,
-    double-click a goal or project to fold it. Drag to move, wheel to zoom.</p>
+  <aside id="side"><p class="muted">Click a node or a link; right-click for what you can do with it. Shift-drag or ctrl-click
+    to select several. Drag the + handle of a selected node onto another to link them. Double-click a super node to rename it,
+    anything else to edit its metadata. Drag to move, wheel to zoom.</p>
     <div class="legend"><span style="color:var(--same)">same</span><span style="color:var(--related)">related</span>
       <span style="color:var(--different)">different</span><span style="color:var(--operator)">drawn by the operator</span>
       <span class="dim">dashed: proposed, solid: confirmed</span></div></aside>
@@ -88,7 +101,7 @@
 
   const svg = d3.select('#svg');
   const world = svg.append('g');
-  const linkLayer = world.append('g'), nodeLayer = world.append('g'), boxLayer = world.append('g');
+  const linkLayer = world.append('g'), nodeLayer = world.append('g'), handleLayer = world.append('g'), boxLayer = world.append('g');
   const zoom = d3.zoom().scaleExtent([0.1, 4]).filter(ev => !ev.shiftKey && !ev.button)
       .on('zoom', ev => world.attr('transform', ev.transform));
   svg.call(zoom).on('dblclick.zoom', null);
@@ -176,9 +189,15 @@
       restyle();
     }).on('dblclick', (ev, d) => {
       ev.stopPropagation();
-      if (d.kind !== 'GOAL' && d.kind !== 'PROJECT') return;
-      if (state.folded.has(d.id)) state.folded.delete(d.id); else state.folded.add(d.id);
-      draw();
+      state.selection.clear(); state.selection.add(d.id); state.edge = null; restyle();
+      run(d.kind === 'SUPER' ? 'rename' : 'edit');
+    }).on('contextmenu', (ev, d) => {
+      ev.preventDefault(); ev.stopPropagation();
+      if (!state.selection.has(d.id)) {
+        if (!(ev.ctrlKey || ev.metaKey)) state.selection.clear();
+        state.selection.add(d.id); state.edge = null; restyle();
+      }
+      menu(ev.clientX, ev.clientY);
     }).call(d3.drag().clickDistance(4)
         // A press is not a drag: the layout is reheated only once the pointer really moves, so a click selects
         // without shaking the graph (it did -- every click moved 29 of 30 nodes).
@@ -192,7 +211,8 @@
     // A wide, invisible line over every link is what a click hits: the drawn line is 2.5 px.
     const hit = linkLayer.selectAll('line.hit').data(edges.filter(e => e.kind === 'LINK'), d => d.id).join('line')
         .attr('class', 'hit')
-        .on('click', (ev, d) => { ev.stopPropagation(); state.edge = d.id; state.selection.clear(); restyle(); });
+        .on('click', (ev, d) => { ev.stopPropagation(); state.edge = d.id; state.selection.clear(); restyle(); })
+        .on('contextmenu', (ev, d) => { ev.preventDefault(); ev.stopPropagation(); state.edge = d.id; state.selection.clear(); restyle(); menu(ev.clientX, ev.clientY); });
     hit.raise();
 
     const settled = simulation != null;
@@ -210,6 +230,7 @@
       hit.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
       line.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
       g.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
+      placeHandle();
       for (const n of nodes) state.positions.set(n.id, { x: n.x, y: n.y, fx: n.fx, fy: n.fy });
     }
     if (STATIC) { simulation.stop(); simulation.tick(400); place(); }
@@ -220,9 +241,108 @@
   function restyle() {
     nodeLayer.selectAll('g.node').classed('selected', d => state.selection.has(d.id)).classed('folded', d => state.folded.has(d.id));
     linkLayer.selectAll('line.edge').classed('selected', d => d.id === state.edge);
+    document.getElementById('hint').textContent = C.statusLine(state.model, state.selection, state.edge);
+    placeHandle();
     side();
     buttons();
   }
+
+  // --- the link handle: a selected node's "+"; drag it onto another node to link the two ---------------------
+  function selectedDatum() {
+    if (state.selection.size !== 1 || state.edge) return null;
+    const id = [...state.selection][0];
+    let found = null;
+    nodeLayer.selectAll('g.node').each(d => { if (d.id === id) found = d; });
+    return found;
+  }
+  function placeHandle() {
+    const d = selectedDatum();
+    const h = handleLayer.selectAll('circle.handle').data(d ? [d] : [], x => x.id);
+    h.exit().remove();
+    h.enter().append('circle').attr('class', 'handle').attr('r', 6).call(handleDrag)
+        .append('title').text('drag onto another node to link');
+    handleLayer.selectAll('circle.handle').attr('cx', x => x.x + (RADIUS[x.kind] || 6) + 9).attr('cy', x => x.y);
+  }
+  let drawing = null;
+  const handleDrag = d3.drag()
+      .on('start', (ev, d) => { drawing = handleLayer.append('line').attr('class', 'drawing').attr('x1', d.x).attr('y1', d.y); })
+      // The drop point is the pointer itself: d3's own ev.x/ev.y run from the node's centre, not from the handle, and
+      // fell short of the target by the handle's offset.
+      .on('drag', (ev, d) => { const [x, y] = d3.pointer(ev, handleLayer.node()); drawing.attr('x2', x).attr('y2', y); })
+      .on('end', (ev, d) => {
+        if (drawing) drawing.remove();
+        drawing = null;
+        const [px, py] = d3.pointer(ev, handleLayer.node());
+        let target = null, best = Infinity;
+        nodeLayer.selectAll('g.node').each(n => {
+          const dist = Math.hypot(n.x - px, n.y - py);
+          if (n.id !== d.id && dist <= (RADIUS[n.kind] || 6) + 8 && dist < best) { best = dist; target = n; }
+        });
+        if (target) send(C.linkEdit(d.id, target.id, C.freshId(state.model.graph, 'link:operator:')));
+        else status('drop the handle on another node to link');
+      });
+
+  // --- one dispatcher for the buttons, the menu and the keys ----------------------------------------------------
+  function run(act) {
+    const a = C.actions(state.model, state.selection, state.edge).find(x => x.act === act && x.why === null)
+        || C.actions(state.model, state.selection, state.edge).find(x => x.act === act);
+    if (!a) return;
+    if (a.why) return status(a.label + ': ' + a.why, true);
+    const sel = [...state.selection];
+    if (act === 'link') return send(C.linkEdit(sel[0], sel[1], C.freshId(state.model.graph, 'link:operator:')));
+    if (act === 'super') {
+      const title = prompt('Title of the super node');
+      if (title === null) return;
+      const id = C.freshId(state.model.graph, 'super:');
+      return send(C.superEdit(state.selection, id, title || id)).then(ok => { if (ok) { state.selection.clear(); state.selection.add(id); restyle(); } });
+    }
+    if (act === 'removeLink') return send(C.removeLinkEdit(state.edge));
+    if (act === 'removeSuper') return send(C.removeSuperEdit(sel[0]));
+    if (act === 'rename') {
+      const n = state.model.nodes.get(sel[0]);
+      const title = prompt('New title of the super node', n.title || '');
+      if (title === null || !title.trim()) return;
+      return send(C.titleEdit(n.id, title));
+    }
+    if (act === 'edit') { const k = document.getElementById('new-key'); if (k) k.focus(); return; }
+    if (act === 'fold') {
+      if (state.folded.has(sel[0])) state.folded.delete(sel[0]); else state.folded.add(sel[0]);
+      return draw();
+    }
+  }
+
+  // --- the right-click menu: every act, the unavailable ones greyed with their reason ------------------------
+  function menu(x, y) {
+    const box = document.getElementById('menu');
+    box.innerHTML = '';
+    for (const a of C.actions(state.model, state.selection, state.edge)) {
+      if (a.why && (a.act === 'removeLink' || a.act === 'removeSuper' || a.act === 'rename' || a.act === 'fold')) continue;
+      const row = document.createElement('div');
+      row.className = a.why ? 'off' : '';
+      row.title = a.why || '';
+      row.innerHTML = '<span>' + esc(a.label) + '</span><kbd>' + esc(a.key) + '</kbd>';
+      if (!a.why) row.onclick = () => { hideMenu(); run(a.act); };
+      box.appendChild(row);
+    }
+    box.style.left = Math.min(x, window.innerWidth - 280) + 'px';
+    box.style.top = Math.min(y, window.innerHeight - 220) + 'px';
+    box.style.display = 'block';
+  }
+  function hideMenu() { document.getElementById('menu').style.display = 'none'; }
+  document.addEventListener('click', hideMenu);
+  svg.on('contextmenu', ev => { ev.preventDefault(); menu(ev.clientX, ev.clientY); });
+
+  // --- keys ---------------------------------------------------------------------------------------------------
+  document.addEventListener('keydown', ev => {
+    if (!state.model || ev.target.tagName === 'INPUT') return;
+    const key = ev.key;
+    const act = key === 'Delete' || key === 'Backspace' ? (state.edge ? 'removeLink' : 'removeSuper')
+        : key === 'F2' ? 'rename' : { l: 'link', s: 'super', e: 'edit', f: 'fold' }[key.toLowerCase()];
+    if (key === 'Escape') { hideMenu(); state.selection.clear(); state.edge = null; return restyle(); }
+    if (!act || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    ev.preventDefault();
+    run(act);
+  });
 
   function depthsFrom(m, projects) {
     const depth = new Map();
@@ -332,18 +452,10 @@
       b.title = o[key] || b.dataset.title;
     }
   }
-  document.getElementById('act-link').onclick = () => {
-    const [a, b] = [...state.selection];
-    send(C.linkEdit(a, b, C.freshId(state.model.graph, 'link:operator:')));
-  };
-  document.getElementById('act-super').onclick = () => {
-    const title = prompt('Title of the super node');
-    if (title === null) return;
-    const id = C.freshId(state.model.graph, 'super:');
-    send(C.superEdit(state.selection, id, title || id)).then(ok => { if (ok) { state.selection.clear(); state.selection.add(id); restyle(); } });
-  };
-  document.getElementById('act-unlink').onclick = () => send(C.removeLinkEdit(state.edge));
-  document.getElementById('act-unsuper').onclick = () => send(C.removeSuperEdit([...state.selection][0]));
+  document.getElementById('act-link').onclick = () => run('link');
+  document.getElementById('act-super').onclick = () => run('super');
+  document.getElementById('act-unlink').onclick = () => run('removeLink');
+  document.getElementById('act-unsuper').onclick = () => run('removeSuper');
 
   // --- kinds shown --------------------------------------------------------------------------------------------
   const kinds = document.getElementById('kinds');

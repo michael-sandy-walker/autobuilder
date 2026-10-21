@@ -38,8 +38,8 @@ public final class MergeSession {
     }
 
     /**
-     * One act on the session. {@code op}: addNode, addEdge, removeEdge, setMeta, addSuper, removeSuper. {@code by}: who did
-     * it -- structure, model or operator.
+     * One act on the session. {@code op}: addNode, addEdge, removeEdge, setMeta, setTitle, addSuper, removeSuper. {@code by}:
+     * who did it -- structure, model or operator.
      */
     public record Edit(String op, String by, Instant at, Map<String, Object> args) {
     }
@@ -96,6 +96,12 @@ public final class MergeSession {
                 if (!nodes.containsKey(target) && !edges.containsKey(target)) yield "no such node or edge";
                 yield str(a, "key") == null ? "metadata needs a key" : null;
             }
+            case "setTitle" -> {
+                Node n = nodes.get(str(a, "target"));
+                // A project's node is named by the project; only what the merge made -- a super node -- is renamed.
+                if (n == null || n.kind() != NodeKind.SUPER) yield "only a super node is renamed";
+                yield str(a, "title") == null || str(a, "title").isBlank() ? "a title is not blank" : null;
+            }
             case "addSuper" -> {
                 String id = str(a, "id");
                 if (id == null || nodes.containsKey(id) || edges.containsKey(id)) yield "a super node needs a new id";
@@ -131,6 +137,12 @@ public final class MergeSession {
                 if (value == null) m.remove(str(a, "key"));
                 else m.put(str(a, "key"), value);
                 m.put("lastEditedBy", e.by());
+            }
+            case "setTitle" -> {
+                Node n = nodes.get(str(a, "target"));
+                Map<String, Object> m = n.metadata();
+                m.put("lastEditedBy", e.by());
+                nodes.put(n.id(), new Node(n.id(), n.kind(), n.project(), str(a, "title").strip(), m));
             }
             case "addSuper" -> {
                 String id = str(a, "id");

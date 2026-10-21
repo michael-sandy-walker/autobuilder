@@ -107,5 +107,40 @@
     return { dashed, colour };
   }
 
-  root.MergeCanvas = { KINDS, model, visible, linkEdit, superEdit, removeLinkEdit, removeSuperEdit, metaEdit, freshId, offers, linkStyle };
+  function titleEdit(target, title) { return { op: 'setTitle', by: 'operator', args: { target, title } }; }
+
+  /**
+   * Every act the canvas has for the current selection -- one list read by the right-click menu, the keys and the status
+   * line, so the three cannot disagree. {@code why} is null when the act is available, else the reason it is not.
+   */
+  function actions(m, selection, edge) {
+    const o = offers(m, selection, edge);
+    const sel = [...selection];
+    const one = sel.length === 1 ? m.nodes.get(sel[0]) : null;
+    const foldable = one && (one.kind === 'GOAL' || one.kind === 'PROJECT');
+    return [
+      { act: 'link', label: 'Link the two selected nodes', key: 'L', why: o.link },
+      { act: 'super', label: 'Make a super node over the selection', key: 'S', why: o.super },
+      { act: 'removeLink', label: 'Remove this link', key: 'Delete', why: o.removeLink },
+      { act: 'removeSuper', label: 'Remove this super node', key: 'Delete', why: o.removeSuper },
+      { act: 'rename', label: 'Rename this super node', key: 'F2', why: one && one.kind === 'SUPER' ? null : 'select one super node' },
+      { act: 'edit', label: 'Edit metadata', key: 'E', why: one || edge ? null : 'select one node or a link' },
+      { act: 'fold', label: 'Fold / unfold what lies below', key: 'F', why: foldable ? null : 'select one goal or project' },
+    ];
+  }
+
+  /** The line under the toolbar: what is selected, and what can be done with it. */
+  function statusLine(m, selection, edge) {
+    const n = selection.size;
+    const what = edge ? 'a link' : n === 0 ? 'nothing' : n === 1 ? (m.nodes.get([...selection][0]) || {}).kind.toLowerCase()
+        : n + ' nodes';
+    const can = actions(m, selection, edge).filter(a => a.why === null);
+    const seen = new Set();
+    const keys = can.filter(a => !seen.has(a.act) && seen.add(a.act)).map(a => a.key + ' ' + a.label.toLowerCase());
+    return 'Selected: ' + what + (keys.length ? ' -- ' + keys.join(' \u00b7 ') : ' -- click a node or a link; ctrl-click or shift-drag for several')
+        + (n === 1 && !edge ? ' \u00b7 drag the + handle onto another node to link' : '');
+  }
+
+  root.MergeCanvas = { KINDS, model, visible, linkEdit, superEdit, removeLinkEdit, removeSuperEdit, metaEdit, titleEdit, freshId,
+    offers, linkStyle, actions, statusLine };
 })(typeof module !== 'undefined' ? module.exports : window);

@@ -1213,6 +1213,48 @@ public class GoalPlannerServiceClosureTest {
     }
 
     @Test
+    void autoCompleteRoot_judgesTheTreeOnDisk_notTheViewTheCycleStartedWith() throws IOException {
+        // cashbook run 2026-10-21_00-53-24: Ledger.java was merged in the cycle whose root closure followed; the closure
+        // showed the verifier the files of the cycle's START -- no Ledger.java -- and six criteria it met were refused.
+        doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).markCompleted(anyString());
+        java.nio.file.Path out = java.nio.file.Path.of("output");
+        when(fileService.resolveSecurePath("output")).thenReturn(out);
+        when(fileService.readFolderContentsResolved(out)).thenReturn(Map.of(
+                "src/main/java/org/warp/Coil.java", "package org.warp; public record Coil(int turns) {}",
+                "src/main/java/org/warp/Winder.java", "package org.warp; public class Winder { public int wind() { return 1; } }"));
+
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService verifier =
+                mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        when(verifier.verifyCompletion(any(), any(), any())).thenReturn(
+                com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.allClear());
+        service.setCriteriaVerificationService(verifier);
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .previousOutput(Map.of("src/main/java/org/warp/Coil.java", "package org.warp; public record Coil(int turns) {}"))
+                .build());
+
+        GoalEntity root = new GoalEntity("G", "root", "system", GoalType.GOAL, null);
+        root.setStatus(GoalStatus.ACTIVE);
+        GoalEntity done = new GoalEntity("D", "Add Winder", "planner", GoalType.SUBGOAL, "G");
+        done.setStatus(GoalStatus.SUBSUMED);
+        done.getMetadata().put("acceptanceCriteria", java.util.List.of("Winder.wind() returns 1"));
+        Map<String, GoalEntity> goalMap = new LinkedHashMap<>();
+        goalMap.put(root.getId(), root);
+        goalMap.put(done.getId(), done);
+        ReflectionTestUtils.setField(service, "goalMap", goalMap);
+        ReflectionTestUtils.setField(service, "rootGoalId", "G");
+
+        service.autoCompleteRootIfSatisfied();
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<Map<String, String>> shown = org.mockito.ArgumentCaptor.forClass(Map.class);
+        verify(verifier, org.mockito.Mockito.atLeastOnce()).verifyCompletion(any(), any(), shown.capture());
+        assertThat(shown.getValue()).containsKey("src/main/java/org/warp/Winder.java");
+    }
+
+    @Test
     void autoCompleteRoot_nonSpecBoundGoalCriteria_doNotGateRootCompletion() throws IOException {
         // Run 11 (2026-07-04): a planner-authored structural stepping-stone ("Create ... package",
         // origin-stamped REQUIRED, T4-BT binding UNKNOWN) carried the state-snapshot criterion

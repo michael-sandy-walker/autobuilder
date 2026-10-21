@@ -828,7 +828,7 @@ public class GoalPlannerService {
         if (goal == null || goal.getMetadata() == null) return 0;
         Object raw = goal.getMetadata().get("acceptanceCriteria");
         if (!(raw instanceof List<?> criteria) || criteria.isEmpty()) return 0;
-        Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+        Map<String, String> output = outputNow();
         if (output == null || output.isEmpty()) return 0; // cannot see the artifact — no opinion
 
         Map<Integer, Boolean> passStatus = getCriteriaPassStatus(goal);
@@ -4038,6 +4038,29 @@ public class GoalPlannerService {
                 .repairOnDisk(Path.of(currentCycleContext.outputPath()));
     }
 
+    /**
+     * The output tree as it is on disk now -- what a closure-time check judges.
+     *
+     * <p>The cycle's context holds the tree as the cycle FOUND it ({@code previousOutput}, read once at its start).
+     * A subgoal merged in this cycle and the root closure that follows it in the same cycle then judged code that
+     * no longer existed: cashbook run 2026-10-21_00-53-24 merged Ledger.java at 00:55:34, and the closure 18 seconds
+     * later showed the verifier only the files of the cycle's start -- no Ledger.java -- logged "evidence=complete",
+     * and refused six criteria the merged class met (13/13, the whole suite green), so the run ground at the
+     * completion edge until it was stopped. By the time anything closes, a candidate not accepted has been rolled
+     * back and an accepted one merged, so the tree on disk is the tree as merged. Falls back to the cycle's view when
+     * the tree cannot be read (or reads empty).
+     */
+    private Map<String, String> outputNow() {
+        Map<String, String> atStart = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+        try {
+            Map<String, String> now = fileService.readFolderContentsResolved(fileService.resolveSecurePath("output"));
+            return now == null || now.isEmpty() ? atStart : now;
+        } catch (Exception e) {
+            log.debug("closure view: output unreadable ({}) -- the cycle's view stands", e.getMessage());
+            return atStart;
+        }
+    }
+
     /** T4-CQ: inputs of the last closure attempt that left the root ACTIVE; derived, not restored. */
     private String lastIncompleteClosureInputs;
     private boolean closureRepeatReported;
@@ -4045,7 +4068,7 @@ public class GoalPlannerService {
     /** The tree the closure gates judge, plus every goal's state and criteria. */
     private String closureInputsFingerprint() {
         StringBuilder sb = new StringBuilder();
-        Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+        Map<String, String> output = outputNow();
         if (output != null) {
             new java.util.TreeMap<>(output).forEach((path, content) ->
                     sb.append(path).append('=').append(content == null ? 0 : content.hashCode()).append(';'));
@@ -4211,7 +4234,7 @@ public class GoalPlannerService {
             // minting; the query abstains when the spec names no endpoints or the built set
             // cannot be grounded (see EndpointSurfaceQuery).
             if (endpointSurfaceQuery != null) {
-                Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+                Map<String, String> output = outputNow();
                 // T4-CV: an artifact that cannot START cannot serve any endpoint the spec names,
                 // so the entry-point gap is raised in the SAME pass and listed first. Six recorded
                 // runs ended `Unable to find main class` with a compiling, endpoint-bearing tree —
@@ -4523,7 +4546,7 @@ public class GoalPlannerService {
             boolean seedObligationsToCheck = criteriaVerificationService != null && passingCriteria.isEmpty()
                     && !uncoveredSeedAtClosure(root, List.of()).isEmpty();
             if (criteriaVerificationService != null && (!passingCriteria.isEmpty() || seedObligationsToCheck)) {
-                Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+                Map<String, String> output = outputNow();
                 // T4-DK (open half): hand the SEED's own obligations to the same verifier. Closure
                 // used to check only the banked criteria of surviving subgoals, so a requirement
                 // whose subgoal was given up or subsumed left the ledger unchecked — which is how
@@ -5440,8 +5463,7 @@ public class GoalPlannerService {
                     }
                     var demanded = endpointSurfaceQuery.endpointFromWorkItem(g.getDescription());
                     if (demanded.isPresent()) {
-                        Map<String, String> output = currentCycleContext != null
-                                ? currentCycleContext.previousOutput() : null;
+                        Map<String, String> output = outputNow();
                         var built = endpointSurfaceQuery.isBuilt(demanded.get(), output);
                         if (built.isPresent() && !built.get()) {
                             log.warn("T2-EI D2: refusing FULFILLED for endpoint work item [{}] — {} still has no request mapping in the output",
@@ -5458,7 +5480,7 @@ public class GoalPlannerService {
                 if (com.walpro.autobuilder.core.build.BlockerTypes.isFromCriteriaGate(g.getMetadata())
                         && criteriaVerificationService != null) {
                     List<String> criteria = acceptanceCriteriaOf(g);
-                    Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
+                    Map<String, String> output = outputNow();
                     if (!criteria.isEmpty() && output != null && !output.isEmpty()) {
                         var check = criteriaVerificationService.verifyCompletion(g.getDescription(), criteria, output);
                         if (check.answered() && check.unconfirmed().isPresent()) {

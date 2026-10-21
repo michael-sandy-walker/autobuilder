@@ -1,0 +1,18 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 35c9f449951409c70f1d77df15d25f5b3b698c3b5c2c363487d66b62afd19ddf
+# body-sha256: 46f35f41a2bf56df373904b19f6cb22e6a6d8c3e4f5892b33966e508bf55f3a6
+Amount.parse reads a decimal with at most two places and an optional leading '-', and refuses anything else with IllegalArgumentException
+Amount.plus adds, Amount.negate changes the sign, and Amount.toString prints two places, as in "12.50"
+A Period runs from its first to its last day inclusive, from not after to; days() counts both ends
+Category is FOOD, TRAVEL, OFFICE, OTHER in that order
+An Expense needs a payee that is not blank and a positive amount
+ExpenseBook keeps expenses in order in a list that cannot be modified, totals them and one category's, and lists those within a period and the billable ones
+gate: tests Every test in PettyCashSpecTest passes
+gate: tests The whole test suite passes
+rule: Create Amount, Period, Category, Expense and ExpenseBook under src/main/java in package org.pettycash
+rule: Do not modify anything under src/test

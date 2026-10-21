@@ -1,0 +1,35 @@
+  A new project, adopted as it stands. Its tree holds only its build file (pom.xml), a README, and the
+  operator's specification under src/test/java; nothing exists under src/main/java yet. In its own words,
+  from its README:
+
+    "invoicer -- Invoices in one currency: money with its currency, billing periods, invoice lines and their
+    total."
+
+  It is a library, in package org.invoicer, with no dependencies beyond the JDK.
+
+  - Money is a record of an amount in cents (long cents) and a currency (String currency): three upper-case
+    letters, else IllegalArgumentException.
+  - Money.parse(String) reads "<decimal> <currency>": a decimal with at most two places and an optional
+    leading '-' ("12.50 EUR" is 1250 cents in EUR, "0.5 CHF" is 50), one space, the currency. Anything else
+    raises IllegalArgumentException.
+  - plus(Money) adds two amounts of the same currency (another currency raises IllegalArgumentException);
+    times(int n) multiplies. toString() prints two places and the currency: "12.50 EUR", "-0.05 USD".
+  - Period is a record of a first and a last day (LocalDate from, LocalDate to), from not after to, else
+    IllegalArgumentException. contains(LocalDate) is true from the first to the last day inclusive; days()
+    returns how many days it spans, both ends included (a long).
+  - LineItem is a record of a description (not blank), a quantity (int, positive) and a unit price (Money),
+    else IllegalArgumentException; amount() is the unit price times the quantity.
+  - Invoice is a class constructed with a number (String), a period (Period) and a currency (String).
+    addLine(LineItem) adds a line whose unit price is in the invoice's currency, else raises
+    IllegalArgumentException and adds nothing. lines() returns the lines in the order added, as a List that
+    cannot be modified. total() is the sum of the lines' amounts, zero in the invoice's currency when there
+    are none. number() and period() return what it was constructed with.
+
+  The specification is InvoicerSpecTest in src/test/java: its tests say exactly what the library must
+  return, and they fail until the code provides it.
+
+  OBJECTIVE: every test in InvoicerSpecTest passes, and the whole suite passes.
+
+  The classes to change are Money, Period, LineItem and Invoice -- none exists yet: create them under
+  src/main/java in package org.invoicer. DO NOT modify anything under src/test: the specification is the
+  operator's, and if one of its tests fails, the code is what is wrong.

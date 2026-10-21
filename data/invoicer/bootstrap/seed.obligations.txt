@@ -1,0 +1,19 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 65e1ccaf0efbb9d15151af56e9ffa84a0662eacaade2d53bdbce5860c653b120
+# body-sha256: 8d4acbaf286b4a7b667b4c95a97d83355585ec32b43dff28922a38d9667e8847
+Money is a record of cents and a currency of three upper-case letters, else IllegalArgumentException
+Money.parse reads a decimal with at most two places and an optional leading '-', one space and the currency, and refuses anything else with IllegalArgumentException
+Money.plus adds amounts of the same currency and refuses another currency, and Money.times multiplies
+Money.toString prints two places and the currency, as in "12.50 EUR"
+A Period runs from its first to its last day inclusive, from not after to; days() counts both ends
+A LineItem needs a description that is not blank and a positive quantity; its amount is the unit price times the quantity
+An Invoice adds only lines in its currency, keeps them in order in a list that cannot be modified, and totals them, zero in its currency when empty
+gate: tests Every test in InvoicerSpecTest passes
+gate: tests The whole test suite passes
+rule: Create Money, Period, LineItem and Invoice under src/main/java in package org.invoicer
+rule: Do not modify anything under src/test

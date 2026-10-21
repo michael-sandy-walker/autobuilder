@@ -1,0 +1,10 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# Both parents' own protected paths, placed with their code: what either parent did is kept.
+cashbook/src/test/**
+linetokens/src/test/**
+# The case: every source either project already has stays exactly as it is.
+cashbook/src/main/java/org/cashbook/ledger/Entry.java
+cashbook/src/main/java/org/cashbook/ledger/Ledger.java
+linetokens/src/main/java/org/linekit/tokens/LineTokenizer.java
+linetokens/src/main/java/org/linekit/tokens/TokenizeException.java
+linetokens/src/main/java/org/linekit/tokens/Token.java

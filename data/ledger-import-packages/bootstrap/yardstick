@@ -1,0 +1,3 @@
+# T4-DG: the yardstick this target is scored by. One line: <script> [mode]
+# An integration case: every specification passes, the tests and both projects' classes are as in the child, LedgerImport uses LineTokenizer, the whole suite passes.
+scripts/smoke_ledger_import_packages.sh terminating

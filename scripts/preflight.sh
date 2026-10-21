@@ -161,6 +161,8 @@ build_boot_smoke() {
     if [ $? -ne 0 ]; then echo "artifact-build-failed"; return; fi
     local ajar
     ajar=$(ls "$tree"/target/*.jar 2>/dev/null | head -1)
+    # T4-EC: a multi-module build has its jars in its modules (the yardstick finds the build root from one).
+    [ -n "$ajar" ] || ajar=$(ls "$tree"/*/target/*.jar 2>/dev/null | grep -v original | head -1)
     [ -n "$ajar" ] || { echo "no-jar"; return; }
     # T4-DD item 3: the yardstick must ask the question the TARGET's completion model licenses.
     # A tool that runs and terminates never prints a readiness banner and is never there to hold a

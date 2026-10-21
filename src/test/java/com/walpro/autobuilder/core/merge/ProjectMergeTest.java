@@ -108,4 +108,46 @@ class ProjectMergeTest {
         Files.createDirectories(p.getParent());
         Files.writeString(p, text);
     }
+
+    @Test
+    void integrateLaysOutTheChildByLayoutUnderANewRootHoldingTheGoal() throws IOException {
+        Path a = parent("a", ADOPTED, "ASpecTest", "Coil.turns() returns 1", true, "Coil.turns() returns 1\nrule: change only Coil\n");
+        Path b = tmp.resolve("b");
+        write(b.resolve("output/pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>org.knot</groupId>"
+                + "<artifactId>knots</artifactId><version>1.0</version><dependencies><dependency><groupId>org.rope</groupId>"
+                + "<artifactId>rope</artifactId><version>2</version></dependency></dependencies></project>");
+        write(b.resolve("output/src/main/java/org/knot/Knot.java"), "package org.knot;\npublic class Knot { }\n");
+        write(b.resolve("output/src/test/java/org/knot/KnotSpecTest.java"), "package org.knot;\nclass KnotSpecTest { }\n");
+        write(b.resolve("meta/GoalStack.json"), "{\"goalTree\": {\"id\": \"root-b\", \"description\": \"Tie knots\", \"type\": \"GOAL\","
+                + " \"status\": \"COMPLETED\", \"metadata\": {\"acceptanceCriteria\": [\"Knot exists\"]}, \"subGoals\": []}}");
+        write(b.resolve("bootstrap/seed.txt"), "Tie knots.");
+        write(b.resolve("bootstrap/protected-paths.txt"), "src/test/**\n");
+        write(a.resolve("output/pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>org.warp</groupId>"
+                + "<artifactId>coil</artifactId><version>0.1</version></project>");
+        String goal = "  Integrate knots into coil.\n";
+        ProjectMerge.Parent into = new ProjectMerge.Parent("coil", "run-a", a), brought = new ProjectMerge.Parent("knots", "run-b", b);
+
+        ProjectMerge.Result packages = ProjectMerge.integrate(into, brought, ProjectMerge.Layout.PACKAGES, goal, List.of("Coil ties a Knot"), NOW);
+        assertThat(packages.tree()).containsKeys(MAIN, "src/main/java/org/knot/Knot.java", "src/test/java/org/knot/KnotSpecTest.java");
+        assertThat(packages.tree().get("pom.xml")).contains("<artifactId>coil</artifactId>").contains("<artifactId>rope</artifactId>");
+        JsonNode root = packages.goalStack().path("goalTree");
+        assertThat(root.path("description").asText()).isEqualTo(goal);
+        assertThat(root.path("status").asText()).isEqualTo("ACTIVE");
+        assertThat(root.path("subGoals")).extracting(n -> n.path("metadata").path("mergedFrom").asText()).containsExactly("coil", "knots");
+        String obligations = packages.bootstrap().get("seed.obligations.txt");
+        assertThat(com.walpro.autobuilder.goal.SeedObligationsFile.read(obligations, goal).state().name()).isEqualTo("PRISTINE");
+        assertThat(obligations).contains("Coil ties a Knot").contains("Coil.turns() returns 1").doesNotContain("change only Coil");
+
+        ProjectMerge.Result dependency = ProjectMerge.integrate(into, brought, ProjectMerge.Layout.DEPENDENCY, goal, List.of("x"), NOW);
+        assertThat(dependency.tree()).doesNotContainKey("src/main/java/org/knot/Knot.java");
+        assertThat(dependency.tree().get("pom.xml")).contains("<artifactId>knots</artifactId>").doesNotContain("rope");
+
+        ProjectMerge.Result modules = ProjectMerge.integrate(into, brought, ProjectMerge.Layout.MODULES, goal, List.of("x"), NOW);
+        assertThat(modules.tree()).containsKeys("coil/" + MAIN, "knots/src/main/java/org/knot/Knot.java", "coil/pom.xml", "knots/pom.xml");
+        assertThat(modules.tree().get("pom.xml")).contains("<packaging>pom</packaging>").contains("<module>knots</module>")
+                .contains("<module>coil</module>");
+        assertThat(modules.tree().get("coil/pom.xml")).contains("<artifactId>knots</artifactId>");
+        assertThat(modules.bootstrap().get("protected-paths.txt")).contains("coil/src/test/**", "knots/src/test/**",
+                "members: coil/src/main/**");
+    }
 }

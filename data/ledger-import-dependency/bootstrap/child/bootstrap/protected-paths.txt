@@ -1,0 +1,3 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# Both parents' own protected paths, placed with their code: what either parent did is kept.
+src/test/**

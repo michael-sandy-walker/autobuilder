@@ -1,0 +1,6 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# Both parents' own protected paths, placed with their code: what either parent did is kept.
+src/test/**
+# The case: every source either project already has stays exactly as it is.
+src/main/java/org/cashbook/ledger/Entry.java
+src/main/java/org/cashbook/ledger/Ledger.java

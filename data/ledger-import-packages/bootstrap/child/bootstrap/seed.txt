@@ -1,0 +1,41 @@
+  Two projects, adopted, and now to be integrated: linetokens is brought into cashbook. Each was written
+  before, by someone else, and each already builds and passes its own tests. In their own words, from their
+  READMEs:
+
+    "cashbook -- An append-only ledger of entries in cents, per account: append, transfer between accounts,
+    balances, the accounts in use."
+    "linetokens -- Reads `name=value; name=value` lines into tokens: bare or quoted values, escapes inside
+    quotes, and an error that says where in the line it went wrong."
+
+  The two are one build now. linetokens' package org.linekit.tokens sits beside cashbook's package
+  org.cashbook.ledger under src/main/java, and both projects' tests are under src/test/java.
+
+  The integration wanted, with the focus on import: the ledger imports entries from name=value lines, read
+  with linetokens' LineTokenizer -- not with a second tokenizer.
+
+  - LedgerImport.importLines(Ledger ledger, List<String> lines) appends one Entry per accepted line, in order,
+    and returns an ImportReport.
+  - ImportReport is a record of the number of lines imported (int imported) and the rejected lines
+    (List<Rejection> rejected, in line order, a list that cannot be modified).
+  - Rejection is a record of the line's number counting from 1 (int line), a position (int position) and a
+    reason (String reason).
+  - A blank line is skipped; lines are numbered as given, blank ones included.
+  - A line is read with LineTokenizer.tokenize. A line it rejects is rejected with the TokenizeException's own
+    position and message.
+  - The names are account, amount and memo. account and amount are required; memo is optional (an Entry
+    without one has the empty memo). Any other name rejects the line with "unknown name '<name>'".
+  - amount is a decimal with at most two places and an optional leading '-' ("12.50" is 1250 cents, "-3" is
+    -300, "0.5" is 50); one that is not, or is zero, rejects the line with "invalid amount".
+  - A line without an account (or with a blank one) is rejected with "missing account", one without an amount
+    with "missing amount". Rejections that do not come from the tokenizer have position -1.
+  - A rejected line appends nothing and does not stop the import.
+
+  The specification is LedgerImportSpecTest, LedgerSpecTest and LineTokensSpecTest in src/test/java: LedgerImportSpecTest says exactly what the integration must do and fails until
+  the code provides it; the other two are each project's own specification and keep passing.
+
+  OBJECTIVE: every test in LedgerImportSpecTest passes, and the whole suite passes.
+
+  The classes to change are LedgerImport, ImportReport and Rejection -- none exists yet: create them under
+  src/main/java in package org.cashbook.ledger. DO NOT modify anything under src/test: the specifications and
+  tests are the operators', and if one fails, the code is what is wrong. Keep every class either project
+  already has exactly as it is.

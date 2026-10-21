@@ -1,0 +1,462 @@
+{
+  "currentGoalId" : "goal-6d28778b-aeed-375e-8935-107bcbb6a22d",
+  "goalTree" : {
+    "id" : "goal-6d28778b-aeed-375e-8935-107bcbb6a22d",
+    "description" : "  Two projects, adopted, and now to be integrated: linetokens is brought into cashbook. Each was written\n  before, by someone else, and each already builds and passes its own tests. In their own words, from their\n  READMEs:\n\n    \"cashbook -- An append-only ledger of entries in cents, per account: append, transfer between accounts,\n    balances, the accounts in use.\"\n    \"linetokens -- Reads `name=value; name=value` lines into tokens: bare or quoted values, escapes inside\n    quotes, and an error that says where in the line it went wrong.\"\n\n  The build has two modules: linetokens/ is the linetokens project, cashbook/ is the cashbook project and\n  depends on linetokens. The root pom.xml only lists the two modules. Both projects' tests are in their\n  modules' src/test/java.\n\n  The integration wanted, with the focus on import: the ledger imports entries from name=value lines, read\n  with linetokens' LineTokenizer -- not with a second tokenizer.\n\n  - LedgerImport.importLines(Ledger ledger, List<String> lines) appends one Entry per accepted line, in order,\n    and returns an ImportReport.\n  - ImportReport is a record of the number of lines imported (int imported) and the rejected lines\n    (List<Rejection> rejected, in line order, a list that cannot be modified).\n  - Rejection is a record of the line's number counting from 1 (int line), a position (int position) and a\n    reason (String reason).\n  - A blank line is skipped; lines are numbered as given, blank ones included.\n  - A line is read with LineTokenizer.tokenize. A line it rejects is rejected with the TokenizeException's own\n    position and message.\n  - The names are account, amount and memo. account and amount are required; memo is optional (an Entry\n    without one has the empty memo). Any other name rejects the line with \"unknown name '<name>'\".\n  - amount is a decimal with at most two places and an optional leading '-' (\"12.50\" is 1250 cents, \"-3\" is\n    -300, \"0.5\" is 50); one that is not, or is zero, rejects the line with \"invalid amount\".\n  - A line without an account (or with a blank one) is rejected with \"missing account\", one without an amount\n    with \"missing amount\". Rejections that do not come from the tokenizer have position -1.\n  - A rejected line appends nothing and does not stop the import.\n\n  The specification is LedgerImportSpecTest, LedgerSpecTest and LineTokensSpecTest in src/test/java: LedgerImportSpecTest says exactly what the integration must do and fails until\n  the code provides it; the other two are each project's own specification and keep passing.\n\n  OBJECTIVE: every test in LedgerImportSpecTest passes, and the whole suite passes.\n\n  The classes to change are LedgerImport, ImportReport and Rejection -- none exists yet: create them under\n  cashbook/src/main/java in package org.cashbook.ledger. DO NOT modify anything under linetokens/src/test and cashbook/src/test: the specifications and\n  tests are the operators', and if one fails, the code is what is wrong. Keep every class either project\n  already has exactly as it is.\n",
+    "role" : "planner",
+    "type" : "GOAL",
+    "status" : "ACTIVE",
+    "created" : "2026-10-21T12:26:01.657227656Z",
+    "metadata" : {
+      "mergeParents" : "cashbook=2026-10-21_14-04-07 (receiving), linetokens=2026-10-21_00-42-59 (brought in)",
+      "mergeLayout" : "MODULES"
+    },
+    "subGoals" : [ {
+      "id" : "goal-f038e060-569b-303e-9a9d-4030038e5a18",
+      "description" : "  A new project, adopted as it stands. Its tree holds only its build file (pom.xml), a README, and the\n  operator's specification under src/test/java; nothing exists under src/main/java yet. In its own words,\n  from its README:\n\n    \"cashbook -- An append-only ledger of entries in cents, per account: append, transfer between accounts,\n    balances, the accounts in use.\"\n\n  It is a library, in package org.cashbook.ledger, with no dependencies beyond the JDK.\n\n  - Entry is a record of an account (String), an amount in cents (long, amountCents) and a memo (String).\n    An entry needs an account that is not null or blank and an amount that is not zero, else it raises\n    IllegalArgumentException; a null memo becomes the empty string.\n  - Ledger is a class with a no-argument constructor; it starts empty.\n  - append(Entry) adds the entry at the end and returns its number, counting from 1.\n  - transfer(String from, String to, long cents, String memo) appends two entries with that memo: first\n    from's debit (-cents), then to's credit (+cents), and returns the number of the credit. It raises\n    IllegalArgumentException, appending nothing, when cents is not positive or from and to are the same.\n  - entries() returns every entry in the order appended, as a List that cannot be modified and does not change\n    when more are appended later.\n  - balance(String account) returns the sum of that account's amounts as a long, 0 for an account with no entries.\n  - accounts() returns the accounts that have entries, each once, in alphabetical order, as a List that cannot\n    be modified.\n\n  The specification is LedgerSpecTest in src/test/java: its tests say exactly what the ledger must return,\n  and they fail until the code provides it.\n\n  OBJECTIVE: every test in LedgerSpecTest passes, and the whole suite passes.\n\n  The classes to change are Entry and Ledger -- neither exists yet: create them under src/main/java in package\n  org.cashbook.ledger. DO NOT modify anything under src/test: the specification is the operator's, and if one\n  of its tests fails, the code is what is wrong.\n",
+      "role" : "system",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1.7925843076004057E9,
+      "completed" : 1.792584418222509E9,
+      "resolution" : "root goal satisfied: closure ledger clear: 2 subgoal(s) accounted for",
+      "metadata" : {
+        "planningRunId" : 2,
+        "activeAttemptId" : "attempt-95bc89ca-ef56-4897-98bb-899750e7bdad",
+        "plannedOnce" : true,
+        "mergedFrom" : "cashbook",
+        "sourceRunId" : "2026-10-21_14-04-07",
+        "sourceGoalId" : "goal-a3e9a3ad-ab21-49d7-883c-e14dade4f41b",
+        "sourceLineageId" : "lineage-904db4fc-3836-41d1-b3ee-3f282674a608"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-a46ab3c0-d849-38e0-819d-af6daa8c1d62",
+        "description" : "Create Entry in package org.cashbook.ledger under src/main/java as a record of account (String), amountCents (long), memo (String), with validation: account must be non-null and non-blank, amountCents must be non-zero (else IllegalArgumentException), and a null memo is normalized to the empty string.",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7925843169497886E9,
+        "completed" : 1.7925843499242127E9,
+        "resolution" : "fulfilled (score=0.81): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 1,
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "new Entry(\"a\", 100L, null) yields account \"a\", amountCents 100, memo \"\"", "new Entry(null, 100L, \"m\") throws IllegalArgumentException", "new Entry(\"  \", 100L, \"m\") throws IllegalArgumentException", "new Entry(\"a\", 0L, \"m\") throws IllegalArgumentException" ],
+          "lastUpdated" : "2026-10-21T12:05:49.886387833Z",
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-95bc89ca-ef56-4897-98bb-899750e7bdad",
+          "activeAttemptId" : "attempt-083a155d-041c-477f-92e0-44c33350e76a",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC",
+            "4" : "SPEC"
+          },
+          "mergedFiles" : [ "Entry.java" ],
+          "mergeCount" : 1,
+          "mergedFrom" : "cashbook",
+          "sourceRunId" : "2026-10-21_14-04-07",
+          "sourceGoalId" : "goal-3b72adc6-6fff-43dc-8716-e2c27c450b66",
+          "sourceLineageId" : "lineage-904db4fc-3836-41d1-b3ee-3f282674a608",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-a2ef31f1-2ee7-3dd9-804a-93bbdeb10aac",
+        "description" : "[BUILD_FIX] Make the application packageable and startable — packaging failed: [ERROR] COMPILATION ERROR : | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/cashbook/output/src/test/java/org/cashbook/ledger/LedgerSpecTest.java:[15,9] cannot find symbol | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/cashbook/output/src/test/java/org/cashbook/ledger/LedgerSpecTest.java:[15,29] cannot find symbol",
+        "role" : "coverage-retro",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7925843530225844E9,
+        "completed" : 1.7925844075282505E9,
+        "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+        "metadata" : {
+          "planningRunId" : 0,
+          "acceptanceCriteria" : [ "The project packages into a startable application artifact without build errors" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-95bc89ca-ef56-4897-98bb-899750e7bdad",
+          "activeAttemptId" : "attempt-1fc2a800-33dc-4ad6-9a73-3d88153b65d2",
+          "criteriaBinding" : {
+            "1" : "AUTHORED"
+          },
+          "originatingGate" : "package-gate",
+          "blockerType" : "BUILD_FIX",
+          "goalKind" : "HYBRID",
+          "mergeCount" : 1,
+          "mergedFiles" : [ "Ledger.java" ],
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T12:06:47.503073066Z",
+          "mergedFrom" : "cashbook",
+          "sourceRunId" : "2026-10-21_14-04-07",
+          "sourceGoalId" : "goal-00bf0672-f7ae-452c-9518-fe4ab7f859c2",
+          "sourceLineageId" : "lineage-904db4fc-3836-41d1-b3ee-3f282674a608",
+          "parentCriteriaPassStatus" : {
+            "1" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-b6d857c4-40b5-3962-8183-5b1b9831ffdb",
+      "description" : "  A new project, adopted as it stands. Its tree holds only its build file (pom.xml), a README, and the\n  operator's specification under src/test/java; nothing exists under src/main/java yet. In its own words,\n  from its README:\n\n    \"linetokens -- Reads `name=value; name=value` lines into tokens: bare or quoted values, escapes inside\n    quotes, and an error that says where in the line it went wrong.\"\n\n  It is a library, in package org.linekit.tokens, with no dependencies beyond the JDK.\n\n  - Token is a record of a name and a value (both String).\n  - LineTokenizer.tokenize(String line) returns the line's pairs as a List of Token, in line order; the list\n    cannot be modified.\n  - Pairs are separated by ';'. A separator at the very end of the line is allowed. An empty or blank line\n    has no tokens.\n  - A pair is name=value. Spaces around the name and around a bare value are not part of them.\n  - A name starts with a letter and holds only letters, digits and underscores.\n  - A bare value is everything up to the next ';' (it may be empty).\n  - A quoted value starts with '\"' (spaces before the quote are skipped) and ends at the next '\"' that is not\n    escaped. Inside it ';', '=' and spaces are part of the value; a backslash followed by '\"' or by a\n    backslash stands for that character. After the closing quote only spaces may come before the next ';'.\n  - A line that breaks these rules raises TokenizeException, an IllegalArgumentException with a position()\n    -- the 0-based index in the line where the problem is -- and a message that names it:\n      a pair without '='                 -> \"missing '='\", at the pair's first character\n      a name that is not a name          -> \"invalid name\", where the name starts (position 0 for \"=x\")\n      a quote that is never closed       -> \"unterminated quote\", at the opening quote\n      anything after a closing quote     -> \"after closing quote\", where that text starts\n      a name already used in the line    -> \"duplicate name\", where the second one starts\n  - TokenizeException has a constructor TokenizeException(String message, int position).\n\n  The specification is LineTokensSpecTest in src/test/java: its tests say exactly what the library must\n  return, and they fail until the code provides it.\n\n  OBJECTIVE: every test in LineTokensSpecTest passes, and the whole suite passes.\n\n  The classes to change are Token, TokenizeException and LineTokenizer -- none exists yet: create them under\n  src/main/java in package org.linekit.tokens. DO NOT modify anything under src/test: the specification is\n  the operator's, and if one of its tests fails, the code is what is wrong.\n",
+      "role" : "system",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1.79253623458059E9,
+      "completed" : 1.792536697506202E9,
+      "resolution" : "root goal satisfied: closure ledger clear: 9 subgoal(s) accounted for (1 subsumed)",
+      "metadata" : {
+        "planningRunId" : 4,
+        "activeAttemptId" : "attempt-d1dec820-efdd-4bdb-95ea-072aad174547",
+        "planRationale" : "The root goal defines a single library resource (the line-tokenizer) composed of three classes; I will decompose it in dependency order (exception → token → tokenizer) so each layer builds on a stable foundation, with the tokenizer subgoal covering all parsing rules and error positions from the spec.",
+        "mergedFrom" : "linetokens",
+        "sourceRunId" : "2026-10-21_00-42-59",
+        "sourceGoalId" : "goal-2162b6dd-a4ce-43fa-8045-faa082e66855",
+        "sourceLineageId" : "lineage-ed7a1648-c6fd-419a-8b6e-b94e197ba99a"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-bfa745fb-9105-3bc8-bd29-7e78af788dfb",
+        "description" : "Create TokenizeException in package org.linekit.tokens under src/main/java: an IllegalArgumentException with a constructor TokenizeException(String message, int position) and a position() accessor returning the 0-based index.",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.792536249920872E9,
+        "completed" : 1.7925362867512584E9,
+        "resolution" : "fulfilled (score=0.91): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 1,
+          "undefinedSymbols" : "TokenizeException",
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "Create TokenizeException.java", "TokenizeException is a subclass of IllegalArgumentException", "A TokenizeException built with (message, position) exposes that exact message and position via position()" ],
+          "lastUpdated" : "2026-10-20T22:44:46.727016331Z",
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-d1dec820-efdd-4bdb-95ea-072aad174547",
+          "activeAttemptId" : "attempt-70533ad7-aea0-45b7-a606-8464f5a5db22",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC"
+          },
+          "mergedFiles" : [ "TokenizeException.java" ],
+          "mergeCount" : 1,
+          "mergedFrom" : "linetokens",
+          "sourceRunId" : "2026-10-21_00-42-59",
+          "sourceGoalId" : "goal-7d183e71-1b0f-4162-8623-7a43999455c6",
+          "sourceLineageId" : "lineage-ed7a1648-c6fd-419a-8b6e-b94e197ba99a",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-bacc2c87-f746-3237-94bf-603c96e0e2d0",
+        "description" : "Create Token in package org.linekit.tokens under src/main/java: a record of name and value (both String) with name() and value() accessors.",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7925362520002413E9,
+        "completed" : 1.7925363225611355E9,
+        "resolution" : "fulfilled (score=0.87): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 1,
+          "acceptanceCriteria" : [ "Token exposes name() and value() returning the supplied String values" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-d1dec820-efdd-4bdb-95ea-072aad174547",
+          "activeAttemptId" : "attempt-1921c41a-3e3f-4e83-bb7a-b719843bdfbd",
+          "criteriaBinding" : {
+            "1" : "SPEC"
+          },
+          "goalKind" : "EXECUTABLE",
+          "mergeCount" : 1,
+          "mergedFiles" : [ "Token.java" ],
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-20T22:45:22.545545044Z",
+          "mergedFrom" : "linetokens",
+          "sourceRunId" : "2026-10-21_00-42-59",
+          "sourceGoalId" : "goal-04dfca0c-d24f-4471-b2af-ddaee4054b2d",
+          "sourceLineageId" : "lineage-ed7a1648-c6fd-419a-8b6e-b94e197ba99a",
+          "parentCriteriaPassStatus" : {
+            "1" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-7a5b7904-c8ed-313f-b5fc-40da21aef747",
+        "description" : "Create LineTokenizer in package org.linekit.tokens under src/main/java with a static tokenize(String line) returning an unmodifiable List<Token> in line order, implementing all spec rules: ';' separation (trailing separator allowed), empty/blank line yields no tokens, name=value pairs with trimmed name and bare value, name validation (letter start; letters/digits/underscores), bare value up to next ';', quoted values (skip leading spaces, ';'/'='/spaces inside, backslash-escaped '\"' and '\\\\', only spaces allowed before next ';'), and TokenizeException with the exact messages and 0-based positions for missing '=', invalid name, unterminated quote, after closing quote, and duplicate name.",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1.7925362529485154E9,
+        "givenUp" : 1.7925364406060708E9,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 1,
+          "acceptanceCriteria" : [ "Create LineTokenizer.java", "Create TokenizeException.java", "tokenize returns a list that cannot be modified (add/remove/set throw UnsupportedOperationException)", "Pairs appear in line order with name and value trimmed of surrounding spaces for bare values", "A trailing ';' and an empty/blank line produce an empty token list", "A pair without '=' raises TokenizeException \"missing '='\" at the pair's first character", "A non-name (e.g. \"=x\") raises TokenizeException \"invalid name\" at the name's start (position 0 for \"=x\")", "An unclosed quote raises TokenizeException \"unterminated quote\" at the opening quote", "Non-space text after a closing quote raises TokenizeException \"after closing quote\" at that text's start", "A repeated name raises TokenizeException \"duplicate name\" at the second occurrence's start", "Quoted values preserve ';', '=', and spaces, and backslash-escaped '\"' and '\\\\' decode to the literal character", "Every test in LineTokensSpecTest passes" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-d1dec820-efdd-4bdb-95ea-072aad174547",
+          "activeAttemptId" : "attempt-f508ec4b-4ba2-4b9c-a5e5-1a77a6edba74",
+          "criteriaBinding" : {
+            "11" : "SPEC",
+            "1" : "SPEC",
+            "12" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC",
+            "4" : "SPEC",
+            "5" : "SPEC",
+            "6" : "SPEC",
+            "7" : "SPEC",
+            "8" : "SPEC",
+            "9" : "SPEC",
+            "10" : "SPEC"
+          },
+          "undefinedSymbols" : "LineTokenizer,TokenizeException",
+          "goalKind" : "HYBRID",
+          "mergeCount" : 1,
+          "mergedFiles" : [ "LineTokenizer.java" ],
+          "lastProgressState" : "PROGRESSING",
+          "lastUpdated" : "2026-10-20T22:46:17.626240935Z",
+          "subsumptionReason" : "REPLACED",
+          "plannedOnce" : true,
+          "mergedFrom" : "linetokens",
+          "sourceRunId" : "2026-10-21_00-42-59",
+          "sourceGoalId" : "goal-b84b4f66-c057-4185-a965-899345747e0e",
+          "sourceLineageId" : "lineage-ed7a1648-c6fd-419a-8b6e-b94e197ba99a",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true,
+            "5" : true,
+            "6" : true,
+            "7" : true,
+            "8" : false,
+            "9" : true,
+            "10" : true,
+            "11" : false,
+            "12" : false
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-ac86f017-c88d-3dde-8a43-55c9c2558dd7",
+          "description" : "Fix the quoted-value parsing loop in src/main/java/org/linekit/tokens/LineTokenizer.java so that a backslash-escaped '\"' and '\\\\' inside a quoted value are decoded to the literal character, ';'/'='/spaces are preserved inside the value, and a quote that is genuinely never closed raises TokenizeException \"unterminated quote\" at the opening quote (no false \"unterminated quote\" for valid quoted values)",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1.7925364406656456E9,
+          "completed" : 1.7925364587030272E9,
+          "resolution" : "all acceptance criteria banked",
+          "metadata" : {
+            "planningRunId" : 2,
+            "cumulativeStagnatingCycles" : 1,
+            "lastProgressState" : "FULFILLED",
+            "acceptanceCriteria" : [ "A quoted value containing ';', '=', and spaces is returned with those characters preserved in the value", "A backslash before '\"' inside a quoted value yields a literal '\"' in the value", "A backslash before a backslash inside a quoted value yields a single literal '\\' in the value", "A quote that is never closed raises TokenizeException \"unterminated quote\" at the opening quote's 0-based index", "No valid quoted value (properly closed) raises \"unterminated quote\"" ],
+            "lastUpdated" : "2026-10-20T22:47:38.687110216Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-f508ec4b-4ba2-4b9c-a5e5-1a77a6edba74",
+            "activeAttemptId" : "attempt-0bcf79e0-0a59-4057-817f-24427e15533e",
+            "criteriaBinding" : {
+              "1" : "SPEC",
+              "2" : "SPEC",
+              "3" : "SPEC",
+              "4" : "SPEC",
+              "5" : "SPEC"
+            },
+            "mergedFiles" : [ "LineTokenizer.java" ],
+            "mergeCount" : 1,
+            "mergedFrom" : "linetokens",
+            "sourceRunId" : "2026-10-21_00-42-59",
+            "sourceGoalId" : "goal-775dae17-5fd1-47ef-bf6b-4eee7109cc95",
+            "sourceLineageId" : "lineage-ed7a1648-c6fd-419a-8b6e-b94e197ba99a",
+            "parentCriteriaPassStatus" : {
+              "1" : true,
+              "2" : true,
+              "3" : true,
+              "4" : true,
+              "5" : true
+            }
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-3f148504-83ba-3e49-a21f-bbced0d2f3c5",
+          "description" : "Ensure every test in LineTokensSpecTest passes by making the code satisfy the spec exactly, without modifying anything under src/test",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1.7925364431408832E9,
+          "completed" : 1.7925364828012552E9,
+          "resolution" : "acceptance criteria verified against current code -- fulfilled instead of superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 2,
+            "acceptanceCriteria" : [ "Every test in LineTokensSpecTest passes", "No file under src/test is changed" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-f508ec4b-4ba2-4b9c-a5e5-1a77a6edba74",
+            "activeAttemptId" : "attempt-e8fd4199-7568-4845-ab79-55c827c90644",
+            "criteriaBinding" : {
+              "1" : "SPEC",
+              "2" : "SPEC"
+            },
+            "lastProgressState" : "FULFILLED",
+            "lastUpdated" : "2026-10-20T22:48:02.787933589Z",
+            "mergedFrom" : "linetokens",
+            "sourceRunId" : "2026-10-21_00-42-59",
+            "sourceGoalId" : "goal-233e3d9a-c28f-4b38-95c0-ec334b8a0f61",
+            "sourceLineageId" : "lineage-ed7a1648-c6fd-419a-8b6e-b94e197ba99a",
+            "parentCriteriaPassStatus" : {
+              "1" : true,
+              "2" : true
+            }
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-8a3d7c14-dddf-30ac-a23b-e0b0c797d68b",
+          "description" : "Verify the duplicate-name detection in src/main/java/org/linekit/tokens/LineTokenizer.java raises TokenizeException \"duplicate name\" at the 0-based index where the second occurrence of the name starts, and that a name used once is accepted",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1.7925365057120287E9,
+          "completed" : 1.7925365679879062E9,
+          "resolution" : "acceptance criteria verified against current code -- fulfilled instead of superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 3,
+            "acceptanceCriteria" : [ "A line with the same name appearing twice raises TokenizeException with message \"duplicate name\" and position() equal to the 0-based index of the second name's first character", "A line with each name appearing exactly once tokenizes successfully" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-f508ec4b-4ba2-4b9c-a5e5-1a77a6edba74",
+            "activeAttemptId" : "attempt-d6e12bbc-74b3-4dd0-a83d-caf15dc50532",
+            "criteriaBinding" : {
+              "1" : "SPEC",
+              "2" : "SPEC"
+            },
+            "goalKind" : "COGNITIVE",
+            "lastProgressState" : "STAGNATING",
+            "lastUpdated" : "2026-10-20T22:49:55.027881896Z",
+            "cumulativeStagnatingCycles" : 2,
+            "mergedFrom" : "linetokens",
+            "sourceRunId" : "2026-10-21_00-42-59",
+            "sourceGoalId" : "goal-cdd278b2-e9b1-4259-9031-e8c6f0ccb932",
+            "sourceLineageId" : "lineage-ed7a1648-c6fd-419a-8b6e-b94e197ba99a",
+            "parentCriteriaPassStatus" : {
+              "1" : true,
+              "2" : true
+            }
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-e870cd6d-84fa-32c8-aa1c-6d4bbac56a40",
+          "description" : "Verify that LineTokenizer.tokenize returns an unmodifiable List<Token> in line order",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1.7925365076333942E9,
+          "completed" : 1.7925365717269971E9,
+          "resolution" : "acceptance criteria verified against current code -- fulfilled instead of superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 3,
+            "acceptanceCriteria" : [ "Calling add/remove on the returned list throws UnsupportedOperationException", "Tokens appear in the same order as their pairs in the line" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-f508ec4b-4ba2-4b9c-a5e5-1a77a6edba74",
+            "activeAttemptId" : "attempt-6417a4da-1160-4ec6-93ce-85da8d2bdbc6",
+            "criteriaBinding" : {
+              "1" : "SPEC",
+              "2" : "SPEC"
+            },
+            "lastProgressState" : "FULFILLED",
+            "lastUpdated" : "2026-10-20T22:49:31.712846778Z",
+            "mergedFrom" : "linetokens",
+            "sourceRunId" : "2026-10-21_00-42-59",
+            "sourceGoalId" : "goal-e7775bd1-bb46-4de8-b48e-285e88777031",
+            "sourceLineageId" : "lineage-ed7a1648-c6fd-419a-8b6e-b94e197ba99a",
+            "parentCriteriaPassStatus" : {
+              "1" : true,
+              "2" : true
+            }
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-648a9421-260d-39aa-9b06-34367bd8fb7f",
+          "description" : "Ensure no file under src/test is changed",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1.7925365086226606E9,
+          "completed" : 1.792536575200519E9,
+          "resolution" : "acceptance criteria verified against current code -- fulfilled instead of superseded by replanning",
+          "metadata" : {
+            "planningRunId" : 3,
+            "acceptanceCriteria" : [ "No file under src/test is changed" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-f508ec4b-4ba2-4b9c-a5e5-1a77a6edba74",
+            "activeAttemptId" : "attempt-cb38ae42-2c55-4f1f-b395-083fc447b79f",
+            "criteriaBinding" : {
+              "1" : "SPEC"
+            },
+            "lastProgressState" : "FULFILLED",
+            "lastUpdated" : "2026-10-20T22:49:35.181003298Z",
+            "mergedFrom" : "linetokens",
+            "sourceRunId" : "2026-10-21_00-42-59",
+            "sourceGoalId" : "goal-775eae83-870d-4296-b496-d8a6a74b1dfc",
+            "sourceLineageId" : "lineage-ed7a1648-c6fd-419a-8b6e-b94e197ba99a",
+            "parentCriteriaPassStatus" : {
+              "1" : true
+            }
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      }, {
+        "id" : "goal-2ebe833f-0f3d-3f9f-a352-93473358502f",
+        "description" : "[BUILD_FIX] Make the project's own test suite pass — test suite failing (Tests run: 16, Failures: 0, Errors: 1): Tests, org.linekit.tokens.LineTokensSpecTest.aQuotedValueKeepsSeparatorsSpacesAndEquals; root cause(s): aQuotedValueKeepsSeparatorsSpacesAndEquals: org.linekit.tokens.TokenizeException: unterminated quote",
+        "role" : "coverage-retro",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7925365829645553E9,
+        "completed" : 1.7925366818820746E9,
+        "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+        "metadata" : {
+          "planningRunId" : 0,
+          "lastProgressState" : "FULFILLED",
+          "acceptanceCriteria" : [ "The project's own automated test suite passes" ],
+          "lastUpdated" : "2026-10-20T22:51:21.866653839Z",
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-d1dec820-efdd-4bdb-95ea-072aad174547",
+          "activeAttemptId" : "attempt-35a1c43b-3601-4508-ae0a-cb60ae9fc104",
+          "criteriaBinding" : {
+            "1" : "AUTHORED"
+          },
+          "originatingGate" : "test-gate",
+          "mergedFiles" : [ "LineTokenizer.java" ],
+          "mergeCount" : 1,
+          "blockerType" : "BUILD_FIX",
+          "mergedFrom" : "linetokens",
+          "sourceRunId" : "2026-10-21_00-42-59",
+          "sourceGoalId" : "goal-e79cb793-f604-4da1-9602-cd53be8a998d",
+          "sourceLineageId" : "lineage-ed7a1648-c6fd-419a-8b6e-b94e197ba99a",
+          "parentCriteriaPassStatus" : {
+            "1" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    } ]
+  }
+}

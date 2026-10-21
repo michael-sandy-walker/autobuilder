@@ -1,0 +1,41 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 8bf5da44b8b4baccf3f14d9670bd81b31a80fb64a2a25773db9317178b4b89d2
+# body-sha256: 575785002668df04461b9a8f5b0ac41a4ee4d44f88224766df6c90ee35c39127
+LedgerImport.importLines(ledger, lines) appends one Entry per accepted line, in order, and returns an ImportReport of the number imported and the rejected lines in line order
+A line is read with linetokens' LineTokenizer.tokenize, and a line it rejects is rejected with the TokenizeException's own position and message
+A blank line is skipped, and lines are numbered from 1 as given, blank ones included
+The names are account, amount and memo; any other name rejects the line with "unknown name '<name>'"
+amount is a decimal with at most two places and an optional leading '-', and one that is not, or is zero, rejects the line with "invalid amount"
+A line without an account or with a blank one is rejected with "missing account", and one without an amount with "missing amount", at position -1
+A rejected line appends nothing and does not stop the import
+The list of rejected lines cannot be modified
+gate: tests Every test in LedgerImportSpecTest passes
+gate: tests The whole test suite passes
+rule: Create LedgerImport, ImportReport and Rejection in package org.cashbook.ledger
+rule: Do not modify anything under the projects' src/test, and keep every existing class of both projects as it is
+An Entry needs an account that is not null or blank and a non-zero amount, else it raises IllegalArgumentException
+An Entry with a null memo has the empty string as its memo
+Ledger.append(entry) adds the entry at the end and returns its number counting from 1
+Ledger.transfer(from, to, cents, memo) appends from's debit then to's credit and returns the number of the credit
+Ledger.transfer raises IllegalArgumentException and appends nothing when cents is not positive or from and to are the same
+Ledger.entries() returns every entry in order, in a list that cannot be modified and does not change when more are appended
+Ledger.balance(account) returns the sum of that account's amounts, 0 for an account with no entries
+Ledger.accounts() returns the accounts with entries, each once, in alphabetical order, in a list that cannot be modified
+gate: tests Every test in LedgerSpecTest passes
+LineTokenizer.tokenize(line) returns the line's name=value pairs as Tokens in line order, in a list that cannot be modified
+Pairs are separated by ';', a separator at the end of the line is allowed, and an empty or blank line has no tokens
+Spaces around a name and around a bare value are not part of them, and a bare value may be empty
+A name starts with a letter and holds only letters, digits and underscores
+A quoted value keeps ';', '=' and spaces, and a backslash before '"' or a backslash stands for that character
+A pair without '=' raises TokenizeException "missing '='" at the pair's first character
+A name that is not a name raises TokenizeException "invalid name" where the name starts
+A quote that is never closed raises TokenizeException "unterminated quote" at the opening quote
+Text after a closing quote raises TokenizeException "after closing quote" where that text starts
+A name already used in the line raises TokenizeException "duplicate name" where the second one starts
+TokenizeException is an IllegalArgumentException whose position() is the 0-based index of the problem
+gate: tests Every test in LineTokensSpecTest passes

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Merge Canvas</title>
+<style>
+  :root {
+    --bg: #050710; --panel: #0b1220; --panel-2: #111827; --rule: #1f2937;
+    --ink: #e5e7eb; --muted: #9ca3af; --dim: #6b7280; --accent: #3b82f6;
+    --same: #86efac; --related: #fcd34d; --different: #fca5a5; --operator: #c4b5fd;
+    --project: #60a5fa; --goal: #93c5fd; --criterion: #6b7280; --type: #f472b6; --operation: #fb923c; --super: #facc15;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 ui-sans-serif, system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 8px 14px; background: var(--panel);
+    border-bottom: 1px solid var(--rule); }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header input[type=text] { background: var(--panel-2); color: var(--ink); border: 1px solid var(--rule); padding: 3px 6px; border-radius: 4px; }
+  button { background: var(--panel-2); color: var(--ink); border: 1px solid #374151; padding: 3px 9px; border-radius: 4px; cursor: pointer; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  label.k { color: var(--muted); font-size: 12px; }
+  main { display: grid; grid-template-columns: 1fr 360px; height: calc(100vh - 82px); }
+  #canvas { position: relative; overflow: hidden; }
+  svg { width: 100%; height: 100%; display: block; cursor: grab; }
+  aside { border-left: 1px solid var(--rule); background: var(--panel); overflow: auto; padding: 12px 14px; }
+  aside h2 { font-size: 14px; margin: 0 0 4px; }
+  .muted { color: var(--muted); } .dim { color: var(--dim); }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+  td { border-bottom: 1px solid var(--rule); padding: 3px 4px; vertical-align: top; }
+  td input { width: 100%; background: var(--panel-2); color: var(--ink); border: 1px solid var(--rule); padding: 2px 4px; }
+  #status { font-size: 12px; color: var(--muted); }
+  #status.err { color: var(--different); }
+  .prompt { display: flex; gap: 6px; padding: 6px 14px; background: var(--panel-2); border-bottom: 1px solid var(--rule); }
+  .prompt input { flex: 1; background: var(--bg); color: var(--dim); border: 1px dashed #374151; padding: 3px 8px; border-radius: 4px; }
+  text { fill: var(--ink); font-size: 10px; pointer-events: none; }
+  .node circle { stroke: #0f172a; stroke-width: 1.5px; cursor: pointer; }
+  .node.selected circle { stroke: #fff; stroke-width: 4px; }
+  .node.folded circle { stroke-dasharray: 3 2; stroke: var(--muted); stroke-width: 2px; }
+  line.STRUCTURE { stroke: #334155; stroke-width: 1px; }
+  line.SUPER_OF { stroke: #e5e7eb; stroke-width: 3px; opacity: 0.35; }
+  line.LINK { stroke-width: 2.5px; cursor: pointer; }
+  line.LINK.selected { stroke-width: 5px; }
+  line.same { stroke: var(--same); } line.related { stroke: var(--related); }
+  line.different { stroke: var(--different); } line.operator { stroke: var(--operator); }
+  line.dashed { stroke-dasharray: 6 4; }
+  rect.box { fill: rgba(59, 130, 246, 0.12); stroke: var(--accent); stroke-dasharray: 4 3; }
+  .legend span { margin-right: 10px; font-size: 11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Merge Canvas</h1>
+  <label class="k">session <input type="text" id="session" size="28"></label>
+  <button id="load">Load</button>
+  <span id="kinds"></span>
+  <button id="act-link" title="Link the two selected nodes">Link</button>
+  <button id="act-super" title="A super node over the selected nodes">Super node</button>
+  <button id="act-unlink" title="Remove the selected link">Remove link</button>
+  <button id="act-unsuper" title="Remove the selected super node">Remove super</button>
+  <span id="status"></span>
+</header>
+<div class="prompt">
+  <input type="text" disabled placeholder="prompt on the selection -- &quot;merge/refine selected nodes&quot;, &quot;materialize additional graph ...&quot; (next slice)">
+</div>
+<main>
+  <div id="canvas"><svg id="svg"></svg></div>
+  <aside id="side"><p class="muted">Click a node or a link. Shift-drag to select several, ctrl-click to add one,
+    double-click a goal or project to fold it. Drag to move, wheel to zoom.</p>
+    <div class="legend"><span style="color:var(--same)">same</span><span style="color:var(--related)">related</span>
+      <span style="color:var(--different)">different</span><span style="color:var(--operator)">drawn by the operator</span>
+      <span class="dim">dashed: proposed, solid: confirmed</span></div></aside>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="merge.js"></script>
+<script>
+(function () {
+  'use strict';
+  const C = window.MergeCanvas;
+  const API = '/autobuilder/merge-sessions';
+  const COLOUR = { PROJECT: 'var(--project)', GOAL: 'var(--goal)', CRITERION: 'var(--criterion)', TYPE: 'var(--type)',
+    OPERATION: 'var(--operation)', SUPER: 'var(--super)' };
+  const RADIUS = { PROJECT: 14, GOAL: 7, CRITERION: 4, TYPE: 10, OPERATION: 5, SUPER: 13 };
+  const STATIC = new URLSearchParams(location.search).get('static') === '1';
+  const state = { session: null, model: null, hidden: new Set(['CRITERION', 'OPERATION']), folded: new Set(),
+    selection: new Set(), edge: null, positions: new Map() };
+
+  const svg = d3.select('#svg');
+  const world = svg.append('g');
+  const linkLayer = world.append('g'), nodeLayer = world.append('g'), boxLayer = world.append('g');
+  const zoom = d3.zoom().scaleExtent([0.1, 4]).filter(ev => !ev.shiftKey && !ev.button)
+      .on('zoom', ev => world.attr('transform', ev.transform));
+  svg.call(zoom).on('dblclick.zoom', null);
+  let simulation = null;
+
+  function status(text, error) {
+    const s = document.getElementById('status');
+    s.textContent = text || '';
+    s.className = error ? 'err' : '';
+  }
+
+  // --- talking to the session: the log is the only state -----------------------------------------------------
+  async function load(id) {
+    const r = await fetch(API + '/' + encodeURIComponent(id));
+    const body = await r.json();
+    if (!r.ok) return status(body.error || r.statusText, true);
+    state.session = id;
+    history.replaceState(null, '', '?session=' + encodeURIComponent(id));
+    accept(body);
+    status(body.applied + ' edits');
+  }
+
+  async function send(edit) {
+    const r = await fetch(API + '/' + encodeURIComponent(state.session) + '/edits',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(edit) });
+    const body = await r.json();
+    if (!r.ok) { status('refused: ' + (body.error || r.statusText), true); return false; }
+    accept(body);
+    status(edit.op + ' -- ' + body.applied + ' edits');
+    return true;
+  }
+
+  function accept(graph) {
+    state.model = C.model(graph);
+    for (const id of [...state.selection]) if (!state.model.nodes.has(id)) state.selection.delete(id);
+    if (state.edge && !graph.edges.some(e => e.id === state.edge)) state.edge = null;
+    draw();
+  }
+
+  // --- drawing -------------------------------------------------------------------------------------------------
+  function draw() {
+    const m = state.model;
+    const shown = C.visible(m, state.hidden, state.folded);
+    const projects = m.graph.nodes.filter(n => n.kind === 'PROJECT').map(n => n.id);
+    const width = svg.node().clientWidth || 1200, height = svg.node().clientHeight || 800;
+    const columnX = id => {
+      const n = m.nodes.get(id);
+      const i = n && n.project ? projects.indexOf(n.project) : -1;
+      return i < 0 ? width / 2 : width * (i + 1) / (projects.length + 1);
+    };
+    const depth = depthsFrom(m, projects);
+    const nodes = shown.nodes.map(n => {
+      const p = state.positions.get(n.id) || { x: columnX(n.id) + (Math.random() - 0.5) * 80, y: 120 + (depth.get(n.id) || 0) * 70 };
+      return Object.assign({ id: n.id, kind: n.kind, title: n.title || n.id, x: p.x, y: p.y }, p.fx != null ? { fx: p.fx, fy: p.fy } : {});
+    });
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    const edges = shown.edges.map(e => ({ id: e.id, kind: e.kind, source: byId.get(e.from), target: byId.get(e.to), edge: e }));
+
+    const line = linkLayer.selectAll('line').data(edges, d => d.id).join('line')
+        .attr('class', d => {
+          const cls = [d.kind];
+          if (d.kind === 'LINK') { const s = C.linkStyle(d.edge); cls.push(s.colour); if (s.dashed) cls.push('dashed'); }
+          if (d.id === state.edge) cls.push('selected');
+          return cls.join(' ');
+        })
+        .on('click', (ev, d) => { if (d.kind !== 'LINK') return; ev.stopPropagation(); state.edge = d.id; state.selection.clear(); draw(); });
+    line.selectAll('title').data(d => [d]).join('title').text(d => d.kind === 'LINK'
+        ? [d.edge.metadata.verdict, d.edge.metadata.action, d.edge.metadata.status].filter(Boolean).join(' / ') : d.kind);
+
+    const g = nodeLayer.selectAll('g.node').data(nodes, d => d.id).join(enter => {
+      const e = enter.append('g').attr('class', 'node');
+      e.append('circle');
+      e.append('text').attr('dy', -12).attr('text-anchor', 'middle');
+      e.append('title');
+      return e;
+    });
+    g.classed('selected', d => state.selection.has(d.id)).classed('folded', d => state.folded.has(d.id));
+    g.select('circle').attr('r', d => RADIUS[d.kind] || 6).attr('fill', d => COLOUR[d.kind] || '#999');
+    g.select('text').text(d => d.kind === 'GOAL' || d.kind === 'CRITERION' || d.kind === 'OPERATION' ? short(d.title, 22) : short(d.title, 40));
+    g.select('title').text(d => d.kind + ': ' + d.title);
+    g.on('click', (ev, d) => {
+      ev.stopPropagation();
+      if (!(ev.ctrlKey || ev.metaKey)) state.selection.clear();
+      if (state.selection.has(d.id)) state.selection.delete(d.id); else state.selection.add(d.id);
+      state.edge = null;
+      draw();
+    }).on('dblclick', (ev, d) => {
+      ev.stopPropagation();
+      if (d.kind !== 'GOAL' && d.kind !== 'PROJECT') return;
+      if (state.folded.has(d.id)) state.folded.delete(d.id); else state.folded.add(d.id);
+      draw();
+    }).call(d3.drag()
+        .on('start', (ev, d) => { if (!ev.active) simulation.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag', (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+        .on('end', (ev, d) => { if (!ev.active) simulation.alphaTarget(0); }));
+
+    if (simulation) simulation.stop();
+    simulation = d3.forceSimulation(nodes)
+        .force('structure', d3.forceLink(edges.filter(e => e.kind !== 'LINK')).id(d => d.id).distance(d => d.target.kind === 'GOAL' ? 80 : 55).strength(0.6))
+        .force('links', d3.forceLink(edges.filter(e => e.kind === 'LINK')).id(d => d.id).distance(240).strength(0.02))
+        .force('charge', d3.forceManyBody().strength(d => d.kind === 'GOAL' ? -260 : -160))
+        .force('collide', d3.forceCollide(d => (RADIUS[d.kind] || 6) + 10))
+        .force('x', d3.forceX(d => d.kind === 'SUPER' ? superX(d, byId, width) : columnX(d.id)).strength(d => d.kind === 'SUPER' ? 0.3 : 0.08))
+        .force('y', d3.forceY(d => d.kind === 'SUPER' ? superY(d, byId) : 120 + (depth.get(d.id) || 0) * 70).strength(0.25))
+        .on('tick', place);
+    function place() {
+      line.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      g.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
+      for (const n of nodes) state.positions.set(n.id, { x: n.x, y: n.y, fx: n.fx, fy: n.fy });
+    }
+    if (STATIC) { simulation.stop(); simulation.tick(400); place(); }
+    side();
+    buttons();
+  }
+
+  function depthsFrom(m, projects) {
+    const depth = new Map();
+    const queue = projects.map(p => [p, 0]);
+    while (queue.length) {
+      const [id, d] = queue.shift();
+      if (depth.has(id)) continue;
+      depth.set(id, d);
+      for (const e of m.graph.edges) if (e.kind === 'STRUCTURE' && e.from === id) queue.push([e.to, d + 1]);
+    }
+    return depth;
+  }
+
+  // A super node stands above the middle of its shown children.
+  function superKids(d, byId) {
+    return (state.model.children.get(d.id) || []).map(id => byId.get(id)).filter(Boolean);
+  }
+  function superX(d, byId, width) {
+    const kids = superKids(d, byId);
+    return kids.length ? kids.reduce((s, k) => s + k.x, 0) / kids.length : width / 2;
+  }
+  function superY(d, byId) {
+    const kids = superKids(d, byId);
+    return (kids.length ? Math.min(...kids.map(k => k.y)) : 200) - 90;
+  }
+
+  function short(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+  // --- box selection: shift-drag on the canvas ------------------------------------------------------------------
+  let boxStart = null, box = null;
+  svg.on('mousedown.box', ev => {
+    if (!ev.shiftKey) return;
+    const t = d3.zoomTransform(svg.node());
+    boxStart = t.invert(d3.pointer(ev, svg.node()));
+    box = boxLayer.append('rect').attr('class', 'box');
+  }).on('mousemove.box', ev => {
+    if (!boxStart) return;
+    const p = d3.zoomTransform(svg.node()).invert(d3.pointer(ev, svg.node()));
+    box.attr('x', Math.min(p[0], boxStart[0])).attr('y', Math.min(p[1], boxStart[1]))
+        .attr('width', Math.abs(p[0] - boxStart[0])).attr('height', Math.abs(p[1] - boxStart[1]));
+  }).on('mouseup.box', ev => {
+    if (!boxStart) return;
+    const p = d3.zoomTransform(svg.node()).invert(d3.pointer(ev, svg.node()));
+    const [x0, x1] = [Math.min(p[0], boxStart[0]), Math.max(p[0], boxStart[0])];
+    const [y0, y1] = [Math.min(p[1], boxStart[1]), Math.max(p[1], boxStart[1])];
+    nodeLayer.selectAll('g.node').each(d => { if (d.x >= x0 && d.x <= x1 && d.y >= y0 && d.y <= y1) state.selection.add(d.id); });
+    box.remove(); boxStart = null; state.edge = null;
+    draw();
+  }).on('click.clear', ev => { if (ev.shiftKey) return; state.selection.clear(); state.edge = null; draw(); });
+
+  // --- the side panel: what is selected, and its metadata, editable ------------------------------------------
+  function side() {
+    const aside = document.getElementById('side');
+    const m = state.model;
+    const node = state.selection.size === 1 ? m.nodes.get([...state.selection][0]) : null;
+    const edge = state.edge ? m.graph.edges.find(e => e.id === state.edge) : null;
+    const target = node || edge;
+    if (!target) {
+      aside.querySelectorAll('.detail').forEach(x => x.remove());
+      if (state.selection.size > 1) {
+        const d = document.createElement('div');
+        d.className = 'detail';
+        d.innerHTML = '<h2>' + state.selection.size + ' selected</h2><p class="muted">' +
+            [...state.selection].map(id => esc((m.nodes.get(id) || {}).title || id)).join('<br>') + '</p>';
+        aside.prepend(d);
+      }
+      return;
+    }
+    aside.querySelectorAll('.detail').forEach(x => x.remove());
+    const d = document.createElement('div');
+    d.className = 'detail';
+    const md = target.metadata || {};
+    const head = node ? '<h2>' + esc(node.title || node.id) + '</h2><p class="muted">' + node.kind + (node.project ? ' of ' + esc(node.project) : '') + '</p>'
+        : '<h2>' + edge.kind + '</h2><p class="muted">' + esc(edge.from) + '<br>&rarr; ' + esc(edge.to) + '</p>';
+    const rows = Object.entries(md).map(([k, v]) => {
+      const readOnly = k === 'by' || k === 'at' || k === 'lastEditedBy';
+      const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
+      return '<tr><td>' + esc(k) + '</td><td>' + (readOnly ? '<span class="dim">' + esc(val) + '</span>'
+          : '<input data-key="' + esc(k) + '" value="' + esc(val) + '">') + '</td></tr>';
+    }).join('');
+    d.innerHTML = head + '<table>' + rows + '<tr><td><input id="new-key" placeholder="key"></td><td><input id="new-value" placeholder="value"></td></tr></table>'
+        + '<p class="dim">Enter saves a value; an empty value removes the key.</p>';
+    aside.prepend(d);
+    d.querySelectorAll('input[data-key]').forEach(inp => inp.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') send(C.metaEdit(target.id, inp.dataset.key, inp.value));
+    }));
+    const save = ev => {
+      if (ev.key !== 'Enter') return;
+      const k = d.querySelector('#new-key').value.trim();
+      if (k) send(C.metaEdit(target.id, k, d.querySelector('#new-value').value));
+    };
+    d.querySelector('#new-key').addEventListener('keydown', save);
+    d.querySelector('#new-value').addEventListener('keydown', save);
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // --- the acts ------------------------------------------------------------------------------------------------
+  function buttons() {
+    const o = C.offers(state.model, state.selection, state.edge);
+    for (const [id, key] of [['act-link', 'link'], ['act-super', 'super'], ['act-unlink', 'removeLink'], ['act-unsuper', 'removeSuper']]) {
+      const b = document.getElementById(id);
+      b.disabled = o[key] !== null;
+      b.title = o[key] || b.dataset.title || b.title;
+    }
+  }
+  document.getElementById('act-link').onclick = () => {
+    const [a, b] = [...state.selection];
+    send(C.linkEdit(a, b, C.freshId(state.model.graph, 'link:operator:')));
+  };
+  document.getElementById('act-super').onclick = () => {
+    const title = prompt('Title of the super node');
+    if (title === null) return;
+    const id = C.freshId(state.model.graph, 'super:');
+    send(C.superEdit(state.selection, id, title || id)).then(ok => { if (ok) { state.selection.clear(); state.selection.add(id); draw(); } });
+  };
+  document.getElementById('act-unlink').onclick = () => send(C.removeLinkEdit(state.edge));
+  document.getElementById('act-unsuper').onclick = () => send(C.removeSuperEdit([...state.selection][0]));
+
+  // --- kinds shown --------------------------------------------------------------------------------------------
+  const kinds = document.getElementById('kinds');
+  for (const k of C.KINDS) {
+    const l = document.createElement('label');
+    l.className = 'k';
+    l.innerHTML = '<input type="checkbox"' + (state.hidden.has(k) ? '' : ' checked') + '> ' + k.toLowerCase() + ' ';
+    l.querySelector('input').onchange = ev => { if (ev.target.checked) state.hidden.delete(k); else state.hidden.add(k); if (state.model) draw(); };
+    kinds.appendChild(l);
+  }
+
+  document.getElementById('load').onclick = () => load(document.getElementById('session').value.trim());
+  const initial = new URLSearchParams(location.search).get('session');
+  if (initial && STATIC) {
+    // static=1: the session read synchronously and the layout settled before the page's load event -- a picture of the
+    // session (export, and a headless screenshot, which is taken at the load event).
+    document.getElementById('session').value = initial;
+    const x = new XMLHttpRequest();
+    x.open('GET', API + '/' + encodeURIComponent(initial), false);
+    x.send();
+    if (x.status === 200) { state.session = initial; accept(JSON.parse(x.responseText)); } else status(x.responseText, true);
+  } else if (initial) { document.getElementById('session').value = initial; load(initial); }
+})();
+</script>
+</body>
+</html>

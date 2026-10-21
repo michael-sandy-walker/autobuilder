@@ -44,6 +44,7 @@
   line.same { stroke: var(--same); } line.related { stroke: var(--related); }
   line.different { stroke: var(--different); } line.operator { stroke: var(--operator); }
   line.dashed { stroke-dasharray: 6 4; }
+  line.hit { stroke: transparent; stroke-width: 14px; cursor: pointer; pointer-events: stroke; }
   rect.box { fill: rgba(59, 130, 246, 0.12); stroke: var(--accent); stroke-dasharray: 4 3; }
   .legend span { margin-right: 10px; font-size: 11px; }
 </style>
@@ -146,14 +147,14 @@
     const byId = new Map(nodes.map(n => [n.id, n]));
     const edges = shown.edges.map(e => ({ id: e.id, kind: e.kind, source: byId.get(e.from), target: byId.get(e.to), edge: e }));
 
-    const line = linkLayer.selectAll('line').data(edges, d => d.id).join('line')
+    const line = linkLayer.selectAll('line.edge').data(edges, d => d.id).join('line')
         .attr('class', d => {
-          const cls = [d.kind];
+          const cls = ['edge', d.kind];
           if (d.kind === 'LINK') { const s = C.linkStyle(d.edge); cls.push(s.colour); if (s.dashed) cls.push('dashed'); }
           if (d.id === state.edge) cls.push('selected');
           return cls.join(' ');
         })
-        .on('click', (ev, d) => { if (d.kind !== 'LINK') return; ev.stopPropagation(); state.edge = d.id; state.selection.clear(); draw(); });
+        ;
     line.selectAll('title').data(d => [d]).join('title').text(d => d.kind === 'LINK'
         ? [d.edge.metadata.verdict, d.edge.metadata.action, d.edge.metadata.status].filter(Boolean).join(' / ') : d.kind);
 
@@ -164,7 +165,6 @@
       e.append('title');
       return e;
     });
-    g.classed('selected', d => state.selection.has(d.id)).classed('folded', d => state.folded.has(d.id));
     g.select('circle').attr('r', d => RADIUS[d.kind] || 6).attr('fill', d => COLOUR[d.kind] || '#999');
     g.select('text').text(d => d.kind === 'GOAL' || d.kind === 'CRITERION' || d.kind === 'OPERATION' ? short(d.title, 22) : short(d.title, 40));
     g.select('title').text(d => d.kind + ': ' + d.title);
@@ -173,17 +173,29 @@
       if (!(ev.ctrlKey || ev.metaKey)) state.selection.clear();
       if (state.selection.has(d.id)) state.selection.delete(d.id); else state.selection.add(d.id);
       state.edge = null;
-      draw();
+      restyle();
     }).on('dblclick', (ev, d) => {
       ev.stopPropagation();
       if (d.kind !== 'GOAL' && d.kind !== 'PROJECT') return;
       if (state.folded.has(d.id)) state.folded.delete(d.id); else state.folded.add(d.id);
       draw();
-    }).call(d3.drag()
-        .on('start', (ev, d) => { if (!ev.active) simulation.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
-        .on('drag', (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
-        .on('end', (ev, d) => { if (!ev.active) simulation.alphaTarget(0); }));
+    }).call(d3.drag().clickDistance(4)
+        // A press is not a drag: the layout is reheated only once the pointer really moves, so a click selects
+        // without shaking the graph (it did -- every click moved 29 of 30 nodes).
+        .on('start', (ev, d) => { d.__moved = false; })
+        .on('drag', (ev, d) => {
+          if (!d.__moved) { d.__moved = true; if (!ev.active) simulation.alphaTarget(0.2).restart(); }
+          d.fx = ev.x; d.fy = ev.y;
+        })
+        .on('end', (ev, d) => { if (d.__moved && !ev.active) simulation.alphaTarget(0); }));
 
+    // A wide, invisible line over every link is what a click hits: the drawn line is 2.5 px.
+    const hit = linkLayer.selectAll('line.hit').data(edges.filter(e => e.kind === 'LINK'), d => d.id).join('line')
+        .attr('class', 'hit')
+        .on('click', (ev, d) => { ev.stopPropagation(); state.edge = d.id; state.selection.clear(); restyle(); });
+    hit.raise();
+
+    const settled = simulation != null;
     if (simulation) simulation.stop();
     simulation = d3.forceSimulation(nodes)
         .force('structure', d3.forceLink(edges.filter(e => e.kind !== 'LINK')).id(d => d.id).distance(d => d.target.kind === 'GOAL' ? 80 : 55).strength(0.6))
@@ -193,12 +205,21 @@
         .force('x', d3.forceX(d => d.kind === 'SUPER' ? superX(d, byId, width) : columnX(d.id)).strength(d => d.kind === 'SUPER' ? 0.3 : 0.08))
         .force('y', d3.forceY(d => d.kind === 'SUPER' ? superY(d, byId) : 120 + (depth.get(d.id) || 0) * 70).strength(0.25))
         .on('tick', place);
+    if (settled) simulation.alpha(0.15);   // after an edit: settle, do not start over
     function place() {
+      hit.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
       line.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
       g.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
       for (const n of nodes) state.positions.set(n.id, { x: n.x, y: n.y, fx: n.fx, fy: n.fy });
     }
     if (STATIC) { simulation.stop(); simulation.tick(400); place(); }
+    restyle();
+  }
+
+  // What selecting changes: highlighting, the side panel and the buttons -- never the layout.
+  function restyle() {
+    nodeLayer.selectAll('g.node').classed('selected', d => state.selection.has(d.id)).classed('folded', d => state.folded.has(d.id));
+    linkLayer.selectAll('line.edge').classed('selected', d => d.id === state.edge);
     side();
     buttons();
   }
@@ -249,8 +270,8 @@
     const [y0, y1] = [Math.min(p[1], boxStart[1]), Math.max(p[1], boxStart[1])];
     nodeLayer.selectAll('g.node').each(d => { if (d.x >= x0 && d.x <= x1 && d.y >= y0 && d.y <= y1) state.selection.add(d.id); });
     box.remove(); boxStart = null; state.edge = null;
-    draw();
-  }).on('click.clear', ev => { if (ev.shiftKey) return; state.selection.clear(); state.edge = null; draw(); });
+    restyle();
+  }).on('click.clear', ev => { if (ev.shiftKey) return; state.selection.clear(); state.edge = null; restyle(); });
 
   // --- the side panel: what is selected, and its metadata, editable ------------------------------------------
   function side() {
@@ -306,8 +327,9 @@
     const o = C.offers(state.model, state.selection, state.edge);
     for (const [id, key] of [['act-link', 'link'], ['act-super', 'super'], ['act-unlink', 'removeLink'], ['act-unsuper', 'removeSuper']]) {
       const b = document.getElementById(id);
+      if (b.dataset.title === undefined) b.dataset.title = b.title;
       b.disabled = o[key] !== null;
-      b.title = o[key] || b.dataset.title || b.title;
+      b.title = o[key] || b.dataset.title;
     }
   }
   document.getElementById('act-link').onclick = () => {
@@ -318,7 +340,7 @@
     const title = prompt('Title of the super node');
     if (title === null) return;
     const id = C.freshId(state.model.graph, 'super:');
-    send(C.superEdit(state.selection, id, title || id)).then(ok => { if (ok) { state.selection.clear(); state.selection.add(id); draw(); } });
+    send(C.superEdit(state.selection, id, title || id)).then(ok => { if (ok) { state.selection.clear(); state.selection.add(id); restyle(); } });
   };
   document.getElementById('act-unlink').onclick = () => send(C.removeLinkEdit(state.edge));
   document.getElementById('act-unsuper').onclick = () => send(C.removeSuperEdit([...state.selection][0]));

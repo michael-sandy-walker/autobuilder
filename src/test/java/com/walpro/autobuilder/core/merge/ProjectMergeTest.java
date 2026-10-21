@@ -142,7 +142,7 @@ class ProjectMergeTest {
         assertThat(dependency.tree()).doesNotContainKey("src/main/java/org/knot/Knot.java");
         assertThat(dependency.tree().get("pom.xml")).contains("<artifactId>knots</artifactId>").doesNotContain("rope");
 
-        ProjectMerge.Result modules = ProjectMerge.integrate(into, brought, ProjectMerge.Layout.MODULES, goal, List.of("x"), NOW);
+        ProjectMerge.Result modules = ProjectMerge.integrate(into, brought, goal, List.of("x"), NOW);   // the default layout
         assertThat(modules.tree()).containsKeys("coil/" + MAIN, "knots/src/main/java/org/knot/Knot.java", "coil/pom.xml", "knots/pom.xml");
         assertThat(modules.tree().get("pom.xml")).contains("<packaging>pom</packaging>").contains("<module>knots</module>")
                 .contains("<module>coil</module>");

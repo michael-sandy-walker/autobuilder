@@ -193,6 +193,18 @@ public final class ProjectMerge {
     public enum Layout { PACKAGES, DEPENDENCY, MODULES }
 
     /**
+     * As {@link #integrate(Parent, Parent, Layout, String, List, Instant)} in the default layout, {@link Layout#MODULES}
+     * (the user's choice, 2026-10-21, after three runs of each layout closed 3 of 3): each project keeps its own build,
+     * dependencies and suite, nothing two projects name alike collides, and every file stays under the project it came
+     * from. PACKAGES is the option for two small libraries with compatible builds; DEPENDENCY is "use B as a library",
+     * not a merge -- the child cannot judge B's criteria nor run B's tests.
+     */
+    public static Result integrate(Parent into, Parent brought, String goal, List<String> integration, Instant now)
+            throws IOException {
+        return integrate(into, brought, Layout.MODULES, goal, integration, now);
+    }
+
+    /**
      * T4-EC stage 2: {@code brought} integrated into {@code into} toward {@code goal} -- two projects with no common base.
      * The child's code is placed by {@code layout}; its goal tree is a new ACTIVE root whose description is {@code goal}
      * (byte for byte: the obligations are keyed to it), both parents' trees below it with their provenance; its

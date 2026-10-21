@@ -444,6 +444,12 @@ structure first (`CriteriaVerificationService.structuralAnswer`: the test run, t
 declarations as adopted), a model for the rest -- with who answered kept beside each verdict (`MERGE-REPORT.tsv`,
 and per node in `meta/GoalStack.json`). The child's goal tree is written to the graph.
 
+Two projects with no common base are merged by `ProjectMerge.integrate`: one is brought into the other toward a goal,
+the child's root is that goal over both parents' trees, and the integration is the loop's work from that tree. The
+default layout is `MODULES` -- each project a module of one reactor build, keeping its own build file, dependencies and
+tests; `PACKAGES` (one build, both projects' packages) suits two small libraries with compatible builds; `DEPENDENCY`
+(the receiving build depends on the other's artifact) uses a library rather than merging it.
+
 ---
 
 ## 11. The stuck layer

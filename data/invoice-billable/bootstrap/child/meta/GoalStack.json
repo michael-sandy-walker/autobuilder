@@ -1,0 +1,598 @@
+{
+  "currentGoalId" : "goal-fa3e8549-6a1a-3319-b899-bb3172c7eed4",
+  "goalTree" : {
+    "id" : "goal-fa3e8549-6a1a-3319-b899-bb3172c7eed4",
+    "description" : "  Two projects, adopted, and now to be integrated: pettycash is brought into invoicer. Each was written before, by\n  someone else, and each already builds and passes its own tests. In their own words, from their READMEs:\n\n    \"invoicer -- Invoices in one currency: money with its currency, billing periods, invoice lines and their total.\"\n    \"pettycash -- A petty-cash book: amounts in cents, expenses with a payee, a category and whether they are billable,\n    totals by category and period.\"\n\n  The build has two modules: pettycash/ is the pettycash project, invoicer/ is the invoicer project and depends on\n  pettycash. The root pom.xml only lists the two modules. Both projects' tests are in their modules' src/test/java.\n\n  How the two fit together was decided in a merge session; those decisions are among the obligations of this goal.\n\n  The integration wanted, with the focus on billing: the billable expenses of a petty-cash book become the lines of an\n  invoice.\n\n  - BillableExpenses.lines(ExpenseBook book, Period period, String currency) returns, in the book's order, one LineItem\n    per billable expense whose date the period contains (its first and last day included): the payee as the\n    description, quantity 1, and the expense's amount as a Money of the same cents in the given currency. The list\n    cannot be modified. Period, LineItem and Money are invoicer's; ExpenseBook and Expense are pettycash's.\n  - BillableExpenses.invoice(String number, Period period, String currency, ExpenseBook book) returns a new Invoice with\n    that number, period and currency, holding those lines (an invoice without lines totals zero in its currency).\n\n  The specification is BillableExpensesSpecTest, InvoicerSpecTest and PettyCashSpecTest in src/test/java:\n  BillableExpensesSpecTest says exactly what the integration must do and fails until the code provides it; the other\n  two are each project's own specification and keep passing.\n\n  OBJECTIVE: every test in BillableExpensesSpecTest passes, and the whole suite passes.\n\n  The classes to change are BillableExpenses -- it does not exist yet: create it under invoicer/src/main/java in\n  package org.invoicer. DO NOT modify anything under invoicer/src/test or pettycash/src/test: the specifications are\n  the operators', and if one fails, the code is what is wrong. Keep every class either project already has exactly as\n  it is.\n",
+    "role" : "planner",
+    "type" : "GOAL",
+    "status" : "ACTIVE",
+    "created" : "2026-10-22T12:13:09.473820096Z",
+    "metadata" : {
+      "mergeParents" : "invoicer=2026-10-21_19-40-55 (receiving), pettycash=2026-10-21_19-48-26 (brought in)",
+      "mergeLayout" : "MODULES"
+    },
+    "subGoals" : [ {
+      "id" : "goal-d3576751-5804-3a6c-9cec-9747549a61c5",
+      "description" : "  A new project, adopted as it stands. Its tree holds only its build file (pom.xml), a README, and the\n  operator's specification under src/test/java; nothing exists under src/main/java yet. In its own words,\n  from its README:\n\n    \"invoicer -- Invoices in one currency: money with its currency, billing periods, invoice lines and their\n    total.\"\n\n  It is a library, in package org.invoicer, with no dependencies beyond the JDK.\n\n  - Money is a record of an amount in cents (long cents) and a currency (String currency): three upper-case\n    letters, else IllegalArgumentException.\n  - Money.parse(String) reads \"<decimal> <currency>\": a decimal with at most two places and an optional\n    leading '-' (\"12.50 EUR\" is 1250 cents in EUR, \"0.5 CHF\" is 50), one space, the currency. Anything else\n    raises IllegalArgumentException.\n  - plus(Money) adds two amounts of the same currency (another currency raises IllegalArgumentException);\n    times(int n) multiplies. toString() prints two places and the currency: \"12.50 EUR\", \"-0.05 USD\".\n  - Period is a record of a first and a last day (LocalDate from, LocalDate to), from not after to, else\n    IllegalArgumentException. contains(LocalDate) is true from the first to the last day inclusive; days()\n    returns how many days it spans, both ends included (a long).\n  - LineItem is a record of a description (not blank), a quantity (int, positive) and a unit price (Money),\n    else IllegalArgumentException; amount() is the unit price times the quantity.\n  - Invoice is a class constructed with a number (String), a period (Period) and a currency (String).\n    addLine(LineItem) adds a line whose unit price is in the invoice's currency, else raises\n    IllegalArgumentException and adds nothing. lines() returns the lines in the order added, as a List that\n    cannot be modified. total() is the sum of the lines' amounts, zero in the invoice's currency when there\n    are none. number() and period() return what it was constructed with.\n\n  The specification is InvoicerSpecTest in src/test/java: its tests say exactly what the library must\n  return, and they fail until the code provides it.\n\n  OBJECTIVE: every test in InvoicerSpecTest passes, and the whole suite passes.\n\n  The classes to change are Money, Period, LineItem and Invoice -- none exists yet: create them under\n  src/main/java in package org.invoicer. DO NOT modify anything under src/test: the specification is the\n  operator's, and if one of its tests fails, the code is what is wrong.\n",
+      "role" : "system",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1.792604515872604E9,
+      "completed" : 1.7926048090214787E9,
+      "resolution" : "root goal satisfied: closure ledger clear: 7 subgoal(s) accounted for",
+      "metadata" : {
+        "planningRunId" : 2,
+        "activeAttemptId" : "attempt-c08bd73e-2738-453c-ab9c-443e833d9e7f",
+        "planRationale" : "The Money resource is complete; the next foundational resource is Period, which Invoice and LineItem depend on. Building Period fully (record, validation, contains, days) before moving to LineItem and Invoice keeps the backlog to one resource at a time.",
+        "plannedOnce" : true,
+        "mergedFrom" : "invoicer",
+        "sourceRunId" : "2026-10-21_19-40-55",
+        "sourceGoalId" : "goal-ac79b38d-dec7-4a9d-85d0-26168f65dbc1",
+        "sourceLineageId" : "lineage-85fa4fb8-9b72-42bc-a340-1469c127f8e2"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-f0751576-f51f-30d8-81b2-52fcbbca3c67",
+        "description" : "Implement the Money record in package org.invoicer (src/main/java/org/invoicer/Money.java) with fields long cents and String currency; constructor validates currency is exactly three upper-case letters else IllegalArgumentException",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7926045303295913E9,
+        "completed" : 1.7926045788243132E9,
+        "resolution" : "fulfilled (score=0.86): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 1,
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "new Money(1250L, \"EUR\") holds cents=1250 and currency=\"EUR\"", "new Money(0L, \"eur\") raises IllegalArgumentException", "new Money(0L, \"EU\") raises IllegalArgumentException" ],
+          "lastUpdated" : "2026-10-21T17:42:58.797722864Z",
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-c08bd73e-2738-453c-ab9c-443e833d9e7f",
+          "activeAttemptId" : "attempt-22929e85-c011-479f-87c0-baf2b581865b",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC"
+          },
+          "mergedFiles" : [ "Money.java" ],
+          "mergeCount" : 1,
+          "mergedFrom" : "invoicer",
+          "sourceRunId" : "2026-10-21_19-40-55",
+          "sourceGoalId" : "goal-b9c6fce6-04bc-40a6-b5d9-2f48a8b37765",
+          "sourceLineageId" : "lineage-85fa4fb8-9b72-42bc-a340-1469c127f8e2",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-d5059fe0-19ac-356c-91fc-78db60989a3d",
+        "description" : "Implement Money.parse(String) reading \"<decimal> <currency>\" with at most two decimal places and optional leading '-', one space, then currency; anything else raises IllegalArgumentException",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7926045326083248E9,
+        "completed" : 1.7926046343471327E9,
+        "resolution" : "all acceptance criteria banked",
+        "metadata" : {
+          "planningRunId" : 1,
+          "acceptanceCriteria" : [ "Money.parse(\"12.50 EUR\") yields cents=1250, currency=\"EUR\"", "Money.parse(\"0.5 CHF\") yields cents=50, currency=\"CHF\"", "Money.parse(\"-0.05 USD\") yields cents=-5, currency=\"USD\"", "Money.parse(\"12.500 EUR\") raises IllegalArgumentException", "Money.parse(\"12.50EUR\") raises IllegalArgumentException", "Money.parse(\"EUR 12.50\") raises IllegalArgumentException" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-c08bd73e-2738-453c-ab9c-443e833d9e7f",
+          "activeAttemptId" : "attempt-f45b30af-51eb-49ba-986b-d93d29c7b9be",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC",
+            "4" : "SPEC",
+            "5" : "SPEC",
+            "6" : "SPEC"
+          },
+          "goalKind" : "EXECUTABLE",
+          "mergeCount" : 1,
+          "mergedFiles" : [ "Invoice.java", "Period.java", "LineItem.java" ],
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T17:43:54.324901539Z",
+          "mergedFrom" : "invoicer",
+          "sourceRunId" : "2026-10-21_19-40-55",
+          "sourceGoalId" : "goal-6da38125-c87b-4670-a31e-6b643baa4c8e",
+          "sourceLineageId" : "lineage-85fa4fb8-9b72-42bc-a340-1469c127f8e2",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true,
+            "5" : true,
+            "6" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-a4c2d5c4-e694-3f41-a2cf-6255343845ee",
+        "description" : "Implement Money.plus(Money) adding same-currency amounts (different currency raises IllegalArgumentException) and Money.times(int) multiplying cents",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7926045348383355E9,
+        "completed" : 1.7926046573798087E9,
+        "resolution" : "acceptance criteria verified against current code -- fulfilled instead of superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 1,
+          "acceptanceCriteria" : [ "Money(100,\"EUR\").plus(Money(50,\"EUR\")) yields cents=150, currency=\"EUR\"", "Money(100,\"EUR\").plus(Money(50,\"USD\")) raises IllegalArgumentException", "Money(100,\"EUR\").times(3) yields cents=300, currency=\"EUR\"", "Money(-100,\"EUR\").times(2) yields cents=-200, currency=\"EUR\"" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-c08bd73e-2738-453c-ab9c-443e833d9e7f",
+          "activeAttemptId" : "attempt-820a1779-e6e0-4041-a4ba-d3fa7c2c29fc",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC",
+            "4" : "SPEC"
+          },
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T17:44:17.362050980Z",
+          "mergedFrom" : "invoicer",
+          "sourceRunId" : "2026-10-21_19-40-55",
+          "sourceGoalId" : "goal-5ba2d412-bc52-4226-80e7-fdf7b2a318c8",
+          "sourceLineageId" : "lineage-85fa4fb8-9b72-42bc-a340-1469c127f8e2",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-00de3490-fc85-3ca9-9f83-f1e75208fc7c",
+        "description" : "Implement Money.toString() printing exactly two decimal places and the currency",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7926045368658216E9,
+        "completed" : 1.7926046617834852E9,
+        "resolution" : "acceptance criteria verified against current code -- fulfilled instead of superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 1,
+          "acceptanceCriteria" : [ "Money(1250,\"EUR\").toString() equals \"12.50 EUR\"", "Money(-5,\"USD\").toString() equals \"-0.05 USD\"", "Money(0,\"CHF\").toString() equals \"0.00 CHF\"" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-c08bd73e-2738-453c-ab9c-443e833d9e7f",
+          "activeAttemptId" : "attempt-0cbd7406-e87b-4eb7-996e-243323c73b5e",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC"
+          },
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T17:44:21.768279526Z",
+          "mergedFrom" : "invoicer",
+          "sourceRunId" : "2026-10-21_19-40-55",
+          "sourceGoalId" : "goal-55d6d69f-af66-442c-b506-8d954ef61980",
+          "sourceLineageId" : "lineage-85fa4fb8-9b72-42bc-a340-1469c127f8e2",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-09952705-058c-3c07-af52-e81c32b46030",
+        "description" : "Implement the Period record in package org.invoicer (src/main/java/org/invoicer/Period.java) with fields LocalDate from and LocalDate to; constructor validates from is not after to else IllegalArgumentException",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.792604675111584E9,
+        "completed" : 1.7926047115496383E9,
+        "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+        "metadata" : {
+          "planningRunId" : 2,
+          "acceptanceCriteria" : [ "new Period(LocalDate.of(2024,1,1), LocalDate.of(2024,1,31)) succeeds", "new Period(LocalDate.of(2024,1,31), LocalDate.of(2024,1,1)) raises IllegalArgumentException", "No file under src/test is changed" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-c08bd73e-2738-453c-ab9c-443e833d9e7f",
+          "activeAttemptId" : "attempt-e6fd5afa-a362-4a07-ac17-580b880675d5",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC"
+          },
+          "goalKind" : "EXECUTABLE",
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T17:45:11.531848545Z",
+          "mergedFrom" : "invoicer",
+          "sourceRunId" : "2026-10-21_19-40-55",
+          "sourceGoalId" : "goal-2d342a92-cddb-48be-b90a-8a118f6515c2",
+          "sourceLineageId" : "lineage-85fa4fb8-9b72-42bc-a340-1469c127f8e2",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-495d502c-2385-3b3b-935c-9bcc99a78b14",
+        "description" : "Implement Period.contains(LocalDate) returning true for any day from the first to the last day inclusive, false otherwise",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7926046773978808E9,
+        "completed" : 1.7926047486902742E9,
+        "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+        "metadata" : {
+          "planningRunId" : 2,
+          "acceptanceCriteria" : [ "Period(2024-01-01, 2024-01-31).contains(2024-01-01) is true", "Period(2024-01-01, 2024-01-31).contains(2024-01-31) is true", "Period(2024-01-01, 2024-01-31).contains(2024-02-01) is false", "No file under src/test is changed" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-c08bd73e-2738-453c-ab9c-443e833d9e7f",
+          "activeAttemptId" : "attempt-567b63c8-c643-4d68-a1d6-2a6a22941596",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC",
+            "4" : "SPEC"
+          },
+          "goalKind" : "EXECUTABLE",
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T17:45:48.674054025Z",
+          "mergedFrom" : "invoicer",
+          "sourceRunId" : "2026-10-21_19-40-55",
+          "sourceGoalId" : "goal-2a2b82f5-06eb-4f70-be94-ac51a54dfceb",
+          "sourceLineageId" : "lineage-85fa4fb8-9b72-42bc-a340-1469c127f8e2",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-949a914b-50d1-3c02-92ae-b2fa98e8f2d1",
+        "description" : "Implement Period.days() returning the number of days the period spans, both ends included, as a long",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7926046797203815E9,
+        "completed" : 1.7926047896166286E9,
+        "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+        "metadata" : {
+          "planningRunId" : 2,
+          "acceptanceCriteria" : [ "Period(2024-01-01, 2024-01-01).days() is 1", "Period(2024-01-01, 2024-01-31).days() is 31", "No file under src/test is changed" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-c08bd73e-2738-453c-ab9c-443e833d9e7f",
+          "activeAttemptId" : "attempt-c6842bb3-407c-469a-8aaa-65b64bce8d0e",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC"
+          },
+          "goalKind" : "EXECUTABLE",
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T17:46:29.600626388Z",
+          "mergedFrom" : "invoicer",
+          "sourceRunId" : "2026-10-21_19-40-55",
+          "sourceGoalId" : "goal-1c3d403c-ce20-43b6-b606-8ed9adfbe8f1",
+          "sourceLineageId" : "lineage-85fa4fb8-9b72-42bc-a340-1469c127f8e2",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-a504b8c6-9b45-3ebe-8351-c1abd187dedf",
+      "description" : "  A new project, adopted as it stands. Its tree holds only its build file (pom.xml), a README, and the\n  operator's specification under src/test/java; nothing exists under src/main/java yet. In its own words,\n  from its README:\n\n    \"pettycash -- A petty-cash book: amounts in cents, expenses with a payee, a category and whether they are\n    billable, totals by category and period.\"\n\n  It is a library, in package org.pettycash, with no dependencies beyond the JDK.\n\n  - Amount is a record of an amount in cents (long cents). Amount.parse(String) reads a decimal with at most\n    two places and an optional leading '-' (\"12.50\" is 1250, \"0.5\" is 50); anything else raises\n    IllegalArgumentException. plus(Amount) adds, negate() changes the sign, toString() prints two places:\n    \"12.50\", \"-0.05\".\n  - Period is a record of a first and a last day (LocalDate from, LocalDate to), from not after to, else\n    IllegalArgumentException. contains(LocalDate) is true from the first to the last day inclusive; days()\n    returns how many days it spans, both ends included (a long).\n  - Category is an enum: FOOD, TRAVEL, OFFICE, OTHER, in that order.\n  - Expense is a record of a date (LocalDate), a payee (String, not blank), an amount (Amount, positive), a\n    category (Category) and whether it is billable (boolean billable), else IllegalArgumentException.\n  - ExpenseBook is a class with a no-argument constructor. add(Expense) adds an expense at the end;\n    expenses() returns them in that order, as a List that cannot be modified; total() is the sum of their\n    amounts and totalFor(Category) the sum of one category's (zero when there are none); within(Period)\n    lists the expenses whose date the period contains, and billable() the billable ones, both in order.\n\n  The specification is PettyCashSpecTest in src/test/java: its tests say exactly what the library must\n  return, and they fail until the code provides it.\n\n  OBJECTIVE: every test in PettyCashSpecTest passes, and the whole suite passes.\n\n  The classes to change are Amount, Period, Category, Expense and ExpenseBook -- none exists yet: create them\n  under src/main/java in package org.pettycash. DO NOT modify anything under src/test: the specification is\n  the operator's, and if one of its tests fails, the code is what is wrong.\n",
+      "role" : "system",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1.7926049614499798E9,
+      "completed" : 1.7926052730559516E9,
+      "resolution" : "root goal satisfied: closure ledger clear: 6 subgoal(s) accounted for",
+      "metadata" : {
+        "planningRunId" : 2,
+        "activeAttemptId" : "attempt-08168a6c-5be0-4f1c-99eb-2c4722a0da8d",
+        "plannedOnce" : true,
+        "planRationale" : "The build is stuck because the main source classes (Amount, Period, Category, Expense, ExpenseBook) do not exist yet, so the test file cannot resolve its symbols. I will remove the stuck build-fix subgoal and replace it with concrete, file-level subgoals that create each class in dependency order, so the test compiles and passes.",
+        "mergedFrom" : "pettycash",
+        "sourceRunId" : "2026-10-21_19-48-26",
+        "sourceGoalId" : "goal-788de376-b6b6-47f3-97fe-ea321fc523f7",
+        "sourceLineageId" : "lineage-4f48ba38-7979-4ffe-9604-5450cf8f6d9d"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-51abe536-6fa8-37de-8945-cf08ffa74967",
+        "description" : "Implement the Amount record in package org.pettycash with a long cents field, a static parse(String) that reads a decimal with at most two places and an optional leading '-', plus(Amount), negate(), and a two-place toString()",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7926049747735975E9,
+        "completed" : 1.7926050232051811E9,
+        "resolution" : "fulfilled (score=0.89): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 1,
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "Amount.parse(\"12.50\") yields an amount whose toString() is \"12.50\"", "Amount.parse(\"0.5\") yields an amount whose toString() is \"0.50\"", "Amount.parse(\"-0.05\") yields an amount whose toString() is \"-0.05\"", "Amount.parse(\"12.5\") yields an amount whose toString() is \"12.50\"", "Amount.parse(\"12.505\") raises IllegalArgumentException", "Amount.parse(\"abc\") raises IllegalArgumentException", "Amount.parse(\"\") raises IllegalArgumentException", "Amount.parse(\"12.\") raises IllegalArgumentException", "Amount.parse(\".50\") raises IllegalArgumentException", "Amount.parse(\"12.50.00\") raises IllegalArgumentException", "Amount.parse(\"12.50 \") raises IllegalArgumentException", "Amount.parse(\" 12.50\") raises IllegalArgumentException", "Amount.parse(\"12,50\") raises IllegalArgumentException", "Amount.parse(\"12.50e2\") raises IllegalArgumentException", "Amount.parse(\"12.50\") plus Amount.parse(\"0.50\") yields an amount whose toString() is \"13.00\"", "Amount.parse(\"12.50\") plus Amount.parse(\"-0.50\") yields an amount whose toString() is \"12.00\"", "Amount.parse(\"12.50\") plus Amount.parse(\"-12.50\") yields an amount whose toString() is \"0.00\"", "Amount.parse(\"12.50\") plus Amount.parse(\"-13.00\") yields an amount whose toString() is \"-0.50\"", "Amount.parse(\"12.50\").negate() yields an amount whose toString() is \"-12.50\"", "Amount.parse(\"-12.50\").negate() yields an amount whose toString() is \"12.50\"", "Amount.parse(\"0.00\").negate() yields an amount whose toString() is \"0.00\"" ],
+          "lastUpdated" : "2026-10-21T17:50:23.159624797Z",
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-08168a6c-5be0-4f1c-99eb-2c4722a0da8d",
+          "activeAttemptId" : "attempt-b3a2d3d5-e30d-410f-b913-603bd3cc18c5",
+          "criteriaBinding" : {
+            "11" : "SPEC",
+            "12" : "SPEC",
+            "13" : "SPEC",
+            "14" : "SPEC",
+            "15" : "SPEC",
+            "16" : "SPEC",
+            "17" : "SPEC",
+            "18" : "SPEC",
+            "19" : "SPEC",
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC",
+            "4" : "SPEC",
+            "5" : "SPEC",
+            "6" : "SPEC",
+            "7" : "SPEC",
+            "8" : "SPEC",
+            "9" : "SPEC",
+            "20" : "SPEC",
+            "10" : "SPEC",
+            "21" : "SPEC"
+          },
+          "mergedFiles" : [ "Amount.java" ],
+          "mergeCount" : 1,
+          "mergedFrom" : "pettycash",
+          "sourceRunId" : "2026-10-21_19-48-26",
+          "sourceGoalId" : "goal-63b747d5-6d4a-4440-9d62-baf42a655df3",
+          "sourceLineageId" : "lineage-4f48ba38-7979-4ffe-9604-5450cf8f6d9d",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true,
+            "5" : true,
+            "6" : true,
+            "7" : true,
+            "8" : true,
+            "9" : true,
+            "10" : true,
+            "11" : true,
+            "12" : true,
+            "13" : true,
+            "14" : true,
+            "15" : true,
+            "16" : true,
+            "17" : true,
+            "18" : true,
+            "19" : true,
+            "20" : true,
+            "21" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-d70ff654-e0d9-3248-9266-f31ea3f9742f",
+        "description" : "[BUILD_FIX] Make the application packageable and startable — packaging failed: [ERROR] COMPILATION ERROR : | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/pettycash/output/src/test/java/org/pettycash/PettyCashSpecTest.java:[16,81] cannot find symbol | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/pettycash/output/src/test/java/org/pettycash/PettyCashSpecTest.java:[16,20] cannot find symbol",
+        "role" : "coverage-retro",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.792605026034031E9,
+        "completed" : 1.7926051077071033E9,
+        "resolution" : "all acceptance criteria banked",
+        "metadata" : {
+          "planningRunId" : 0,
+          "acceptanceCriteria" : [ "The project packages into a startable application artifact without build errors" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-08168a6c-5be0-4f1c-99eb-2c4722a0da8d",
+          "activeAttemptId" : "attempt-e7c126ca-50aa-4b3a-9b36-b4a0fd9c82e5",
+          "criteriaBinding" : {
+            "1" : "AUTHORED"
+          },
+          "originatingGate" : "package-gate",
+          "blockerType" : "BUILD_FIX",
+          "goalKind" : "HYBRID",
+          "mergeCount" : 1,
+          "mergedFiles" : [ "Category.java", "Period.java", "Expense.java", "ExpenseBook.java" ],
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T17:51:47.689913710Z",
+          "mergedFrom" : "pettycash",
+          "sourceRunId" : "2026-10-21_19-48-26",
+          "sourceGoalId" : "goal-4ecbf85c-59c7-4ea0-8ae1-4dcbb088aad0",
+          "sourceLineageId" : "lineage-4f48ba38-7979-4ffe-9604-5450cf8f6d9d",
+          "parentCriteriaPassStatus" : {
+            "1" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-a91a43bc-1d02-3b44-bf78-bf6bbae0f6f3",
+        "description" : "Create src/main/java/org/pettycash/Category.java defining the enum Category with constants FOOD, TRAVEL, OFFICE, OTHER in that order",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7926050415259178E9,
+        "completed" : 1.7926051389933639E9,
+        "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+        "metadata" : {
+          "planningRunId" : 2,
+          "acceptanceCriteria" : [ "Category.java exists", "The enum declares FOOD, TRAVEL, OFFICE, OTHER in that exact order" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-08168a6c-5be0-4f1c-99eb-2c4722a0da8d",
+          "activeAttemptId" : "attempt-21da8766-289d-47eb-9af1-995dd56fbaa7",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC"
+          },
+          "goalKind" : "EXECUTABLE",
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T17:52:18.977859967Z",
+          "mergedFrom" : "pettycash",
+          "sourceRunId" : "2026-10-21_19-48-26",
+          "sourceGoalId" : "goal-26ca68dd-6720-4351-84a1-49076325bea5",
+          "sourceLineageId" : "lineage-4f48ba38-7979-4ffe-9604-5450cf8f6d9d",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-40af23e2-0eab-3e14-bc82-2bb127d1e4f1",
+        "description" : "Create src/main/java/org/pettycash/Period.java defining a record Period(LocalDate from, LocalDate to) with contains(LocalDate) and days()",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7926050434822307E9,
+        "completed" : 1.7926051740738575E9,
+        "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+        "metadata" : {
+          "planningRunId" : 2,
+          "acceptanceCriteria" : [ "Period.java exists", "Period constructor raises IllegalArgumentException when from is after to", "Period.contains returns true for dates from through to inclusive and false otherwise", "Period.days() returns the inclusive day span as a long" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-08168a6c-5be0-4f1c-99eb-2c4722a0da8d",
+          "activeAttemptId" : "attempt-7d3b93ef-3791-445d-bfec-bc8b7a102dcf",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC",
+            "4" : "SPEC"
+          },
+          "subgoalRequests" : {
+            "LOW_CONFIDENCE" : {
+              "urgency" : 0.45,
+              "age" : 1,
+              "source" : "evaluation",
+              "validForCycles" : 3
+            }
+          },
+          "goalKind" : "EXECUTABLE",
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T17:52:54.057463228Z",
+          "mergedFrom" : "pettycash",
+          "sourceRunId" : "2026-10-21_19-48-26",
+          "sourceGoalId" : "goal-d1194234-e67d-4b38-8690-6145b4ca7dd8",
+          "sourceLineageId" : "lineage-4f48ba38-7979-4ffe-9604-5450cf8f6d9d",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-7d366598-fa26-3e0a-bcd8-79674448a3df",
+        "description" : "Create src/main/java/org/pettycash/Expense.java defining a record Expense(LocalDate date, String payee, Amount amount, Category category, boolean billable) with validation",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.792605044870516E9,
+        "completed" : 1.792605212104345E9,
+        "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+        "metadata" : {
+          "planningRunId" : 2,
+          "acceptanceCriteria" : [ "Expense.java exists", "Expense constructor raises IllegalArgumentException when payee is null or blank", "Expense constructor raises IllegalArgumentException when amount is null or not positive", "Expense constructor raises IllegalArgumentException when category is null" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-08168a6c-5be0-4f1c-99eb-2c4722a0da8d",
+          "activeAttemptId" : "attempt-023f3dd7-79ab-4e8a-984c-d302da040b6f",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC",
+            "4" : "SPEC"
+          },
+          "subgoalRequests" : {
+            "LOW_CONFIDENCE" : {
+              "urgency" : 0.45,
+              "age" : 2,
+              "source" : "evaluation",
+              "validForCycles" : 3
+            }
+          },
+          "goalKind" : "EXECUTABLE",
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T17:53:32.087730532Z",
+          "mergedFrom" : "pettycash",
+          "sourceRunId" : "2026-10-21_19-48-26",
+          "sourceGoalId" : "goal-213b3957-bb25-4636-ae69-44ca92ed9059",
+          "sourceLineageId" : "lineage-4f48ba38-7979-4ffe-9604-5450cf8f6d9d",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      }, {
+        "id" : "goal-45618f63-1e29-31bb-9eb9-2cf6b521a108",
+        "description" : "Create src/main/java/org/pettycash/ExpenseBook.java defining a class ExpenseBook with no-arg constructor, add(Expense), expenses(), total(), totalFor(Category), within(Period), billable()",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1.7926050462215145E9,
+        "completed" : 1.7926052527664042E9,
+        "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+        "metadata" : {
+          "planningRunId" : 2,
+          "acceptanceCriteria" : [ "Create ExpenseBook.java", "ExpenseBook.java exists", "add(Expense) appends to the end and expenses() returns them in insertion order as an unmodifiable List", "total() returns the sum of all expense amounts", "totalFor(Category) returns the sum for that category, zero when none exist", "within(Period) returns expenses whose date the period contains, in order", "billable() returns the billable expenses in order" ],
+          "subgoalOrigin" : "required",
+          "parentAttemptId" : "attempt-08168a6c-5be0-4f1c-99eb-2c4722a0da8d",
+          "activeAttemptId" : "attempt-0d3ce7bf-fed6-432e-a95f-304c2aaf6d48",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC",
+            "4" : "SPEC",
+            "5" : "SPEC",
+            "6" : "SPEC",
+            "7" : "SPEC"
+          },
+          "undefinedSymbols" : "ExpenseBook",
+          "subgoalRequests" : {
+            "LOW_CONFIDENCE" : {
+              "urgency" : 0.45,
+              "age" : 3,
+              "source" : "evaluation",
+              "validForCycles" : 3
+            }
+          },
+          "goalKind" : "EXECUTABLE",
+          "lastProgressState" : "FULFILLED",
+          "lastUpdated" : "2026-10-21T17:54:12.745316351Z",
+          "mergedFrom" : "pettycash",
+          "sourceRunId" : "2026-10-21_19-48-26",
+          "sourceGoalId" : "goal-e82cc6a0-4447-4af0-87a2-3f95e4d39a0e",
+          "sourceLineageId" : "lineage-4f48ba38-7979-4ffe-9604-5450cf8f6d9d",
+          "parentCriteriaPassStatus" : {
+            "1" : true,
+            "2" : true,
+            "3" : true,
+            "4" : true,
+            "5" : true,
+            "6" : true,
+            "7" : true
+          }
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    } ]
+  }
+}

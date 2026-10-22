@@ -1,0 +1,7 @@
+BillableExpenses.lines(book, period, currency) returns one LineItem per billable expense whose date the period contains, in the book's order, with the payee as the description, quantity 1 and the amount as Money of the same cents in the given currency
+The lines BillableExpenses.lines returns cannot be modified
+BillableExpenses.invoice(number, period, currency, book) returns a new Invoice with that number, period and currency, holding those lines
+gate: tests Every test in BillableExpensesSpecTest passes
+gate: tests The whole test suite passes
+rule: Create BillableExpenses under invoicer/src/main/java in package org.invoicer
+rule: Do not modify anything under the projects' src/test, and keep every existing class of both projects as it is

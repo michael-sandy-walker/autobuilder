@@ -1,0 +1,16 @@
+file	member	from
+pettycash/README.md	file	pettycash
+pettycash/pom.xml	file	pettycash
+pettycash/src/main/java/org/pettycash/Amount.java	file	pettycash
+pettycash/src/main/java/org/pettycash/Category.java	file	pettycash
+pettycash/src/main/java/org/pettycash/Expense.java	file	pettycash
+pettycash/src/main/java/org/pettycash/ExpenseBook.java	file	pettycash
+pettycash/src/main/java/org/pettycash/Period.java	file	pettycash
+pettycash/src/test/java/org/pettycash/PettyCashSpecTest.java	file	pettycash
+invoicer/README.md	file	invoicer
+invoicer/pom.xml	file	invoicer
+invoicer/src/main/java/org/invoicer/Invoice.java	file	invoicer
+invoicer/src/main/java/org/invoicer/LineItem.java	file	invoicer
+invoicer/src/main/java/org/invoicer/Money.java	file	invoicer
+invoicer/src/main/java/org/invoicer/Period.java	file	invoicer
+invoicer/src/test/java/org/invoicer/InvoicerSpecTest.java	file	invoicer

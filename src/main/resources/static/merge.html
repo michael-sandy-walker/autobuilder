@@ -9,7 +9,7 @@
     --bg: #050710; --panel: #0b1220; --panel-2: #111827; --rule: #1f2937;
     --ink: #e5e7eb; --muted: #9ca3af; --dim: #6b7280; --accent: #3b82f6;
     --same: #86efac; --related: #fcd34d; --different: #fca5a5; --operator: #c4b5fd;
-    --project: #60a5fa; --goal: #93c5fd; --criterion: #6b7280; --type: #f472b6; --operation: #fb923c; --super: #facc15;
+    --project: #60a5fa; --goal: #93c5fd; --loop: #34d399; --criterion: #6b7280; --type: #f472b6; --operation: #fb923c; --super: #facc15;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 ui-sans-serif, system-ui, sans-serif; }
@@ -34,6 +34,8 @@
   .prompt { display: flex; gap: 6px; padding: 6px 14px; background: var(--panel-2); border-bottom: 1px solid var(--rule); }
   .prompt input { flex: 1; background: var(--bg); color: var(--ink); border: 1px solid #374151; padding: 3px 8px; border-radius: 4px; }
   .prompt input:disabled { color: var(--dim); border-style: dashed; }
+  .node.loop circle { fill: var(--loop); }
+  .node.fresh circle { stroke: var(--loop); stroke-width: 6px; stroke-opacity: 0.8; }
   .node.proposed circle { stroke: var(--super); stroke-width: 3px; stroke-dasharray: 4 3; fill-opacity: 0.45; }
   text { fill: var(--ink); font-size: 10px; pointer-events: none; }
   .node circle { stroke: #0f172a; stroke-width: 1.5px; cursor: pointer; }
@@ -66,6 +68,7 @@
   <h1>Merge Canvas</h1>
   <label class="k">session <input type="text" id="session" size="28"></label>
   <button id="load">Load</button>
+  <label class="k" title="Fetch the session every 2 s -- a run made from it adds its goal tree as it works"><input type="checkbox" id="follow"> follow</label>
   <span id="kinds"></span>
   <button id="act-link" title="Link the two selected nodes">Link</button>
   <button id="act-super" title="A super node over the selected nodes">Super node</button>
@@ -86,6 +89,7 @@
     anything else to edit its metadata. Drag to move, wheel to zoom.</p>
     <div class="legend"><span style="color:var(--same)">same</span><span style="color:var(--related)">related</span>
       <span style="color:var(--different)">different</span><span style="color:var(--operator)">drawn by the operator</span>
+      <span style="color:var(--loop)">the loop's goals</span>
       <span class="dim">dashed: proposed, solid: confirmed</span></div></aside>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
@@ -99,7 +103,7 @@
     OPERATION: 'var(--operation)', SUPER: 'var(--super)' };
   const RADIUS = { PROJECT: 14, GOAL: 7, CRITERION: 4, TYPE: 10, OPERATION: 5, SUPER: 13 };
   const STATIC = new URLSearchParams(location.search).get('static') === '1';
-  const state = { session: null, model: null, hidden: new Set(['CRITERION', 'OPERATION']), folded: new Set(),
+  const state = { fresh: new Set(), applied: -1, session: null, model: null, hidden: new Set(['CRITERION', 'OPERATION']), folded: new Set(),
     selection: new Set(), edge: null, positions: new Map() };
 
   const svg = d3.select('#svg');
@@ -122,6 +126,7 @@
     const body = await r.json();
     if (!r.ok) return status(body.error || r.statusText, true);
     state.session = id;
+    state.applied = body.applied;
     history.replaceState(null, '', '?session=' + encodeURIComponent(id));
     accept(body);
     status(body.applied + ' edits');
@@ -133,11 +138,19 @@
     const body = await r.json();
     if (!r.ok) { status('refused: ' + (body.error || r.statusText), true); return false; }
     accept(body);
+    state.applied = body.applied;
     status(edit.op + ' -- ' + body.applied + ' edits');
     return true;
   }
 
   function accept(graph) {
+    // What arrived since the last graph glows for a few seconds (a run reporting into the session, live).
+    if (state.model) {
+      const before = new Set(state.model.nodes.keys());
+      const arrived = graph.nodes.map(n => n.id).filter(id => !before.has(id));
+      arrived.forEach(id => state.fresh.add(id));
+      if (arrived.length) setTimeout(() => { arrived.forEach(id => state.fresh.delete(id)); restyle(); }, 4000);
+    }
     state.model = C.model(graph);
     for (const id of [...state.selection]) if (!state.model.nodes.has(id)) state.selection.delete(id);
     if (state.edge && !graph.edges.some(e => e.id === state.edge)) state.edge = null;
@@ -243,7 +256,9 @@
   // What selecting changes: highlighting, the side panel and the buttons -- never the layout.
   function restyle() {
     nodeLayer.selectAll('g.node').classed('selected', d => state.selection.has(d.id)).classed('folded', d => state.folded.has(d.id))
-        .classed('proposed', d => C.proposed(state.model.nodes.get(d.id)));
+        .classed('proposed', d => C.proposed(state.model.nodes.get(d.id)))
+        .classed('loop', d => (state.model.nodes.get(d.id) || {}).project === 'loop' || d.id === 'loop:root')
+        .classed('fresh', d => state.fresh.has(d.id));
     const canAsk = state.selection.size >= 2 && !state.asking;
     document.getElementById('prompt').disabled = !canAsk;
     document.getElementById('ask').disabled = !canAsk;
@@ -498,6 +513,29 @@
     l.querySelector('input').onchange = ev => { if (ev.target.checked) state.hidden.delete(k); else state.hidden.add(k); if (state.model) draw(); };
     kinds.appendChild(l);
   }
+
+  // --- follow: a run made from the session reports into it; fetch every 2 s and redraw when the log has grown ------
+  let following = null;
+  async function poll() {
+    if (!state.session || state.asking) return;
+    try {
+      const r = await fetch(API + '/' + encodeURIComponent(state.session));
+      if (!r.ok) return;
+      const body = await r.json();
+      if (body.applied !== state.applied) {
+        const grew = body.applied - state.applied;
+        state.applied = body.applied;
+        accept(body);
+        status('following -- ' + body.applied + ' edits (+' + grew + ')');
+      }
+    } catch (e) { /* the run may be restarting: try again on the next tick */ }
+  }
+  const followBox = document.getElementById('follow');
+  followBox.onchange = () => {
+    if (following) { clearInterval(following); following = null; }
+    if (followBox.checked) following = setInterval(poll, 2000);
+  };
+  if (new URLSearchParams(location.search).get('follow') === '1') { followBox.checked = true; followBox.onchange(); }
 
   document.getElementById('load').onclick = () => load(document.getElementById('session').value.trim());
   const initial = new URLSearchParams(location.search).get('session');

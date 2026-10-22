@@ -436,6 +436,17 @@ public final class ProjectMerge {
                 .filter(l -> !l.isBlank() && !l.startsWith("#")).toList();
         Result r = integrate(new Parent(args[3], args[4], Path.of(args[2])), new Parent(args[6], args[7], Path.of(args[5])),
                 Layout.valueOf(args[1]), Files.readString(Path.of(args[8])), integration, Instant.now());
+        writeChild(r, child);
+        System.out.println("integrated (" + args[1] + "): " + r.tree().size() + " files, " + r.conflicts().size()
+                + " conflict(s), " + r.criteria().size() + " distinct criteria carried, "
+                + r.criteria().stream().mapToInt(c -> c.origins().size()).sum() + " origins");
+    }
+
+    /**
+     * An integration's child as a target directory: {@code output/}, {@code bootstrap/}, {@code meta/GoalStack.json}, and
+     * MERGE-PROVENANCE.tsv, MERGE-CONFLICTS.txt, MERGE-NOTES.txt beside them.
+     */
+    public static void writeChild(Result r, Path child) throws IOException {
         writeAll(child.resolve("output"), r.tree());
         writeAll(child.resolve("bootstrap"), r.bootstrap());
         Files.createDirectories(child.resolve("meta"));
@@ -443,9 +454,6 @@ public final class ProjectMerge {
         Files.writeString(child.resolve("MERGE-PROVENANCE.tsv"), "file\tmember\tfrom\n" + String.join("\n", r.provenance()) + "\n");
         Files.writeString(child.resolve("MERGE-CONFLICTS.txt"), r.conflicts().isEmpty() ? "" : String.join("\n", r.conflicts()) + "\n");
         Files.writeString(child.resolve("MERGE-NOTES.txt"), r.notes().isEmpty() ? "" : String.join("\n", r.notes()) + "\n");
-        System.out.println("integrated (" + args[1] + "): " + r.tree().size() + " files, " + r.conflicts().size()
-                + " conflict(s), " + r.criteria().size() + " distinct criteria carried, "
-                + r.criteria().stream().mapToInt(c -> c.origins().size()).sum() + " origins");
     }
 
     private static void writeAll(Path dir, Map<String, String> files) throws IOException {

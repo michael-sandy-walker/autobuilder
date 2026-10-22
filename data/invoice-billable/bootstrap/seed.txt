@@ -1,0 +1,32 @@
+  Two projects, adopted, and now to be integrated: pettycash is brought into invoicer. Each was written before, by
+  someone else, and each already builds and passes its own tests. In their own words, from their READMEs:
+
+    "invoicer -- Invoices in one currency: money with its currency, billing periods, invoice lines and their total."
+    "pettycash -- A petty-cash book: amounts in cents, expenses with a payee, a category and whether they are billable,
+    totals by category and period."
+
+  The build has two modules: pettycash/ is the pettycash project, invoicer/ is the invoicer project and depends on
+  pettycash. The root pom.xml only lists the two modules. Both projects' tests are in their modules' src/test/java.
+
+  How the two fit together was decided in a merge session; those decisions are among the obligations of this goal.
+
+  The integration wanted, with the focus on billing: the billable expenses of a petty-cash book become the lines of an
+  invoice.
+
+  - BillableExpenses.lines(ExpenseBook book, Period period, String currency) returns, in the book's order, one LineItem
+    per billable expense whose date the period contains (its first and last day included): the payee as the
+    description, quantity 1, and the expense's amount as a Money of the same cents in the given currency. The list
+    cannot be modified. Period, LineItem and Money are invoicer's; ExpenseBook and Expense are pettycash's.
+  - BillableExpenses.invoice(String number, Period period, String currency, ExpenseBook book) returns a new Invoice with
+    that number, period and currency, holding those lines (an invoice without lines totals zero in its currency).
+
+  The specification is BillableExpensesSpecTest, InvoicerSpecTest and PettyCashSpecTest in src/test/java:
+  BillableExpensesSpecTest says exactly what the integration must do and fails until the code provides it; the other
+  two are each project's own specification and keep passing.
+
+  OBJECTIVE: every test in BillableExpensesSpecTest passes, and the whole suite passes.
+
+  The classes to change are BillableExpenses -- it does not exist yet: create it under invoicer/src/main/java in
+  package org.invoicer. DO NOT modify anything under invoicer/src/test or pettycash/src/test: the specifications are
+  the operators', and if one fails, the code is what is wrong. Keep every class either project already has exactly as
+  it is.

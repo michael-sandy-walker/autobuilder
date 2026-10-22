@@ -1,0 +1,34 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: e45785f4d706c7d393a77fa73cf63f05c1c97530965d450164e4ef91cbbffbcb
+# body-sha256: 90ef5695108370acafa7f020c1fa0eca970b6ca3502d4d95e65f818b5b6b2554
+BillableExpenses.lines(book, period, currency) returns one LineItem per billable expense whose date the period contains, in the book's order, with the payee as the description, quantity 1 and the amount as Money of the same cents in the given currency
+The lines BillableExpenses.lines returns cannot be modified
+BillableExpenses.invoice(number, period, currency, book) returns a new Invoice with that number, period and currency, holding those lines
+gate: tests Every test in BillableExpensesSpecTest passes
+gate: tests The whole test suite passes
+rule: Create BillableExpenses under invoicer/src/main/java in package org.invoicer
+rule: Do not modify anything under the projects' src/test, and keep every existing class of both projects as it is
+Money (invoicer) and Amount (pettycash) are one concept in two shapes: keep both, with a conversion where they meet (currency: EUR, where: a billable expense becomes an invoice line)
+Period (invoicer) and Period (pettycash) are the same thing: one of them serves for both
+Expense (pettycash) and LineItem (invoicer) are one concept in two shapes: keep both, with a conversion where they meet -- a billable expense becomes an invoice line
+Amount (pettycash) and Money (invoicer) belong together
+Money (invoicer) and Amount (pettycash) are merged as Monetary amount -- one concept: cents; invoicer's carries a currency
+Money is a record of cents and a currency of three upper-case letters, else IllegalArgumentException
+Money.parse reads a decimal with at most two places and an optional leading '-', one space and the currency, and refuses anything else with IllegalArgumentException
+Money.plus adds amounts of the same currency and refuses another currency, and Money.times multiplies
+Money.toString prints two places and the currency, as in "12.50 EUR"
+A Period runs from its first to its last day inclusive, from not after to; days() counts both ends
+A LineItem needs a description that is not blank and a positive quantity; its amount is the unit price times the quantity
+An Invoice adds only lines in its currency, keeps them in order in a list that cannot be modified, and totals them, zero in its currency when empty
+gate: tests Every test in InvoicerSpecTest passes
+Amount.parse reads a decimal with at most two places and an optional leading '-', and refuses anything else with IllegalArgumentException
+Amount.plus adds, Amount.negate changes the sign, and Amount.toString prints two places, as in "12.50"
+Category is FOOD, TRAVEL, OFFICE, OTHER in that order
+An Expense needs a payee that is not blank and a positive amount
+ExpenseBook keeps expenses in order in a list that cannot be modified, totals them and one category's, and lists those within a period and the billable ones
+gate: tests Every test in PettyCashSpecTest passes

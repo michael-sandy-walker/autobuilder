@@ -1,0 +1,14 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# Both parents' own protected paths, placed with their code: what either parent did is kept.
+invoicer/src/test/**
+pettycash/src/test/**
+# The case: every source either project already has stays exactly as it is.
+invoicer/src/main/java/org/invoicer/Invoice.java
+invoicer/src/main/java/org/invoicer/LineItem.java
+invoicer/src/main/java/org/invoicer/Money.java
+invoicer/src/main/java/org/invoicer/Period.java
+pettycash/src/main/java/org/pettycash/Amount.java
+pettycash/src/main/java/org/pettycash/Category.java
+pettycash/src/main/java/org/pettycash/ExpenseBook.java
+pettycash/src/main/java/org/pettycash/Expense.java
+pettycash/src/main/java/org/pettycash/Period.java

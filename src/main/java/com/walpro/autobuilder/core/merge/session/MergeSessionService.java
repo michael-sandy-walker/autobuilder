@@ -73,10 +73,27 @@ public class MergeSessionService {
         MergeSession.Edit stamped = new MergeSession.Edit(edit.op(), edit.by(), edit.at() == null ? Instant.now() : edit.at(),
                 edit.args());
         String why = s.refusal(stamped);
+        if (why == null) why = duplicateLink(s, stamped);
         if (why != null) throw new IllegalArgumentException(why);
         s.apply(stamped);
         store.append(sessionId, List.of(stamped));
         return publish(sessionId, s);
+    }
+
+    /**
+     * A second link between two nodes already linked (either way round) is refused as it arrives -- the user's session
+     * held the same Amount-Money link three times. Checked here, not in the fold, so a log that already holds such
+     * duplicates still replays.
+     */
+    private static String duplicateLink(MergeSession s, MergeSession.Edit e) {
+        if (!"addEdge".equals(e.op()) || e.args() == null || !"LINK".equals(String.valueOf(e.args().get("kind")))) return null;
+        String a = String.valueOf(e.args().get("from")), b = String.valueOf(e.args().get("to"));
+        for (MergeSession.Edge x : s.edges().values()) {
+            if (x.kind() == MergeSession.EdgeKind.LINK && ((x.from().equals(a) && x.to().equals(b)) || (x.from().equals(b) && x.to().equals(a)))) {
+                return "these two nodes are already linked (" + x.id() + ")";
+            }
+        }
+        return null;
     }
 
     public synchronized Graph graph(String sessionId) throws IOException {
@@ -140,6 +157,38 @@ public class MergeSessionService {
 
     private static String freshId(MergeSession s, String prefix) {
         for (int i = 1; ; i++) if (!s.nodes().containsKey(prefix + i) && !s.edges().containsKey(prefix + i)) return prefix + i;
+    }
+
+    /** Where a child records the merge session it was made from -- the loop mirrors its goal tree into that session. */
+    public static final String SESSION_LINK = "meta/merge-session.json";
+
+    /**
+     * T4-EC slice 4, the bridge: a confirmed session and the operator's integration goal become the child the loop runs
+     * on -- {@code brought} integrated into {@code into} by {@link ProjectMerge#integrate} (the default layout unless one
+     * is given), its obligations the operator's own lines followed by one per confirmed decision of the session
+     * ({@link SessionDecisions}); the child records the session under {@value #SESSION_LINK}. Nothing in the session
+     * changes. Refused when the session has no confirmed decision or the child directory holds files.
+     */
+    public synchronized ProjectMerge.Result integrate(String sessionId, ProjectMerge.Parent into, ProjectMerge.Parent brought,
+                                                      ProjectMerge.Layout layout, String goal, List<String> obligations,
+                                                      Path child) throws IOException {
+        requireSession(sessionId);
+        if (goal == null || goal.isBlank()) throw new IllegalArgumentException("an integration needs a goal");
+        if (Files.isDirectory(child)) {
+            try (var w = Files.list(child)) {
+                if (w.findAny().isPresent()) throw new IllegalArgumentException(child + " is not empty");
+            }
+        }
+        List<String> decisions = SessionDecisions.obligations(MergeSession.replay(store.log(sessionId)));
+        if (decisions.isEmpty()) throw new IllegalArgumentException("the session has no confirmed decision to integrate from");
+        List<String> lines = new ArrayList<>(obligations == null ? List.of() : obligations);
+        lines.addAll(decisions);
+        ProjectMerge.Result r = ProjectMerge.integrate(into, brought, layout == null ? ProjectMerge.Layout.MODULES : layout,
+                goal, lines, Instant.now());
+        ProjectMerge.writeChild(r, child);
+        Files.writeString(child.resolve(SESSION_LINK), MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(
+                Map.of("sessionId", sessionId, "decisions", decisions)));
+        return r;
     }
 
     public List<MergeSession.Edit> log(String sessionId) throws IOException {

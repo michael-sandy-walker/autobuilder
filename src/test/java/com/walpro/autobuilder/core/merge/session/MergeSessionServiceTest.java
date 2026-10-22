@@ -41,6 +41,8 @@ class MergeSessionServiceTest {
         String goalA = g.nodes().stream().filter(n -> n.kind() == MergeSession.NodeKind.GOAL && n.project().equals("wick")).findFirst().orElseThrow().id();
         String goalB = g.nodes().stream().filter(n -> n.kind() == MergeSession.NodeKind.GOAL && n.project().equals("lamp")).findFirst().orElseThrow().id();
         svc.apply("s1", edit("addEdge", Map.of("id", "link:op:1", "from", goalA, "to", goalB, "kind", "LINK")));
+        assertThatThrownBy(() -> svc.apply("s1", edit("addEdge", Map.of("id", "link:op:9", "from", goalB, "to", goalA, "kind", "LINK"))))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("already linked");
         svc.apply("s1", edit("addSuper", Map.of("id", "super:1", "title", "Light", "children", List.of("wick:type:Flame", "lamp:type:Glow"))));
         svc.apply("s1", edit("removeEdge", Map.of("id", "link:op:1")));
         assertThatThrownBy(() -> svc.apply("s1", edit("removeEdge", Map.of("id", "wick->wick:type:Flame"))))

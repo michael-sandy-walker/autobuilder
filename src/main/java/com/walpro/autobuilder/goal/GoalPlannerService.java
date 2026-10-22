@@ -2640,7 +2640,14 @@ public class GoalPlannerService {
             appendGoalTransition(cycleId, g, prev);
         }
         lastObservedStatus.keySet().retainAll(goalMap.keySet());
+        // T4-EC: a run made from a merge session reports its goal tree into it, as it happens.
+        if (mergeSessionMirror != null) mergeSessionMirror.observe(List.copyOf(goalMap.values()), rootGoalId);
     }
+
+    /** T4-EC slice 4: optional -- inert unless the target records a merge session. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.merge.session.MergeSessionMirror mergeSessionMirror;
 
     /**
      * T4-DQ blocker 1: the same chokepoint now also APPENDS the change to the goal-transition log,

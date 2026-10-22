@@ -1,0 +1,4 @@
+{
+  "decisions" : [ "Money (invoicer) and Amount (pettycash) are one concept in two shapes: keep both, with a conversion where they meet (currency: EUR, where: a billable expense becomes an invoice line)", "Period (invoicer) and Period (pettycash) are the same thing: one of them serves for both", "Expense (pettycash) and LineItem (invoicer) are one concept in two shapes: keep both, with a conversion where they meet -- a billable expense becomes an invoice line", "Amount (pettycash) and Money (invoicer) belong together", "Money (invoicer) and Amount (pettycash) are merged as Monetary amount -- one concept: cents; invoicer's carries a currency" ],
+  "sessionId" : "invoice-billable-prepare"
+}

@@ -47,11 +47,22 @@ while IFS= read -r f; do
 done < <(cd "$ORIG" && find . -type f \( -path '*/src/test/*' -o -path '*/src/main/*' \) | sed 's|^\./||' | sort)
 chk "$tests" untouched "the tests are as in the child"
 chk "$kept" kept "every class either project had is unchanged"
-LI=$(find "$TREE" -path '*/src/main/*' -name LedgerImport.java -not -path '*/target/*' | head -1)
-uses=no; [ -n "$LI" ] && grep -q 'LineTokenizer' "$LI" && uses=yes
-own=$(find "$TREE" -path '*/src/main/*' -name '*.java' -not -path '*/target/*' -not -path '*/org/linekit/*' -exec grep -l 'class [A-Za-z]*Tokeni[sz]er\b' {} + 2>/dev/null | head -1)
-[ -n "$own" ] && { uses=second-tokenizer; echo "      declares a tokenizer: ${own#$TREE/}"; }
-chk "$uses" yes "LedgerImport reads its lines with LineTokenizer, and no second tokenizer is declared"
+USES="$ROOT/data/$TGT/bootstrap/integration/uses.txt"
+if [ -f "$USES" ]; then
+  # What the seed says the integration must reuse rather than rewrite: "<Class> <Reference>", one per line.
+  while read -r cls ref; do
+    [ -z "$cls" ] && continue
+    F=$(find "$TREE" -path '*/src/main/*' -name "$cls.java" -not -path '*/target/*' | head -1)
+    used=no; [ -n "$F" ] && grep -q "\b$ref\b" "$F" && used=yes
+    chk "$used" yes "$cls uses $ref"
+  done < <(grep -vE '^\s*(#|$)' "$USES")
+else
+  LI=$(find "$TREE" -path '*/src/main/*' -name LedgerImport.java -not -path '*/target/*' | head -1)
+  uses=no; [ -n "$LI" ] && grep -q 'LineTokenizer' "$LI" && uses=yes
+  own=$(find "$TREE" -path '*/src/main/*' -name '*.java' -not -path '*/target/*' -not -path '*/org/linekit/*' -exec grep -l 'class [A-Za-z]*Tokeni[sz]er\b' {} + 2>/dev/null | head -1)
+  [ -n "$own" ] && { uses=second-tokenizer; echo "      declares a tokenizer: ${own#$TREE/}"; }
+  chk "$uses" yes "LedgerImport reads its lines with LineTokenizer, and no second tokenizer is declared"
+fi
 chk "$suite" pass "the whole suite passes"
 [ "$suite" = pass ] || echo "      $(grep -m1 -E 'Tests run:|ERROR' "$SCRATCH/test.log" 2>/dev/null | head -c 160)"
 rm -rf "${SCRATCH:?}"

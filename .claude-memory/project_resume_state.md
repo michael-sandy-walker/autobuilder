@@ -17,7 +17,9 @@ metadata:
 - **Slice 1** (session = fold of an edit log; store interface; service; three endpoints) and its field check on invoicer + pettycash: see the T4-EC append. A boot-breaking defect (two constructors, no @Autowired) was caught by booting it and fixed with a container test.
 - **User's idea recorded:** one criterion clustered into a super criterion connected to several goals (works now via super nodes; open: matcher-proposed clusters; criteria as first-class nodes in the loop's goal model).
 - **Since:** slice 2 the canvas (d3 by hand, user's choice) + fixes after the user's try (a click shook the graph; links unhittable) + direct editing (handle, right-click menu, keys, status line, rename via `setTitle`) + slice 3 the prompt operation (model's super node recorded proposed; Confirm). All driven in headless Firefox (`src/test/browser/drive.py`) before the user tried them. Suite 3972/0.
-- **NEXT:** slice 4, the bridge -- a confirmed session becomes an integration goal and a loop run (first measure: invoicer + pettycash integrated through a session) -- options first.
+- **Slice 4 done (2026-10-22):** bridge + live mirror + follow mode; field103 invoice-billable GOAL_FULFILLED 28/28 from the user's session, watched live on the canvas. See the T4-EC append.
+- **User correction 2026-10-22:** no lettered option menus by reflex -- answer in prose, recommend, ask openly (feedback memory, rule 4).
+- **NEXT:** the user's call -- a longer case to watch live (is the loop's goal granularity noise?), "materialize graph", or T4-ED's supervisor so a run can be started from the page.
 
 ## 2026-10-21 (Opus 5.5, session 17 cont.) -- T4-EC STAGE 3 DONE (MATCHING, STRUCTURE THEN MODEL: 8 PAIRS, STABLE x3, NO FALSE UNIFY); MODULES CHOSEN AS DEFAULT LAYOUT; T4-ED (OPERATOR CONSOLE) FILED
 

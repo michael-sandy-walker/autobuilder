@@ -35,3 +35,16 @@ metadata:
    **How to apply:** before posing options, check each pair: could both be done, one after the other, toward the same
    end? Then they are stages -- present them as an ordered plan and ask only about what genuinely competes (which
    stage first, which mechanism for a stage).
+
+4. **Do not turn everything into lettered options (user, 2026-10-22).** The user, verbatim: "Within most of the recent
+   sessions, you have this habit to optionalize all into either 1, 2, 3 or A, B, C. This is not healthy anymore." It
+   came right after I answered their conceptual question ("when does this get converted into an actual live run ...
+   viewed during generation?") with an A/B/C menu.
+   **My reading (mine, not the user's words):** rule 2 had become a reflex -- every next step, every fix, every
+   question got a menu, even when one way was plainly better or when the user wanted my thinking, not a choice; a
+   menu with uneven options is a recommendation dressed as a choice and hands the thinking back to the user.
+   **How to apply:** answer a question in prose, with what I think and why. Say what I intend to do and the reason;
+   ask a plain open question when I need the user's view. Bring distinct alternatives only when the user asks for
+   them, or when a design decision is genuinely theirs and the alternatives truly compete (rule 2 still holds for
+   non-trivial capabilities -- but described in prose, not as a lettered menu by default).
+

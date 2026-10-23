@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-22 (Opus 5.5, session 17 end) -- T4-EC STAGES 1-4 BUILT AND RUN; THE MERGE CANVAS WITH A LIVE RUN WATCHED BY THE USER -- START HERE
+## 2026-10-23 (Opus 5.5, session 18) -- T6-U WITHHELD RUNG BUILT AND MEASURED ON BAND 1: 0 OF 6 (vs 6/6 WITH TESTS), FIVE FALSE COMPLETIONS -- START HERE
+
+- **Nothing is live.** Head = this commit; code `e4098638` (withheld support in `prepare_module_change.sh` + `smoke_criterion_status.sh`; cases `receiver-questions-withheld` v1, `edit-hunks-withheld` v1). Batch `~/.autobuilder/field105` (run.sh, results.txt). `scripts/run_outcomes.json` left uncommitted for the user.
+- **User's choices:** state the interface in the withheld seed, never the tests (the ticket's words alone would have measured guessing exact refusal wording).
+- **Result and the three closure mechanisms that let it happen:** on the `T6-U` ticket (2026-10-23 appends). In short: `ObjectiveMetClosure` treats the loop's own green suite as the objective; a model confirmed a test-answerable obligation falsely; a planner criterion forbade the tests the seed asked for.
+- **NEXT, the user's call:** fix the completion edge for the withheld rung (no "objective met by own tests" when the specification is not in the suite; test-answerable obligations not confirmed by reading), or measure band 2 at this rung first.
+
+## 2026-10-22 (Opus 5.5, session 17 end) -- T4-EC STAGES 1-4 BUILT AND RUN; THE MERGE CANVAS WITH A LIVE RUN WATCHED BY THE USER
 
 - **Nothing is live** (no JVM, no run, no viewer). Head = this commit; suite 3975/0; node tests 6/6 (`node --test src/test/js/merge.test.mjs`). Not committed, left for the user: `scripts/run_outcomes.json` (the run ledger, which the user commits).
 - **This session, in order** (detail on the `T4-EC` ticket, dated appends 2026-10-20..22): stage 1 (two lineages -> one child, criteria answered structure-then-model); stage 2 (two new projects, three layouts x3, 9/9 true completions; MODULES chosen as default; fixes 4c93e4b0 stale closure view, 10ed8cf7 let-go final, 91ecd2df module reports); stage 3 (matching, structure then model, stable x3); stage 4 = the user's MERGE CANVAS: headless session log (files; Neo4j kept in view) -> canvas on d3 (user's choice) -> direct editing -> prompt operation (model's super node, proposed) -> bridge + live mirror (a run reports its goal tree into its session as "loop"). Runs: field96-104. Filed: `T4-ED` operator console.

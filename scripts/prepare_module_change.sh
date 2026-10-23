@@ -20,5 +20,7 @@ mkdir -p "$DEST"
 done
 cp "$B/module/pom.xml" "$B/module/README.md" "$DEST/"
 mkdir -p "$DEST/src/main/java" "$DEST/src/test"   # a new project (no files.txt entries) has no src/ of its own
-cp -a "$B/spec/src/test/." "$DEST/src/test/"
+# A withheld case (T6-U) keeps its specification in bootstrap/withheld, which the loop never sees; bootstrap/spec,
+# when present, then holds only existing tests the commit changed.
+[ -d "$B/spec/src/test" ] && cp -a "$B/spec/src/test/." "$DEST/src/test/"
 echo "prepared $TGT: $(find "$DEST/src/test" -name '*.java' | wc -l) test sources into $DEST"

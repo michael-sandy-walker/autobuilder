@@ -16,6 +16,11 @@ TGT="${SMOKE_TARGET:-criterion-status}"
 # from scripts/ladder_case.py carries every test class its commit shipped).
 SPECS=$(grep -o 'The specification is [A-Za-z0-9_, ]*' "$ROOT/data/$TGT/bootstrap/seed.txt" | head -1 \
     | sed -e 's/The specification is //' -e 's/ in .*//' -e 's/ in$//' -e 's/ and /,/g' | tr -d ' ')
+# A withheld case (T6-U): the specification is not in the loop's tree or named by its seed; it is every test class
+# in bootstrap/withheld, laid over a copy of the tree being scored. The loop may ADD tests, so "src/test is
+# unmodified" becomes "the existing tests are unmodified".
+W="$ROOT/data/$TGT/bootstrap/withheld/src/test"
+[ -d "$W" ] && SPECS=$(cd "$W" && find . -name '*.java' -exec basename {} .java \; | sort | paste -sd,)
 SPEC=${SPECS%%,*}
 CHANGED=$(grep -o 'The one class to change is [A-Za-z0-9_]*' "$ROOT/data/$TGT/bootstrap/seed.txt" | head -1 | awk '{print $NF}')
 # A change across several classes names them all: "The classes to change are A, B and C."
@@ -32,7 +37,15 @@ chk(){ n=$((n+1)); if [ "$1" = "$2" ]; then pass=$((pass+1)); [ -n "${QUIET:-}" 
        else echo "FAIL [$n] $3 (want $2 got $1)"; fi; }
 SCRATCH=$(mktemp -d)
 "${SMOKE_PREPARE:-$ROOT/scripts/prepare_criterion_status_change.sh}" "$TGT" "$SCRATCH/orig" > /dev/null 2>&1
-diff -rq "$SCRATCH/orig/src/test" "$TREE/src/test" > /dev/null 2>&1 && u=untouched || u=modified
+if [ -d "$W" ]; then
+    u=untouched
+    while IFS= read -r f; do
+        cmp -s "$SCRATCH/orig/src/test/$f" "$TREE/src/test/$f" || { u=modified; echo "      changed: src/test/$f"; }
+    done < <(cd "$SCRATCH/orig/src/test" && find . -type f | sed 's|^\./||' | sort)
+    cp -a "$W/." "$SCRATCH/orig/src/test/"
+else
+    diff -rq "$SCRATCH/orig/src/test" "$TREE/src/test" > /dev/null 2>&1 && u=untouched || u=modified
+fi
 # Every source the module had, other than the one class the seed says to change, byte for byte.
 kept=kept
 [ -n "$CHANGED" ] && while IFS= read -r f; do
@@ -42,6 +55,7 @@ done < <(cd "$SCRATCH/orig/src/main" && find . -name '*.java' | sort)
 # The suite, run in copies: grading must not write into the artifact it grades. The pristine tree
 # is run too, for the list of specification cases a tree that does not compile never reports.
 cp -a "$TREE" "$SCRATCH/p" 2>/dev/null; rm -rf "${SCRATCH:?}/p/target"
+[ -d "$W" ] && mkdir -p "$SCRATCH/p/src/test" && cp -a "$W/." "$SCRATCH/p/src/test/"
 (cd "$SCRATCH/p" && timeout 600 mvn -B -q -o test > "$SCRATCH/test.log" 2>&1) && suite=pass || suite=fail
 (cd "$SCRATCH/orig" && timeout 600 mvn -B -q -o test > /dev/null 2>&1)
 for SPEC in ${SPECS//,/ }; do
@@ -84,7 +98,7 @@ for name in sorted(want) or ['(no specification cases reported by the pristine t
 PY
 )
 done
-chk "$u" untouched "src/test is unmodified"
+chk "$u" untouched "$([ -d "$W" ] && echo 'the existing tests are unmodified' || echo 'src/test is unmodified')"
 [ -n "$CHANGED" ] && chk "$kept" kept "the module's existing sources are unchanged"
 chk "$suite" pass "the whole suite passes"
 [ "$suite" = pass ] || echo "      $(grep -m1 -E 'Tests run:|ERROR' "$SCRATCH/test.log" 2>/dev/null | head -c 140)"

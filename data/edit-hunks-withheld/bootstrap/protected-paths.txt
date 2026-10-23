@@ -1,0 +1,9 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# The withheld rung (T6-U): the existing tests are the operator's; the loop may ADD tests beside them.
+src/test/java/com/walpro/autobuilder/protocol/evolution/EvolutionResponseParserTest.java
+# The module's other classes stay exactly as they were.
+src/main/java/com/walpro/autobuilder/agent/evolution/model/**
+# The parser keeps every declaration it was adopted with EXCEPT the two the ticket's change extends
+# (the reference implementation changed exactly these: parse gains an overload with the tree, and the
+# code-block pattern captures the language tag).
+members: src/main/java/com/walpro/autobuilder/protocol/evolution/EvolutionResponseParser.java except parse, CODE_BLOCK_PATTERN

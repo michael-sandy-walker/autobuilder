@@ -1,0 +1,10 @@
+# The module: files read from git at bootstrap/origin-rev, one path per line.
+src/main/java/com/walpro/autobuilder/core/build/StuckQuestions.java
+src/main/java/com/walpro/autobuilder/core/build/DeclaredMembers.java
+# Autobuilder's own tests of the closure -- the regression suite, with the data they read.
+src/test/java/com/walpro/autobuilder/core/build/DeclaredMembersTest.java
+src/test/java/com/walpro/autobuilder/core/build/StuckQuestionsSpecTest.java
+src/test/java/com/walpro/autobuilder/core/build/StuckQuestionsSymbolTest.java
+src/test/java/com/walpro/autobuilder/core/build/StuckQuestionsPortReviewTest.java
+src/test/resources/stuck/signatures.tsv
+src/test/resources/stuck/trees.zip

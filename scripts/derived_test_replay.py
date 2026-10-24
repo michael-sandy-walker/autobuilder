@@ -13,7 +13,9 @@ Then every check combination is scored on the same writings: which it would acce
 The decision rule, fixed before the results (user agreed, 2026-10-24): a combination may freeze only with ZERO wrong
 accepted across the sample, while at least half of each case's marked requirements get an accepted right test.
 
-Usage: derived_test_replay.py <case> <attempts.ndjson> <correct-tree> <labels.json> [--review] [--out results.json]
+Usage: derived_test_replay.py <case> <attempts.ndjson> <correct-tree>[,<more>...] <labels.json> [--review] [--out results.json]
+  The FIRST correct tree decides WRONG (the ticket's real implementation, where there is one); the others are
+  reported beside it (runs that met the goal with the tests given -- correct only as far as the specification tests go).
   labels.json: {"<requirement text>": "new" | "existing"} -- which lines describe behaviour the pristine tree has.
   --review: also ask the model (llm.api.* of application.yml) the revised review question for every writing.
 """
@@ -123,10 +125,14 @@ def main():
             kind = labels.get(e['requirement'])
             if kind is None:
                 sys.exit('no label for requirement: ' + e['requirement'])
-            p, g = run_one(pristine, e['path'], e['content']), run_one(o.correct, e['path'], e['content'])
+            refs = o.correct.split(',')
+            p = run_one(pristine, e['path'], e['content'])
+            results = [run_one(r, e['path'], e['content']) for r in refs]
+            g = results[0]
             klass = 'WRONG' if g != 'PASS' else ('VACUOUS' if kind == 'new' and p == 'PASS' else 'RIGHT')
             row = {'n': i, 'requirement': e['requirement'], 'attempt': e['attempt'], 'kind': kind,
-                   'pristine': p, 'correct': g, 'class': klass,
+                   'pristine': p, 'correct': g, 'class': klass, 'others_pass': sum(r == 'PASS' for r in results[1:]),
+                   'others': len(results) - 1,
                    'quote_ok': not e['reason'].startswith('the requirement quotes'),
                    'review_ok': bool(e['accepted']),
                    'pristine_ok': (p != 'PASS') if kind == 'new' else (p == 'PASS'),
@@ -140,7 +146,7 @@ def main():
                 row['original_review_ok'] = verdict(orig)
                 row['revised_review'] = ans.strip()[:600]
             rows.append(row)
-            print(f"[{i}/{len(attempts)}] {klass:8} pristine={p:9} correct={g:9} {kind:8} a{e['attempt']} "
+            print(f"[{i}/{len(attempts)}] {klass:8} pristine={p:9} correct={g:9} others={row['others_pass']}/{row['others']} {kind:8} a{e['attempt']} "
                   f"{e['requirement'][:70]}", flush=True)
     if o.out:
         json.dump(rows, open(o.out, 'w'), indent=1)

@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-23 (Opus 5.5, session 18) -- T6-U WITHHELD RUNG BUILT AND MEASURED ON BAND 1: 0 OF 6 (vs 6/6 WITH TESTS), FIVE FALSE COMPLETIONS -- START HERE
+## 2026-10-24 (Opus 5.5, session 18 cont.) -- T6-U DESIGN 2 BUILT; OFFLINE REPLAY: 6 OF 27 DERIVED TESTS RIGHT, NO CHECK COMBINATION MEETS THE RULE -- START HERE
+
+- **Nothing is live.** Head = this commit (code `793edf3f`); suite 3985/0 at `89bbafc6` plus DerivedTests unit tests 10/10 since. Batches field106/field107 stopped at run 1 (both `jvm-stopped`, reasons recorded). Replay data `~/.autobuilder/dtreplay/gen2`, references `~/.autobuilder/dtreplay/refs`. `scripts/run_outcomes.json` left for the user.
+- **User's choices:** Design 2 with a wording check; then step 1 (offline replay before more live runs) with the rule fixed in advance.
+- **Result:** on the `T6-U` ticket (2026-10-24 append). The withheld cases v2 still carry `gate: derived-test` markers; do not run them until the user decides.
+- **NEXT, the user's call:** the pre-stated exit (drop freezing, keep the completion-edge fixes), and what replaces the derived tests, if anything.
+
+## 2026-10-23 (Opus 5.5, session 18) -- T6-U WITHHELD RUNG BUILT AND MEASURED ON BAND 1: 0 OF 6 (vs 6/6 WITH TESTS), FIVE FALSE COMPLETIONS
 
 - **Nothing is live.** Head = this commit; code `e4098638` (withheld support in `prepare_module_change.sh` + `smoke_criterion_status.sh`; cases `receiver-questions-withheld` v1, `edit-hunks-withheld` v1). Batch `~/.autobuilder/field105` (run.sh, results.txt). `scripts/run_outcomes.json` left uncommitted for the user.
 - **User's choices:** state the interface in the withheld seed, never the tests (the ticket's words alone would have measured guessing exact refusal wording).

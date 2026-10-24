@@ -215,6 +215,7 @@ public class DerivedTests implements DerivedTestAuthority {
                 continue;
             }
             Review review = review(seedText, requirement, name, file.get().content());
+            recordAttempt(requirement, attempt, path, file.get().content(), review);
             log.info("T6-U: test for \"{}\" attempt {}: {} -- {}", requirement, attempt,
                     review.pass() ? "accepted" : "not accepted", review.reason());
             if (review.pass()) return new Entry(requirement, path, file.get().content(), Status.ACCEPTED, review.reason());
@@ -222,6 +223,22 @@ public class DerivedTests implements DerivedTestAuthority {
             last = file.get().content();
         }
         return new Entry(requirement, null, last, Status.UNACCEPTED, feedback);
+    }
+
+    /** Every writing and what the check said of it, appended -- the record a replay of the check is scored on. */
+    static final String ATTEMPTS_PATH = "meta/derived-tests-attempts.ndjson";
+
+    private void recordAttempt(String requirement, int attempt, String path, String content, Review review) {
+        try {
+            var line = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(Map.of(
+                    "requirement", requirement, "attempt", attempt, "path", path, "content", content,
+                    "accepted", review.pass(), "reason", review.reason()));
+            java.nio.file.Path f = files.resolveSecurePath(ATTEMPTS_PATH);
+            Files.createDirectories(f.getParent());
+            Files.writeString(f, line + "\n", java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception e) {
+            log.warn("T6-U: could not record a writing of a requirement's test: {}", e.getMessage());
+        }
     }
 
     /** The opening of the block the model is asked for: beside the existing tests, under the test root. */

@@ -429,7 +429,7 @@ public class DerivedTests implements DerivedTestAuthority {
         return sb.length() == 0 ? "(none)" : sb.toString();
     }
 
-    static String outline(String source) {
+    public static String outline(String source) {
         CompilationUnit unit = JavaSources.parser().parse(source).getResult().orElse(null);
         if (unit == null) return null;
         unit.findAll(MethodDeclaration.class).forEach(m -> m.getBody().ifPresent(b -> m.setBody(new BlockStmt())));

@@ -193,4 +193,21 @@ class DerivedTestsTest {
         assertThat(derived.settled()).isTrue();
         verify(llm, org.mockito.Mockito.never()).ask(any());
     }
+
+    /** field106 run 1: every answer was a bare fenced block, so nothing was ever accepted. */
+    @Test
+    void aBareBlockDeclaringTheTestIsPlacedBesideTheExistingTestThatOpensTheSameWay() {
+        var tests = new java.util.TreeMap<String, String>(java.util.Map.of(
+                "src/test/java/org/ink/QuillTest.java", "package org.ink;\nclass QuillTest {}",
+                "src/test/java/org/well/WellTest.java", "package org.well;\nclass WellTest {}"));
+        var file = DerivedTests.located("Here it is:\n```java\npackage org.well;\nclass DerivedRequirement01Test {}\n```\n",
+                "DerivedRequirement01Test", tests);
+        assertThat(file).get().satisfies(f -> {
+            assertThat(f.path()).isEqualTo("src/test/java/org/well/DerivedRequirement01Test.java");
+            assertThat(f.content()).startsWith("package org.well;");
+        });
+        assertThat(DerivedTests.located("```java\nclass Other {}\n```", "DerivedRequirement01Test", tests)).isEmpty();
+        assertThat(DerivedTests.header("DerivedRequirement01Test", List.copyOf(tests.keySet())))
+                .isEqualTo("```java [src/test/java/org/ink/DerivedRequirement01Test.java]");
+    }
 }

@@ -162,11 +162,13 @@ public class DerivedTests implements DerivedTestAuthority {
             entries.removeIf(e -> !lines.contains(e.requirement()));
             String existing = existingTests();
             String outline = outline();
+            Map<String, String> tests = sources(TEST_ROOT);
             for (int i = 0; i < lines.size(); i++) {
                 String line = lines.get(i);
                 if (entries.stream().anyMatch(e -> e.requirement().equals(line) && e.accepted())) continue;
                 entries.removeIf(e -> e.requirement().equals(line));
-                entries.add(derive(seedText, line, String.format("DerivedRequirement%02dTest", i + 1), existing, outline));
+                entries.add(derive(seedText, line, String.format("DerivedRequirement%02dTest", i + 1), existing, outline,
+                        tests));
                 DerivedTestsFile.write(files, entries);
             }
             long accepted = entries.stream().filter(Entry::accepted).count();
@@ -182,7 +184,9 @@ public class DerivedTests implements DerivedTestAuthority {
         }
     }
 
-    private Entry derive(String seedText, String requirement, String name, String existing, String outline) {
+    private Entry derive(String seedText, String requirement, String name, String existing, String outline,
+                         Map<String, String> tests) {
+        String header = header(name, List.copyOf(tests.keySet()));
         String feedback = null;
         String last = null;
         for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
@@ -190,16 +194,17 @@ public class DerivedTests implements DerivedTestAuthority {
                     .append("\n\nSPECIFICATION:\n").append(seedText)
                     .append("\n\nTHE PROJECT'S DECLARATIONS AS THEY ARE NOW (bodies left out):\n").append(outline)
                     .append("\n\nTHE EXISTING TESTS:\n").append(existing)
-                    .append("\n\nName the file ").append(name).append(", and the class in it ").append(name).append('.');
+                    .append("\n\nName the file ").append(name).append(", and the class in it ").append(name)
+                    .append(". Open the block with its path in brackets, for example:\n").append(header);
             if (feedback != null) {
                 user.append("\n\nAn earlier version was not accepted: ").append(feedback)
                         .append("\nThat version:\n").append(last);
             }
             String answer = ask(DERIVE_SYSTEM, user.toString(), "derived-test");
-            Optional<FileMutation> file = new EvolutionResponseParser().parse(answer).addedOrChangedFiles().stream()
-                    .filter(f -> fileName(f.path()).startsWith(name + ".")).findFirst();
+            Optional<FileMutation> file = located(answer, name, tests);
             if (file.isEmpty()) {
-                feedback = "the answer held no file named " + name;
+                feedback = "the answer held no file named " + name + " -- open its block with the path in brackets, as "
+                        + header;
                 last = answer;
                 continue;
             }
@@ -217,6 +222,50 @@ public class DerivedTests implements DerivedTestAuthority {
             last = file.get().content();
         }
         return new Entry(requirement, null, last, Status.UNACCEPTED, feedback);
+    }
+
+    /** The opening of the block the model is asked for: beside the existing tests, under the test root. */
+    static String header(String name, List<String> testPaths) {
+        String dir = testPaths.isEmpty() ? TEST_ROOT.substring(0, TEST_ROOT.length() - 1) : dirOf(testPaths.get(0));
+        String ext = testPaths.isEmpty() ? "" : extOf(testPaths.get(0));
+        String lang = ext.isEmpty() ? "" : ext.substring(1);
+        return "```" + lang + " [" + dir + "/" + name + ext + "]";
+    }
+
+    /**
+     * The answer's file for {@code name}: a block headed by its path, or -- field106 run 1: the local model wrote all
+     * eighteen of its answers as a bare fenced block -- the one block that declares {@code name}, placed beside the
+     * existing test whose first line it shares (its package, in the projects seen so far), else beside the first.
+     */
+    static Optional<FileMutation> located(String answer, String name, Map<String, String> tests) {
+        Optional<FileMutation> headed = new EvolutionResponseParser().parse(answer).addedOrChangedFiles().stream()
+                .filter(f -> fileName(f.path()).startsWith(name + ".")).findFirst();
+        if (headed.isPresent() || answer == null || tests.isEmpty()) return headed;
+        Matcher block = Pattern.compile("```[^\\n]*\\n(.*?)```", Pattern.DOTALL).matcher(answer);
+        List<String> declaring = new ArrayList<>();
+        while (block.find()) if (block.group(1).contains(name)) declaring.add(block.group(1));
+        if (declaring.size() != 1) return Optional.empty();
+        String content = declaring.get(0);
+        String first = firstLine(content);
+        String beside = tests.entrySet().stream().filter(t -> firstLine(t.getValue()).equals(first))
+                .map(Map.Entry::getKey).findFirst().orElse(tests.keySet().iterator().next());
+        return Optional.of(new FileMutation(dirOf(beside) + "/" + name + extOf(beside), content));
+    }
+
+    private static String firstLine(String text) {
+        for (String l : text.split("\\R")) if (!l.isBlank()) return l.strip();
+        return "";
+    }
+
+    private static String dirOf(String path) {
+        int slash = path.lastIndexOf('/');
+        return slash < 0 ? "" : path.substring(0, slash);
+    }
+
+    private static String extOf(String path) {
+        String f = fileName(path);
+        int dot = f.lastIndexOf('.');
+        return dot < 0 ? "" : f.substring(dot);
     }
 
     /** The wording check: every quoted text present, then a reader who sees no code. */

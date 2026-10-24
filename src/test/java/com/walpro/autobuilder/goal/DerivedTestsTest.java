@@ -210,4 +210,18 @@ class DerivedTestsTest {
         assertThat(DerivedTests.header("DerivedRequirement01Test", List.copyOf(tests.keySet())))
                 .isEqualTo("```java [src/test/java/org/ink/DerivedRequirement01Test.java]");
     }
+
+    /** A test of an edit form writes fences inside its own strings; the file runs to the LAST fence. */
+    @Test
+    void aTestWhoseStringsHoldFencesIsTakenWhole() {
+        String body = "package org.ink;\nclass DerivedRequirement01Test {\n  String a = \"\"\"\n      ```edit [x]\n      ```\n      \"\"\";\n}\n";
+        var tests = java.util.Map.of("src/test/java/org/ink/QuillTest.java", "package org.ink;\n");
+        assertThat(DerivedTests.located("```java [src/test/java/org/ink/DerivedRequirement01Test.java]\n" + body + "```\n",
+                "DerivedRequirement01Test", tests)).get().satisfies(f -> {
+            assertThat(f.path()).isEqualTo("src/test/java/org/ink/DerivedRequirement01Test.java");
+            assertThat(f.content()).isEqualTo(body);
+        });
+        assertThat(DerivedTests.located("```java\n" + body + "```", "DerivedRequirement01Test", tests)).get()
+                .satisfies(f -> assertThat(f.content()).isEqualTo(body));
+    }
 }

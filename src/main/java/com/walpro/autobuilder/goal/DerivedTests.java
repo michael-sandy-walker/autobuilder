@@ -16,7 +16,6 @@ import com.walpro.autobuilder.core.build.DerivedTestsFile;
 import com.walpro.autobuilder.core.build.DerivedTestsFile.Entry;
 import com.walpro.autobuilder.core.build.DerivedTestsFile.Status;
 import com.walpro.autobuilder.core.service.FileService;
-import com.walpro.autobuilder.protocol.evolution.EvolutionResponseParser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -250,19 +249,26 @@ public class DerivedTests implements DerivedTestAuthority {
     }
 
     /**
-     * The answer's file for {@code name}: a block headed by its path, or -- field106 run 1: the local model wrote all
-     * eighteen of its answers as a bare fenced block -- the one block that declares {@code name}, placed beside the
-     * existing test whose first line it shares (its package, in the projects seen so far), else beside the first.
+     * The answer's file for {@code name}. One file is asked for, so its text runs from the first fence to the LAST one:
+     * a test of an edit form writes fences inside its own strings, and a parser that ends the block at the next fence
+     * cut every such test short (the replay of field106/107's writings: "unclosed text block"). The path is the
+     * block's header when it names {@code name}; otherwise -- field106 run 1: the local model wrote all eighteen of its
+     * answers as a bare fenced block -- beside the existing test whose first line it shares (its package, in the
+     * projects seen so far), else beside the first.
      */
     static Optional<FileMutation> located(String answer, String name, Map<String, String> tests) {
-        Optional<FileMutation> headed = new EvolutionResponseParser().parse(answer).addedOrChangedFiles().stream()
-                .filter(f -> fileName(f.path()).startsWith(name + ".")).findFirst();
-        if (headed.isPresent() || answer == null || tests.isEmpty()) return headed;
-        Matcher block = Pattern.compile("```[^\\n]*\\n(.*?)```", Pattern.DOTALL).matcher(answer);
-        List<String> declaring = new ArrayList<>();
-        while (block.find()) if (block.group(1).contains(name)) declaring.add(block.group(1));
-        if (declaring.size() != 1) return Optional.empty();
-        String content = declaring.get(0);
+        if (answer == null) return Optional.empty();
+        Matcher open = Pattern.compile("(?m)^[ \\t]*```([^\\n]*)\\n").matcher(answer);
+        if (!open.find()) return Optional.empty();
+        int close = answer.lastIndexOf("```");
+        if (close <= open.end()) return Optional.empty();
+        String content = answer.substring(open.end(), close);
+        if (!content.contains(name)) return Optional.empty();
+        Matcher bracket = Pattern.compile("\\[([^\\]]+)\\]").matcher(open.group(1));
+        if (bracket.find() && fileName(bracket.group(1).strip()).startsWith(name + ".")) {
+            return Optional.of(new FileMutation(bracket.group(1).strip(), content));
+        }
+        if (tests.isEmpty()) return Optional.empty();
         String first = firstLine(content);
         String beside = tests.entrySet().stream().filter(t -> firstLine(t.getValue()).equals(first))
                 .map(Map.Entry::getKey).findFirst().orElse(tests.keySet().iterator().next());

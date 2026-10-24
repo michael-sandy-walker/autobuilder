@@ -45,6 +45,19 @@ class ObjectiveMetClosureTest {
         assertThat(c.objectiveMet()).isFalse();
     }
 
+    /** T6-U, field105: a green suite of the loop's own tests is not the objective while a requirement's test is missing. */
+    @Test
+    void aGreenSuiteIsNotTheObjectiveWhileARequirementsTestIsMissing() {
+        ObjectiveMetClosure c = new ObjectiveMetClosure(new Recurrence(0));
+        c.setTestRunGate(gate(TestRunGate.TreeTests.RAN, Set.of()));
+        DerivedTests derived = mock(DerivedTests.class);
+        c.setDerivedTests(derived);
+        when(derived.settled()).thenReturn(false);
+        assertThat(c.objectiveMet()).isFalse();
+        when(derived.settled()).thenReturn(true);
+        assertThat(c.objectiveMet()).isTrue();
+    }
+
     @Test
     void theSameCriteriaRefusedAgainAndAgain_becomeStalled_byTheRunsOwnRatios() {
         ObjectiveMetClosure c = new ObjectiveMetClosure(new Recurrence(0));

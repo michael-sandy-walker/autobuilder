@@ -54,7 +54,7 @@ public class MutationApplier {
                                 + " specification asks for no tests", file.path());
                         continue;
                     }
-                    if (protectedPaths != null && protectedPaths.refuse("evolution", file.path())) {
+                    if (protectedPaths != null && protectedPaths.refuse("evolution", file.path(), file.content())) {
                         continue;
                     }
                     writeFile(outputPrefix + file.path(), protectedPaths != null

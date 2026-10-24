@@ -353,7 +353,16 @@ body's hash, so an operator's hand edit is kept and reported as theirs. Line mar
 
 - `rule:` -- how the work is done; guides the work, never blocks completion;
 - `gate: tests` -- answered by the project's own test run, not by a model reading the source; the line also
-  declares the suite an authority for the whole run (`DeclaredTestSuite`).
+  declares the suite an authority for the whole run (`DeclaredTestSuite`);
+- `gate: derived-test` -- for a target whose specification tests are withheld: when the root goal is set,
+  `DerivedTests` writes one test per such line from its wording (the seed, the existing tests, and the code's
+  declarations without bodies -- never what the code does), checks it against that wording (every quoted text
+  present, a lone capital letter in a quote standing for one value; then a model that sees no code), and up to
+  three writings later either accepts it or leaves the line to a reading. Accepted tests are kept in
+  `meta/derived-tests.json`, frozen (`ProtectedPaths`), written back before every test run, and answered by the
+  test gate at closure; a writer may propose a corrected text, which is judged against the wording alone. While
+  any such line lacks an accepted test, a green suite is not "the objective met by the project's own tests"
+  (`ObjectiveMetClosure`).
 
 `ObjectiveCoverage` checks that the obligations still carry the seed's `OBJECTIVE:` sentence.
 

@@ -55,10 +55,27 @@ public class ObjectiveMetClosure {
         this.testRunGate = gate;
     }
 
-    /** Whether the loop's own test run has run the suite on the tree as merged, with no test failing. */
+    /**
+     * T6-U: the tests written from the requirements' wording. A green suite is the objective only while the
+     * requirements are IN it: field105 (tests withheld) closed three runs on a suite of the loop's own tests, one
+     * with no test written at all, with code the withheld specification fails.
+     */
+    @Lazy
+    @Autowired(required = false)
+    private DerivedTests derivedTests;
+
+    void setDerivedTests(DerivedTests derivedTests) {
+        this.derivedTests = derivedTests;
+    }
+
+    /**
+     * Whether the loop's own test run has run the suite on the tree as merged, with no test failing -- and every
+     * requirement marked {@code gate: derived-test} has its accepted test in that suite.
+     */
     public boolean objectiveMet() {
         return testRunGate != null && testRunGate.treeTests() == TestRunGate.TreeTests.RAN
-                && testRunGate.treeFailing().map(Set::isEmpty).orElse(false);
+                && testRunGate.treeFailing().map(Set::isEmpty).orElse(false)
+                && (derivedTests == null || derivedTests.settled());
     }
 
     /** A work item's criteria were refused again, as {@code unconfirmed}; true when that refusal has become persistent. */

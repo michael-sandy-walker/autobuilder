@@ -125,6 +125,12 @@ public class TestRunGate {
     @Autowired(required = false)
     private org.springframework.beans.factory.ObjectProvider<com.walpro.autobuilder.core.stuck.StuckLayer> stuckLayer;
 
+    /** T6-U: writes the tests derived from the requirements back before each run; optional in narrow tests. */
+    @Setter
+    @org.springframework.context.annotation.Lazy
+    @Autowired(required = false)
+    private DerivedTestAuthority derivedTestAuthority;
+
     /** T4-DY: the failing sets of this run's test runs, judged by the one recurrence rule. */
     private final com.walpro.autobuilder.core.stuck.Recurrence failingSets =
             com.walpro.autobuilder.core.stuck.Recurrence.ofThisRun();
@@ -234,6 +240,8 @@ public class TestRunGate {
         if (!enabled || !buildExecutor.isEnabled()) {
             return Optional.empty();
         }
+        // T6-U: the tests written from the requirements are the framework's; the suite never runs without them.
+        if (derivedTestAuthority != null) derivedTestAuthority.restore();
         // T4-AN-2b: a test-required goal with no test sources must not pass on a vacuous build.
         if (testsRequired && !testSourcesPresent()) {
             log.info("T4-AN-2: goal requires automated tests but no test sources are present — blocking completion");

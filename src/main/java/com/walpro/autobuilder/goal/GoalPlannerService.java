@@ -97,6 +97,11 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private ObjectiveMetClosure objectiveMetClosure;
 
+    /** T6-U: the tests written from the requirements' wording; optional, absent on targets that mark no such line. */
+    @Setter
+    @Autowired(required = false)
+    private DerivedTests derivedTests;
+
     /** Spec-grounding of authored criteria (run 19) — optional, wired by Spring if present. */
     @Setter
     @Autowired(required = false)
@@ -1917,6 +1922,8 @@ public class GoalPlannerService {
      */
     private void ensureSeedObligations(String rootDescription) {
         if (seedObligationsGenerator != null) seedObligationsGenerator.ensureFor(rootDescription);
+        // T6-U: the tests of the lines marked gate: derived-test, written from their wording before any code changes.
+        if (derivedTests != null) derivedTests.ensureFor(rootDescription);
     }
 
     public void addSubGoal(String id, String description, boolean setAsCurrent) {
@@ -4007,8 +4014,17 @@ public class GoalPlannerService {
         String written = writtenObligations();
         List<String> uncovered = new ArrayList<>(
                 SeedRequirements.notAlreadyCoveredVerifiable(root.getDescription(), banked, written));
-        List<String> testGateLines = SeedRequirements.answeredByGate(
-                root.getDescription(), written, SeedRequirements.GATE_TESTS);
+        List<String> testGateLines = new ArrayList<>(SeedRequirements.answeredByGate(
+                root.getDescription(), written, SeedRequirements.GATE_TESTS));
+        // T6-U: a line whose test was written from its wording and accepted is in the suite, so the test gate answers
+        // it; one still without an accepted test stays a reading.
+        if (derivedTests != null) {
+            Set<String> accepted = derivedTests.acceptedRequirements();
+            List<String> answered = SeedRequirements.answeredByGate(root.getDescription(), written,
+                    SeedRequirements.GATE_DERIVED).stream().filter(accepted::contains).toList();
+            uncovered.removeAll(answered);
+            testGateLines.addAll(answered);
+        }
         if (testGateLines.isEmpty()) return uncovered;
         if (testRunGate != null && testRunGate.isLive()) {
             log.info("T4-CQ: {} seed obligation(s) answered by the test gate, not by a reading: {}",
@@ -4166,6 +4182,10 @@ public class GoalPlannerService {
     }
 
     private void attemptRootClosure(GoalEntity root, List<GoalEntity> allSubgoals) {
+        if (derivedTests != null && derivedTests.pending()) {
+            log.info("T6-U: root closure deferred -- the requirements' tests are still being written");
+            return;
+        }
         List<String> blockers = new ArrayList<>();
         int passing = 0;
         int subsumed = 0;

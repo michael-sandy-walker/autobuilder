@@ -15,10 +15,11 @@ rule: The question: when the type a failure names is not declared in the sources
 rule: Change only StuckQuestions under src/main/java
 rule: Do not modify the existing tests under src/test; add new tests beside them
 rule: Keep every other class exactly as it is, and the project's packages, classes and naming
-For a failure whose type is a class of the running JDK and not declared in the sources, answer() returns kind MEMBERS, the type's simple name without type arguments, and the called method's name as member
-For such a failure, declared lists the JDK class's public methods, own and inherited, each once, as name(ParameterSimpleType, ...)
-For such a failure, meant is the first declaration of the called method in the project's sources as Type.name(ParameterSimpleType, ...), or null when the sources declare none
-A type that neither the sources nor the JDK declare still has no answer
-A type the sources declare is still answered from the sources as before
-Tests for the receiver question are added beside the existing tests in src/test/java
+gate: derived-test For a failure whose type is a class of the running JDK and not declared in the sources, answer() returns kind MEMBERS, the type's simple name without type arguments, and the called method's name as member
+gate: derived-test For such a failure, declared lists the JDK class's public methods, own and inherited, each once, as name(ParameterSimpleType, ...)
+gate: derived-test For such a failure, meant is the first declaration of the called method in the project's sources as Type.name(ParameterSimpleType, ...), or null when the sources declare none
+gate: derived-test A type that neither the sources nor the JDK declare still has no answer
+gate: derived-test A type the sources declare is still answered from the sources as before
+gate: derived-test answer() answers both failures the ticket quotes, "the build fails: Object has no getBookId()" and "cannot find symbol method indexOf(ParticipationWindow) in record component active of type Map<String,ParticipationWindow>", with kind MEMBERS, type Object and Map respectively, and the called method as member
+rule: Tests for the receiver question are added beside the existing tests in src/test/java
 gate: tests the whole suite passes

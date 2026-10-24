@@ -128,4 +128,27 @@ class ProtectedPathsTest {
         assertThat(paths.openMembers("src/main/java/zeta/Router.java")).containsExactlyInAnyOrder("answer", "route");
         assertThat(paths.openMembers("src/main/java/zeta/Quill.java")).isEmpty();
     }
+
+    /** T6-U: a test written from the requirements is frozen, and only a text its authority accepts may be written. */
+    @Test
+    void aDerivedTestIsFrozenAndOnlyATextItsAuthorityAcceptsGetsThrough() throws Exception {
+        String test = "src/test/java/zeta/DerivedRequirement01Test.java";
+        new FileService(base.toString(), new ObjectMapper()).writeFile(DerivedTestsFile.PATH,
+                "[{\"requirement\":\"A quill dries.\",\"path\":\"" + test + "\",\"content\":\"class A {}\","
+                        + "\"status\":\"ACCEPTED\",\"reason\":\"ok\"}]");
+        java.util.List<String> proposed = new java.util.ArrayList<>();
+        paths.setDerivedTestAuthority(new DerivedTestAuthority() {
+            public boolean contest(String writer, String path, String content) { proposed.add(content); return content.contains("good"); }
+            public void restore() { }
+            public String drainNotes() { return "Your corrected version of " + test + " was NOT accepted: weaker"; }
+        });
+
+        assertThat(paths.isProtected(test)).isTrue();
+        assertThat(paths.isProtected("src/test/java/zeta/QuillTest.java")).isFalse();
+        assertThat(paths.refuse("the merge", test)).as("a writer without a text never writes it").isTrue();
+        assertThat(paths.refuse("evolution", test, "class A { /* bad */ }")).isTrue();
+        assertThat(paths.refuse("evolution", test, "class A { /* good */ }")).isFalse();
+        assertThat(proposed).hasSize(2);
+        assertThat(paths.promptBlock()).contains(test, "judged against the requirement's wording only", "NOT accepted: weaker");
+    }
 }

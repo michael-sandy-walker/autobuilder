@@ -319,8 +319,14 @@ public final class SeedRequirements {
      */
     public static final String GATE_MARKER = "gate:";
 
-    /** The one gate a line may name today: the project's own test suite. */
+    /** The gate of the project's own test suite. */
     public static final String GATE_TESTS = "tests";
+
+    /**
+     * T6-U: a test written from this line's own wording before the code changed, then frozen ({@code DerivedTests}).
+     * Until that test is accepted the line is an ordinary obligation; once it is, the test gate answers it.
+     */
+    public static final String GATE_DERIVED = "derived-test";
 
     /** The gate a line names, or null when it names none. */
     static String gateOf(String line) {

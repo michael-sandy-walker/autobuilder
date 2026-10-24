@@ -58,6 +58,7 @@ public class ProtectedPaths {
     /** True when {@code pathUnderOutput} (relative to {@code output/}) matches a protected glob. */
     public boolean isProtected(String pathUnderOutput) {
         if (pathUnderOutput == null || pathUnderOutput.isBlank()) return false;
+        if (isDerivedTest(pathUnderOutput)) return true;
         List<PathMatcher> matchers = matchers();
         if (matchers.isEmpty()) return false;
         String rel = pathUnderOutput.replace('\\', '/');
@@ -73,8 +74,63 @@ public class ProtectedPaths {
     /** Refused writes not yet told to the model, oldest first; drained by {@link #promptBlock()}. */
     private final java.util.Set<String> unreportedRefusals = new java.util.LinkedHashSet<>();
 
+    /**
+     * T6-U: true when {@code pathUnderOutput} is a test written from the requirements' wording and accepted
+     * ({@link DerivedTestsFile}). Frozen like an operator's test, but the framework's to write: a writer may
+     * only propose a new text for it, through {@link #refuse(String, String, String)}.
+     */
+    public boolean isDerivedTest(String pathUnderOutput) {
+        if (pathUnderOutput == null || pathUnderOutput.isBlank()) return false;
+        return derivedPaths().contains(normalise(pathUnderOutput));
+    }
+
+    /** The accepted derived tests' paths, re-read whenever the file's text changes. */
+    private synchronized java.util.Set<String> derivedPaths() {
+        String text = DerivedTestsFile.readText(fileService);
+        if (text.equals(cachedDerivedText)) return cachedDerivedPaths;
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        for (DerivedTestsFile.Entry e : DerivedTestsFile.parse(text)) {
+            if (e.accepted() && e.path() != null) out.add(normalise(e.path()));
+        }
+        cachedDerivedText = text;
+        cachedDerivedPaths = java.util.Set.copyOf(out);
+        return cachedDerivedPaths;
+    }
+
+    private String cachedDerivedText;
+    private java.util.Set<String> cachedDerivedPaths = java.util.Set.of();
+
+    /** T6-U: the party that judges a proposed text for a derived test; optional, so narrow tests need not wire it. */
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DerivedTestAuthority derivedTestAuthority;
+
+    void setDerivedTestAuthority(DerivedTestAuthority authority) {
+        this.derivedTestAuthority = authority;
+    }
+
+    /**
+     * As {@link #refuse(String, String)}, for a writer that has the text it would write. A derived test is the
+     * one protected path such a writer may change: its text is put to the {@link DerivedTestAuthority}, judged
+     * against the requirement's wording, and the write goes ahead when that text is the accepted one.
+     */
+    public boolean refuse(String writer, String pathUnderOutput, String content) {
+        if (isDerivedTest(pathUnderOutput) && derivedTestAuthority != null && content != null
+                && derivedTestAuthority.contest(writer, normalise(pathUnderOutput), content)) {
+            return false;
+        }
+        return refuse(writer, pathUnderOutput);
+    }
+
     /** Logs the refusal in one wording, so a run can be searched for it, and keeps it for the model. */
     public boolean refuse(String writer, String pathUnderOutput) {
+        if (isDerivedTest(pathUnderOutput)) {
+            // The framework writes these from their accepted text before every test run, so a writer's copy
+            // is never needed; what the model is told of its proposals is the authority's to say.
+            log.info("T6-U: {} did not write {} -- a test written from the requirements, the framework's to write",
+                    writer, pathUnderOutput);
+            return true;
+        }
         if (!isProtected(pathUnderOutput)) return false;
         log.warn("T4-CQ: {} did not write {} — it is protected by {}", writer, pathUnderOutput, PATH);
         if (grindDetector != null) grindDetector.observe(null, com.walpro.autobuilder.core.stuck.StuckObservation.Source.PROTECTED_WRITE, "write to " + normalise(pathUnderOutput) + " refused: protected");
@@ -192,7 +248,8 @@ public class ProtectedPaths {
         synchronized (this) {
             memberGlobs = cachedMemberGlobs;
         }
-        if (globs.isEmpty() && memberGlobs.isEmpty()) return null;
+        java.util.Set<String> derived = derivedPaths();
+        if (globs.isEmpty() && memberGlobs.isEmpty() && derived.isEmpty()) return null;
         List<String> refused;
         synchronized (unreportedRefusals) {
             refused = List.copyOf(unreportedRefusals);
@@ -213,6 +270,15 @@ public class ProtectedPaths {
                     + " beside them. A change to an existing declaration is undone:\n");
             for (String g : memberGlobs) sb.append("  - ").append(g).append("\n");
         }
+        if (!derived.isEmpty()) {
+            sb.append("These tests were written from the requirements' own wording before the code changed, and they"
+                    + " are the requirements: make the code pass them. If one checks something its requirement does"
+                    + " not say, you may write a corrected version of it; the correction is judged against the"
+                    + " requirement's wording only, never against your code:\n");
+            for (String d : derived) sb.append("  - ").append(d).append("\n");
+        }
+        String contests = derivedTestAuthority == null ? null : derivedTestAuthority.drainNotes();
+        if (contests != null && !contests.isBlank()) sb.append(contests.strip()).append("\n");
         if (!refused.isEmpty()) {
             sb.append("Your previous changes to these files were NOT applied, because they are protected:\n");
             for (String r : refused) sb.append("  - ").append(r).append("\n");

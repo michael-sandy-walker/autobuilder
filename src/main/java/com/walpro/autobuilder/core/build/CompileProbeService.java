@@ -195,7 +195,7 @@ public class CompileProbeService {
                 // probe failed on the baseline, zero merges for 45 min). Same guard as the
                 // injector inner loop below.
                 // T4-CQ: a protected path is never staged -- the candidate is judged without it.
-                if (protectedPaths != null && protectedPaths.refuse("the compile probe", mutation.path())) {
+                if (protectedPaths != null && protectedPaths.refuse("the compile probe", mutation.path(), mutation.content())) {
                     continue;
                 }
                 if (!originalContents.containsKey(mutation.path())) {

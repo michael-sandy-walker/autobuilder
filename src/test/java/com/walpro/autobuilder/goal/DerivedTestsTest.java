@@ -9,25 +9,27 @@ import com.walpro.autobuilder.core.service.FileService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.ArgumentCaptor;
 import org.springframework.http.ResponseEntity;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * T6-U: the tests a change is held to, written from the requirement's wording before the code changes, checked
- * against that wording, then frozen. Invented coordinates; the failure each test names is field105's.
+ * T6-U: the tests a change is held to -- each requirement split into atomic claims, one test per claim written from
+ * the wording, kept only when it passes on a throwaway implementation written from the same wording. Invented
+ * coordinates; the model and the builds are stubbed, so what is tested is the routing, not a model.
  */
 class DerivedTestsTest {
 
@@ -37,123 +39,212 @@ class DerivedTestsTest {
               OBJECTIVE: edits are applied as above, and the whole suite passes.
             """;
     private static final String REQUIREMENT = "A piece that occurs more than once is refused with \"occurs N times\".";
-    private static final String PATH = "src/test/java/org/ink/DerivedRequirement01Test.java";
+    private static final String TEST_DIR = "src/test/java/org/ink";
 
     @TempDir
     Path base;
 
     private FileService files;
-    private final Deque<String> answers = new ArrayDeque<>();
+    /** Answers per prompt kind, in order. */
+    private final Map<String, Deque<String>> answers = new HashMap<>();
+    private final List<String> asked = new ArrayList<>();
     private LLMClient llm;
+    /** What the stub bench does: which spike trees compile, and which test texts pass there. */
+    private final Deque<String> compileResults = new ArrayDeque<>();
+    private final Map<String, Boolean> passesWhenContains = new LinkedHashMap<>();
 
     @BeforeEach
     void setUp() throws Exception {
         files = new FileService(base.toString(), new ObjectMapper());
         files.writeFile(DerivedTests.SEED_PATH, SEED);
-        files.writeFile(SeedObligationsFile.PATH, SeedObligationsFile.render(SEED, List.of(
-                "rule: Keep the project's naming.",
-                SeedRequirements.GATE_MARKER + " " + SeedRequirements.GATE_DERIVED + " " + REQUIREMENT)));
+        obligations(REQUIREMENT);
         files.writeFile("output/src/main/java/org/ink/Quill.java",
                 "package org.ink;\npublic class Quill {\n  public int ink() { return 1 + 1; }\n}\n");
-        files.writeFile("output/src/test/java/org/ink/QuillTest.java", "package org.ink;\nclass QuillTest {}\n");
+        files.writeFile("output/" + TEST_DIR + "/QuillTest.java", "package org.ink;\nclass QuillTest {}\n");
         llm = mock(LLMClient.class);
         when(llm.ask(any())).thenAnswer(inv -> {
+            List<Message> m = inv.getArgument(0);
+            String system = m.get(0).getContent();
+            asked.add(m.get(1).getContent());
+            String kind = system.equals(DerivedTests.DECOMPOSE_SYSTEM) ? "claims"
+                    : system.equals(DerivedTests.WRITE_SYSTEM) ? "write"
+                    : system.equals(DerivedTests.SPIKE_SYSTEM) ? "spike" : "review";
+            Deque<String> q = answers.getOrDefault(kind, new ArrayDeque<>());
             ChatResponse body = mock(ChatResponse.class);
-            when(body.getFirstContent()).thenReturn(answers.isEmpty() ? "" : answers.poll());
+            when(body.getFirstContent()).thenReturn(q.isEmpty() ? "" : q.poll());
             return ResponseEntity.ok(body);
         });
     }
 
-    private static String file(String body) {
-        return "```java [" + PATH + "]\npackage org.ink;\nclass DerivedRequirement01Test {\n" + body + "\n}\n```\n";
+    private void obligations(String... derived) throws Exception {
+        List<String> lines = new ArrayList<>(List.of("rule: Keep the project's naming."));
+        for (String d : derived) lines.add(SeedRequirements.GATE_MARKER + " " + SeedRequirements.GATE_DERIVED + " " + d);
+        files.writeFile(SeedObligationsFile.PATH, SeedObligationsFile.render(SEED, lines));
+    }
+
+    private void answer(String kind, String... texts) {
+        answers.computeIfAbsent(kind, k -> new ArrayDeque<>()).addAll(List.of(texts));
+    }
+
+    private static String test(int n, String body) {
+        String name = String.format("DerivedClaim%03dTest", n);
+        return "```java [" + TEST_DIR + "/" + name + ".java]\npackage org.ink;\nclass " + name + " {\n" + body + "\n}\n```\n";
+    }
+
+    private static final String SPIKE = "```java [src/main/java/org/ink/Quill.java]\npackage org.ink;\npublic class Quill {}\n```\n";
+
+    private DerivedTests derived() {
+        DerivedTests d = new DerivedTests(llm, files);
+        d.setBench(new DerivedTests.Bench() {
+            public String compiles(Path tree) {
+                if (compileResults.isEmpty()) return null;
+                String r = compileResults.poll();
+                return r.isEmpty() ? null : r;
+            }
+
+            public Map<String, Boolean> run(Path tree, Map<String, String> tests) {
+                Map<String, Boolean> out = new LinkedHashMap<>();
+                tests.forEach((p, t) -> out.put(p, passesWhenContains.entrySet().stream()
+                        .anyMatch(e -> t.contains(e.getKey()) && e.getValue())));
+                return out;
+            }
+        });
+        return d;
     }
 
     @Test
-    void aTestLeavingOutTheQuotedWordingIsWrittenAgainWithTheReasonThenAcceptedAndWrittenIntoTheTree() throws Exception {
-        answers.add(file("  @Test void twice() { assertThat(refusal()).contains(\"duplicate\"); }"));
-        answers.add(file("  @Test void twice() { assertThat(refusal()).contains(\"occurs 2 times\"); }"));
-        answers.add("VERDICT: PASS\nIt checks the refusal's wording with the count.");
-        DerivedTests derived = new DerivedTests(llm, files);
+    void eachClaimGetsATestAndOnlyOnesPassingOnAThrowawayImplementationAreFrozen() throws Exception {
+        answer("claims", """
+                Here they are:
+                [{"claim": "two matches are refused", "source": "STATED", "words": "refused"},
+                 {"claim": "the reason says occurs 2 times", "source": "STATED", "words": "occurs N times"},
+                 {"claim": "what a third hunk does", "source": "OPEN", "words": ""}]""");
+        answer("write", test(1, "  // RIGHT refused"), test(2, "  // WRONG reason"));
+        answer("spike", SPIKE, SPIKE, SPIKE);
+        passesWhenContains.put("RIGHT", true);
+        DerivedTests derived = derived();
 
-        derived.ensureFor(SEED);
+        derived.ensureNow(SEED);
 
         List<DerivedTestsFile.Entry> entries = DerivedTestsFile.read(files);
-        assertThat(entries).singleElement().satisfies(e -> {
-            assertThat(e.accepted()).isTrue();
-            assertThat(e.requirement()).isEqualTo(REQUIREMENT);
-            assertThat(e.path()).isEqualTo(PATH);
-        });
-        assertThat(Files.readString(base.resolve("output/" + PATH))).contains("occurs 2 times");
-        assertThat(derived.settled()).isTrue();
-        assertThat(derived.acceptedRequirements()).containsExactly(REQUIREMENT);
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Message>> asked = ArgumentCaptor.forClass(List.class);
-        verify(llm, atLeastOnce()).ask(asked.capture());
-        assertThat(asked.getAllValues().get(1).get(1).getContent())
-                .as("the second writing is told why the first was not accepted")
-                .contains("the requirement quotes \"occurs N times\"");
-        assertThat(asked.getAllValues().get(2).get(1).getContent())
-                .as("the reviewer sees the requirement and the test, never the code")
-                .contains(REQUIREMENT).doesNotContain("return 1 + 1");
-    }
-
-    @Test
-    void aRequirementTheReviewNeverPassesIsLeftWithoutATestAndNothingIsSettled() throws Exception {
-        for (int i = 0; i < DerivedTests.ATTEMPTS; i++) {
-            answers.add(file("  @Test void twice() { assertThat(refusal()).contains(\"occurs 2 times\"); }"));
-            answers.add("VERDICT: FAIL\nIt never tests a piece that occurs more than twice.");
-        }
-        DerivedTests derived = new DerivedTests(llm, files);
-
-        derived.ensureFor(SEED);
-
-        assertThat(DerivedTestsFile.read(files)).singleElement().satisfies(e -> assertThat(e.accepted()).isFalse());
-        assertThat(Files.exists(base.resolve("output/" + PATH))).isFalse();
+        assertThat(entries).as("the OPEN claim gets no test").hasSize(2);
+        assertThat(entries.get(0).accepted()).isTrue();
+        assertThat(entries.get(0).claim()).isEqualTo("two matches are refused");
+        assertThat(entries.get(0).reason()).isEqualTo("passed on 3 of 3 throwaway implementation(s)");
+        assertThat(entries.get(1).accepted()).as("fails on every throwaway implementation").isFalse();
+        assertThat(Files.readString(base.resolve("output/" + TEST_DIR + "/DerivedClaim001Test.java"))).contains("RIGHT");
+        assertThat(Files.exists(base.resolve("output/" + TEST_DIR + "/DerivedClaim002Test.java"))).isFalse();
+        assertThat(derived.acceptedRequirements()).as("a requirement with a claim left out stays a reading").isEmpty();
         assertThat(derived.settled()).isFalse();
+        assertThat(asked.stream().filter(a -> a.contains("THE PROJECT'S SOURCES AS THEY ARE NOW")))
+                .as("the throwaway implementations never see a claim's test").noneMatch(a -> a.contains("DerivedClaim"));
+        assertThat(asked.stream().filter(a -> a.startsWith("CLAIM")))
+                .as("a claim's test sees the declarations, never what the code does").noneMatch(a -> a.contains("1 + 1"));
     }
 
     @Test
-    void anAcceptedTestIsKeptAcrossARestartAndPutBackWhenTheTreeLosesOrChangesIt() throws Exception {
-        answers.add(file("  @Test void twice() { assertThat(refusal()).contains(\"occurs 2 times\"); }"));
-        answers.add("VERDICT: PASS\nfine");
-        new DerivedTests(llm, files).ensureFor(SEED);
-        String accepted = Files.readString(base.resolve("output/" + PATH));
+    void aRequirementEveryClaimOfWhichPassesIsTheTestGatesAndSettled() throws Exception {
+        answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"refused\"}]");
+        answer("write", test(1, "  // RIGHT"));
+        answer("spike", SPIKE, SPIKE, SPIKE, SPIKE);
+        compileResults.addAll(List.of("Quill.java:[3,1] cannot find symbol", ""));   // spike 1: broken, then fixed
+        passesWhenContains.put("RIGHT", true);
+        DerivedTests derived = derived();
 
-        DerivedTests restarted = new DerivedTests(llm, files);
-        restarted.ensureFor(SEED);
-        verify(llm, org.mockito.Mockito.times(2)).ask(any());
+        derived.ensureNow(SEED);
 
-        Files.writeString(base.resolve("output/" + PATH), "class DerivedRequirement01Test {}");
-        restarted.restore();
-        assertThat(Files.readString(base.resolve("output/" + PATH))).isEqualTo(accepted);
-        Files.delete(base.resolve("output/" + PATH));
-        restarted.restore();
-        assertThat(Files.readString(base.resolve("output/" + PATH))).isEqualTo(accepted);
+        assertThat(derived.acceptedRequirements()).containsExactly(REQUIREMENT);
+        assertThat(derived.settled()).isTrue();
+        assertThat(asked).as("a spike that does not compile is asked again with the compiler's words")
+                .anyMatch(a -> a.contains("IT DID NOT COMPILE") && a.contains("cannot find symbol"));
     }
 
     @Test
-    void aWritersCorrectionIsJudgedAgainstTheWordingAndOnlyAnAcceptedOneReplacesTheTest() throws Exception {
-        answers.add(file("  @Test void twice() { assertThat(refusal()).contains(\"occurs 2 times\"); }"));
-        answers.add("VERDICT: PASS\nfine");
-        DerivedTests derived = new DerivedTests(llm, files);
-        derived.ensureFor(SEED);
+    void withoutAnyCompilingThrowawayImplementationNothingIsFrozen() throws Exception {
+        answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"refused\"}]");
+        answer("write", test(1, "  // RIGHT"));
+        answer("spike", SPIKE, SPIKE, SPIKE, SPIKE, SPIKE, SPIKE);
+        for (int i = 0; i < 6; i++) compileResults.add("does not compile");
+        passesWhenContains.put("RIGHT", true);
+
+        derived().ensureNow(SEED);
+
+        assertThat(DerivedTestsFile.read(files)).singleElement().satisfies(e -> {
+            assertThat(e.accepted()).isFalse();
+            assertThat(e.reason()).contains("no throwaway implementation compiled");
+        });
+    }
+
+    @Test
+    void writtenTestsAreKeptAcrossARestartAndPutBackWhenTheTreeLosesThem() throws Exception {
+        answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"refused\"}]");
+        answer("write", test(1, "  // RIGHT"));
+        answer("spike", SPIKE, SPIKE, SPIKE);
+        passesWhenContains.put("RIGHT", true);
+        derived().ensureNow(SEED);
+        Path written = base.resolve("output/" + TEST_DIR + "/DerivedClaim001Test.java");
+        String accepted = Files.readString(written);
+        int calls = asked.size();
+
+        DerivedTests restarted = derived();
+        restarted.ensureNow(SEED);
+        assertThat(asked).as("a restart asks nothing again").hasSize(calls);
+
+        Files.delete(written);
+        restarted.restore();
+        assertThat(Files.readString(written)).isEqualTo(accepted);
+    }
+
+    @Test
+    void aWritersCorrectionMustKeepTheQuotedWordsPassAThrowawayImplementationAndPassAReading() throws Exception {
+        obligations("A piece that occurs twice is refused.");
+        answer("claims", "[{\"claim\": \"the reason says \\\"occurs 2 times\\\"\", \"source\": \"STATED\", \"words\": \"x\"}]");
+        answer("write", test(1, "  // RIGHT occurs 2 times"));
+        answer("spike", SPIKE, SPIKE, SPIKE);
+        passesWhenContains.put("RIGHT", true);
+        DerivedTests derived = derived();
+        derived.ensureNow(SEED);
+        String path = TEST_DIR + "/DerivedClaim001Test.java";
         String accepted = DerivedTestsFile.read(files).get(0).content();
 
-        assertThat(derived.contest("evolution", PATH, accepted)).as("the accepted text itself").isTrue();
+        assertThat(derived.contest("evolution", path, accepted)).isTrue();
+        assertThat(derived.contest("evolution", path, "class DerivedClaim001Test { /* RIGHT */ }"))
+                .as("drops the quoted words").isFalse();
+        assertThat(derived.drainNotes()).contains("NOT accepted", "occurs 2 times");
+        assertThat(derived.contest("evolution", path, "class DerivedClaim001Test { /* occurs 2 times, nowhere */ }"))
+                .as("passes on no throwaway implementation").isFalse();
 
-        String weaker = "package org.ink;\nclass DerivedRequirement01Test {\n  @Test void twice() {}\n}\n";
-        assertThat(derived.contest("evolution", PATH, weaker)).as("drops the quoted wording").isFalse();
-        assertThat(derived.drainNotes()).contains("NOT accepted", "occurs N times");
-        assertThat(DerivedTestsFile.read(files).get(0).content()).isEqualTo(accepted);
-
-        String corrected = "package org.ink;\nclass DerivedRequirement01Test {\n"
-                + "  @Test void twice() { assertThat(refusal(\"a\")).contains(\"occurs 2 times\"); }\n}\n";
-        answers.add("VERDICT: PASS\nThe count is still checked.");
-        assertThat(derived.contest("evolution", PATH, corrected)).isTrue();
+        String corrected = "class DerivedClaim001Test { /* RIGHT, occurs 2 times, other input */ }";
+        answer("review", "VERDICT: PASS\nThe count is still checked.");
+        assertThat(derived.contest("evolution", path, corrected)).isTrue();
         assertThat(DerivedTestsFile.read(files).get(0).content()).isEqualTo(corrected);
-        assertThat(derived.drainNotes()).contains("was accepted");
-        assertThat(derived.drainNotes()).as("drained").isNull();
+    }
+
+    @Test
+    void aTargetMarkingNoLineIsSettledAndNothingIsAsked() throws Exception {
+        obligations();
+        DerivedTests derived = derived();
+        derived.ensureNow(SEED);
+        assertThat(derived.settled()).isTrue();
+        assertThat(asked).isEmpty();
+    }
+
+    @Test
+    void theClaimsAreReadFromAListInTheAnswer() {
+        assertThat(DerivedTests.jsonList("Sure! [{\"claim\": \"a\", \"source\": \"STATED\"}] Hope this helps [x]"))
+                .singleElement().satisfies(m -> assertThat(m).containsEntry("claim", "a"));
+        assertThat(DerivedTests.jsonList("no list here")).isEmpty();
+    }
+
+    /** An edit form's sources write fenced examples inside their own strings; a header starts at column 0. */
+    @Test
+    void aThrowawayImplementationsFilesAreItsColumnZeroBlocksOnly() {
+        String answer = "```java [src/main/java/org/ink/A.java]\nclass A {\n  String s = \"\"\"\n"
+                + "      ```java [src/main/java/org/ink/Fake.java]\n      ```\n      \"\"\";\n}\n```\n"
+                + "```java [src/main/java/org/ink/B.java]\nclass B {}\n```\n";
+        Map<String, String> got = DerivedTests.filesOf(answer);
+        assertThat(got).containsOnlyKeys("src/main/java/org/ink/A.java", "src/main/java/org/ink/B.java");
+        assertThat(got.get("src/main/java/org/ink/A.java")).contains("Fake.java").endsWith("}\n");
     }
 
     @Test
@@ -170,7 +261,6 @@ class DerivedTestsTest {
     @Test
     void aReviewWithoutAVerdictNeverPasses() {
         assertThat(DerivedTests.verdict("VERDICT: PASS\nok").pass()).isTrue();
-        assertThat(DerivedTests.verdict("verdict: pass").pass()).isTrue();
         assertThat(DerivedTests.verdict("VERDICT: FAIL\nmissing the Map form").reason()).isEqualTo("missing the Map form");
         assertThat(DerivedTests.verdict("Looks good to me.").pass()).isFalse();
         assertThat(DerivedTests.verdict(null).pass()).isFalse();
@@ -186,42 +276,18 @@ class DerivedTestsTest {
     }
 
     @Test
-    void aTargetMarkingNoLineIsSettledAndNothingIsAsked() throws Exception {
-        files.writeFile(SeedObligationsFile.PATH, SeedObligationsFile.render(SEED, List.of("The suite passes.")));
-        DerivedTests derived = new DerivedTests(llm, files);
-        derived.ensureFor(SEED);
-        assertThat(derived.settled()).isTrue();
-        verify(llm, org.mockito.Mockito.never()).ask(any());
-    }
-
-    /** field106 run 1: every answer was a bare fenced block, so nothing was ever accepted. */
-    @Test
-    void aBareBlockDeclaringTheTestIsPlacedBesideTheExistingTestThatOpensTheSameWay() {
-        var tests = new java.util.TreeMap<String, String>(java.util.Map.of(
+    void aBareOrHeadedBlockIsTheTestAndRunsToTheLastFence() {
+        var tests = new java.util.TreeMap<String, String>(Map.of(
                 "src/test/java/org/ink/QuillTest.java", "package org.ink;\nclass QuillTest {}",
                 "src/test/java/org/well/WellTest.java", "package org.well;\nclass WellTest {}"));
-        var file = DerivedTests.located("Here it is:\n```java\npackage org.well;\nclass DerivedRequirement01Test {}\n```\n",
-                "DerivedRequirement01Test", tests);
-        assertThat(file).get().satisfies(f -> {
-            assertThat(f.path()).isEqualTo("src/test/java/org/well/DerivedRequirement01Test.java");
-            assertThat(f.content()).startsWith("package org.well;");
-        });
-        assertThat(DerivedTests.located("```java\nclass Other {}\n```", "DerivedRequirement01Test", tests)).isEmpty();
-        assertThat(DerivedTests.header("DerivedRequirement01Test", List.copyOf(tests.keySet())))
-                .isEqualTo("```java [src/test/java/org/ink/DerivedRequirement01Test.java]");
-    }
-
-    /** A test of an edit form writes fences inside its own strings; the file runs to the LAST fence. */
-    @Test
-    void aTestWhoseStringsHoldFencesIsTakenWhole() {
-        String body = "package org.ink;\nclass DerivedRequirement01Test {\n  String a = \"\"\"\n      ```edit [x]\n      ```\n      \"\"\";\n}\n";
-        var tests = java.util.Map.of("src/test/java/org/ink/QuillTest.java", "package org.ink;\n");
-        assertThat(DerivedTests.located("```java [src/test/java/org/ink/DerivedRequirement01Test.java]\n" + body + "```\n",
-                "DerivedRequirement01Test", tests)).get().satisfies(f -> {
-            assertThat(f.path()).isEqualTo("src/test/java/org/ink/DerivedRequirement01Test.java");
-            assertThat(f.content()).isEqualTo(body);
-        });
-        assertThat(DerivedTests.located("```java\n" + body + "```", "DerivedRequirement01Test", tests)).get()
-                .satisfies(f -> assertThat(f.content()).isEqualTo(body));
+        assertThat(DerivedTests.located("```java\npackage org.well;\nclass DerivedClaim001Test {}\n```\n",
+                "DerivedClaim001Test", tests)).get()
+                .satisfies(f -> assertThat(f.path()).isEqualTo("src/test/java/org/well/DerivedClaim001Test.java"));
+        String body = "package org.ink;\nclass DerivedClaim001Test {\n  String a = \"\"\"\n      ```edit [x]\n      ```\n      \"\"\";\n}\n";
+        assertThat(DerivedTests.located("```java [src/test/java/org/ink/DerivedClaim001Test.java]\n" + body + "```\n",
+                "DerivedClaim001Test", tests)).get().satisfies(f -> assertThat(f.content()).isEqualTo(body));
+        assertThat(DerivedTests.located("```java\nclass Other {}\n```", "DerivedClaim001Test", tests)).isEmpty();
+        assertThat(DerivedTests.header("DerivedClaim001Test", List.copyOf(tests.keySet())))
+                .isEqualTo("```java [src/test/java/org/ink/DerivedClaim001Test.java]");
     }
 }

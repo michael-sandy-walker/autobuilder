@@ -355,13 +355,16 @@ body's hash, so an operator's hand edit is kept and reported as theirs. Line mar
 - `gate: tests` -- answered by the project's own test run, not by a model reading the source; the line also
   declares the suite an authority for the whole run (`DeclaredTestSuite`);
 - `gate: derived-test` -- for a target whose specification tests are withheld: when the root goal is set,
-  `DerivedTests` writes one test per such line from its wording (the seed, the existing tests, and the code's
-  declarations without bodies -- never what the code does), checks it against that wording (every quoted text
-  present, a lone capital letter in a quote standing for one value; then a model that sees no code), and up to
-  three writings later either accepts it or leaves the line to a reading. Accepted tests are kept in
-  `meta/derived-tests.json`, frozen (`ProtectedPaths`), written back before every test run, and answered by the
-  test gate at closure; a writer may propose a corrected text, which is judged against the wording alone. While
-  any such line lacks an accepted test, a green suite is not "the objective met by the project's own tests"
+  `DerivedTests` (in the background; closure waits meanwhile) splits each such line into atomic claims with the
+  source of each expected outcome (stated / a runtime fact, computed in the test / open: no test), writes one test
+  per claim from the wording (the seed, the existing tests, the code's declarations without bodies), and writes three
+  throwaway implementations of the change from the same wording, never seeing the tests (`meta/derived-spikes`). A
+  claim's test is kept only when it passes on at least one of them (measured offline, `scripts/claim_tests/`: no
+  wrong test kept; a reading reviewer and a vote did not separate right from wrong). Kept tests live in
+  `meta/derived-tests.json`, are frozen (`ProtectedPaths`), written back before every test run, and a line is
+  answered by the test gate at closure only when every claim of it was kept; a writer may propose a corrected text,
+  accepted only when it keeps the claim's quoted words, passes on a throwaway implementation and passes a reading.
+  While any such line is not the gate's, a green suite is not "the objective met by the project's own tests"
   (`ObjectiveMetClosure`).
 
 `ObjectiveCoverage` checks that the obligations still carry the seed's `OBJECTIVE:` sentence.

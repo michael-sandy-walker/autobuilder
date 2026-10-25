@@ -197,9 +197,17 @@ public class TestRunGate {
                 return Optional.empty();
             }
         }
-        // The first report location that holds a report of this run wins, as before -- now per module, merged.
+        return reportOf(out, since);
+    }
+
+    /**
+     * The report of a test run in {@code root} that started at {@code since}: the first report location that holds
+     * one wins, per module, merged. Shared with the runs of the tests written from the requirements (T6-U), which
+     * run in trees of their own.
+     */
+    public static Optional<TestRunReport> reportOf(Path root, long since) {
         for (String dir : TEST_REPORT_DIRS) {
-            Optional<TestRunReport> r = SurefireReports.readAll(ProjectLayout.underEveryModule(out, dir), since, out);
+            Optional<TestRunReport> r = SurefireReports.readAll(ProjectLayout.underEveryModule(root, dir), since, root);
             if (r.isPresent()) return r;
         }
         return Optional.empty();

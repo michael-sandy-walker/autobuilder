@@ -1,5 +1,7 @@
 package com.walpro.autobuilder.goal;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.InitializerDeclaration;
@@ -11,12 +13,17 @@ import com.walpro.autobuilder.client.LLMClient;
 import com.walpro.autobuilder.client.LlmCallContext;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import com.walpro.autobuilder.client.dto.Message;
+import com.walpro.autobuilder.core.build.BuildExecutor;
+import com.walpro.autobuilder.core.build.BuildOutcome;
 import com.walpro.autobuilder.core.build.DerivedTestAuthority;
 import com.walpro.autobuilder.core.build.DerivedTestsFile;
 import com.walpro.autobuilder.core.build.DerivedTestsFile.Entry;
 import com.walpro.autobuilder.core.build.DerivedTestsFile.Status;
+import com.walpro.autobuilder.core.build.TestRunGate;
+import com.walpro.autobuilder.core.build.TestRunReport;
 import com.walpro.autobuilder.core.service.FileService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
@@ -25,68 +32,104 @@ import org.springframework.stereotype.Component;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * T6-U: the tests a change is held to, written from the requirements' own wording BEFORE the code changes, then
- * frozen -- for a target whose specification tests are withheld from the loop (the user's choice of design,
- * 2026-10-23).
+ * frozen -- for a target whose specification tests are withheld from the loop.
  *
  * <p><b>The defect this closes.</b> Batch field105 ran the band-1 ladder cases with their specification tests
  * withheld: 0 of 6 true completions against 6 of 6 with the tests given, five of them false completions. In none
- * was the code beyond the model; in every one a behaviour the seed states was never tested -- the Map receiver in
- * the compiler's own wording, {@code parse(String)} without the tree -- because the only tests were the loop's
- * own, written beside the code they were meant to check, or none at all. With tests in front of it the loop
- * finishes; these are those tests, and they cannot be bent to fit the code because no code existed when they were
- * written and no writer may change them except through {@link #contest}.
+ * was the code beyond the model; in every one a behaviour the seed states was never tested, because the only tests
+ * were the loop's own, written beside the code they were meant to check, or none at all.
+ *
+ * <p><b>How, and why this way -- each part kept only where the offline replay showed it helps</b>
+ * ({@code scripts/claim_tests/}, the T6-U appends of 2026-10-24/25; the user's design, 2026-10-24):
+ * <ol>
+ *   <li><b>Divide and conquer.</b> Each requirement is split into ATOMIC claims, one situation and one expected
+ *       outcome each, with the source of that outcome: stated by the wording, a fact of the runtime (computed in the
+ *       test from the runtime, never written as a literal), or open (no test). One test per claim. The one-pass
+ *       writing of a whole requirement's test was right 6 times in 27; claims were right 120 times in 125.</li>
+ *   <li><b>Throwaway implementations as the check.</b> {@value #SPIKES} implementations of the change, written from
+ *       the wording without ever seeing the tests; a claim's test is kept only when it passes on at least one. The
+ *       replay: no wrong test passed any, every requirement kept tests. A reading reviewer accepted 26 of 27 one-pass
+ *       tests, wrong ones included, and a judge deciding "test or implementation" kept two contradicting tests
+ *       unanimously -- so no model reading decides here.</li>
+ *   <li><b>Not built, measured useless:</b> a vote over several writings of a claim (agreement was total on wrong
+ *       claims too).</li>
+ * </ol>
+ * The price: a right claim every throwaway implementation gets wrong is dropped -- the spikes share the model's
+ * blind spots (receiver-questions: all three missed the compiler's record-component form). Such a requirement keeps
+ * its other tests but is NOT answered by the test gate: a requirement is the gate's only when every claim of it has
+ * an accepted test; otherwise it stays a reading, as before.
  *
  * <p><b>Which lines.</b> Only an obligation the operator marked {@code gate: derived-test} -- which gate answers
  * which line is the operator's declaration ({@link SeedRequirements#GATE_MARKER}), never inferred from wording.
- * Once accepted, its test is part of the suite, and closure takes the test gate's verdict for the line instead of
- * a model's reading of the code (field105: a model confirmed "the existing parse(String) applies no edit" from
- * code that does the opposite, twice).
- *
- * <p><b>The check against the wording</b> (the user, 2026-10-23: "include the check against the requirement's
- * wording"), structure first, a model last: every text the requirement quotes must appear in the test, then a
- * reader who sees the requirement, the specification and the test -- never the code -- says whether the test
- * checks what the requirement says, in every case and form it names. A test that fails either is written again,
- * with the reason, up to {@value #ATTEMPTS} times; a line still without one is left to the reading it had before,
- * and the objective is not "met by the project's own tests" while any such line is open.
+ * The writing runs in the background when the root is set; closure waits while it does
+ * ({@link GoalPlannerService}), and a green suite is not the objective until every marked line is the gate's
+ * ({@link ObjectiveMetClosure}).
  */
 @Slf4j
 @Component
 @com.walpro.autobuilder.core.checkpoint.StateHolder(
         value = com.walpro.autobuilder.core.checkpoint.StateBucket.DERIVED_DO_NOT_RESTORE,
-        note = "the accepted tests live in meta/derived-tests.json; this holds only a review cache and unsent notes")
+        note = "the accepted tests live in meta/derived-tests.json and the spikes under meta/derived-spikes; this holds "
+                + "only a review cache, unsent notes and whether a writing is under way")
 @ConditionalOnProperty(name = "autobuilder.obligations.derived-tests", havingValue = "true", matchIfMissing = true)
 public class DerivedTests implements DerivedTestAuthority {
 
-    /** Writings per requirement before it is left without a test: the reason goes back each time. */
-    static final int ATTEMPTS = 3;
+    /** Throwaway implementations a claim's test is checked on: as many as the replay measured. */
+    static final int SPIKES = 3;
 
     static final String SEED_PATH = "bootstrap/seed.txt";
     static final String TEST_ROOT = "src/test/";
+    static final String MAIN_ROOT = "src/main/";
+    /** Where the throwaway implementations are kept (a later proposal for a frozen test is run on them too). */
+    static final String SPIKES_DIR = "meta/derived-spikes";
 
     private static final Pattern QUOTED = Pattern.compile("\"([^\"]{3,})\"|`([^`]{3,})`");
+    private static final ObjectMapper JSON = new ObjectMapper();
 
-    static final String DERIVE_SYSTEM = """
-            You write ONE test class for ONE requirement of a change to an existing project. The code that meets the \
-            requirement has not been written yet: write the test from the requirement's own words and the \
-            specification, so that it fails until the code does what the requirement says and passes once it does.
-            - Test every case and every form the requirement names, with the exact values, wordings and examples it \
-            gives; where the specification quotes an example input for this requirement, use it as written.
-            - Call the code only as the specification and the declarations shown say it is called.
-            - Use the same language, test libraries and assertion style as the existing tests shown.
-            - Test nothing the requirement does not say.
-            Answer with the one file, in a fenced block headed by its path in brackets, under src/test/, its file \
-            named exactly as given. No other files.""";
+    private static final String SOURCES = """
+            For each claim say where its expected outcome comes from:
+            - STATED: the requirement or the specification gives it -- copy the words that give it;
+            - ENVIRONMENT: a fact about the language runtime or its standard library (for example which methods a \
+            standard class declares) -- a test will compute it from the runtime;
+            - OPEN: the wording does not fix it.
+            Use only situations the requirement or the specification names or plainly implies; never invent an input form.
+            Answer with JSON only: [{"claim": "...", "source": "STATED|ENVIRONMENT|OPEN", "words": "..."}]""";
+
+    static final String DECOMPOSE_SYSTEM = "You split ONE requirement of a change to an existing project into atomic "
+            + "claims a test can check. A claim is one situation (an input) and one expected outcome.\n" + SOURCES;
+
+    static final String WRITE_SYSTEM = """
+            You write ONE test class with ONE test method for ONE claim about a change to an existing project. The \
+            code that meets it has not been written yet: write the test from the claim, the requirement and the \
+            specification, so that it fails until the code does what the claim says.
+            - Check exactly this claim -- its situation and its expected outcome -- and nothing else.
+            - Assert only what the claim's source gives. A fact about the runtime (an ENVIRONMENT claim) is computed in \
+            the test from the runtime itself, for example by reflection -- never written out as a literal list or value.
+            - Do not name a type, method or value the specification and the declarations shown do not name; where the \
+            result's type is not named, do not name it.
+            - Use the same language, libraries and assertion style as the existing tests shown.
+            Answer with the one file in a fenced block whose opening line names its path in brackets, as shown.""";
+
+    static final String SPIKE_SYSTEM = """
+            You write the change a specification asks for, in an existing project. Write the full new content of every \
+            source file you add or change under src/main/, each in a fenced block whose opening line names its path in \
+            brackets, for example:
+            ```java [src/main/java/org/example/Thing.java]
+            Do not write or change any test. Keep every existing declaration the specification says to keep.""";
 
     static final String REVIEW_SYSTEM = """
             You check whether a test checks a requirement -- as the requirement is WORDED. You see the requirement, \
@@ -98,8 +141,21 @@ public class DerivedTests implements DerivedTestAuthority {
             Answer with the first line exactly "VERDICT: PASS" or "VERDICT: FAIL", then one short paragraph naming \
             what is missing or wrong.""";
 
+    private static final Pattern HEADER = Pattern.compile("^```\\w*\\s*\\[([^\\]]+)\\]\\s*$");
+
     private final LLMClient llmClient;
     private final FileService files;
+
+    /** Runs a tree's tests: the loop's own build executor and test command, in a tree of the spikes. */
+    interface Bench {
+        /** Null when the tree compiles, else what the compiler said. */
+        String compiles(Path tree);
+
+        /** For each test path (relative to the tree), whether every case of it passed there. */
+        Map<String, Boolean> run(Path tree, Map<String, String> tests);
+    }
+
+    private Bench bench;
 
     @Value("${autobuilder.evaluation.fileContentBudgetChars:40000}")
     private int fileContentBudgetChars = 40000;
@@ -107,8 +163,14 @@ public class DerivedTests implements DerivedTestAuthority {
     /** True while the requirements' tests are being written: no closure may rest on a suite that lacks them. */
     private volatile boolean pending;
 
+    private final ExecutorService writer = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "derived-tests");
+        t.setDaemon(true);
+        return t;
+    });
+
     /** Review verdicts per proposed text, so a proposal reaching several writers is judged once. */
-    private final Map<String, Review> reviewed = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> contested = new ConcurrentHashMap<>();
 
     private final List<String> notes = new ArrayList<>();
 
@@ -117,8 +179,21 @@ public class DerivedTests implements DerivedTestAuthority {
         this.files = files;
     }
 
-    /** What the wording check concluded, and why. */
+    @Autowired(required = false)
+    void wireBuilds(BuildExecutor buildExecutor,
+                    @Value("${autobuilder.build.test-gate.command:mvn test}") String testCommand) {
+        this.bench = new BuildBench(buildExecutor, testCommand);
+    }
+
+    void setBench(Bench bench) {
+        this.bench = bench;
+    }
+
+    /** What a check concluded, and why. */
     record Review(boolean pass, String reason) {}
+
+    /** One atomic claim of a requirement. */
+    record Claim(String requirement, String text, String source, String words) {}
 
     /** True while the tests are being written. */
     public boolean pending() {
@@ -134,47 +209,106 @@ public class DerivedTests implements DerivedTestAuthority {
         return SeedRequirements.answeredByGate(seedText, read(SeedObligationsFile.PATH), SeedRequirements.GATE_DERIVED);
     }
 
-    /** The requirements whose test was accepted -- the ones the test gate now answers. */
+    /** The requirements every claim of which has an accepted test -- the ones the test gate now answers. */
     public Set<String> acceptedRequirements() {
+        Map<String, Boolean> all = new LinkedHashMap<>();
+        for (Entry e : DerivedTestsFile.read(files)) all.merge(e.requirement(), e.accepted(), Boolean::logicalAnd);
         Set<String> out = new LinkedHashSet<>();
-        for (Entry e : DerivedTestsFile.read(files)) if (e.accepted()) out.add(e.requirement());
+        all.forEach((r, ok) -> { if (ok) out.add(r); });
         return out;
     }
 
-    /** True when nothing is being written and every marked requirement has an accepted test. */
+    /** True when nothing is being written and every marked requirement is answered by the test gate. */
     public boolean settled() {
         if (pending) return false;
         return acceptedRequirements().containsAll(requirements());
     }
 
     /**
-     * Write and check the test of every marked requirement that has none accepted. Called where the root goal is
-     * set, beside the obligations file it reads; an accepted test is kept across restarts and never rewritten.
+     * Write and check the tests of every marked requirement that has none yet, in the background. Called where the
+     * root goal is set, beside the obligations file it reads; tests already written are kept across restarts.
      */
     public void ensureFor(String seedText) {
-        if (seedText == null || seedText.isBlank()) return;
+        if (seedText == null || seedText.isBlank() || requirements(seedText).isEmpty()) return;
+        pending = true;
+        writer.submit(() -> {
+            try {
+                ensureNow(seedText);
+            } finally {
+                pending = false;
+            }
+        });
+    }
+
+    /** As {@link #ensureFor}, on the caller's thread. */
+    void ensureNow(String seedText) {
         List<String> lines = requirements(seedText);
         if (lines.isEmpty()) return;
         pending = true;
         try {
             List<Entry> entries = new ArrayList<>(DerivedTestsFile.read(files));
             entries.removeIf(e -> !lines.contains(e.requirement()));
-            String existing = existingTests();
-            String outline = outline();
-            Map<String, String> tests = sources(TEST_ROOT);
-            for (int i = 0; i < lines.size(); i++) {
-                String line = lines.get(i);
-                if (entries.stream().anyMatch(e -> e.requirement().equals(line) && e.accepted())) continue;
-                entries.removeIf(e -> e.requirement().equals(line));
-                entries.add(derive(seedText, line, String.format("DerivedRequirement%02dTest", i + 1), existing, outline,
-                        tests));
-                DerivedTestsFile.write(files, entries);
+            Set<String> done = new LinkedHashSet<>();
+            for (Entry e : entries) done.add(e.requirement());
+            List<String> todo = lines.stream().filter(l -> !done.contains(l)).toList();
+            if (todo.isEmpty()) {
+                restore();
+                return;     // pending is cleared below
             }
+            Map<String, String> tests = sources(TEST_ROOT);
+            String context = "SPECIFICATION:\n" + seedText + "\n\nTHE PROJECT'S DECLARATIONS AS THEY ARE NOW (bodies left out):\n"
+                    + outline() + "\n\nTHE EXISTING TESTS:\n" + listing(tests);
+
+            List<Claim> claims = new ArrayList<>();
+            for (String requirement : todo) {
+                List<Claim> of = claims(requirement, context);
+                if (of.isEmpty()) log.warn("T6-U: no checkable claim in \"{}\" -- it stays a reading", requirement);
+                claims.addAll(of);
+            }
+            int counter = entries.size();
+            Map<String, Claim> written = new LinkedHashMap<>();   // test path -> claim
+            Map<String, String> texts = new LinkedHashMap<>();    // test path -> test text
+            List<Entry> unwritten = new ArrayList<>();
+            for (Claim c : claims) {
+                String name = String.format("DerivedClaim%03dTest", ++counter);
+                String header = header(name, List.copyOf(tests.keySet()));
+                String answer = ask(WRITE_SYSTEM, "CLAIM (" + c.source() + "): " + c.text() + "\nWORDS THAT GIVE IT: "
+                        + c.words() + "\n\nREQUIREMENT:\n" + c.requirement() + "\n\n" + context + "\n\nName the class "
+                        + name + ". Open the block exactly as:\n" + header, "derived-test");
+                Optional<FileMutation> file = located(answer, name, tests);
+                if (file.isEmpty() || !file.get().path().replace('\\', '/').startsWith(TEST_ROOT)) {
+                    unwritten.add(new Entry(c.requirement(), c.text(), null, answer, Status.UNACCEPTED,
+                            "the answer held no test file named " + name));
+                    continue;
+                }
+                String path = file.get().path().replace('\\', '/');
+                written.put(path, c);
+                texts.put(path, file.get().content());
+            }
+
+            List<Path> spikes = spikes(seedText, tests);
+            Map<String, Integer> passes = new LinkedHashMap<>();
+            for (Path spike : spikes) {
+                bench.run(spike, texts).forEach((p, ok) -> passes.merge(p, ok ? 1 : 0, Integer::sum));
+            }
+            for (Map.Entry<String, Claim> w : written.entrySet()) {
+                int n = passes.getOrDefault(w.getKey(), 0);
+                boolean ok = n > 0;
+                String reason = spikes.isEmpty() ? "no throwaway implementation compiled, so no test could be checked"
+                        : "passed on " + n + " of " + spikes.size() + " throwaway implementation(s)";
+                entries.add(new Entry(w.getValue().requirement(), w.getValue().text(), w.getKey(), texts.get(w.getKey()),
+                        ok ? Status.ACCEPTED : Status.UNACCEPTED, reason));
+                recordAttempt(w.getValue(), w.getKey(), texts.get(w.getKey()), ok, reason);
+            }
+            entries.addAll(unwritten);
+            DerivedTestsFile.write(files, entries);
             long accepted = entries.stream().filter(Entry::accepted).count();
-            log.warn("T6-U: {} of {} requirement(s) marked gate: {} have an accepted test written from their wording{}",
-                    accepted, lines.size(), SeedRequirements.GATE_DERIVED,
-                    accepted == lines.size() ? "" : " -- the rest are left to a reading, and the objective is not met"
-                            + " by the project's own tests while they are open");
+            Set<String> answered = acceptedRequirements();
+            log.warn("T6-U: {} claim(s) of {} requirement(s); {} test(s) accepted on {} throwaway implementation(s);"
+                            + " {} of {} requirement(s) answered by the test gate{}", claims.size(), todo.size(), accepted,
+                    spikes.size(), lines.stream().filter(answered::contains).count(), lines.size(),
+                    answered.containsAll(lines) ? "" : " -- the rest stay a reading, and the objective is not met by the"
+                            + " project's own tests while they are open");
             restore();
         } catch (Exception e) {
             log.warn("T6-U: could not write the requirements' tests: {}", e.getMessage());
@@ -183,61 +317,90 @@ public class DerivedTests implements DerivedTestAuthority {
         }
     }
 
-    private Entry derive(String seedText, String requirement, String name, String existing, String outline,
-                         Map<String, String> tests) {
-        String header = header(name, List.copyOf(tests.keySet()));
-        String feedback = null;
-        String last = null;
-        for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
-            StringBuilder user = new StringBuilder("REQUIREMENT:\n").append(requirement)
-                    .append("\n\nSPECIFICATION:\n").append(seedText)
-                    .append("\n\nTHE PROJECT'S DECLARATIONS AS THEY ARE NOW (bodies left out):\n").append(outline)
-                    .append("\n\nTHE EXISTING TESTS:\n").append(existing)
-                    .append("\n\nName the file ").append(name).append(", and the class in it ").append(name)
-                    .append(". Open the block with its path in brackets, for example:\n").append(header);
-            if (feedback != null) {
-                user.append("\n\nAn earlier version was not accepted: ").append(feedback)
-                        .append("\nThat version:\n").append(last);
-            }
-            String answer = ask(DERIVE_SYSTEM, user.toString(), "derived-test");
-            Optional<FileMutation> file = located(answer, name, tests);
-            if (file.isEmpty()) {
-                feedback = "the answer held no file named " + name + " -- open its block with the path in brackets, as "
-                        + header;
-                last = answer;
-                continue;
-            }
-            String path = file.get().path().replace('\\', '/');
-            if (!path.startsWith(TEST_ROOT)) {
-                feedback = "the file was not under " + TEST_ROOT + " (" + path + ")";
-                last = file.get().content();
-                continue;
-            }
-            Review review = review(seedText, requirement, name, file.get().content());
-            recordAttempt(requirement, attempt, path, file.get().content(), review);
-            log.info("T6-U: test for \"{}\" attempt {}: {} -- {}", requirement, attempt,
-                    review.pass() ? "accepted" : "not accepted", review.reason());
-            if (review.pass()) return new Entry(requirement, path, file.get().content(), Status.ACCEPTED, review.reason());
-            feedback = review.reason();
-            last = file.get().content();
+    /** The requirement's atomic claims with a source; OPEN ones dropped (the wording does not fix them). */
+    List<Claim> claims(String requirement, String context) {
+        String answer = ask(DECOMPOSE_SYSTEM, "REQUIREMENT:\n" + requirement + "\n\n" + context, "derived-test-claims");
+        List<Claim> out = new ArrayList<>();
+        for (Map<String, Object> c : jsonList(answer)) {
+            String text = String.valueOf(c.getOrDefault("claim", "")).strip();
+            String source = String.valueOf(c.getOrDefault("source", "OPEN")).strip().toUpperCase(java.util.Locale.ROOT);
+            if (text.isEmpty() || source.equals("OPEN")) continue;
+            out.add(new Claim(requirement, text, source, String.valueOf(c.getOrDefault("words", ""))));
         }
-        return new Entry(requirement, null, last, Status.UNACCEPTED, feedback);
+        return out;
     }
 
-    /** Every writing and what the check said of it, appended -- the record a replay of the check is scored on. */
-    static final String ATTEMPTS_PATH = "meta/derived-tests-attempts.ndjson";
-
-    private void recordAttempt(String requirement, int attempt, String path, String content, Review review) {
-        try {
-            var line = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(Map.of(
-                    "requirement", requirement, "attempt", attempt, "path", path, "content", content,
-                    "accepted", review.pass(), "reason", review.reason()));
-            java.nio.file.Path f = files.resolveSecurePath(ATTEMPTS_PATH);
-            Files.createDirectories(f.getParent());
-            Files.writeString(f, line + "\n", java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-        } catch (Exception e) {
-            log.warn("T6-U: could not record a writing of a requirement's test: {}", e.getMessage());
+    /** The first JSON list of objects in a model's answer. */
+    static List<Map<String, Object>> jsonList(String answer) {
+        if (answer == null) return List.of();
+        for (int i = answer.indexOf('['); i >= 0; i = answer.indexOf('[', i + 1)) {
+            for (int j = answer.lastIndexOf(']'); j > i; j = answer.lastIndexOf(']', j - 1)) {
+                try {
+                    return JSON.readValue(answer.substring(i, j + 1), new TypeReference<List<Map<String, Object>>>() {});
+                } catch (Exception ignored) {
+                    // a shorter span may parse
+                }
+            }
         }
+        return List.of();
+    }
+
+    /**
+     * Up to {@value #SPIKES} throwaway implementations of the change, written from the specification, the sources and
+     * the existing tests -- never a claim's test -- each in a copy of the tree under {@value #SPIKES_DIR}; one that
+     * does not compile is asked once more with the compiler's words, then dropped.
+     */
+    private List<Path> spikes(String seedText, Map<String, String> tests) throws Exception {
+        List<Path> kept = new ArrayList<>();
+        if (bench == null) return kept;
+        Path output = files.resolveSecurePath("output");
+        String user = "SPECIFICATION:\n" + seedText + "\n\nTHE PROJECT'S SOURCES AS THEY ARE NOW:\n" + listing(sources(MAIN_ROOT))
+                + "\n\nTHE EXISTING TESTS:\n" + listing(tests);
+        for (int s = 1; s <= SPIKES; s++) {
+            Path tree = files.resolveSecurePath(SPIKES_DIR + "/spike-" + s);
+            deleteTree(tree);
+            copyTree(output, tree);
+            String answer = ask(SPIKE_SYSTEM, user, "derived-test-spike");
+            String errors = null;
+            for (int attempt = 0; attempt < 2; attempt++) {
+                for (Map.Entry<String, String> f : filesOf(answer).entrySet()) {
+                    if (!f.getKey().startsWith(MAIN_ROOT)) continue;
+                    Path p = tree.resolve(f.getKey()).normalize();
+                    if (!p.startsWith(tree)) continue;
+                    Files.createDirectories(p.getParent());
+                    Files.writeString(p, f.getValue());
+                }
+                errors = bench.compiles(tree);
+                if (errors == null || attempt == 1) break;
+                answer = ask(SPIKE_SYSTEM, user + "\n\nYOUR EARLIER CHANGE:\n" + answer + "\n\nIT DID NOT COMPILE:\n"
+                        + errors + "\nWrite the corrected full files.", "derived-test-spike");
+            }
+            if (errors == null) kept.add(tree);
+            log.info("T6-U: throwaway implementation {} {}", s, errors == null ? "compiles" : "does not compile -- dropped");
+        }
+        return kept;
+    }
+
+    /** Path blocks of an answer: a file runs from its header to the last bare fence before the next header. */
+    static Map<String, String> filesOf(String answer) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (answer == null) return out;
+        // A header or closing fence starts at column 0: indented, the same text is the code's own (an edit form's
+        // sources write fenced examples in their strings and comments).
+        String[] lines = answer.split("\n", -1);
+        List<Integer> heads = new ArrayList<>();
+        for (int i = 0; i < lines.length; i++) if (HEADER.matcher(lines[i].stripTrailing()).matches()) heads.add(i);
+        for (int n = 0; n < heads.size(); n++) {
+            int h = heads.get(n);
+            int end = n + 1 < heads.size() ? heads.get(n + 1) : lines.length;
+            int close = -1;
+            for (int i = h + 1; i < end; i++) if (lines[i].stripTrailing().equals("```")) close = i;
+            if (close < 0) continue;
+            Matcher m = HEADER.matcher(lines[h].stripTrailing());
+            m.matches();
+            out.put(m.group(1).strip(), String.join("\n", java.util.Arrays.copyOfRange(lines, h + 1, close)) + "\n");
+        }
+        return out;
     }
 
     /** The opening of the block the model is asked for: beside the existing tests, under the test root. */
@@ -250,11 +413,9 @@ public class DerivedTests implements DerivedTestAuthority {
 
     /**
      * The answer's file for {@code name}. One file is asked for, so its text runs from the first fence to the LAST one:
-     * a test of an edit form writes fences inside its own strings, and a parser that ends the block at the next fence
-     * cut every such test short (the replay of field106/107's writings: "unclosed text block"). The path is the
-     * block's header when it names {@code name}; otherwise -- field106 run 1: the local model wrote all eighteen of its
-     * answers as a bare fenced block -- beside the existing test whose first line it shares (its package, in the
-     * projects seen so far), else beside the first.
+     * a test of an edit form writes fences inside its own strings. The path is the block's header when it names
+     * {@code name}; otherwise -- the local model often writes a bare fenced block -- beside the existing test whose
+     * first line it shares (its package, in the projects seen so far), else beside the first.
      */
     static Optional<FileMutation> located(String answer, String name, Map<String, String> tests) {
         if (answer == null) return Optional.empty();
@@ -275,35 +436,6 @@ public class DerivedTests implements DerivedTestAuthority {
         return Optional.of(new FileMutation(dirOf(beside) + "/" + name + extOf(beside), content));
     }
 
-    private static String firstLine(String text) {
-        for (String l : text.split("\\R")) if (!l.isBlank()) return l.strip();
-        return "";
-    }
-
-    private static String dirOf(String path) {
-        int slash = path.lastIndexOf('/');
-        return slash < 0 ? "" : path.substring(0, slash);
-    }
-
-    private static String extOf(String path) {
-        String f = fileName(path);
-        int dot = f.lastIndexOf('.');
-        return dot < 0 ? "" : f.substring(dot);
-    }
-
-    /** The wording check: every quoted text present, then a reader who sees no code. */
-    Review review(String seedText, String requirement, String name, String test) {
-        String key = sha256(requirement + '\u0000' + test);
-        return reviewed.computeIfAbsent(key, k -> {
-            Optional<String> missing = missingQuotes(requirement, test);
-            if (missing.isPresent()) return new Review(false, missing.get());
-            if (!test.contains(name)) return new Review(false, "the test does not declare " + name);
-            String answer = ask(REVIEW_SYSTEM, "REQUIREMENT:\n" + requirement + "\n\nSPECIFICATION:\n" + seedText
-                    + "\n\nTEST:\n" + test, "derived-test-review");
-            return verdict(answer);
-        });
-    }
-
     /** Every text the requirement quotes, compared without escapes or spacing, must appear in the test. */
     static Optional<String> missingQuotes(String requirement, String test) {
         String body = comparable(test);
@@ -319,15 +451,14 @@ public class DerivedTests implements DerivedTestAuthority {
     }
 
     /**
-     * A quoted text as a pattern: literal, except that a capital letter standing alone is a placeholder for one
-     * value ("occurs N times" is written "occurs 2 times" by a test that checks it) -- the field105 seed's own
-     * wording, and the way a specification writes a count or a name it does not fix.
+     * A quoted text as a pattern: literal, except that a capital letter standing alone is a placeholder for one value
+     * ("occurs N times" is written "occurs 2 times" by a test that checks it).
      */
     static Pattern quotedPattern(String quoted) {
         StringBuilder re = new StringBuilder();
-        Matcher placeholder = Pattern.compile("(?<![A-Za-z0-9_])[A-Z](?![A-Za-z0-9_])").matcher(comparable(quoted));
-        int at = 0;
         String text = comparable(quoted);
+        Matcher placeholder = Pattern.compile("(?<![A-Za-z0-9_])[A-Z](?![A-Za-z0-9_])").matcher(text);
+        int at = 0;
         while (placeholder.find()) {
             re.append(Pattern.quote(text.substring(at, placeholder.start()))).append("[A-Za-z0-9_.]+");
             at = placeholder.end();
@@ -351,36 +482,75 @@ public class DerivedTests implements DerivedTestAuthority {
         return new Review(false, "the review gave no verdict");
     }
 
+    /**
+     * A writer's text for a frozen test is accepted only as a new test would be -- it passes on a throwaway
+     * implementation -- and, since a writer could weaken it there, only when the claim's quoted words are still in it
+     * and a reading of the claim and the text (never the code) passes it as well.
+     */
     @Override
     public boolean contest(String writer, String pathUnderOutput, String content) {
         List<Entry> entries = new ArrayList<>(DerivedTestsFile.read(files));
         Entry current = entries.stream().filter(e -> e.accepted() && pathUnderOutput.equals(e.path())).findFirst().orElse(null);
         if (current == null) return false;
         if (content.equals(current.content())) return true;
-        Review review = review(read(SEED_PATH), current.requirement(), stem(fileName(pathUnderOutput)), content);
-        synchronized (notes) {
-            if (review.pass()) {
-                notes.add("Your corrected version of " + pathUnderOutput + " was accepted: " + review.reason());
-            } else {
-                notes.add("Your corrected version of " + pathUnderOutput + " was NOT accepted, and the test stands as"
-                        + " written: " + review.reason());
+        String key = sha256(pathUnderOutput + '\u0000' + content);
+        Boolean prior = contested.get(key);
+        String reason;
+        boolean ok;
+        if (prior == null) {
+            Optional<String> missing = missingQuotes(current.claim() == null ? current.requirement() : current.claim(), content);
+            boolean onSpike = false;
+            if (missing.isEmpty() && bench != null) {
+                for (Path spike : keptSpikes()) {
+                    if (Boolean.TRUE.equals(bench.run(spike, Map.of(pathUnderOutput, content)).get(pathUnderOutput))) {
+                        onSpike = true;
+                        break;
+                    }
+                }
             }
+            Review review = missing.isEmpty() && onSpike
+                    ? verdict(ask(REVIEW_SYSTEM, "REQUIREMENT:\n" + (current.claim() == null ? current.requirement()
+                    : current.claim()) + "\n\nSPECIFICATION:\n" + read(SEED_PATH) + "\n\nTEST:\n" + content, "derived-test-review"))
+                    : new Review(false, missing.orElse("it passes on no throwaway implementation of the wording"));
+            ok = review.pass();
+            reason = review.reason();
+            contested.put(key, ok);
+        } else {
+            ok = prior;
+            reason = ok ? "accepted earlier" : "the same text was judged earlier and not accepted";
         }
-        if (!review.pass()) {
-            log.warn("T6-U: {} proposed a new text for {} -- not accepted: {}", writer, pathUnderOutput, review.reason());
+        synchronized (notes) {
+            notes.add(ok ? "Your corrected version of " + pathUnderOutput + " was accepted: " + reason
+                    : "Your corrected version of " + pathUnderOutput + " was NOT accepted, and the test stands as written: "
+                    + reason);
+        }
+        if (!ok) {
+            log.warn("T6-U: {} proposed a new text for {} -- not accepted: {}", writer, pathUnderOutput, reason);
             return false;
         }
-        entries.replaceAll(e -> e == current ? new Entry(e.requirement(), e.path(), content, Status.ACCEPTED,
-                "rewritten by " + writer + ": " + review.reason()) : e);
+        entries.replaceAll(e -> e == current ? new Entry(e.requirement(), e.claim(), e.path(), content, Status.ACCEPTED,
+                "rewritten by " + writer + ": " + reason) : e);
         try {
             DerivedTestsFile.write(files, entries);
         } catch (Exception e) {
             log.warn("T6-U: could not record the accepted new text of {}: {}", pathUnderOutput, e.getMessage());
             return false;
         }
-        log.warn("T6-U: {} proposed a new text for {} -- accepted against its requirement's wording: {}",
-                writer, pathUnderOutput, review.reason());
+        log.warn("T6-U: {} proposed a new text for {} -- accepted: {}", writer, pathUnderOutput, reason);
         return true;
+    }
+
+    private List<Path> keptSpikes() {
+        List<Path> out = new ArrayList<>();
+        for (int s = 1; s <= SPIKES; s++) {
+            try {
+                Path p = files.resolveSecurePath(SPIKES_DIR + "/spike-" + s);
+                if (Files.isDirectory(p) && bench.compiles(p) == null) out.add(p);
+            } catch (Exception ignored) {
+                // a spike that cannot be read checks nothing
+            }
+        }
+        return out;
     }
 
     @Override
@@ -410,19 +580,25 @@ public class DerivedTests implements DerivedTestAuthority {
         }
     }
 
-    /** The tests already in the tree, each in full up to the per-file budget. */
-    private String existingTests() {
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> f : sources(TEST_ROOT).entrySet()) {
-            sb.append("--- ").append(f.getKey()).append(" ---\n").append(capped(f.getValue())).append('\n');
+    /** Every claim's test and how it fared, appended -- the record a replay of the check is scored on. */
+    static final String ATTEMPTS_PATH = "meta/derived-tests-attempts.ndjson";
+
+    private void recordAttempt(Claim claim, String path, String content, boolean accepted, String reason) {
+        try {
+            var line = JSON.writeValueAsString(Map.of("requirement", claim.requirement(), "claim", claim.text(),
+                    "source", claim.source(), "path", path, "content", content, "accepted", accepted, "reason", reason));
+            Path f = files.resolveSecurePath(ATTEMPTS_PATH);
+            Files.createDirectories(f.getParent());
+            Files.writeString(f, line + "\n", java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception e) {
+            log.warn("T6-U: could not record a claim's test: {}", e.getMessage());
         }
-        return sb.length() == 0 ? "(none)" : sb.toString();
     }
 
     /** The main sources' declarations without their bodies: how the code is called, never what it does. */
     private String outline() {
         StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> f : sources("src/main/").entrySet()) {
+        for (Map.Entry<String, String> f : sources(MAIN_ROOT).entrySet()) {
             String o = outline(f.getValue());
             if (o != null) sb.append("--- ").append(f.getKey()).append(" ---\n").append(capped(o)).append('\n');
         }
@@ -438,6 +614,15 @@ public class DerivedTests implements DerivedTestAuthority {
         return unit.toString();
     }
 
+    private String listing(Map<String, String> sources) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> f : sources.entrySet()) {
+            sb.append("--- ").append(f.getKey()).append(" ---\n").append(capped(f.getValue())).append('\n');
+        }
+        return sb.length() == 0 ? "(none)" : sb.toString();
+    }
+
+    /** The text files under {@code under} in the tree, the derived tests left out. */
     private Map<String, String> sources(String under) {
         Map<String, String> out = new java.util.TreeMap<>();
         try {
@@ -481,7 +666,7 @@ public class DerivedTests implements DerivedTestAuthority {
         try (var purpose = LlmCallContext.scopeIfUnscoped(purposeName)) {
             resp = llmClient.ask(List.of(new Message("system", system), new Message("user", user)));
         }
-        return resp.getBody() == null ? "" : resp.getBody().getFirstContent();
+        return resp == null || resp.getBody() == null ? "" : resp.getBody().getFirstContent();
     }
 
     private String read(String path) {
@@ -489,6 +674,25 @@ public class DerivedTests implements DerivedTestAuthority {
             return files.exists(path) ? files.readFile(path) : "";
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    private static void copyTree(Path from, Path to) throws java.io.IOException {
+        try (var walk = Files.walk(from)) {
+            for (Path p : (Iterable<Path>) walk::iterator) {
+                Path rel = from.relativize(p);
+                if (rel.getNameCount() > 0 && rel.getName(0).toString().equals("target")) continue;
+                Path t = to.resolve(rel.toString());
+                if (Files.isDirectory(p)) Files.createDirectories(t);
+                else Files.copy(p, t, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+    }
+
+    private static void deleteTree(Path dir) throws java.io.IOException {
+        if (!Files.exists(dir)) return;
+        try (var walk = Files.walk(dir)) {
+            for (Path p : walk.sorted(java.util.Comparator.reverseOrder()).toList()) Files.delete(p);
         }
     }
 
@@ -501,13 +705,104 @@ public class DerivedTests implements DerivedTestAuthority {
         }
     }
 
+    private static String firstLine(String text) {
+        for (String l : text.split("\\R")) if (!l.isBlank()) return l.strip();
+        return "";
+    }
+
     private static String fileName(String path) {
         String p = path.replace('\\', '/');
         return p.substring(p.lastIndexOf('/') + 1);
     }
 
-    private static String stem(String fileName) {
-        int dot = fileName.lastIndexOf('.');
-        return dot < 0 ? fileName : fileName.substring(0, dot);
+    private static String dirOf(String path) {
+        int slash = path.lastIndexOf('/');
+        return slash < 0 ? "" : path.substring(0, slash);
+    }
+
+    private static String extOf(String path) {
+        String f = fileName(path);
+        int dot = f.lastIndexOf('.');
+        return dot < 0 ? "" : f.substring(dot);
+    }
+
+    /** The loop's own build executor and test command, run in a spike's tree; reports read as the test gate reads them. */
+    static final class BuildBench implements Bench {
+        private final BuildExecutor builds;
+        private final String command;
+
+        BuildBench(BuildExecutor builds, String command) {
+            this.builds = builds;
+            this.command = command;
+        }
+
+        @Override
+        public String compiles(Path tree) {
+            long start = System.currentTimeMillis();
+            BuildOutcome out = builds.execute(tree.toString(), "derived-tests", command);
+            if (TestRunGate.reportOf(tree, start).isPresent()) return null;
+            if (out.errorFiles().isEmpty() && out.result() != com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR) {
+                return null;
+            }
+            return out.stderrTail() == null || out.stderrTail().isBlank() ? "the build failed" : out.stderrTail();
+        }
+
+        @Override
+        public Map<String, Boolean> run(Path tree, Map<String, String> tests) {
+            Map<String, Boolean> result = new LinkedHashMap<>();
+            Map<String, String> left = new LinkedHashMap<>(tests);
+            try {
+                for (Map.Entry<String, String> t : left.entrySet()) {
+                    Path p = tree.resolve(t.getKey());
+                    Files.createDirectories(p.getParent());
+                    Files.writeString(p, t.getValue());
+                }
+                // A test that does not compile takes the run down with it: drop it (it failed here), and run the rest.
+                for (int round = 0; round <= tests.size() && !left.isEmpty(); round++) {
+                    long start = System.currentTimeMillis();
+                    BuildOutcome out = builds.execute(tree.toString(), "derived-tests", command);
+                    Optional<TestRunReport> report = TestRunGate.reportOf(tree, start);
+                    if (report.isPresent()) {
+                        for (String path : left.keySet()) result.put(path, passed(report.get(), stem(fileName(path))));
+                        left.clear();
+                        break;
+                    }
+                    List<String> broken = left.keySet().stream()
+                            .filter(path -> out.errorFiles().stream().anyMatch(f -> f.replace('\\', '/').endsWith(path)))
+                            .toList();
+                    if (broken.isEmpty()) break;    // the implementation itself does not build: nothing passes here
+                    for (String path : broken) {
+                        result.put(path, false);
+                        left.remove(path);
+                        Files.deleteIfExists(tree.resolve(path));
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("T6-U: could not run the requirements' tests on {}: {}", tree, e.getMessage());
+            } finally {
+                for (String path : tests.keySet()) {
+                    try {
+                        Files.deleteIfExists(tree.resolve(path));
+                    } catch (Exception ignored) {
+                        // a spike keeps no claim test between runs
+                    }
+                }
+            }
+            for (String path : tests.keySet()) result.putIfAbsent(path, false);
+            return result;
+        }
+
+        private static boolean passed(TestRunReport report, String simpleName) {
+            for (Map.Entry<String, List<TestRunReport.Case>> c : report.byClass().entrySet()) {
+                if (!c.getKey().equals(simpleName) && !c.getKey().endsWith("." + simpleName)) continue;
+                return !c.getValue().isEmpty() && c.getValue().stream().allMatch(x -> x.outcome() == TestRunReport.Outcome.PASSED);
+            }
+            return false;
+        }
+
+        private static String stem(String fileName) {
+            int dot = fileName.lastIndexOf('.');
+            return dot < 0 ? fileName : fileName.substring(0, dot);
+        }
     }
 }

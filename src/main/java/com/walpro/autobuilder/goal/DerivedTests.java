@@ -739,7 +739,7 @@ public class DerivedTests implements DerivedTestAuthority {
         @Override
         public String compiles(Path tree) {
             long start = System.currentTimeMillis();
-            BuildOutcome out = builds.execute(tree.toString(), "derived-tests", command);
+            BuildOutcome out = builds.executeIn(tree.toString(), "derived-tests", command);
             if (TestRunGate.reportOf(tree, start).isPresent()) return null;
             if (out.errorFiles().isEmpty() && out.result() != com.walpro.autobuilder.core.build.BuildResult.COMPILE_ERROR) {
                 return null;
@@ -760,7 +760,7 @@ public class DerivedTests implements DerivedTestAuthority {
                 // A test that does not compile takes the run down with it: drop it (it failed here), and run the rest.
                 for (int round = 0; round <= tests.size() && !left.isEmpty(); round++) {
                     long start = System.currentTimeMillis();
-                    BuildOutcome out = builds.execute(tree.toString(), "derived-tests", command);
+                    BuildOutcome out = builds.executeIn(tree.toString(), "derived-tests", command);
                     Optional<TestRunReport> report = TestRunGate.reportOf(tree, start);
                     if (report.isPresent()) {
                         for (String path : left.keySet()) result.put(path, passed(report.get(), stem(fileName(path))));

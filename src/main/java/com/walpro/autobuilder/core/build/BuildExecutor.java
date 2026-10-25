@@ -120,10 +120,23 @@ public class BuildExecutor {
     }
 
     public BuildOutcome execute(String workingDir, String cycleId, String commandOverride) {
+        return record(cycleId, executeInternal(resolveWorkingDir(workingDir), cycleId, commandOverride));
+    }
+
+    /**
+     * T6-U: execute {@code command} in exactly {@code tree}, never the configured working directory -- a build of a
+     * tree of its own (the throwaway implementations a requirement's tests are checked on). The override exists to
+     * point the loop's builds at its target; a caller naming another tree means that tree: with the override, every
+     * such build of field run 2026-10-25_13-07-16 ran in the loop's own output and checked nothing.
+     */
+    public BuildOutcome executeIn(String tree, String cycleId, String command) {
+        return record(cycleId, executeInternal(tree, cycleId, command));
+    }
+
+    private BuildOutcome record(String cycleId, BuildOutcome outcome) {
         // T5-P: record every invocation's wall-clock at this single chokepoint (probe, inner-loop,
         // post-merge gate, completion-edge package/test gates, javac-direct all pass through here).
         // Zero/skipped durations are ignored by the tracker, so the disabled early-return is free.
-        BuildOutcome outcome = executeInternal(workingDir, cycleId, commandOverride);
         if (buildCostTracker != null && outcome != null) {
             buildCostTracker.record(cycleId, outcome.durationMs());
         }
@@ -135,7 +148,7 @@ public class BuildExecutor {
             return BuildOutcome.skipped("build executor disabled");
         }
 
-        String effectiveDir = resolveWorkingDir(workingDir);
+        String effectiveDir = workingDir;
         if (effectiveDir == null || effectiveDir.isBlank()) {
             return BuildOutcome.skipped("no working directory");
         }

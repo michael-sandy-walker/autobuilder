@@ -221,4 +221,16 @@ class BuildExecutorTest {
         assertThat(calledWith.get()).isNull();
         assertThat(outcome.command()).isEqualTo("true");
     }
+
+    /** T6-U, field run 2026-10-25_13-07-16: every spike build ran in the configured output dir and checked nothing. */
+    @Test
+    void aBuildOfANamedTreeRunsThereWhateverTheConfiguredWorkingDirectory(@TempDir Path tree) throws Exception {
+        java.nio.file.Files.writeString(tree.resolve("marker.txt"), "here");
+        BuildExecutor executor = new BuildExecutor(true, "true", 10_000, "/no/such/configured/dir");
+
+        assertThat(executor.execute(tree.toString(), "c1", "true").result())
+                .as("the loop's own builds go where the configuration says").isEqualTo(BuildResult.SKIPPED);
+        assertThat(executor.executeIn(tree.toString(), "c1", "test -f marker.txt").result())
+                .isEqualTo(BuildResult.COMPILE_OK);
+    }
 }

@@ -11,7 +11,12 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-24 (Opus 5.5, session 18 cont.) -- T6-U DESIGN 2 BUILT; OFFLINE REPLAY: 6 OF 27 DERIVED TESTS RIGHT, NO CHECK COMBINATION MEETS THE RULE -- START HERE
+## 2026-10-25 (Opus 5.5, session 18 cont.) -- T6-U STEP 1 REVISED: CLAIMS + SPIKE FILTER MEETS THE RULE OFFLINE (0 HARMFUL, ALL REQUIREMENTS COVERED); VOTE AND ADJUDICATION DO NOT HELP -- START HERE
+
+- **Nothing is live.** Head = this commit. Data `~/.autobuilder/dtreplay/claims`. Detail on `T6-U` (2026-10-25 append). Withheld cases v2 still carry `gate: derived-test`; the Java DerivedTests is still the one-pass writer the replay rejected -- do not run the cases until the port.
+- **NEXT, the user's call:** port "claims + spike filter" into DerivedTests (N=1, dedupe claims, no vote, no adjudication), then one live batch against field105.
+
+## 2026-10-24 (Opus 5.5, session 18 cont.) -- T6-U DESIGN 2 BUILT; OFFLINE REPLAY: 6 OF 27 DERIVED TESTS RIGHT, NO CHECK COMBINATION MEETS THE RULE
 
 - **Nothing is live.** Head = this commit (code `793edf3f`); suite 3985/0 at `89bbafc6` plus DerivedTests unit tests 10/10 since. Batches field106/field107 stopped at run 1 (both `jvm-stopped`, reasons recorded). Replay data `~/.autobuilder/dtreplay/gen2`, references `~/.autobuilder/dtreplay/refs`. `scripts/run_outcomes.json` left for the user.
 - **User's choices:** Design 2 with a wording check; then step 1 (offline replay before more live runs) with the rule fixed in advance.

@@ -29,3 +29,10 @@ waiter on the `PREFLIGHT:` line is a fallback for run END, not a substitute for 
 run DID. Related: [[project-run-lifecycle-runbook]] (halt-marker variants),
 [[feedback-escalate-unrecoverable-stagnation]] (watchers must inform early, not just at terminal
 markers and silence).
+
+**2026-10-26, a scripted WAIT counts too.** A derivation-only "warm" script waited only for the derivation's summary
+line; the 60-minute run it started ended at its deadline mid-repair, printed no such line, and the script -- with a
+batch chained behind it -- waited for ever (found by the user asking "why was it stuck?"). Every `until grep ...`
+in a driver also ends when the run itself ends (`PREFLIGHT:` in its launch log), and a run started only to produce
+an artifact gets a deadline sized to that artifact (edit-hunks' writing plus three repairs is well over an hour).
+

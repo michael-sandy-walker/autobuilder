@@ -11,7 +11,15 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-26 (Opus 5.5, session 18 cont.) -- T6-U WITHHELD RUNG: FIRST TRUE COMPLETIONS (edit-hunks 2 of 3 GOAL_FULFILLED 11/11 in field110); receiver-questions 0 of 2 (spike blind spot) -- START HERE
+## 2026-10-26 evening (Opus 5.5, session 18 end) -- T6-U: PLANNER-CRITERION FIX AND SPIKE REPAIR BUILT; A WARM WRITING AND BATCH field111 ARE RUNNING UNATTENDED -- START HERE
+
+- **Something IS live** at hand-off: a chain started ~19:45 on 2026-10-26 -- the edit-hunks warm writing (`~/.autobuilder/dtreplay/warm2/generate-eh.sh`, 240-min run, launch log `warm2/launch-edit-hunks-withheld-1.log`), then, if the cache gains it (`ls ~/.autobuilder/derived-tests-cache | wc -l` reaches 4), batch `~/.autobuilder/field111/run.sh` (receiver-questions x3 then edit-hunks x3, 60 min, field105 recipe; results in `field111/results.txt`). The chain's outcome line lands in `warm2/results.txt` ("kept-after N", or "field111 NOT started ..."). Before any edit or mvn: `pgrep -af "preflight|field111|warm2"` ([[feedback-no-heavy-mvn-beside-a-live-run]]).
+- **Head** `2800b1b0` + this commit; suite 3998/0. `scripts/run_outcomes.json` left for the user.
+- **What field111 tests:** (1) the planner-criterion fix `56d5acd2` -- edit-hunks runs should no longer stall at 11/11 on "No file under src/test/java is changed" (field110 run 3); (2) the spike repair `2800b1b0` -- receiver-questions' writing recovered none of its 10 dropped claims, so expect 14/16 honest halts again (skip run 3 if runs 1-2 repeat, as before); edit-hunks' first repair recovered 21 of 67.
+- **Reference rates:** field110 edit-hunks 2 of 3 GOAL_FULFILLED 11/11; field109 receiver-questions 0 of 2 (14/16); field105 0 of 6 (five false completions); field71 with tests 3/3, 3/3. Detail on `T6-U` (appends 2026-10-24..26).
+- **Open after field111:** the repair's cost on edit-hunks (100+ tests per round) and its weak recovery on receiver-questions; requirements answered by the gate stay few (1/6, 3/17).
+
+## 2026-10-26 (Opus 5.5, session 18 cont.) -- T6-U WITHHELD RUNG: FIRST TRUE COMPLETIONS (edit-hunks 2 of 3 GOAL_FULFILLED 11/11 in field110); receiver-questions 0 of 2 (spike blind spot)
 
 - **Nothing is live.** Head = this commit (code `8aaf2c41`), suite 3993/0. Kept writings in `~/.autobuilder/derived-tests-cache` (reused while prompts, seed, obligations and starting tree are unchanged). Batches field108-110 under `~/.autobuilder/`. `scripts/run_outcomes.json` left for the user.
 - **Detail** on `T6-U` (2026-10-25/26 appends): the claims + spike design measured offline, ported, two framework fixes found by live runs (`10054c15` spike builds ran in output/; `8aaf2c41` derived tests counted as the loop's changes).

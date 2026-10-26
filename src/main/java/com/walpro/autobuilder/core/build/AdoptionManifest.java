@@ -85,7 +85,18 @@ public class AdoptionManifest {
             Map<String, String> adopted = mapper.readValue(fileService.readString(PATH), new TypeReference<TreeMap<String, String>>() { });
             Path out = fileService.resolveSecurePath("output");
             if (!Files.isDirectory(out)) return Optional.empty();
-            return Optional.of(compare(adopted, digests(out)));
+            Changes all = compare(adopted, digests(out));
+            // T6-U: the tests written from the requirements are the framework's, written and restored by it -- none of
+            // the loop's changes. Counted, field109's edit-hunks run 1 reached 11/11 and was refused closure to the end
+            // on "No file under src/test/java is changed": 98 files were added there, every one a derived test.
+            java.util.Set<String> derived = new java.util.HashSet<>();
+            for (DerivedTestsFile.Entry e : DerivedTestsFile.read(fileService)) {
+                if (e.accepted() && e.path() != null) derived.add(e.path().replace('\\', '/'));
+            }
+            if (derived.isEmpty()) return Optional.of(all);
+            java.util.function.Predicate<String> loops = path -> !derived.contains(path.replace('\\', '/'));
+            return Optional.of(new Changes(all.modified().stream().filter(loops).toList(),
+                    all.added().stream().filter(loops).toList(), all.removed().stream().filter(loops).toList()));
         } catch (Exception e) {
             log.debug("T4-DK: adoption manifest unreadable: {}", e.getMessage());
             return Optional.empty();

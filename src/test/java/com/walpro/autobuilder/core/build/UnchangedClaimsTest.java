@@ -127,4 +127,32 @@ class UnchangedClaimsTest {
         assertThat(UnchangedClaims.answer("StuckQuestions answers a package question", testTouched, GOAL)).isNull();
         assertThat(UnchangedClaims.answer("No file under src/test is changed", null, GOAL)).isNull();
     }
+
+    /**
+     * T6-U, field109 edit-hunks run 1: 11/11, refused closure to the end on "No file under src/test/java is changed" --
+     * the 98 files added there were all tests the framework wrote from the requirements, none the loop's.
+     */
+    @Test
+    void theTestsWrittenFromTheRequirementsAreNoneOfTheLoopsChanges() throws Exception {
+        Path out = root.resolve("output");
+        Files.createDirectories(out.resolve("src/test/java/org/ink"));
+        Files.writeString(out.resolve("src/test/java/org/ink/QuillTest.java"), "class QuillTest {}");
+        Files.createDirectories(root.resolve("meta"));
+        FileService files = new FileService(root.toString(), new ObjectMapper());
+        AdoptionManifest manifest = new AdoptionManifest(files);
+        manifest.recordIfAbsent();
+        String derived = "src/test/java/org/ink/DerivedClaim001Test.java";
+        Files.writeString(out.resolve(derived), "class DerivedClaim001Test {}");
+        files.writeFile(DerivedTestsFile.PATH, "[{\"requirement\":\"r\",\"claim\":\"c\",\"path\":\"" + derived
+                + "\",\"content\":\"class DerivedClaim001Test {}\",\"status\":\"ACCEPTED\",\"reason\":\"ok\"}]");
+        String claim = "No file under src/test/java is changed";
+
+        assertThat(UnchangedClaims.isClaim(claim)).as("the field109 criterion is one of these claims").isTrue();
+        assertThat(manifest.changes().orElseThrow().added()).isEmpty();
+        assertThat(UnchangedClaims.answer(claim, manifest.changes().orElseThrow(), "")).isTrue();
+
+        Files.writeString(out.resolve("src/test/java/org/ink/LoopsOwnTest.java"), "class LoopsOwnTest {}");
+        assertThat(manifest.changes().orElseThrow().added()).containsExactly("src/test/java/org/ink/LoopsOwnTest.java");
+        assertThat(UnchangedClaims.answer(claim, manifest.changes().orElseThrow(), "")).isFalse();
+    }
 }

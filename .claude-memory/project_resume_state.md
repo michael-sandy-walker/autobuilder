@@ -11,7 +11,13 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-26 evening (Opus 5.5, session 18 end) -- T6-U: PLANNER-CRITERION FIX AND SPIKE REPAIR BUILT; A WARM WRITING AND BATCH field111 ARE RUNNING UNATTENDED -- START HERE
+## 2026-10-26 night (Opus 5.5, session 19) -- T6-U field111: EDIT-HUNKS 3 OF 3 TRUE COMPLETIONS WITH THE TESTS WITHHELD; RECEIVER-QUESTIONS 2 OF 2 FALSE -- START HERE
+
+- **Nothing is live.** Head `e229d102` + uncommitted memory (this block, the `T6-U` append, the watcher rule). `scripts/run_outcomes.json` left for the user (it now also holds four runs that were not measurements -- named on `T6-U`). An empty detached worktree `scratchpad/wt-t6u` was made for the closure change; nothing written in it (`git worktree remove` it if unused).
+- **field111** (`~/.autobuilder/field111/results.txt`): edit-hunks 11/11 GOAL_FULFILLED x3 (planner-criterion fix `56d5acd2` confirmed live); receiver-questions 14/16 GOAL_FULFILLED x2, FALSE (record-component Map form), run 3 skipped. Every completion closed on "closure ledger clear" -- a model reading of the requirements no kept test answers (3/17, 1/6).
+- **NEXT, the user's call (asked, unanswered):** refuse closure for a marked requirement with a dropped claim (stops the false ones AND edit-hunks' true ones), ask the reading per dropped claim, or raise claim recovery first. The user said "yes" to the refusal before I corrected its cost (I had said only receiver-questions would lose completions) -- do not build on that yes.
+
+## 2026-10-26 evening (Opus 5.5, session 18 end) -- T6-U: PLANNER-CRITERION FIX AND SPIKE REPAIR BUILT; A WARM WRITING AND BATCH field111 ARE RUNNING UNATTENDED
 
 - **Something IS live** at hand-off: a chain started ~19:45 on 2026-10-26 -- the edit-hunks warm writing (`~/.autobuilder/dtreplay/warm2/generate-eh.sh`, 240-min run, launch log `warm2/launch-edit-hunks-withheld-1.log`), then, if the cache gains it (`ls ~/.autobuilder/derived-tests-cache | wc -l` reaches 4), batch `~/.autobuilder/field111/run.sh` (receiver-questions x3 then edit-hunks x3, 60 min, field105 recipe; results in `field111/results.txt`). The chain's outcome line lands in `warm2/results.txt` ("kept-after N", or "field111 NOT started ..."). Before any edit or mvn: `pgrep -af "preflight|field111|warm2"` ([[feedback-no-heavy-mvn-beside-a-live-run]]).
 - **Head** `2800b1b0` + this commit; suite 3998/0. `scripts/run_outcomes.json` left for the user.

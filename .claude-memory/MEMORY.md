@@ -164,7 +164,7 @@ Code and design constraints:
 
 Watchers:
 - `feedback_batch_watcher_alarms_on_the_environment.md`: the watcher alarms on Neo4j down and under 2 GB available; a run with almost no cycles is an environment failure, not a score. (reviewed 2026-10-11)
-- `feedback_monitor_every_terminal.md`: a monitor must match EVERY terminal state; stopping one for noise means re-arming a narrower one, never going blind; a driver's `until grep` wait also ends when the run ends (2026-10-26). (reviewed 2026-10-26)
+- `feedback_monitor_every_terminal.md`: a monitor must match EVERY terminal state; stopping one for noise means re-arming a narrower one, never going blind; a driver's `until grep` wait also ends when the run ends (2026-10-26); anchor pgrep on argv start -- a check must not match itself or hide a wrapper containing it (2026-10-26 night). (reviewed 2026-10-26)
 - `feedback_escalate_unrecoverable_stagnation.md`: watchers -- and the loop itself -- must detect periodic failure patterns and act early; any gate deciding the same way while nothing moves is a grind (2026-10-18). (reviewed 2026-10-19)
 - `feedback_waiter_fires_on_loop_terminal.md`: a run waiter fires on the LOOP's terminal line, not only preflight's final line minutes later. (reviewed 2026-09-24)
 - `feedback_fix_first_when_a_finding_changes_the_measurement.md`: when a finding changes what a running batch measures, stop and fix first (user's choice twice); never let a batch build from uncommitted code. (reviewed 2026-09-30)

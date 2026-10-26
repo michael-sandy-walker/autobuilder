@@ -36,3 +36,13 @@ batch chained behind it -- waited for ever (found by the user asking "why was it
 in a driver also ends when the run itself ends (`PREFLIGHT:` in its launch log), and a run started only to produce
 an artifact gets a deadline sized to that artifact (edit-hunks' writing plus three repairs is well over an hour).
 
+
+2026-10-26 night (field111): **a process check must not match its own text, nor hide a process whose text contains the
+check.** `pgrep -af ... | grep -v pgrep` hid a live chain wrapper because the wrapper's own command line contained
+`pgrep -f '[p]reflight.sh live'`; believing it dead, I started the batch by hand and the wrapper started a second driver,
+two drivers launched runs on one target, and three runs were wasted. Then a launcher waiting on
+`until ! pgrep -f "preflight.sh live"` matched ITSELF and never proceeded. Anchor the pattern on the process's argv start
+(`pgrep -f "^/bin/bash /path/run.sh"`, `"^/bin/bash scripts/preflight.sh"`), and before starting a batch by hand list the
+full `ps -eo pid,ppid,args` tree, not a filtered one. A prev/ directory a driver moves state into must not already exist:
+`mv` into an existing one fails, the prepare step refuses, and the run boots on the leftover tree (a one-cycle false
+GOAL_FULFILLED); drivers now refuse an existing prev dir and stop on a failed mv.

@@ -75,6 +75,30 @@ public class ProtectedPaths {
     private final java.util.Set<String> unreportedRefusals = new java.util.LinkedHashSet<>();
 
     /**
+     * T6-U: the operator's declared boundary, for a no-change claim ({@link UnchangedClaims.Boundary}): something is
+     * declared under {@code scope} when a protecting glob names a path at or below it, or covers it from above.
+     */
+    public UnchangedClaims.Boundary boundary() {
+        return new UnchangedClaims.Boundary() {
+            @Override
+            public boolean declaresUnder(String scope) {
+                String s = normalise(scope).replaceAll("/\\*+$", "").replaceAll("/$", "");
+                for (String g : globs()) {
+                    String literal = g.replaceAll("[*?\\[{].*$", "").replaceAll("/$", "");
+                    if (literal.isEmpty()) return true;
+                    if (literal.equals(s) || literal.startsWith(s + "/") || s.startsWith(literal + "/")) return true;
+                }
+                return false;
+            }
+
+            @Override
+            public boolean protects(String path) {
+                return isProtected(path);
+            }
+        };
+    }
+
+    /**
      * T6-U: true when {@code pathUnderOutput} is a test written from the requirements' wording and accepted
      * ({@link DerivedTestsFile}). Frozen like an operator's test, but the framework's to write: a writer may
      * only propose a new text for it, through {@link #refuse(String, String, String)}.

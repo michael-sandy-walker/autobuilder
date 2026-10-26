@@ -155,4 +155,47 @@ class UnchangedClaimsTest {
         assertThat(manifest.changes().orElseThrow().added()).containsExactly("src/test/java/org/ink/LoopsOwnTest.java");
         assertThat(UnchangedClaims.answer(claim, manifest.changes().orElseThrow(), "")).isFalse();
     }
+
+    /**
+     * T6-U, field110 edit-hunks run 3 (11/11, refused to the deadline): the seed says "do not modify the existing
+     * tests; add new tests beside them", the operator protected exactly the existing test, the planner wrote "No file
+     * under src/test/java is changed", and the loop added a test of its own. The operator sets the boundary.
+     */
+    @Test
+    void aNoChangeClaimOverAPathTheOperatorSpokeAboutCountsOnlyWhatTheOperatorProtects() {
+        String existing = "src/test/java/org/ink/QuillTest.java";
+        UnchangedClaims.Boundary operator = new UnchangedClaims.Boundary() {
+            public boolean declaresUnder(String scope) { return existing.startsWith(scope.replaceAll("/$", "") + "/"); }
+            public boolean protects(String path) { return path.equals(existing); }
+        };
+        String claim = "No file under `src/test/java` is changed";
+        var added = new AdoptionManifest.Changes(List.of(), List.of("src/test/java/org/ink/LoopsOwnTest.java"), List.of());
+        var modified = new AdoptionManifest.Changes(List.of(existing), List.of(), List.of());
+
+        assertThat(UnchangedClaims.answer(claim, added, "", operator)).as("an added test is the seed's to allow").isTrue();
+        assertThat(UnchangedClaims.answer(claim, modified, "", operator)).as("a protected test modified").isFalse();
+        assertThat(UnchangedClaims.answer(claim, added, "")).as("no boundary: the claim's letter, as before").isFalse();
+        UnchangedClaims.Boundary silent = new UnchangedClaims.Boundary() {
+            public boolean declaresUnder(String scope) { return false; }
+            public boolean protects(String path) { return false; }
+        };
+        assertThat(UnchangedClaims.answer(claim, added, "", silent))
+                .as("a path the operator said nothing about keeps the claim's letter").isFalse();
+    }
+
+    /** The form the seed's rule needed: what the tree had is untouched; what was added is allowed. */
+    @Test
+    void noExistingFileChangedAllowsAddedFilesAndRefusesModifiedOrRemovedOnes() {
+        String claim = "No existing file under src/test/java is changed";
+        assertThat(UnchangedClaims.TEMPLATES).contains("No existing file under <path> is changed");
+        assertThat(UnchangedClaims.isClaim(claim)).isTrue();
+        assertThat(UnchangedClaims.answer(claim, new AdoptionManifest.Changes(List.of(),
+                List.of("src/test/java/org/ink/NewTest.java"), List.of()), "")).isTrue();
+        assertThat(UnchangedClaims.answer(claim, new AdoptionManifest.Changes(List.of("src/test/java/org/ink/QuillTest.java"),
+                List.of(), List.of()), "")).isFalse();
+        assertThat(UnchangedClaims.answer(claim, new AdoptionManifest.Changes(List.of(), List.of(),
+                List.of("src/test/java/org/ink/QuillTest.java")), "")).isFalse();
+        assertThat(UnchangedClaims.answer(claim, new AdoptionManifest.Changes(List.of("src/main/java/org/ink/Quill.java"),
+                List.of(), List.of()), "")).as("outside the path").isTrue();
+    }
 }

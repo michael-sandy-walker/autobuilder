@@ -151,4 +151,19 @@ class ProtectedPathsTest {
         assertThat(proposed).hasSize(2);
         assertThat(paths.promptBlock()).contains(test, "judged against the requirement's wording only", "NOT accepted: weaker");
     }
+
+    /** T6-U: the operator's boundary for a no-change claim -- declared at, below or above a path. */
+    @Test
+    void theBoundaryKnowsWhichPathsTheOperatorSpokeAbout() throws Exception {
+        declare("src/test/java/zeta/QuillTest.java\nmembers: src/main/java/zeta/Quill.java except ink\n");
+        var b = paths.boundary();
+        assertThat(b.declaresUnder("src/test/java")).isTrue();
+        assertThat(b.declaresUnder("src/test")).isTrue();
+        assertThat(b.declaresUnder("src/main/resources")).isFalse();
+        assertThat(b.protects("src/test/java/zeta/QuillTest.java")).isTrue();
+        assertThat(b.protects("src/test/java/zeta/NewTest.java")).isFalse();
+        declare("src/test/**\n");
+        assertThat(paths.boundary().declaresUnder("src/test/java")).as("covered from above").isTrue();
+        assertThat(paths.boundary().protects("src/test/java/zeta/NewTest.java")).isTrue();
+    }
 }

@@ -833,6 +833,10 @@ public class CriteriaVerificationService {
         return out;
     }
 
+    /** T6-U: what the operator declared may not change -- the boundary a no-change claim is answered by; optional. */
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.ProtectedPaths protectedPaths;
+
     /** T4-DK: what changed since adoption, for claims that something was not changed; optional. */
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.AdoptionManifest adoptionManifest;
@@ -897,7 +901,8 @@ public class CriteriaVerificationService {
             }
         }
         if (changes.isPresent()) {
-            Boolean unchanged = com.walpro.autobuilder.core.build.UnchangedClaims.answer(criterion, changes.get(), goalText);
+            Boolean unchanged = com.walpro.autobuilder.core.build.UnchangedClaims.answer(criterion, changes.get(), goalText,
+                    protectedPaths == null ? null : protectedPaths.boundary());
             if (unchanged != null) {
                 log.info("T4-DK: [{}] {} by the changes since adoption ({} modified, {} added, {} removed), not by a reading",
                         criterion, unchanged ? "confirmed" : "contradicted", changes.get().modified().size(),

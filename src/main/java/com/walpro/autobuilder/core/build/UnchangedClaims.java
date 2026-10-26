@@ -15,7 +15,10 @@ import java.util.regex.Pattern;
  * decision 2026-10-02: the record answers first). The claim may be several such parts joined by ";" or
  * ", and" -- every part must be one of these shapes; anything else is left to the reader:
  * <ul>
- *   <li>"no file(s)/class(es) under P is/are/has/have been modified/changed/touched"</li>
+ *   <li>"no file(s)/class(es) under P is/are/has/have been modified/changed/touched" -- where the operator declared
+ *       what is protected under P ({@code bootstrap/protected-paths.txt}), only the protected files count</li>
+ *   <li>"no existing file(s)/test(s) under P is/are ... modified/changed" -- nothing the adopted tree had there was
+ *       modified or removed; files added are allowed</li>
  *   <li>"only X[.java] (under P) is/was/has been modified/changed"</li>
  *   <li>"all/every other class(es)/file(s) (under P) remain(s) unchanged" -- other than the classes the
  *       criterion or the goal names</li>
@@ -28,6 +31,9 @@ public final class UnchangedClaims {
     private static final String PATH = "`?([\\w./*-]+?)`?";
     private static final Pattern NONE_UNDER = Pattern.compile(
             "no (?:files?|class(?:es)?|tests?|sources?)(?: files?)? (?:under|in) " + PATH
+                    + "(?: (?:is|are|was|were|has|have))?(?: been)? (?:modified|changed|touched|altered)");
+    private static final Pattern NONE_EXISTING = Pattern.compile(
+            "no existing (?:files?|class(?:es)?|tests?|sources?)(?: files?)? (?:under|in) " + PATH
                     + "(?: (?:is|are|was|were|has|have))?(?: been)? (?:modified|changed|touched|altered)");
     private static final Pattern ONLY = Pattern.compile(
             "(?i)only (\\w+)(?:\\.java)?(?: (?:under|in) ([\\w./*-]+?))? (?:is|was|has been|gets) (?:modified|changed)");
@@ -47,6 +53,10 @@ public final class UnchangedClaims {
      */
     public static final List<String> TEMPLATES = List.of(
             "No file under <path> is changed",
+            // T6-U, field110 run 3 and field105 receiver-questions run 3: a seed that says "do not modify the existing
+            // tests; add new tests beside them" had no form of its own, so the planner wrote the line above -- stricter
+            // than the seed -- and correct code was refused closure to the deadline on it.
+            "No existing file under <path> is changed",
             "Only <Class> under <path> is changed",
             "All other classes under <path> remain unchanged",
             "The project's packages, classes and naming are preserved");
@@ -55,16 +65,33 @@ public final class UnchangedClaims {
     }
 
     /**
+     * What the operator declared may not change ({@code bootstrap/protected-paths.txt}). A no-change claim over a path
+     * the operator spoke about is answered by that declaration: the operator, not the planner, sets the boundary.
+     */
+    public interface Boundary {
+        /** True when the operator declared something protected at or under {@code scope}. */
+        boolean declaresUnder(String scope);
+
+        /** True when the operator protects {@code path}. */
+        boolean protects(String path);
+    }
+
+    /**
      * True when {@code criterion} claims only that things were not changed, and {@code changes} shows
      * exactly that. {@code goal} is the goal's own text: a class it names is "the one to change".
      */
     public static boolean provenBy(String criterion, AdoptionManifest.Changes changes, String goal) {
+        return provenBy(criterion, changes, goal, null);
+    }
+
+    /** As {@link #provenBy(String, AdoptionManifest.Changes, String)}, with the operator's declared boundary. */
+    public static boolean provenBy(String criterion, AdoptionManifest.Changes changes, String goal, Boundary boundary) {
         if (criterion == null || changes == null) return false;
         String claim = criterion.strip().replaceAll("[.\\s]+$", "");
         String[] parts = claim.split("\\s*;\\s*|,\\s+and\\s+(?=(?:no|only|all|every|the)\\b)");
         if (parts.length == 0) return false;
         for (String part : parts) {
-            if (!partProven(part.strip(), changes, goal)) return false;
+            if (!partProven(part.strip(), changes, goal, boundary)) return false;
         }
         return true;
     }
@@ -74,8 +101,13 @@ public final class UnchangedClaims {
      * when it is one they contradict, null when it is not such a claim (a reading answers it).
      */
     public static Boolean answer(String criterion, AdoptionManifest.Changes changes, String goal) {
+        return answer(criterion, changes, goal, null);
+    }
+
+    /** As {@link #answer(String, AdoptionManifest.Changes, String)}, with the operator's declared boundary. */
+    public static Boolean answer(String criterion, AdoptionManifest.Changes changes, String goal, Boundary boundary) {
         if (changes == null || !isClaim(criterion)) return null;
-        return provenBy(criterion, changes, goal);
+        return provenBy(criterion, changes, goal, boundary);
     }
 
     /**
@@ -88,7 +120,8 @@ public final class UnchangedClaims {
         for (String part : claim.split("\\s*;\\s*|,\\s+and\\s+(?=(?:no|only|all|every|the)\\b)")) {
             String p = part.strip();
             String lower = p.toLowerCase(Locale.ROOT).replace("`", "");
-            if (!(NONE_UNDER.matcher(lower).matches() || ONLY.matcher(p.replace("`", "")).matches()
+            if (!(NONE_UNDER.matcher(lower).matches() || NONE_EXISTING.matcher(lower).matches()
+                    || ONLY.matcher(p.replace("`", "")).matches()
                     || ALL_OTHER.matcher(lower).matches() || PRESERVED.matcher(lower).matches())) {
                 return false;
             }
@@ -96,12 +129,19 @@ public final class UnchangedClaims {
         return true;
     }
 
-    private static boolean partProven(String part, AdoptionManifest.Changes changes, String goal) {
+    private static boolean partProven(String part, AdoptionManifest.Changes changes, String goal, Boundary boundary) {
         String lower = part.toLowerCase(Locale.ROOT).replace("`", "");
         Matcher none = NONE_UNDER.matcher(lower);
         if (none.matches()) {
             String scope = none.group(1);
-            return changes.changedOrAdded().stream().noneMatch(p -> under(p, scope))
+            java.util.function.Predicate<String> counts = boundary != null && boundary.declaresUnder(scope)
+                    ? p -> under(p, scope) && boundary.protects(p) : p -> under(p, scope);
+            return changes.changedOrAdded().stream().noneMatch(counts) && changes.removed().stream().noneMatch(counts);
+        }
+        Matcher existing = NONE_EXISTING.matcher(lower);
+        if (existing.matches()) {
+            String scope = existing.group(1);
+            return changes.modified().stream().noneMatch(p -> under(p, scope))
                     && changes.removed().stream().noneMatch(p -> under(p, scope));
         }
         Matcher only = ONLY.matcher(part.replace("`", ""));

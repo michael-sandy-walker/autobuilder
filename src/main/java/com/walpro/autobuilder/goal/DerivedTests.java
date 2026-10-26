@@ -160,6 +160,18 @@ public class DerivedTests implements DerivedTestAuthority {
     @Value("${autobuilder.evaluation.fileContentBudgetChars:40000}")
     private int fileContentBudgetChars = 40000;
 
+    /**
+     * Where a finished writing is kept for the next run of the same case: what was written depends only on the seed,
+     * the obligations and the tree it started from, so a run with all three unchanged reuses it instead of spending
+     * the writing again (~20 and ~50 minutes on the band-1 cases). Blank: no reuse.
+     */
+    @Value("${autobuilder.obligations.derived-tests-cache:${user.home}/.autobuilder/derived-tests-cache}")
+    private String cacheDir = "";
+
+    void setCacheDir(String cacheDir) {
+        this.cacheDir = cacheDir;
+    }
+
     /** True while the requirements' tests are being written: no closure may rest on a suite that lacks them. */
     private volatile boolean pending;
 
@@ -231,9 +243,12 @@ public class DerivedTests implements DerivedTestAuthority {
     public void ensureFor(String seedText) {
         if (seedText == null || seedText.isBlank() || requirements(seedText).isEmpty()) return;
         pending = true;
+        // The key of the starting tree is taken HERE, before the loop's first cycle can change the tree; taken on the
+        // writer's thread it would race the loop and miss a kept writing.
+        String key = DerivedTestsFile.read(files).isEmpty() ? cacheKey(seedText) : null;
         writer.submit(() -> {
             try {
-                ensureNow(seedText);
+                ensureNow(seedText, key);
             } finally {
                 pending = false;
             }
@@ -242,6 +257,10 @@ public class DerivedTests implements DerivedTestAuthority {
 
     /** As {@link #ensureFor}, on the caller's thread. */
     void ensureNow(String seedText) {
+        ensureNow(seedText, DerivedTestsFile.read(files).isEmpty() ? cacheKey(seedText) : null);
+    }
+
+    private void ensureNow(String seedText, String key) {
         List<String> lines = requirements(seedText);
         if (lines.isEmpty()) return;
         pending = true;
@@ -255,6 +274,10 @@ public class DerivedTests implements DerivedTestAuthority {
                 restore();
                 return;     // pending is cleared below
             }
+            if (key != null && reuse(key)) {
+                restore();
+                return;
+            }
             Map<String, String> tests = sources(TEST_ROOT);
             String context = "SPECIFICATION:\n" + seedText + "\n\nTHE PROJECT'S DECLARATIONS AS THEY ARE NOW (bodies left out):\n"
                     + outline() + "\n\nTHE EXISTING TESTS:\n" + listing(tests);
@@ -266,10 +289,18 @@ public class DerivedTests implements DerivedTestAuthority {
                 claims.addAll(of);
             }
             int counter = entries.size();
-            Map<String, Claim> written = new LinkedHashMap<>();   // test path -> claim
-            Map<String, String> texts = new LinkedHashMap<>();    // test path -> test text
+            Map<String, List<Claim>> written = new LinkedHashMap<>();   // test path -> the claims it checks
+            Map<String, String> texts = new LinkedHashMap<>();          // test path -> test text
+            Map<String, String> pathOfClaim = new LinkedHashMap<>();    // claim as compared -> test path
             List<Entry> unwritten = new ArrayList<>();
             for (Claim c : claims) {
+                // field108's derivation of edit-hunks: 206 claims, 143 distinct -- the same claim stated under several
+                // requirements. Written once; each requirement's entry points at the one test.
+                String same = pathOfClaim.get(comparableClaim(c.text()));
+                if (same != null) {
+                    written.get(same).add(c);
+                    continue;
+                }
                 String name = String.format("DerivedClaim%03dTest", ++counter);
                 String header = header(name, List.copyOf(tests.keySet()));
                 String answer = ask(WRITE_SYSTEM, "CLAIM (" + c.source() + "): " + c.text() + "\nWORDS THAT GIVE IT: "
@@ -282,8 +313,9 @@ public class DerivedTests implements DerivedTestAuthority {
                     continue;
                 }
                 String path = file.get().path().replace('\\', '/');
-                written.put(path, c);
+                written.put(path, new ArrayList<>(List.of(c)));
                 texts.put(path, file.get().content());
+                pathOfClaim.put(comparableClaim(c.text()), path);
             }
 
             List<Path> spikes = spikes(seedText, tests);
@@ -291,17 +323,20 @@ public class DerivedTests implements DerivedTestAuthority {
             for (Path spike : spikes) {
                 bench.run(spike, texts).forEach((p, ok) -> passes.merge(p, ok ? 1 : 0, Integer::sum));
             }
-            for (Map.Entry<String, Claim> w : written.entrySet()) {
+            for (Map.Entry<String, List<Claim>> w : written.entrySet()) {
                 int n = passes.getOrDefault(w.getKey(), 0);
                 boolean ok = n > 0;
                 String reason = spikes.isEmpty() ? "no throwaway implementation compiled, so no test could be checked"
                         : "passed on " + n + " of " + spikes.size() + " throwaway implementation(s)";
-                entries.add(new Entry(w.getValue().requirement(), w.getValue().text(), w.getKey(), texts.get(w.getKey()),
-                        ok ? Status.ACCEPTED : Status.UNACCEPTED, reason));
-                recordAttempt(w.getValue(), w.getKey(), texts.get(w.getKey()), ok, reason);
+                for (Claim c : w.getValue()) {
+                    entries.add(new Entry(c.requirement(), c.text(), w.getKey(), texts.get(w.getKey()),
+                            ok ? Status.ACCEPTED : Status.UNACCEPTED, reason));
+                }
+                recordAttempt(w.getValue().get(0), w.getKey(), texts.get(w.getKey()), ok, reason);
             }
             entries.addAll(unwritten);
             DerivedTestsFile.write(files, entries);
+            if (key != null && !spikes.isEmpty()) keep(key);   // a writing nothing could check is not worth reusing
             long accepted = entries.stream().filter(Entry::accepted).count();
             Set<String> answered = acceptedRequirements();
             log.warn("T6-U: {} claim(s) of {} requirement(s); {} test(s) accepted on {} throwaway implementation(s);"
@@ -317,6 +352,11 @@ public class DerivedTests implements DerivedTestAuthority {
         }
     }
 
+    /** A claim as compared for repeats: case, punctuation and spacing aside -- nothing looser (unmeasured). */
+    static String comparableClaim(String text) {
+        return text.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9 ]", " ").replaceAll("\\s+", " ").strip();
+    }
+
     /** The requirement's atomic claims with a source; OPEN ones dropped (the wording does not fix them). */
     List<Claim> claims(String requirement, String context) {
         String answer = ask(DECOMPOSE_SYSTEM, "REQUIREMENT:\n" + requirement + "\n\n" + context, "derived-test-claims");
@@ -328,6 +368,60 @@ public class DerivedTests implements DerivedTestAuthority {
             out.add(new Claim(requirement, text, source, String.valueOf(c.getOrDefault("words", ""))));
         }
         return out;
+    }
+
+    /** The seed, the obligations and the starting tree (sources and tests, build output aside), as one digest. */
+    private String cacheKey(String seedText) {
+        if (cacheDir == null || cacheDir.isBlank()) return null;
+        try {
+            // The prompts too: a changed way of writing must never reuse what the old one wrote.
+            StringBuilder sb = new StringBuilder(DECOMPOSE_SYSTEM + WRITE_SYSTEM + SPIKE_SYSTEM).append('\u0000')
+                    .append(seedText).append('\u0000').append(read(SeedObligationsFile.PATH));
+            Path out = files.resolveSecurePath("output");
+            try (var walk = Files.walk(out)) {
+                for (Path p : walk.filter(Files::isRegularFile).sorted().toList()) {
+                    String rel = out.relativize(p).toString().replace('\\', '/');
+                    if (rel.startsWith("target/") || rel.contains("/target/")) continue;
+                    sb.append('\u0000').append(rel).append('\u0000').append(sha256(new String(Files.readAllBytes(p),
+                            java.nio.charset.StandardCharsets.ISO_8859_1)));
+                }
+            }
+            return sha256(sb.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Copies a kept writing for {@code key} in: its tests and its throwaway implementations. False when none. */
+    private boolean reuse(String key) {
+        try {
+            Path kept = Path.of(cacheDir, key);
+            if (!Files.isRegularFile(kept.resolve("derived-tests.json"))) return false;
+            files.writeFile(DerivedTestsFile.PATH, Files.readString(kept.resolve("derived-tests.json")));
+            Path spikes = files.resolveSecurePath(SPIKES_DIR);
+            deleteTree(spikes);
+            if (Files.isDirectory(kept.resolve("spikes"))) copyTree(kept.resolve("spikes"), spikes);
+            log.warn("T6-U: the requirements' tests were written before for this seed, these obligations and this"
+                    + " starting tree -- reused from {} instead of written again", kept);
+            return true;
+        } catch (Exception e) {
+            log.warn("T6-U: could not reuse the kept tests for {}: {}", key, e.getMessage());
+            return false;
+        }
+    }
+
+    /** Keeps this writing for the next run of the same case. */
+    private void keep(String key) {
+        try {
+            Path kept = Path.of(cacheDir, key);
+            deleteTree(kept);
+            Files.createDirectories(kept);
+            Files.writeString(kept.resolve("derived-tests.json"), DerivedTestsFile.readText(files));
+            Path spikes = files.resolveSecurePath(SPIKES_DIR);
+            if (Files.isDirectory(spikes)) copyTree(spikes, kept.resolve("spikes"));
+        } catch (Exception e) {
+            log.warn("T6-U: could not keep the tests for reuse: {}", e.getMessage());
+        }
     }
 
     /** The first JSON list of objects in a model's answer. */
@@ -528,8 +622,8 @@ public class DerivedTests implements DerivedTestAuthority {
             log.warn("T6-U: {} proposed a new text for {} -- not accepted: {}", writer, pathUnderOutput, reason);
             return false;
         }
-        entries.replaceAll(e -> e == current ? new Entry(e.requirement(), e.claim(), e.path(), content, Status.ACCEPTED,
-                "rewritten by " + writer + ": " + reason) : e);
+        entries.replaceAll(e -> e.accepted() && pathUnderOutput.equals(e.path()) ? new Entry(e.requirement(), e.claim(),
+                e.path(), content, Status.ACCEPTED, "rewritten by " + writer + ": " + reason) : e);
         try {
             DerivedTestsFile.write(files, entries);
         } catch (Exception e) {

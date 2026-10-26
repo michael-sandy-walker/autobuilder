@@ -290,4 +290,61 @@ class DerivedTestsTest {
         assertThat(DerivedTests.header("DerivedClaim001Test", List.copyOf(tests.keySet())))
                 .isEqualTo("```java [src/test/java/org/ink/DerivedClaim001Test.java]");
     }
+
+    /** field108, edit-hunks: 206 claims, 143 distinct -- the same claim under several requirements is written once. */
+    @Test
+    void aClaimRepeatedUnderAnotherRequirementIsWrittenOnceAndAnswersBoth() throws Exception {
+        String other = "A piece that occurs twice leaves the file out.";
+        obligations(REQUIREMENT, other);
+        answer("claims", "[{\"claim\": \"Two matches are refused.\", \"source\": \"STATED\", \"words\": \"x\"}]",
+                "[{\"claim\": \"two matches are refused\", \"source\": \"STATED\", \"words\": \"y\"}]");
+        answer("write", test(1, "  // RIGHT"));
+        answer("spike", SPIKE, SPIKE, SPIKE);
+        passesWhenContains.put("RIGHT", true);
+        DerivedTests derived = derived();
+
+        derived.ensureNow(SEED);
+
+        assertThat(asked.stream().filter(a -> a.startsWith("CLAIM"))).as("written once").hasSize(1);
+        assertThat(DerivedTestsFile.read(files)).hasSize(2)
+                .allSatisfy(e -> assertThat(e.path()).isEqualTo(TEST_DIR + "/DerivedClaim001Test.java"));
+        assertThat(derived.acceptedRequirements()).containsExactlyInAnyOrder(REQUIREMENT, other);
+    }
+
+    /** A run of the same case with the same wording and starting tree reuses the writing instead of repeating it. */
+    @Test
+    void theSameWordingAndStartingTreeReuseAKeptWritingAndAChangedTreeDoesNot(@TempDir Path cache, @TempDir Path base2)
+            throws Exception {
+        answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"refused\"}]");
+        answer("write", test(1, "  // RIGHT"));
+        answer("spike", SPIKE, SPIKE, SPIKE);
+        passesWhenContains.put("RIGHT", true);
+        DerivedTests first = derived();
+        first.setCacheDir(cache.toString());
+        first.ensureNow(SEED);
+        int calls = asked.size();
+
+        // The next run: a fresh target directory holding the same seed, obligations and starting tree.
+        FileService next = new FileService(base2.toString(), new ObjectMapper());
+        for (String f : List.of(DerivedTests.SEED_PATH, SeedObligationsFile.PATH, "output/src/main/java/org/ink/Quill.java",
+                "output/" + TEST_DIR + "/QuillTest.java")) {
+            next.writeFile(f, files.readFile(f));
+        }
+        DerivedTests again = new DerivedTests(llm, next);
+        again.setCacheDir(cache.toString());
+        again.ensureNow(SEED);
+        assertThat(asked).as("nothing asked again").hasSize(calls);
+        assertThat(Files.readString(base2.resolve("output/" + TEST_DIR + "/DerivedClaim001Test.java"))).contains("RIGHT");
+        assertThat(again.acceptedRequirements()).containsExactly(REQUIREMENT);
+
+        // A different starting tree is a different case: written again.
+        Files.delete(base2.resolve("output/" + TEST_DIR + "/DerivedClaim001Test.java"));
+        next.writeFile(DerivedTestsFile.PATH, "[]");
+        java.nio.file.Files.delete(base2.resolve(DerivedTestsFile.PATH));
+        next.writeFile("output/src/main/java/org/ink/Quill.java", "package org.ink;\npublic class Quill { int other; }\n");
+        DerivedTests changed = new DerivedTests(llm, next);
+        changed.setCacheDir(cache.toString());
+        changed.ensureNow(SEED);
+        assertThat(asked.size()).as("a changed tree is written again").isGreaterThan(calls);
+    }
 }

@@ -131,6 +131,15 @@ public class DerivedTests implements DerivedTestAuthority {
             ```java [src/main/java/org/example/Thing.java]
             Do not write or change any test. Keep every existing declaration the specification says to keep.""";
 
+    /** Repaired implementations per writing, and feedback rounds per repair: as the offline replay measured. */
+    static final int REPAIRS = 3;
+    static final int ROUNDS = 3;
+
+    static final String REPAIR_SYSTEM = SPIKE_SYSTEM + """
+
+            Some claims about the change are listed below. Earlier implementations of the same specification did not \
+            meet them; meet them as well as everything else the specification says, as the specification words them.""";
+
     static final String REVIEW_SYSTEM = """
             You check whether a test checks a requirement -- as the requirement is WORDED. You see the requirement, \
             the specification it comes from, and the test. You do not see the code, and must not guess at it.
@@ -153,6 +162,11 @@ public class DerivedTests implements DerivedTestAuthority {
 
         /** For each test path (relative to the tree), whether every case of it passed there. */
         Map<String, Boolean> run(Path tree, Map<String, String> tests);
+
+        /** What the runner reported for the tests at {@code only}, all of {@code tests} run together -- never a source. */
+        default String failures(Path tree, Map<String, String> tests, Set<String> only) {
+            return "";
+        }
     }
 
     private Bench bench;
@@ -323,10 +337,13 @@ public class DerivedTests implements DerivedTestAuthority {
             for (Path spike : spikes) {
                 bench.run(spike, texts).forEach((p, ok) -> passes.merge(p, ok ? 1 : 0, Integer::sum));
             }
+            Set<String> recovered = spikes.isEmpty() ? Set.of() : repair(seedText, tests, written, texts, passes);
             for (Map.Entry<String, List<Claim>> w : written.entrySet()) {
                 int n = passes.getOrDefault(w.getKey(), 0);
-                boolean ok = n > 0;
+                boolean ok = n > 0 || recovered.contains(w.getKey());
                 String reason = spikes.isEmpty() ? "no throwaway implementation compiled, so no test could be checked"
+                        : n == 0 && ok ? "failed on every throwaway implementation; passed on a repaired one beside every"
+                        + " accepted test"
                         : "passed on " + n + " of " + spikes.size() + " throwaway implementation(s)";
                 for (Claim c : w.getValue()) {
                     entries.add(new Entry(c.requirement(), c.text(), w.getKey(), texts.get(w.getKey()),
@@ -375,7 +392,7 @@ public class DerivedTests implements DerivedTestAuthority {
         if (cacheDir == null || cacheDir.isBlank()) return null;
         try {
             // The prompts too: a changed way of writing must never reuse what the old one wrote.
-            StringBuilder sb = new StringBuilder(DECOMPOSE_SYSTEM + WRITE_SYSTEM + SPIKE_SYSTEM).append('\u0000')
+            StringBuilder sb = new StringBuilder(DECOMPOSE_SYSTEM + WRITE_SYSTEM + SPIKE_SYSTEM + REPAIR_SYSTEM).append('\u0000')
                     .append(seedText).append('\u0000').append(read(SeedObligationsFile.PATH));
             Path out = files.resolveSecurePath("output");
             try (var walk = Files.walk(out)) {
@@ -473,6 +490,101 @@ public class DerivedTests implements DerivedTestAuthority {
             log.info("T6-U: throwaway implementation {} {}", s, errors == null ? "compiles" : "does not compile -- dropped");
         }
         return kept;
+    }
+
+    /**
+     * The spikes' blind spot (field108/109: receiver-questions' record-component claims failed on every spike, so the
+     * loop was never held to them, and with the tests given it solves that case 3 of 3): up to {@value #REPAIRS}
+     * repaired implementations, each told the dropped claims (never their tests) and given, for up to {@value #ROUNDS}
+     * rounds, what the runner reported for the ones still failing -- the loop's own way to a change. A round that
+     * breaks an accepted test is undone. A dropped claim is recovered when a repair passes it while EVERY accepted test
+     * passes beside it: one implementation then meets it and everything else, so it contradicts nothing accepted.
+     * Measured offline (scripts/claim_tests/repair.py): no contradicting test kept in four repairs; the blind-spot
+     * claims recovered in one repair of three -- hence several.
+     */
+    private Set<String> repair(String seedText, Map<String, String> tests, Map<String, List<Claim>> written,
+                               Map<String, String> texts, Map<String, Integer> passes) throws Exception {
+        Map<String, String> accepted = new LinkedHashMap<>();
+        Map<String, String> dropped = new LinkedHashMap<>();
+        texts.forEach((p, t) -> (passes.getOrDefault(p, 0) > 0 ? accepted : dropped).put(p, t));
+        Set<String> recovered = new LinkedHashSet<>();
+        if (dropped.isEmpty()) return recovered;
+        Path output = files.resolveSecurePath("output");
+        String base = "SPECIFICATION:\n" + seedText + "\n\nTHE PROJECT'S SOURCES AS THEY ARE NOW:\n" + listing(sources(MAIN_ROOT))
+                + "\n\nTHE EXISTING TESTS:\n" + listing(tests);
+        Map<String, String> everything = new LinkedHashMap<>(accepted);
+        everything.putAll(dropped);
+        for (int r = 1; r <= REPAIRS && !dropped.isEmpty(); r++) {
+            // A claim one repair recovered is accepted for the next: two recovered claims must hold together too.
+            for (String p : recovered) if (dropped.containsKey(p)) accepted.put(p, dropped.remove(p));
+            if (dropped.isEmpty()) break;
+            StringBuilder claimList = new StringBuilder();
+            for (String p : dropped.keySet()) claimList.append("- ").append(written.get(p).get(0).text()).append('\n');
+            String user = base + "\n\nCLAIMS EARLIER IMPLEMENTATIONS DID NOT MEET:\n" + claimList;
+            Path tree = files.resolveSecurePath(SPIKES_DIR + "/repair-" + r);
+            deleteTree(tree);
+            copyTree(output, tree);
+            String answer = ask(REPAIR_SYSTEM, user, "derived-test-repair");
+            writeMain(tree, answer);
+            if (bench.compiles(tree) != null) {
+                answer = ask(REPAIR_SYSTEM, user + "\n\nYOUR EARLIER CHANGE:\n" + answer + "\n\nIT DID NOT COMPILE:\n"
+                        + bench.compiles(tree) + "\nWrite the corrected full files.", "derived-test-repair");
+                writeMain(tree, answer);
+                if (bench.compiles(tree) != null) {
+                    log.info("T6-U: repaired implementation {} does not compile -- dropped", r);
+                    continue;
+                }
+            }
+            Path backup = null;
+            for (int round = 0; round <= ROUNDS; round++) {
+                Map<String, Boolean> res = bench.run(tree, everything);
+                boolean acceptedHold = accepted.keySet().stream().allMatch(p -> Boolean.TRUE.equals(res.get(p)));
+                if (!acceptedHold) {
+                    if (backup != null) {
+                        deleteTree(tree);
+                        copyTree(backup, tree);
+                    }
+                    log.info("T6-U: repaired implementation {} round {} broke an accepted test -- undone", r, round);
+                    break;
+                }
+                dropped.keySet().stream().filter(p -> Boolean.TRUE.equals(res.get(p))).forEach(recovered::add);
+                List<String> still = dropped.keySet().stream().filter(p -> !Boolean.TRUE.equals(res.get(p))).toList();
+                log.info("T6-U: repaired implementation {} round {}: {} of {} dropped claim(s) pass beside every accepted"
+                        + " test", r, round, dropped.size() - still.size(), dropped.size());
+                if (still.isEmpty() || round == ROUNDS) break;
+                Path prev = files.resolveSecurePath(SPIKES_DIR + "/repair-" + r + "-previous");
+                deleteTree(prev);
+                copyTree(tree, prev);
+                backup = prev;
+                Map<String, String> stillTests = new LinkedHashMap<>();
+                for (String p : still) stillTests.put(p, dropped.get(p));
+                answer = ask(REPAIR_SYSTEM, user + "\n\nYOUR CURRENT CHANGE:\n" + answer + "\n\nCHECKS OF THOSE CLAIMS STILL"
+                        + " FAIL, AS THE TEST RUNNER REPORTED THEM:\n" + bench.failures(tree, everything, stillTests.keySet())
+                        + "\nWrite the corrected full files.", "derived-test-repair");
+                writeMain(tree, answer);
+                if (bench.compiles(tree) != null) {
+                    deleteTree(tree);
+                    copyTree(prev, tree);
+                    log.info("T6-U: repaired implementation {} round {} did not compile -- undone", r, round + 1);
+                }
+            }
+            deleteTree(files.resolveSecurePath(SPIKES_DIR + "/repair-" + r + "-previous"));
+        }
+        if (!recovered.isEmpty()) {
+            log.warn("T6-U: {} claim test(s) that failed on every throwaway implementation passed on a repaired one beside"
+                    + " every accepted test -- kept", recovered.size());
+        }
+        return recovered;
+    }
+
+    private void writeMain(Path tree, String answer) throws java.io.IOException {
+        for (Map.Entry<String, String> f : filesOf(answer).entrySet()) {
+            if (!f.getKey().startsWith(MAIN_ROOT)) continue;
+            Path p = tree.resolve(f.getKey()).normalize();
+            if (!p.startsWith(tree)) continue;
+            Files.createDirectories(p.getParent());
+            Files.writeString(p, f.getValue());
+        }
     }
 
     /** Path blocks of an answer: a file runs from its header to the last bare fence before the next header. */
@@ -636,13 +748,18 @@ public class DerivedTests implements DerivedTestAuthority {
 
     private List<Path> keptSpikes() {
         List<Path> out = new ArrayList<>();
-        for (int s = 1; s <= SPIKES; s++) {
-            try {
-                Path p = files.resolveSecurePath(SPIKES_DIR + "/spike-" + s);
-                if (Files.isDirectory(p) && bench.compiles(p) == null) out.add(p);
-            } catch (Exception ignored) {
-                // a spike that cannot be read checks nothing
+        try {
+            Path dir = files.resolveSecurePath(SPIKES_DIR);
+            if (!Files.isDirectory(dir)) return out;
+            try (var list = Files.list(dir)) {
+                for (Path p : list.sorted().toList()) {
+                    // the spikes and the repaired implementations: a recovered claim passes only on the latter
+                    if (Files.isDirectory(p) && !p.getFileName().toString().endsWith("-previous")
+                            && bench.compiles(p) == null) out.add(p);
+                }
             }
+        } catch (Exception ignored) {
+            // a spike that cannot be read checks nothing
         }
         return out;
     }
@@ -884,6 +1001,43 @@ public class DerivedTests implements DerivedTestAuthority {
             }
             for (String path : tests.keySet()) result.putIfAbsent(path, false);
             return result;
+        }
+
+        @Override
+        public String failures(Path tree, Map<String, String> tests, Set<String> only) {
+            StringBuilder sb = new StringBuilder();
+            try {
+                for (Map.Entry<String, String> t : tests.entrySet()) {
+                    Path p = tree.resolve(t.getKey());
+                    Files.createDirectories(p.getParent());
+                    Files.writeString(p, t.getValue());
+                }
+                long start = System.currentTimeMillis();
+                builds.executeIn(tree.toString(), "derived-tests", command);
+                Optional<TestRunReport> report = TestRunGate.reportOf(tree, start);
+                Set<String> names = new LinkedHashSet<>();
+                for (String p : only) names.add(stem(fileName(p)));
+                if (report.isPresent()) {
+                    for (TestRunReport.Failure f : report.get().failing()) {
+                        String cls = f.className().substring(f.className().lastIndexOf('.') + 1);
+                        if (!names.contains(cls)) continue;
+                        sb.append(cls).append('.').append(f.method()).append(": ")
+                                .append(f.message() == null ? f.outcome() : f.message().strip()).append('\n');
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("T6-U: could not read the failures on {}: {}", tree, e.getMessage());
+            } finally {
+                for (String path : tests.keySet()) {
+                    try {
+                        Files.deleteIfExists(tree.resolve(path));
+                    } catch (Exception ignored) {
+                        // a tree keeps no claim test between runs
+                    }
+                }
+            }
+            String out = sb.toString();
+            return out.length() > 4000 ? out.substring(0, 4000) : out;
         }
 
         private static boolean passed(TestRunReport report, String simpleName) {

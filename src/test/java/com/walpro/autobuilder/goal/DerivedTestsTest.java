@@ -52,6 +52,9 @@ class DerivedTestsTest {
     /** What the stub bench does: which spike trees compile, and which test texts pass there. */
     private final Deque<String> compileResults = new ArrayDeque<>();
     private final Map<String, Boolean> passesWhenContains = new LinkedHashMap<>();
+    /** Test texts that pass only on a repaired implementation, and ones that fail there. */
+    private final List<String> passesOnRepairOnly = new ArrayList<>();
+    private final List<String> failsOnRepair = new ArrayList<>();
 
     @BeforeEach
     void setUp() throws Exception {
@@ -68,7 +71,8 @@ class DerivedTestsTest {
             asked.add(m.get(1).getContent());
             String kind = system.equals(DerivedTests.DECOMPOSE_SYSTEM) ? "claims"
                     : system.equals(DerivedTests.WRITE_SYSTEM) ? "write"
-                    : system.equals(DerivedTests.SPIKE_SYSTEM) ? "spike" : "review";
+                    : system.equals(DerivedTests.SPIKE_SYSTEM) ? "spike"
+                    : system.equals(DerivedTests.REPAIR_SYSTEM) ? "repair" : "review";
             Deque<String> q = answers.getOrDefault(kind, new ArrayDeque<>());
             ChatResponse body = mock(ChatResponse.class);
             when(body.getFirstContent()).thenReturn(q.isEmpty() ? "" : q.poll());
@@ -103,10 +107,16 @@ class DerivedTestsTest {
             }
 
             public Map<String, Boolean> run(Path tree, Map<String, String> tests) {
+                boolean repaired = tree.getFileName().toString().startsWith("repair-");
                 Map<String, Boolean> out = new LinkedHashMap<>();
-                tests.forEach((p, t) -> out.put(p, passesWhenContains.entrySet().stream()
-                        .anyMatch(e -> t.contains(e.getKey()) && e.getValue())));
+                tests.forEach((p, t) -> out.put(p, repaired && failsOnRepair.stream().anyMatch(t::contains) ? false
+                        : repaired && passesOnRepairOnly.stream().anyMatch(t::contains) ? true
+                        : passesWhenContains.entrySet().stream().anyMatch(e -> t.contains(e.getKey()) && e.getValue())));
                 return out;
+            }
+
+            public String failures(Path tree, Map<String, String> tests, java.util.Set<String> only) {
+                return "DerivedClaim002Test.it: expected Map but was empty";
             }
         });
         return d;
@@ -137,7 +147,8 @@ class DerivedTestsTest {
         assertThat(derived.acceptedRequirements()).as("a requirement with a claim left out stays a reading").isEmpty();
         assertThat(derived.settled()).isFalse();
         assertThat(asked.stream().filter(a -> a.contains("THE PROJECT'S SOURCES AS THEY ARE NOW")))
-                .as("the throwaway implementations never see a claim's test").noneMatch(a -> a.contains("DerivedClaim"));
+                .as("the throwaway and repaired implementations never see a claim's test source")
+                .noneMatch(a -> a.contains("// RIGHT refused") || a.contains("// WRONG reason"));
         assertThat(asked.stream().filter(a -> a.startsWith("CLAIM")))
                 .as("a claim's test sees the declarations, never what the code does").noneMatch(a -> a.contains("1 + 1"));
     }
@@ -346,5 +357,47 @@ class DerivedTestsTest {
         changed.setCacheDir(cache.toString());
         changed.ensureNow(SEED);
         assertThat(asked.size()).as("a changed tree is written again").isGreaterThan(calls);
+    }
+
+    /** field108/109: the record-component claims failed on every spike -- the spikes share the loop's blind spot. */
+    @Test
+    void aClaimEverySpikeFailsIsKeptWhenARepairedImplementationPassesItBesideEveryAcceptedTest() throws Exception {
+        answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"a\"},"
+                + " {\"claim\": \"the blind form\", \"source\": \"STATED\", \"words\": \"b\"}]");
+        answer("write", test(1, "  // RIGHT"), test(2, "  // BLIND"));
+        answer("spike", SPIKE, SPIKE, SPIKE);
+        answer("repair", SPIKE, SPIKE);
+        passesWhenContains.put("RIGHT", true);
+        passesOnRepairOnly.add("BLIND");
+        DerivedTests derived = derived();
+
+        derived.ensureNow(SEED);
+
+        List<DerivedTestsFile.Entry> entries = DerivedTestsFile.read(files);
+        assertThat(entries).allSatisfy(e -> assertThat(e.accepted()).isTrue());
+        assertThat(entries.get(1).reason()).contains("passed on a repaired one beside every accepted test");
+        assertThat(derived.acceptedRequirements()).containsExactly(REQUIREMENT);
+        assertThat(asked).as("the repair is told the dropped claim, never its test")
+                .anyMatch(a -> a.contains("CLAIMS EARLIER IMPLEMENTATIONS DID NOT MEET") && a.contains("the blind form")
+                        && !a.contains("BLIND"));
+    }
+
+    /** A repair that meets the dropped claim by breaking an accepted one recovers nothing. */
+    @Test
+    void aRepairThatBreaksAnAcceptedTestRecoversNothing() throws Exception {
+        answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"a\"},"
+                + " {\"claim\": \"contradicts it\", \"source\": \"STATED\", \"words\": \"b\"}]");
+        answer("write", test(1, "  // RIGHT"), test(2, "  // CONTRADICTS"));
+        answer("spike", SPIKE, SPIKE, SPIKE);
+        answer("repair", SPIKE, SPIKE, SPIKE, SPIKE, SPIKE, SPIKE);
+        passesWhenContains.put("RIGHT", true);
+        passesOnRepairOnly.add("CONTRADICTS");
+        failsOnRepair.add("RIGHT");
+
+        derived().ensureNow(SEED);
+
+        List<DerivedTestsFile.Entry> entries = DerivedTestsFile.read(files);
+        assertThat(entries.get(0).accepted()).isTrue();
+        assertThat(entries.get(1).accepted()).isFalse();
     }
 }

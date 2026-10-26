@@ -11,7 +11,13 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-25 (Opus 5.5, session 18 cont.) -- T6-U STEP 1 REVISED: CLAIMS + SPIKE FILTER MEETS THE RULE OFFLINE (0 HARMFUL, ALL REQUIREMENTS COVERED); VOTE AND ADJUDICATION DO NOT HELP -- START HERE
+## 2026-10-26 (Opus 5.5, session 18 cont.) -- T6-U WITHHELD RUNG: FIRST TRUE COMPLETIONS (edit-hunks 2 of 3 GOAL_FULFILLED 11/11 in field110); receiver-questions 0 of 2 (spike blind spot) -- START HERE
+
+- **Nothing is live.** Head = this commit (code `8aaf2c41`), suite 3993/0. Kept writings in `~/.autobuilder/derived-tests-cache` (reused while prompts, seed, obligations and starting tree are unchanged). Batches field108-110 under `~/.autobuilder/`. `scripts/run_outcomes.json` left for the user.
+- **Detail** on `T6-U` (2026-10-25/26 appends): the claims + spike design measured offline, ported, two framework fixes found by live runs (`10054c15` spike builds ran in output/; `8aaf2c41` derived tests counted as the loop's changes).
+- **NEXT, the user's call:** the planner-authored criterion that contradicts a rule: line (blocked field110 run 3 at 11/11 and field105 rq run 3); then the spikes' blind spot.
+
+## 2026-10-25 (Opus 5.5, session 18 cont.) -- T6-U STEP 1 REVISED: CLAIMS + SPIKE FILTER MEETS THE RULE OFFLINE (0 HARMFUL, ALL REQUIREMENTS COVERED); VOTE AND ADJUDICATION DO NOT HELP
 
 - **Nothing is live.** Head = this commit. Data `~/.autobuilder/dtreplay/claims`. Detail on `T6-U` (2026-10-25 append). Withheld cases v2 still carry `gate: derived-test`; the Java DerivedTests is still the one-pass writer the replay rejected -- do not run the cases until the port.
 - **NEXT, the user's call:** port "claims + spike filter" into DerivedTests (N=1, dedupe claims, no vote, no adjudication), then one live batch against field105.

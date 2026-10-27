@@ -69,9 +69,10 @@ import java.util.regex.Pattern;
  *       claims too).</li>
  * </ol>
  * The price: a right claim every throwaway implementation gets wrong is dropped -- the spikes share the model's
- * blind spots (receiver-questions: all three missed the compiler's record-component form). Such a requirement keeps
- * its other tests but is NOT answered by the test gate: a requirement is the gate's only when every claim of it has
- * an accepted test; otherwise it stays a reading, as before.
+ * blind spots (receiver-questions: all three missed the compiler's record-component form). A dropped test is written
+ * once more from the runner's report ({@link #rewrite}), since most are broken tests of right claims; a requirement is
+ * then the gate's when it has an accepted test and every text it quotes is used by one ({@link #answeredBy});
+ * otherwise it stays a reading, as before.
  *
  * <p><b>Which lines.</b> Only an obligation the operator marked {@code gate: derived-test} -- which gate answers
  * which line is the operator's declaration ({@link SeedRequirements#GATE_MARKER}), never inferred from wording.
@@ -131,6 +132,14 @@ public class DerivedTests implements DerivedTestAuthority {
             ```java [src/main/java/org/example/Thing.java]
             Do not write or change any test. Keep every existing declaration the specification says to keep.""";
 
+    static final String REWRITE_SYSTEM = WRITE_SYSTEM + """
+
+
+            Your earlier test for this claim was run against an implementation written from the same specification, \
+            and the report of that run is shown. That implementation may itself be wrong. Correct the test where IT is \
+            wrong -- how it builds its input, how it calls the code, what it names -- and keep the claim's expected \
+            outcome exactly as the claim and the specification give it.""";
+
     /** Repaired implementations per writing, and feedback rounds per repair: as the offline replay measured. */
     static final int REPAIRS = 3;
     static final int ROUNDS = 3;
@@ -165,6 +174,11 @@ public class DerivedTests implements DerivedTestAuthority {
 
         /** What the runner reported for the tests at {@code only}, all of {@code tests} run together -- never a source. */
         default String failures(Path tree, Map<String, String> tests, Set<String> only) {
+            return "";
+        }
+
+        /** What the build reported for the one test at {@code path} in {@code tree}: its failures, or the compiler's. */
+        default String report(Path tree, String path, String content) {
             return "";
         }
     }
@@ -235,13 +249,36 @@ public class DerivedTests implements DerivedTestAuthority {
         return SeedRequirements.answeredByGate(seedText, read(SeedObligationsFile.PATH), SeedRequirements.GATE_DERIVED);
     }
 
-    /** The requirements every claim of which has an accepted test -- the ones the test gate now answers. */
+    /**
+     * The requirements the test gate now answers: each has an accepted test, and every text it quotes is used by one.
+     *
+     * <p>Not "every claim accepted": a claim's test that fails on every throwaway implementation is, nearly always, a
+     * badly written test of a claim the accepted ones already check -- of the 194 dropped by five writings, about 190
+     * fail on the ticket's real implementation too (2026-10-27) -- and one such test made a requirement with 5 to 17
+     * accepted tests a reading (field111: 3 of 17 and 1 of 6 answered). What a dropped claim can still leave unchecked
+     * shows where the requirement quotes an input: receiver-questions' record-component form, which the spikes all get
+     * wrong, is the one quoted text no accepted test uses, and its requirement stays a reading.
+     */
     public Set<String> acceptedRequirements() {
-        Map<String, Boolean> all = new LinkedHashMap<>();
-        for (Entry e : DerivedTestsFile.read(files)) all.merge(e.requirement(), e.accepted(), Boolean::logicalAnd);
+        Map<String, List<String>> kept = new LinkedHashMap<>();
+        for (Entry e : DerivedTestsFile.read(files)) {
+            List<String> texts = kept.computeIfAbsent(e.requirement(), r -> new ArrayList<>());
+            if (e.accepted() && e.content() != null) texts.add(e.content());
+        }
         Set<String> out = new LinkedHashSet<>();
-        all.forEach((r, ok) -> { if (ok) out.add(r); });
+        kept.forEach((r, texts) -> { if (answeredBy(r, texts)) out.add(r); });
         return out;
+    }
+
+    /** True when {@code tests} is not empty and every text {@code requirement} quotes is used by one of them. */
+    static boolean answeredBy(String requirement, List<String> tests) {
+        if (tests.isEmpty()) return false;
+        Matcher m = QUOTED.matcher(requirement);
+        while (m.find()) {
+            Pattern quoted = quotedPattern(m.group(1) != null ? m.group(1) : m.group(2));
+            if (tests.stream().noneMatch(t -> quoted.matcher(comparable(t)).find())) return false;
+        }
+        return true;
     }
 
     /** True when nothing is being written and every marked requirement is answered by the test gate. */
@@ -337,6 +374,7 @@ public class DerivedTests implements DerivedTestAuthority {
             for (Path spike : spikes) {
                 bench.run(spike, texts).forEach((p, ok) -> passes.merge(p, ok ? 1 : 0, Integer::sum));
             }
+            Set<String> rewritten = spikes.isEmpty() ? Set.of() : rewrite(context, spikes, written, texts, passes);
             Set<String> recovered = spikes.isEmpty() ? Set.of() : repair(seedText, tests, written, texts, passes);
             for (Map.Entry<String, List<Claim>> w : written.entrySet()) {
                 int n = passes.getOrDefault(w.getKey(), 0);
@@ -344,6 +382,8 @@ public class DerivedTests implements DerivedTestAuthority {
                 String reason = spikes.isEmpty() ? "no throwaway implementation compiled, so no test could be checked"
                         : n == 0 && ok ? "failed on every throwaway implementation; passed on a repaired one beside every"
                         + " accepted test"
+                        : rewritten.contains(w.getKey()) ? "failed on every throwaway implementation; rewritten once from"
+                        + " the runner's report, then passed on " + n + " of " + spikes.size()
                         : "passed on " + n + " of " + spikes.size() + " throwaway implementation(s)";
                 for (Claim c : w.getValue()) {
                     entries.add(new Entry(c.requirement(), c.text(), w.getKey(), texts.get(w.getKey()),
@@ -392,7 +432,7 @@ public class DerivedTests implements DerivedTestAuthority {
         if (cacheDir == null || cacheDir.isBlank()) return null;
         try {
             // The prompts too: a changed way of writing must never reuse what the old one wrote.
-            StringBuilder sb = new StringBuilder(DECOMPOSE_SYSTEM + WRITE_SYSTEM + SPIKE_SYSTEM + REPAIR_SYSTEM).append('\u0000')
+            StringBuilder sb = new StringBuilder(DECOMPOSE_SYSTEM + WRITE_SYSTEM + REWRITE_SYSTEM + SPIKE_SYSTEM + REPAIR_SYSTEM).append('\u0000')
                     .append(seedText).append('\u0000').append(read(SeedObligationsFile.PATH));
             Path out = files.resolveSecurePath("output");
             try (var walk = Files.walk(out)) {
@@ -490,6 +530,59 @@ public class DerivedTests implements DerivedTestAuthority {
             log.info("T6-U: throwaway implementation {} {}", s, errors == null ? "compiles" : "does not compile -- dropped");
         }
         return kept;
+    }
+
+    /**
+     * A claim's test that failed on every throwaway implementation, written once more: the writer is shown what the
+     * build reported for it on the first one, told that implementation may be the one that is wrong, and the rewrite
+     * replaces the test only when the claim's quoted words are still in it and it then passes on a throwaway
+     * implementation, as any new test must. Returns the paths whose test was replaced; {@code texts} and
+     * {@code passes} are updated in place.
+     *
+     * <p>Why: the dropped tests of five writings, scored on the ticket's real implementation (2026-10-27), are nearly
+     * all broken tests of right claims -- an edit block with no closing fence, an invented result type -- and
+     * edit-hunks' "occurs N times" kept no test in any of three writings. A repaired implementation cannot recover
+     * those; the test is what is wrong. Offline ({@code scripts/claim_tests/rewrite.py}): receiver-questions' writing,
+     * 4 of 10 dropped tests rewritten and accepted, all 4 right on the real implementation and every reference tree.
+     */
+    private Set<String> rewrite(String context, List<Path> spikes, Map<String, List<Claim>> written,
+                                Map<String, String> texts, Map<String, Integer> passes) {
+        Map<String, String> again = new LinkedHashMap<>();
+        long dropped = written.keySet().stream().filter(p -> passes.getOrDefault(p, 0) == 0).count();
+        for (Map.Entry<String, List<Claim>> w : written.entrySet()) {
+            String path = w.getKey();
+            if (passes.getOrDefault(path, 0) > 0) continue;
+            Claim c = w.getValue().get(0);
+            String name = stem(fileName(path));
+            String said = bench.report(spikes.get(0), path, texts.get(path));
+            String answer = ask(REWRITE_SYSTEM, "CLAIM (" + c.source() + "): " + c.text() + "\nWORDS THAT GIVE IT: "
+                    + c.words() + "\n\nREQUIREMENT:\n" + c.requirement() + "\n\n" + context + "\n\nYOUR EARLIER TEST:\n"
+                    + "```" + extOf(path).replace(".", "") + " [" + path + "]\n" + texts.get(path) + "```\n\nTHE RUN ON ONE"
+                    + " IMPLEMENTATION REPORTED:\n" + (said.isBlank() ? "(nothing)" : said) + "\n\nName the class " + name
+                    + ". Open the block exactly as:\n```" + extOf(path).replace(".", "") + " [" + path + "]",
+                    "derived-test-rewrite");
+            Optional<FileMutation> file = located(answer, name, Map.of(path, texts.get(path)));
+            if (file.isEmpty()) continue;
+            if (missingQuotes(c.text(), file.get().content()).isPresent()) {
+                log.info("T6-U: the rewrite of {} left out the claim's quoted words -- not used", name);
+                continue;
+            }
+            again.put(path, file.get().content());
+        }
+        if (again.isEmpty()) return Set.of();
+        Map<String, Integer> now = new LinkedHashMap<>();
+        for (Path spike : spikes) bench.run(spike, again).forEach((p, ok) -> now.merge(p, ok ? 1 : 0, Integer::sum));
+        Set<String> replaced = new LinkedHashSet<>();
+        for (Map.Entry<String, String> r : again.entrySet()) {
+            int n = now.getOrDefault(r.getKey(), 0);
+            if (n == 0) continue;
+            texts.put(r.getKey(), r.getValue());
+            passes.put(r.getKey(), n);
+            replaced.add(r.getKey());
+        }
+        log.warn("T6-U: {} claim test(s) failed on every throwaway implementation; {} rewritten, {} of them then passed"
+                + " on one -- kept", dropped, again.size(), replaced.size());
+        return replaced;
     }
 
     /**
@@ -931,6 +1024,11 @@ public class DerivedTests implements DerivedTestAuthority {
         return slash < 0 ? "" : path.substring(0, slash);
     }
 
+    private static String stem(String fileName) {
+        int dot = fileName.lastIndexOf('.');
+        return dot < 0 ? fileName : fileName.substring(0, dot);
+    }
+
     private static String extOf(String path) {
         String f = fileName(path);
         int dot = f.lastIndexOf('.');
@@ -1040,6 +1138,48 @@ public class DerivedTests implements DerivedTestAuthority {
             return out.length() > 4000 ? out.substring(0, 4000) : out;
         }
 
+        @Override
+        public String report(Path tree, String path, String content) {
+            Path p = tree.resolve(path);
+            try {
+                Files.createDirectories(p.getParent());
+                Files.writeString(p, content);
+                long start = System.currentTimeMillis();
+                BuildOutcome out = builds.executeIn(tree.toString(), "derived-tests", command);
+                Optional<TestRunReport> report = TestRunGate.reportOf(tree, start);
+                StringBuilder sb = new StringBuilder();
+                if (report.isPresent()) {
+                    String name = stem(fileName(path));
+                    for (TestRunReport.Failure f : report.get().failing()) {
+                        if (!f.className().equals(name) && !f.className().endsWith("." + name)) continue;
+                        sb.append(name).append('.').append(f.method()).append(": ")
+                                .append(f.message() == null ? f.outcome() : f.message().strip()).append('\n');
+                    }
+                } else {
+                    // It did not compile: the compiler's lines about this file, and the two that follow each
+                    // ("symbol:", "location:").
+                    String[] lines = out.stderrTail() == null ? new String[0] : out.stderrTail().split("\n");
+                    String file = fileName(path);
+                    for (int i = 0; i < lines.length; i++) {
+                        if (!lines[i].contains(file)) continue;
+                        for (int j = i; j < Math.min(lines.length, i + 3); j++) sb.append(lines[j].strip()).append('\n');
+                    }
+                    if (sb.length() == 0 && out.stderrTail() != null) sb.append(out.stderrTail());
+                }
+                String s = sb.toString();
+                return s.length() > 3000 ? s.substring(0, 3000) : s;
+            } catch (Exception e) {
+                log.warn("T6-U: could not read the report of {} on {}: {}", path, tree, e.getMessage());
+                return "";
+            } finally {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (Exception ignored) {
+                    // a tree keeps no claim test between runs
+                }
+            }
+        }
+
         private static boolean passed(TestRunReport report, String simpleName) {
             for (Map.Entry<String, List<TestRunReport.Case>> c : report.byClass().entrySet()) {
                 if (!c.getKey().equals(simpleName) && !c.getKey().endsWith("." + simpleName)) continue;
@@ -1048,9 +1188,5 @@ public class DerivedTests implements DerivedTestAuthority {
             return false;
         }
 
-        private static String stem(String fileName) {
-            int dot = fileName.lastIndexOf('.');
-            return dot < 0 ? fileName : fileName.substring(0, dot);
-        }
     }
 }

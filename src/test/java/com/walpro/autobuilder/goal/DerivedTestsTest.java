@@ -71,6 +71,7 @@ class DerivedTestsTest {
             asked.add(m.get(1).getContent());
             String kind = system.equals(DerivedTests.DECOMPOSE_SYSTEM) ? "claims"
                     : system.equals(DerivedTests.WRITE_SYSTEM) ? "write"
+                    : system.equals(DerivedTests.REWRITE_SYSTEM) ? "rewrite"
                     : system.equals(DerivedTests.SPIKE_SYSTEM) ? "spike"
                     : system.equals(DerivedTests.REPAIR_SYSTEM) ? "repair" : "review";
             Deque<String> q = answers.getOrDefault(kind, new ArrayDeque<>());
@@ -118,6 +119,10 @@ class DerivedTestsTest {
             public String failures(Path tree, Map<String, String> tests, java.util.Set<String> only) {
                 return "DerivedClaim002Test.it: expected Map but was empty";
             }
+
+            public String report(Path tree, String path, String content) {
+                return "DerivedClaim002Test.it: no edit was applied -- the block has no closing fence";
+            }
         });
         return d;
     }
@@ -144,7 +149,8 @@ class DerivedTestsTest {
         assertThat(entries.get(1).accepted()).as("fails on every throwaway implementation").isFalse();
         assertThat(Files.readString(base.resolve("output/" + TEST_DIR + "/DerivedClaim001Test.java"))).contains("RIGHT");
         assertThat(Files.exists(base.resolve("output/" + TEST_DIR + "/DerivedClaim002Test.java"))).isFalse();
-        assertThat(derived.acceptedRequirements()).as("a requirement with a claim left out stays a reading").isEmpty();
+        assertThat(derived.acceptedRequirements()).as("no accepted test uses the quoted \"occurs N times\": a reading")
+                .isEmpty();
         assertThat(derived.settled()).isFalse();
         assertThat(asked.stream().filter(a -> a.contains("THE PROJECT'S SOURCES AS THEY ARE NOW")))
                 .as("the throwaway and repaired implementations never see a claim's test source")
@@ -154,9 +160,9 @@ class DerivedTestsTest {
     }
 
     @Test
-    void aRequirementEveryClaimOfWhichPassesIsTheTestGatesAndSettled() throws Exception {
+    void aRequirementWhoseQuotedTextAnAcceptedTestUsesIsTheTestGatesAndSettled() throws Exception {
         answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"refused\"}]");
-        answer("write", test(1, "  // RIGHT"));
+        answer("write", test(1, "  // RIGHT occurs 2 times"));
         answer("spike", SPIKE, SPIKE, SPIKE, SPIKE);
         compileResults.addAll(List.of("Quill.java:[3,1] cannot find symbol", ""));   // spike 1: broken, then fixed
         passesWhenContains.put("RIGHT", true);
@@ -309,7 +315,7 @@ class DerivedTestsTest {
         obligations(REQUIREMENT, other);
         answer("claims", "[{\"claim\": \"Two matches are refused.\", \"source\": \"STATED\", \"words\": \"x\"}]",
                 "[{\"claim\": \"two matches are refused\", \"source\": \"STATED\", \"words\": \"y\"}]");
-        answer("write", test(1, "  // RIGHT"));
+        answer("write", test(1, "  // RIGHT occurs 2 times"));
         answer("spike", SPIKE, SPIKE, SPIKE);
         passesWhenContains.put("RIGHT", true);
         DerivedTests derived = derived();
@@ -327,7 +333,7 @@ class DerivedTestsTest {
     void theSameWordingAndStartingTreeReuseAKeptWritingAndAChangedTreeDoesNot(@TempDir Path cache, @TempDir Path base2)
             throws Exception {
         answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"refused\"}]");
-        answer("write", test(1, "  // RIGHT"));
+        answer("write", test(1, "  // RIGHT occurs 2 times"));
         answer("spike", SPIKE, SPIKE, SPIKE);
         passesWhenContains.put("RIGHT", true);
         DerivedTests first = derived();
@@ -364,7 +370,7 @@ class DerivedTestsTest {
     void aClaimEverySpikeFailsIsKeptWhenARepairedImplementationPassesItBesideEveryAcceptedTest() throws Exception {
         answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"a\"},"
                 + " {\"claim\": \"the blind form\", \"source\": \"STATED\", \"words\": \"b\"}]");
-        answer("write", test(1, "  // RIGHT"), test(2, "  // BLIND"));
+        answer("write", test(1, "  // RIGHT occurs 2 times"), test(2, "  // BLIND"));
         answer("spike", SPIKE, SPIKE, SPIKE);
         answer("repair", SPIKE, SPIKE);
         passesWhenContains.put("RIGHT", true);
@@ -399,5 +405,51 @@ class DerivedTestsTest {
         List<DerivedTestsFile.Entry> entries = DerivedTestsFile.read(files);
         assertThat(entries.get(0).accepted()).isTrue();
         assertThat(entries.get(1).accepted()).isFalse();
+    }
+
+    /** 2026-10-27: a correctly dropped bad test no longer makes a well-tested requirement a reading; a quoted input does. */
+    @Test
+    void aRequirementIsTheGatesWhenAnAcceptedTestUsesEveryTextItQuotes() {
+        assertThat(DerivedTests.answeredBy(REQUIREMENT, List.of("assertThat(r).contains(\"occurs 2 times\")"))).isTrue();
+        assertThat(DerivedTests.answeredBy(REQUIREMENT, List.of("assertThat(r).isRefused()")))
+                .as("no accepted test uses the quoted text").isFalse();
+        assertThat(DerivedTests.answeredBy("Hunks are applied in order.", List.of("any test"))).isTrue();
+        assertThat(DerivedTests.answeredBy("Hunks are applied in order.", List.of())).as("no accepted test").isFalse();
+    }
+
+    /** edit-hunks' "occurs N times": every writing's test of it was broken (no closing fence), never the claim. */
+    @Test
+    void aTestEverySpikeFailsIsRewrittenOnceFromTheRunnersReportAndKeptWhenItThenPasses() throws Exception {
+        answer("claims", "[{\"claim\": \"the reason says occurs 2 times\", \"source\": \"STATED\", \"words\": \"x\"}]");
+        answer("write", test(1, "  // BROKEN occurs 2 times"));
+        answer("rewrite", test(1, "  // RIGHT occurs 2 times"));
+        answer("spike", SPIKE, SPIKE, SPIKE);
+        passesWhenContains.put("RIGHT", true);
+        DerivedTests derived = derived();
+
+        derived.ensureNow(SEED);
+
+        DerivedTestsFile.Entry e = DerivedTestsFile.read(files).get(0);
+        assertThat(e.accepted()).isTrue();
+        assertThat(e.content()).contains("RIGHT").doesNotContain("BROKEN");
+        assertThat(e.reason()).contains("rewritten once from the runner's report, then passed on 3 of 3");
+        assertThat(derived.acceptedRequirements()).containsExactly(REQUIREMENT);
+        assertThat(asked).as("the rewrite sees its earlier test and what the run reported")
+                .anyMatch(a -> a.contains("YOUR EARLIER TEST") && a.contains("BROKEN") && a.contains("no closing fence"));
+    }
+
+    @Test
+    void aRewriteThatLeavesOutTheClaimsQuotedWordsIsNotUsed() throws Exception {
+        answer("claims", "[{\"claim\": \"the reason says \\\"occurs 2 times\\\"\", \"source\": \"STATED\", \"words\": \"x\"}]");
+        answer("write", test(1, "  // BROKEN occurs 2 times"));
+        answer("rewrite", test(1, "  // RIGHT but weaker"));
+        answer("spike", SPIKE, SPIKE, SPIKE);
+        passesWhenContains.put("RIGHT", true);
+
+        derived().ensureNow(SEED);
+
+        DerivedTestsFile.Entry e = DerivedTestsFile.read(files).get(0);
+        assertThat(e.accepted()).isFalse();
+        assertThat(e.content()).contains("BROKEN");
     }
 }

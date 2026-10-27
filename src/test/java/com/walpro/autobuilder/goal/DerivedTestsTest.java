@@ -452,4 +452,20 @@ class DerivedTestsTest {
         assertThat(e.accepted()).isFalse();
         assertThat(e.content()).contains("BROKEN");
     }
+
+    /** 2026-10-27: three spike answers wrote no file ("I'll start by exploring..."); the unchanged tree compiled. */
+    @Test
+    void aThrowawayImplementationThatChangesNoSourceIsAskedAgainThenDropped() throws Exception {
+        answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"refused\"}]");
+        answer("write", test(1, "  // RIGHT occurs 2 times"));
+        answer("spike", "I'll start by exploring the project structure.", SPIKE,   // spike 1: no file, then a change
+                "Let me look first.", "Still looking.",                            // spike 2: no file twice -- dropped
+                SPIKE);                                                            // spike 3
+        passesWhenContains.put("RIGHT", true);
+
+        derived().ensureNow(SEED);
+
+        assertThat(DerivedTestsFile.read(files).get(0).reason()).isEqualTo("passed on 2 of 2 throwaway implementation(s)");
+        assertThat(asked).anyMatch(a -> a.contains("YOUR ANSWER CHANGED NO SOURCE FILE"));
+    }
 }

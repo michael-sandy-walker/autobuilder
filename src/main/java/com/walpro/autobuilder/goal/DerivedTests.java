@@ -513,21 +513,21 @@ public class DerivedTests implements DerivedTestAuthority {
             copyTree(output, tree);
             String answer = ask(SPIKE_SYSTEM, user, "derived-test-spike");
             String errors = null;
+            int changed = 0;
             for (int attempt = 0; attempt < 2; attempt++) {
-                for (Map.Entry<String, String> f : filesOf(answer).entrySet()) {
-                    if (!f.getKey().startsWith(MAIN_ROOT)) continue;
-                    Path p = tree.resolve(f.getKey()).normalize();
-                    if (!p.startsWith(tree)) continue;
-                    Files.createDirectories(p.getParent());
-                    Files.writeString(p, f.getValue());
-                }
-                errors = bench.compiles(tree);
+                changed += writeMain(tree, answer);
+                // An answer that changes no source is not an implementation: the unchanged tree compiles, and every
+                // claim test then fails on it (2026-10-27: three such answers, "I'll start by exploring the project
+                // structure", and 141 of 143 tests dropped).
+                errors = changed == 0 ? NO_CHANGE : bench.compiles(tree);
                 if (errors == null || attempt == 1) break;
-                answer = ask(SPIKE_SYSTEM, user + "\n\nYOUR EARLIER CHANGE:\n" + answer + "\n\nIT DID NOT COMPILE:\n"
-                        + errors + "\nWrite the corrected full files.", "derived-test-spike");
+                answer = ask(SPIKE_SYSTEM, user + "\n\nYOUR EARLIER ANSWER:\n" + answer + "\n\n"
+                        + (changed == 0 ? errors : "IT DID NOT COMPILE:\n" + errors) + "\nWrite the corrected full files.",
+                        "derived-test-spike");
             }
             if (errors == null) kept.add(tree);
-            log.info("T6-U: throwaway implementation {} {}", s, errors == null ? "compiles" : "does not compile -- dropped");
+            log.info("T6-U: throwaway implementation {} {}", s, errors == null ? "compiles"
+                    : changed == 0 ? "changes no source -- dropped" : "does not compile -- dropped");
         }
         return kept;
     }
@@ -618,7 +618,14 @@ public class DerivedTests implements DerivedTestAuthority {
             deleteTree(tree);
             copyTree(output, tree);
             String answer = ask(REPAIR_SYSTEM, user, "derived-test-repair");
-            writeMain(tree, answer);
+            if (writeMain(tree, answer) == 0) {
+                answer = ask(REPAIR_SYSTEM, user + "\n\nYOUR EARLIER ANSWER:\n" + answer + "\n\n" + NO_CHANGE
+                        + "\nWrite the corrected full files.", "derived-test-repair");
+                if (writeMain(tree, answer) == 0) {
+                    log.info("T6-U: repaired implementation {} changes no source -- dropped", r);
+                    continue;
+                }
+            }
             if (bench.compiles(tree) != null) {
                 answer = ask(REPAIR_SYSTEM, user + "\n\nYOUR EARLIER CHANGE:\n" + answer + "\n\nIT DID NOT COMPILE:\n"
                         + bench.compiles(tree) + "\nWrite the corrected full files.", "derived-test-repair");
@@ -670,15 +677,22 @@ public class DerivedTests implements DerivedTestAuthority {
         return recovered;
     }
 
-    private void writeMain(Path tree, String answer) throws java.io.IOException {
+    /** Writes the answer's files under src/main/ into {@code tree}; how many it wrote. */
+    private int writeMain(Path tree, String answer) throws java.io.IOException {
+        int n = 0;
         for (Map.Entry<String, String> f : filesOf(answer).entrySet()) {
             if (!f.getKey().startsWith(MAIN_ROOT)) continue;
             Path p = tree.resolve(f.getKey()).normalize();
             if (!p.startsWith(tree)) continue;
             Files.createDirectories(p.getParent());
             Files.writeString(p, f.getValue());
+            n++;
         }
+        return n;
     }
+
+    static final String NO_CHANGE = "YOUR ANSWER CHANGED NO SOURCE FILE: it held no fenced block whose opening line names a"
+            + " path under src/main/. Write the change itself, as the full files.";
 
     /** Path blocks of an answer: a file runs from its header to the last bare fence before the next header. */
     static Map<String, String> filesOf(String answer) {

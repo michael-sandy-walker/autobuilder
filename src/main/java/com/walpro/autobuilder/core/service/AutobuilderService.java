@@ -313,6 +313,8 @@ public class AutobuilderService implements CheckpointableState {
     @Value("${autobuilder.scheduler.enabled:true}")
     private boolean schedulerEnabled = true;
 
+    private boolean schedulerDisabledNoted;
+
     private boolean systemPaused = false;
 
     /**
@@ -1341,7 +1343,12 @@ public class AutobuilderService implements CheckpointableState {
         }
 
         if (!schedulerEnabled) {
-            log.warn("Autobuilder scheduler disabled via configuration (autobuilder.scheduler.enabled=false)");
+            // Once: the tick fires every inter-cycle delay (1 ms under the fast profile), and a line per tick wrote
+            // 1.3 million of them in one writing-only run (2026-10-27).
+            if (!schedulerDisabledNoted) {
+                log.warn("Autobuilder scheduler disabled via configuration (autobuilder.scheduler.enabled=false)");
+                schedulerDisabledNoted = true;
+            }
             return;
         }
 

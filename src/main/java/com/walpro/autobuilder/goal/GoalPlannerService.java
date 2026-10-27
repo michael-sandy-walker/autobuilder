@@ -4017,7 +4017,8 @@ public class GoalPlannerService {
         List<String> testGateLines = new ArrayList<>(SeedRequirements.answeredByGate(
                 root.getDescription(), written, SeedRequirements.GATE_TESTS));
         // T6-U: a line whose test was written from its wording and accepted is in the suite, so the test gate answers
-        // it; one still without an accepted test stays a reading.
+        // it. One no kept test answers refuses closure before this ({@code derivedRequirementsNoTestAnswers}) while
+        // the gate is live; with the gate off it stays a reading, as before.
         if (derivedTests != null) {
             Set<String> accepted = derivedTests.acceptedRequirements();
             List<String> answered = SeedRequirements.answeredByGate(root.getDescription(), written,
@@ -4033,6 +4034,25 @@ public class GoalPlannerService {
             uncovered.addAll(testGateLines);
         }
         return uncovered;
+    }
+
+    /**
+     * T6-U: the lines the operator marked {@code gate: derived-test} that no kept test answers, when the test gate is
+     * live; empty otherwise. Such a line is never put to a reading: field111 closed receiver-questions GOAL_FULFILLED
+     * at 14/16 twice on "closure ledger clear", a model confirming the record-component form over code that lacks it --
+     * the one requirement whose right claims every throwaway implementation failed. Once a dropped test is rewritten
+     * and a requirement is the gate's by its quoted texts ({@link DerivedTests#acceptedRequirements}), that is the
+     * only kind of line left (offline, 2026-10-27: 17/17, 5/6 and 6/6 answered), so refusing it costs a correct run
+     * nothing measured; a run whose writing leaves one open halts honestly instead of completing on a reading.
+     */
+    private Optional<List<String>> derivedRequirementsNoTestAnswers(GoalEntity root) {
+        if (derivedTests == null || testRunGate == null || !testRunGate.isLive()) return Optional.empty();
+        List<String> marked = SeedRequirements.answeredByGate(root.getDescription(), writtenObligations(),
+                SeedRequirements.GATE_DERIVED);
+        if (marked.isEmpty()) return Optional.empty();
+        Set<String> accepted = derivedTests.acceptedRequirements();
+        List<String> open = marked.stream().filter(l -> !accepted.contains(l)).toList();
+        return open.isEmpty() ? Optional.empty() : Optional.of(open);
     }
 
     private void refuseClosureUnrepairable(String gate, String detail) {
@@ -4184,6 +4204,15 @@ public class GoalPlannerService {
     private void attemptRootClosure(GoalEntity root, List<GoalEntity> allSubgoals) {
         if (derivedTests != null && derivedTests.pending()) {
             log.info("T6-U: root closure deferred -- the requirements' tests are still being written");
+            return;
+        }
+        Optional<List<String>> unanswered = derivedRequirementsNoTestAnswers(root);
+        if (unanswered.isPresent()) {
+            String reason = "no test written from the requirement's wording could be kept for " + unanswered.get().size()
+                    + " requirement(s), and a reading of the code does not confirm one: "
+                    + String.join("; ", unanswered.get());
+            log.warn("T6-U: root closure REFUSED -- {}", reason);
+            recordClosureRefusal("T6-U", root.getId(), reason, unanswered.get());
             return;
         }
         List<String> blockers = new ArrayList<>();

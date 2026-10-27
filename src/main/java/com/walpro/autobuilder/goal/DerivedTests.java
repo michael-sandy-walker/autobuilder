@@ -399,8 +399,8 @@ public class DerivedTests implements DerivedTestAuthority {
             log.warn("T6-U: {} claim(s) of {} requirement(s); {} test(s) accepted on {} throwaway implementation(s);"
                             + " {} of {} requirement(s) answered by the test gate{}", claims.size(), todo.size(), accepted,
                     spikes.size(), lines.stream().filter(answered::contains).count(), lines.size(),
-                    answered.containsAll(lines) ? "" : " -- the rest stay a reading, and the objective is not met by the"
-                            + " project's own tests while they are open");
+                    answered.containsAll(lines) ? "" : " -- no kept test answers the rest, and closure is refused while they"
+                            + " are open");
             restore();
         } catch (Exception e) {
             log.warn("T6-U: could not write the requirements' tests: {}", e.getMessage());

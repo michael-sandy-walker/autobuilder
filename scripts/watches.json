@@ -397,6 +397,32 @@
         "pattern": "observed behavioural defect injected as work: the packaged artifact declares no entry point"
       },
       "check": "FIRED should follow a 'T4-DO: the packaged artifact could not run' line within about one cycle, and the retired item should not come back unless the defect does (a retirement clears the self-check's repeat suppression, so a genuine recurrence is raised again). OPPORTUNITY-NO-FIRE is NOT by itself a regression: the repair abstains when the sources name no single entry point, and then nothing is declared and nothing may be retired. Check with grep -rl 'static void main' over the artifact before calling it one."
+    },
+    {
+      "id": "t6u-unanswered-line-refused",
+      "ticket": "T6-U",
+      "type": "watch",
+      "description": "A line marked for the derived tests that no kept test answers refuses closure instead of going to a reading (field111: receiver-questions closed GOAL_FULFILLED 14/16 twice on that reading). The opportunity is a writing that left a marked requirement to a reading.",
+      "fired": {
+        "file": "applog",
+        "pattern": "T6-U: root closure REFUSED"
+      },
+      "opportunity": {
+        "file": "applog",
+        "pattern": "T6-U: \\d+ claim\\(s\\) of \\d+ requirement\\(s\\);.*no kept test answers the rest"
+      },
+      "check": "Read the requirement the line names. Expected only on receiver-questions' record-component requirement, in a writing whose spikes all miss that form; on a run whose code meets it, the terminal is then an honest halt, not GOAL_FULFILLED. A refusal on edit-hunks means its live writing came out worse than the offline three (17/17) -- read the writing summary's answered count."
+    },
+    {
+      "id": "t6u-dropped-test-rewritten",
+      "ticket": "T6-U",
+      "type": "tally",
+      "description": "Claim tests that failed on every throwaway implementation, rewritten once from the runner's report and then kept (offline 2026-10-27: 38 kept over three writings, none wrong on the real implementation).",
+      "fired": {
+        "file": "applog",
+        "pattern": "T6-U: \\d+ claim test\\(s\\) failed on every throwaway implementation; \\d+ rewritten, \\d+ of them then passed"
+      },
+      "check": "Read the line's counts; a writing reused from the cache prints no such line."
     }
   ]
 }

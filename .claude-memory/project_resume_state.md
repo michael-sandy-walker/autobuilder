@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-26 night (Opus 5.5, session 19) -- T6-U field111: EDIT-HUNKS 3 OF 3 TRUE COMPLETIONS WITH THE TESTS WITHHELD; RECEIVER-QUESTIONS 2 OF 2 FALSE -- START HERE
+## 2026-10-27 (Opus 5.5, session 19 cont.) -- T6-U: DROPPED TESTS REWRITTEN, QUOTE RULE, UNANSWERED LINE REFUSES CLOSURE; WRITINGS + BATCH field112 RUNNING UNATTENDED -- START HERE
+
+- **Something IS live** (started 17:23): one driver `~/.autobuilder/warm3/chain.sh` -- fresh writings (receiver-questions, then edit-hunks; 360-min cap, edit-hunks' rewrites take hours), then batch field112 (edit-hunks x3, receiver-questions x3, 60 min) only if the cache gained both. Results: `warm3/results.txt`, `field112/results.txt`. Check with `pgrep -f "^/bin/bash /home/anugeshtu/.autobuilder/warm3/chain.sh"` -- anchored, never `| grep -v pgrep` ([[feedback-monitor-every-terminal]]). No mvn or src edit while it runs.
+- **Head `b177bc21`**, suite 4002/0: `e4e5b82f` (quote rule + one rewrite of a test every spike fails), `b177bc21` (a marked line no kept test answers refuses closure). Offline basis and numbers on `T6-U` (2026-10-27 appends): ~190 of 194 dropped tests were broken tests of right claims; 38 rewrites kept, 0 wrong; gate 17/17, 5/6, 6/6.
+- **What field112 tests:** edit-hunks should stay 3/3 true (a refusal there means the live writing is worse than offline); receiver-questions should halt honestly where field111 completed falsely, or complete truly where its writing keeps the record-component form. Watches `t6u-unanswered-line-refused`, `t6u-dropped-test-rewritten`.
+- `scripts/run_outcomes.json` left for the user (holds four non-measurement runs of 2026-10-26, named on `T6-U`).
+
+## 2026-10-26 night (Opus 5.5, session 19) -- T6-U field111: EDIT-HUNKS 3 OF 3 TRUE COMPLETIONS WITH THE TESTS WITHHELD; RECEIVER-QUESTIONS 2 OF 2 FALSE
 
 - **Nothing is live.** Head `e229d102` + uncommitted memory (this block, the `T6-U` append, the watcher rule). `scripts/run_outcomes.json` left for the user (it now also holds four runs that were not measurements -- named on `T6-U`). An empty detached worktree `scratchpad/wt-t6u` was made for the closure change; nothing written in it (`git worktree remove` it if unused).
 - **field111** (`~/.autobuilder/field111/results.txt`): edit-hunks 11/11 GOAL_FULFILLED x3 (planner-criterion fix `56d5acd2` confirmed live); receiver-questions 14/16 GOAL_FULFILLED x2, FALSE (record-component Map form), run 3 skipped. Every completion closed on "closure ledger clear" -- a model reading of the requirements no kept test answers (3/17, 1/6).

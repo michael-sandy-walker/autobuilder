@@ -399,4 +399,27 @@ class CriteriaVerificationServiceTest {
         assertThat(service.structuralAnswer(claim, "Grow the coil", Map.of(path, adopted))).isTrue();
         verifyNoInteractions(llmClient);
     }
+
+    /** field112: ~130 frozen derived tests took the file budget; every closure check cropped the sources out. */
+    @Test
+    void theTestsWrittenFromTheRequirementsAreLeftOutOfTheFilesAVerificationReads() throws Exception {
+        stubLlm("1. \u2713 Hunks are applied in order");
+        var files = mock(com.walpro.autobuilder.core.service.FileService.class);
+        String frozen = "src/test/java/org/ink/DerivedClaim001Test.java";
+        when(files.exists(com.walpro.autobuilder.core.build.DerivedTestsFile.PATH)).thenReturn(true);
+        when(files.readFile(com.walpro.autobuilder.core.build.DerivedTestsFile.PATH)).thenReturn(
+                "[{\"requirement\":\"r\",\"claim\":\"c\",\"path\":\"" + frozen + "\",\"content\":\"x\","
+                        + "\"status\":\"ACCEPTED\",\"reason\":\"y\"},"
+                        + "{\"requirement\":\"r\",\"claim\":\"d\",\"path\":\"src/test/java/org/ink/DerivedClaim002Test.java\","
+                        + "\"content\":\"x\",\"status\":\"UNACCEPTED\",\"reason\":\"y\"}]");
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "fileService", files);
+
+        service.verifyAndRecord(ctx(List.of("Hunks are applied in order"), Map.of(
+                "src/main/java/org/ink/Hunks.java", "class Hunks { /* SOURCE */ }",
+                frozen, "class DerivedClaim001Test { /* FROZEN */ }",
+                "src/test/java/org/ink/HunksTest.java", "class HunksTest { /* OWN */ }")), "sg-1");
+
+        assertThat(promptSent()).contains("SOURCE", "OWN").doesNotContain("FROZEN")
+                .contains("1 test file(s) written from the requirements' wording before the change are in the tree");
+    }
 }

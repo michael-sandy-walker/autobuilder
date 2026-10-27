@@ -237,10 +237,17 @@ public class CriteriaVerificationService {
      * notes block appended to the prompt (the completion gate supplies it; other consumers pass null).
      */
     private Assessment verifyFeatures(String subjectDescription, List<String> features,
-                                                Map<String, String> outputFiles, String structuralNotes) {
+                                                Map<String, String> allFiles, String structuralNotes) {
         if (features == null || features.isEmpty()
-                || outputFiles == null || outputFiles.isEmpty()) {
+                || allFiles == null || allFiles.isEmpty()) {
             return Assessment.none();
+        }
+        Map<String, String> outputFiles = withoutDerivedTests(allFiles);
+        int frozen = allFiles.size() - outputFiles.size();
+        if (frozen > 0) {
+            String note = frozen + " test file(s) written from the requirements' wording before the change are in the"
+                    + " tree and not shown here; they run with the project's tests.";
+            structuralNotes = structuralNotes == null || structuralNotes.isBlank() ? note : structuralNotes + "\n" + note;
         }
         Evidence evidence = buildPrompt(subjectDescription, features, outputFiles, structuralNotes);
         if (!evidence.complete()) {
@@ -815,6 +822,24 @@ public class CriteriaVerificationService {
         if (criteria == null || criteria.isEmpty() || files == null || files.isEmpty()) return Map.of();
         Assessment a = verifyFeatures(subject, criteria, files, testRunEvidence(files));
         return a.evidenceComplete() ? a.passMap() : Map.of();
+    }
+
+    /**
+     * T6-U: the files without the accepted tests written from the requirements' wording. They are the test gate's --
+     * frozen, run with the suite -- and a reading of them answers nothing; shown, they took the file budget: field112's
+     * edit-hunks tree held about 130 of them, every closure check cropped the sources and README out and got no
+     * verdict, and a run at 11/11 deferred completion to its deadline (2026-10-27).
+     */
+    Map<String, String> withoutDerivedTests(Map<String, String> files) {
+        if (fileService == null) return files;
+        java.util.Set<String> frozen = new java.util.HashSet<>();
+        for (var e : com.walpro.autobuilder.core.build.DerivedTestsFile.read(fileService)) {
+            if (e.accepted() && e.path() != null) frozen.add(e.path().replace('\\', '/'));
+        }
+        if (frozen.isEmpty()) return files;
+        Map<String, String> out = new LinkedHashMap<>();
+        files.forEach((path, text) -> { if (!frozen.contains(path.replace('\\', '/'))) out.put(path, text); });
+        return out;
     }
 
     /** T4-EC: the text of the tree's files as adopted, where recorded ({@code ProtectedPaths.BASELINE_DIR}); optional. */

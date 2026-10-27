@@ -130,6 +130,7 @@ Evidence discipline:
 - `feedback_dont_group_defects_by_vocabulary.md`: a shared description is not a shared cause; verify each member's mechanism. (reviewed 2026-08-29)
 - `feedback_compare_against_the_last_good_build.md`: judge a new line against the last GOOD build's runs (scores, failing sets, best measure), never its own predecessor; name the reference in the batch header. (reviewed 2026-10-11)
 - `feedback_dont_evaluate_a_build_with_older_runs.md`: a window is a rate only if build AND target are constant; split by target first. (reviewed 2026-09-21)
+- `feedback_read_test_results_from_the_run.md`: quote a test count from THIS run's output or a report newer than it; a failed compile leaves the last run's green reports standing. (reviewed 2026-10-27)
 - `feedback_verify_diff_is_substantive.md`: prove which input now yields different output; green tests on a no-op diff is not progress. (reviewed 2026-09-08)
 - `feedback_verify_at_decision_timestamp.md`: diagnose against the state AT decision time (per-cycle snapshots), not the final artifact. (reviewed 2026-07-09)
 - `feedback_activity_not_progress.md`: a mechanism firing is not helping; validate the outcome moved. (reviewed 2026-07-09)

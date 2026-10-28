@@ -148,7 +148,7 @@ Reasoning and correction:
 
 Ticket and scope discipline:
 - `feedback_ticket_tiering.md`: tier by mechanism — designed-but-dumb policy is T2, missing capability T4, real logic bug T1. (reviewed 2026-07-09)
-- `feedback_ticket_definition_of_done.md`: tickets state their DoD and close then; the filing reflex is the bigger trap -- fix it or drop it, file last. (reviewed 2026-09-13)
+- `feedback_ticket_definition_of_done.md`: tickets state their DoD and close then; the filing reflex is the bigger trap -- fix it or drop it, file last; once the DoD is met, name any new mechanism as a new capability before building it under the ticket (T6-U, 2026-10-28). (reviewed 2026-10-28)
 - `feedback_append_dont_rewrite_tickets.md`: ticket updates APPEND; the filed body stays untouched. (reviewed 2026-07-10)
 - `feedback_ship_full_scope.md`: ship a capability in one scope — build, rewire every caller, delete dead code; never split into a T5 follow-up. (reviewed 2026-07-09)
 - `feedback_instrument_needs_an_actuator.md`: an observability ticket ships its actuator in the SAME scope; prompt prose is not an actuator. (reviewed 2026-07-31)

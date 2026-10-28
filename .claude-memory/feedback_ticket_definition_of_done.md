@@ -42,3 +42,12 @@ removal") exists to say. Two questions before filing: *can this be done right no
 ticket takes to write?* and *if nobody ever picks this up, what actually breaks?* If the answer to the
 second is "nothing", it is a note or a code comment, not a queue entry.
 
+
+**2026-10-28 (T6-U): the DoD was met and the ticket kept growing anyway.** T6-U was a MEASUREMENT (run the
+withheld-tests rung, state the rate); field105 met it on 2026-10-23. I then built a capability under it -- derived
+tests, spikes, repair, rewrite, quote rule, closure refusal: 23 commits, ~1,600 lines, every live batch surfacing the
+next defect, all tuned on two toy cases -- until the user asked "Aren't we over-engineering this ticket?" and chose to
+close it, recording the remaining limits as notes, not tickets.
+**How to apply:** when a ticket's DoD is already met and a new mechanism is proposed under it, say so first, in one
+line -- "the DoD was met on <date>; this is a new capability" -- and let the user decide whether it belongs to the
+ticket. Each "the batch showed the next defect" step is the point to ask, not after the third.

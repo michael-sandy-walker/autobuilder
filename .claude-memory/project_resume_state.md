@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-28 (Opus 5.5, session 19 end) -- T6-U field112: EDIT-HUNKS 2 TRUE + 1 FALSE; RECEIVER-QUESTIONS NO FALSE COMPLETION BUT CORRECT CODE REFUSED -- START HERE
+## 2026-10-28 (Opus 5.5, session 19 close) -- T6-U CLOSED; THE REFUSAL GRIND FIXED -- START HERE
+
+- **Nothing is live.** Head = this commit (code `b103e0ef`), suite 4005/0. `scripts/run_outcomes.json` left for the user.
+- **T6-U closed `[x]`** on its DoD (the withheld-tests rung measured: field105 0/6 true + 5 false -> field112 edit-hunks 2/3 true + 1 false, receiver-questions 0 true 0 false). The user judged the ticket over-engineered (a measurement that grew into a capability); the three known limits are recorded on the ticket and NOT filed -- reopen only on evidence from another case. The whole-repository rung was never entered (gate unmet).
+- **Last change:** an unanswered derived-test line now refuses closure only at the completion points and then halts the run (`honest-halt:requirement-no-test-answers`, never rewound) -- not yet seen live.
+- **NEXT:** back to the roadmap queue (`python3 scripts/next_work.py`); `T4-EC` was next by the user's earlier word.
+
+## 2026-10-28 (Opus 5.5, session 19 end) -- T6-U field112: EDIT-HUNKS 2 TRUE + 1 FALSE; RECEIVER-QUESTIONS NO FALSE COMPLETION BUT CORRECT CODE REFUSED
 
 - **Nothing is live.** Head = this commit (code `843a2979`), suite 4004/0. Writings cached (`~/.autobuilder/derived-tests-cache`, keyed on prompts/seed/obligations/tree): receiver-questions 5/6, edit-hunks 17/17. `scripts/run_outcomes.json` left for the user (several non-measurement runs of 2026-10-26/27, named on `T6-U`).
 - **field112** (`~/.autobuilder/field112/results.txt`, below the "restarted" marker): edit-hunks 11/11 GF x2, 9/11 GF false (unit-level claims: the `java`-fence edit tested via `EditHunks.isEdit`, not the parser); receiver-questions 14/16 objective-met, **16/16 refused to an honest halt**, 14/16 stopped -- 0 false.

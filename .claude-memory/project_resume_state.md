@@ -16,7 +16,7 @@ metadata:
 - **Nothing is live.** Head = this commit (code `b103e0ef`), suite 4005/0. `scripts/run_outcomes.json` left for the user.
 - **T6-U closed `[x]`** on its DoD (the withheld-tests rung measured: field105 0/6 true + 5 false -> field112 edit-hunks 2/3 true + 1 false, receiver-questions 0 true 0 false). The user judged the ticket over-engineered (a measurement that grew into a capability); the three known limits are recorded on the ticket and NOT filed -- reopen only on evidence from another case. The whole-repository rung was never entered (gate unmet).
 - **Last change:** an unanswered derived-test line now refuses closure only at the completion points and then halts the run (`honest-halt:requirement-no-test-answers`, never rewound) -- not yet seen live.
-- **NEXT:** back to the roadmap queue (`python3 scripts/next_work.py`); `T4-EC` was next by the user's earlier word.
+- **NEXT: not chosen.** The user's "T4-EC next" (2026-10-20) was spent on stages 1-4; the 2026-10-22 follow-ups were never picked. Do not cite it as a standing order (corrected 2026-10-28 on the user's question).
 
 ## 2026-10-28 (Opus 5.5, session 19 end) -- T6-U field112: EDIT-HUNKS 2 TRUE + 1 FALSE; RECEIVER-QUESTIONS NO FALSE COMPLETION BUT CORRECT CODE REFUSED
 

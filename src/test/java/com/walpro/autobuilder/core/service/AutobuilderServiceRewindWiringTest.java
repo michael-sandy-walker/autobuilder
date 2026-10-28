@@ -171,6 +171,9 @@ class AutobuilderServiceRewindWiringTest {
         assertThat(service.rewindBeforeHalting(cycle("cycle-30", "user-pause")))
                 .as("a person asked the loop to stop; backing up to keep working overrides them")
                 .isFalse();
+        assertThat(service.rewindBeforeHalting(cycle("cycle-30", AutobuilderService.UNANSWERABLE_HALT)))
+                .as("T6-U: the frozen tests refuse any path the same way once its work is done")
+                .isFalse();
         assertThat(service.rewindBeforeHalting(cycle("cycle-30", "llm-circuit-breaker")))
                 .as("a suspension waiting on the endpoint says nothing about the path being bad")
                 .isFalse();

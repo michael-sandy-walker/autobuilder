@@ -4037,6 +4037,31 @@ public class GoalPlannerService {
     }
 
     /**
+     * T6-U: false -- and the run asked to halt -- when every other gate has let the root close and only a line no kept
+     * test answers is left. Checked at the point of completion, not first: field112's receiver-questions runs were
+     * refused 31 to 77 times each while the loop worked on, a refusal nothing in the run can lift (the tests are
+     * frozen); one of them had reached 16/16. Asked here, the refusal comes once, when the work is otherwise done.
+     */
+    private boolean completeRootUnlessUnanswerable(GoalEntity root) {
+        Optional<List<String>> open = derivedRequirementsNoTestAnswers(root);
+        if (open.isEmpty()) return true;
+        String reason = "no test written from the requirement's wording could be kept for " + open.get().size()
+                + " requirement(s), and a reading of the code does not confirm one: " + String.join("; ", open.get());
+        log.warn("T6-U: root closure REFUSED -- {}", reason);
+        recordClosureRefusal("T6-U", root.getId(), reason, open.get());
+        unanswerableAtClosure = reason;
+        return false;
+    }
+
+    /** T6-U: set when closure was refused only for a line no kept test answers; the run halts on it. */
+    private volatile String unanswerableAtClosure;
+
+    /** T6-U: why the root cannot close in this run, when the only thing left is a line no kept test answers. */
+    public Optional<String> unanswerableAtClosure() {
+        return Optional.ofNullable(unanswerableAtClosure);
+    }
+
+    /**
      * T6-U: the lines the operator marked {@code gate: derived-test} that no kept test answers, when the test gate is
      * live; empty otherwise. Such a line is never put to a reading: field111 closed receiver-questions GOAL_FULFILLED
      * at 14/16 twice on "closure ledger clear", a model confirming the record-component form over code that lacks it --
@@ -4204,15 +4229,6 @@ public class GoalPlannerService {
     private void attemptRootClosure(GoalEntity root, List<GoalEntity> allSubgoals) {
         if (derivedTests != null && derivedTests.pending()) {
             log.info("T6-U: root closure deferred -- the requirements' tests are still being written");
-            return;
-        }
-        Optional<List<String>> unanswered = derivedRequirementsNoTestAnswers(root);
-        if (unanswered.isPresent()) {
-            String reason = "no test written from the requirement's wording could be kept for " + unanswered.get().size()
-                    + " requirement(s), and a reading of the code does not confirm one: "
-                    + String.join("; ", unanswered.get());
-            log.warn("T6-U: root closure REFUSED -- {}", reason);
-            recordClosureRefusal("T6-U", root.getId(), reason, unanswered.get());
             return;
         }
         List<String> blockers = new ArrayList<>();
@@ -4703,6 +4719,7 @@ public class GoalPlannerService {
                         return;
                     }
                     String reason = ObjectiveMetClosure.outsideTreeReason(completionVerification.outsideTree());
+                    if (!completeRootUnlessUnanswerable(root)) return;
                     markGoalCompleted(root.getId(), "root goal satisfied: " + reason);
                     log.info("T2-DR: root '{}' marked COMPLETED — {}", root.getId(), reason);
                     return;
@@ -4710,6 +4727,7 @@ public class GoalPlannerService {
                 if (unconfirmed.isPresent() && objectiveMetClosure != null && objectiveMetClosure.objectiveMet()
                         && objectiveMetClosure.allStalled(completionVerification.unconfirmedCriteria())) {
                     String reason = ObjectiveMetClosure.reason(completionVerification.unconfirmedCriteria());
+                    if (!completeRootUnlessUnanswerable(root)) return;
                     markGoalCompleted(root.getId(), "root goal satisfied: " + reason);
                     log.info("T2-DR: root '{}' marked COMPLETED — {}", root.getId(), reason);
                     return;
@@ -4762,6 +4780,7 @@ public class GoalPlannerService {
                 rationale += "; let go earlier with the objective met by the project's own tests, open: "
                         + String.join("; ", objectiveMetClosure.stalledCriteria());
             }
+            if (!completeRootUnlessUnanswerable(root)) return;
             markGoalCompleted(root.getId(), "root goal satisfied: " + rationale);
             log.info("T2-DR: root '{}' marked COMPLETED — {}", root.getId(), rationale);
         } else {

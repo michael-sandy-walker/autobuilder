@@ -411,7 +411,7 @@
         "file": "applog",
         "pattern": "T6-U: \\d+ claim\\(s\\) of \\d+ requirement\\(s\\);.*no kept test answers the rest"
       },
-      "check": "Read the requirement the line names. Expected only on receiver-questions' record-component requirement, in a writing whose spikes all miss that form; on a run whose code meets it, the terminal is then an honest halt, not GOAL_FULFILLED. A refusal on edit-hunks means its live writing came out worse than the offline three (17/17) -- read the writing summary's answered count."
+      "check": "Read the requirement the line names. The refusal fires only when every other gate lets the root close, and the run then halts at once (honest-halt:requirement-no-test-answers) -- expect one refusal per run, not one per cycle. Expected on receiver-questions' record-component requirement in a writing whose spikes all miss that form; a refusal on edit-hunks means its live writing left a requirement unanswered -- read the writing summary's answered count."
     },
     {
       "id": "t6u-dropped-test-rewritten",

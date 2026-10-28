@@ -1669,24 +1669,52 @@ public class GoalPlannerServiceClosureTest {
      * kept test answered. A line the operator marked for the derived tests is never put to a reading.
      */
     @Test
-    void autoCompleteRoot_aDerivedTestLineNoKeptTestAnswersRefusesClosure() throws IOException {
+    void autoCompleteRoot_aDerivedTestLineNoKeptTestAnswersRefusesClosureAndHaltsOnlyWhenNothingElseIsLeft() throws IOException {
         lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
         lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
         String seed = "Answer the failure.\n\nOBJECTIVE: the failure is answered, and the whole suite passes.\n";
         String marked = "answer() answers \"cannot find symbol method indexOf(Window) in record component active\"";
         String other = "A type the sources declare is answered from the sources";
         lenient().when(fileService.readFile(SeedObligationsFile.PATH)).thenReturn(SeedObligationsFile.render(seed, List.of(
                 SeedRequirements.GATE_MARKER + " " + SeedRequirements.GATE_DERIVED + " " + marked,
                 SeedRequirements.GATE_MARKER + " " + SeedRequirements.GATE_DERIVED + " " + other)));
-
-        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
-        com.walpro.autobuilder.core.build.TestRunGate gate = mock(com.walpro.autobuilder.core.build.TestRunGate.class);
-        when(gate.isLive()).thenReturn(true);
-        service.setTestRunGate(gate);
         DerivedTests derived = mock(DerivedTests.class);
         when(derived.acceptedRequirements()).thenReturn(java.util.Set.of(other));
-        service.setDerivedTests(derived);
 
+        // Another gate still refuses (the suite fails): the loop works on, and nothing asks the run to halt.
+        com.walpro.autobuilder.core.build.TestRunGate failing = mock(com.walpro.autobuilder.core.build.TestRunGate.class);
+        when(failing.runOnTree(any(), anyBoolean())).thenReturn(java.util.Optional.of("test suite failing (Tests run: 3, Failures: 1)"));
+        GoalPlannerService working = derivedClosureService(seed, failing, derived);
+        working.autoCompleteRootIfSatisfied();
+        assertThat(working.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(working.unanswerableAtClosure()).isEmpty();
+
+        // Every other gate lets it close: only the unanswered line is left, so closure is refused and the run halts.
+        com.walpro.autobuilder.core.build.TestRunGate passing = mock(com.walpro.autobuilder.core.build.TestRunGate.class);
+        when(passing.isLive()).thenReturn(true);
+        GoalPlannerService done = derivedClosureService(seed, passing, derived);
+        done.autoCompleteRootIfSatisfied();
+        assertThat(done.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(done.unanswerableAtClosure()).hasValueSatisfying(r -> assertThat(r).contains("record component active"));
+
+        GoalEntity root = done.getGoalById("G");
+        java.util.Optional<List<String>> open = ReflectionTestUtils.invokeMethod(done, "derivedRequirementsNoTestAnswers", root);
+        assertThat(open).contains(List.of(marked));
+        when(derived.acceptedRequirements()).thenReturn(java.util.Set.of(marked, other));
+        open = ReflectionTestUtils.invokeMethod(done, "derivedRequirementsNoTestAnswers", root);
+        assertThat(open).as("every marked line answered by a kept test").isEmpty();
+        when(passing.isLive()).thenReturn(false);
+        open = ReflectionTestUtils.invokeMethod(done, "derivedRequirementsNoTestAnswers", root);
+        assertThat(open).as("the test gate off answers nothing: the lines go to a reading as before").isEmpty();
+    }
+
+    private GoalPlannerService derivedClosureService(String seed, com.walpro.autobuilder.core.build.TestRunGate gate,
+                                                     DerivedTests derived) {
+        GoalPlannerService service = new GoalPlannerService(fileService, goalGraphService, goalPlannerConfig);
+        service.setTestRunGate(gate);
+        service.setDerivedTests(derived);
         GoalEntity root = new GoalEntity("G", seed, "system", GoalType.GOAL, null);
         root.setStatus(GoalStatus.ACTIVE);
         GoalEntity done = new GoalEntity("D", "completed, criteria-less", "planner", GoalType.SUBGOAL, "G");
@@ -1696,19 +1724,6 @@ public class GoalPlannerServiceClosureTest {
         goalMap.put(done.getId(), done);
         ReflectionTestUtils.setField(service, "goalMap", goalMap);
         ReflectionTestUtils.setField(service, "rootGoalId", "G");
-
-        service.autoCompleteRootIfSatisfied();
-
-        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
-        verify(gate, never()).runOnTree(any(), anyBoolean());
-
-        java.util.Optional<List<String>> open = ReflectionTestUtils.invokeMethod(service, "derivedRequirementsNoTestAnswers", root);
-        assertThat(open).contains(List.of(marked));
-        when(derived.acceptedRequirements()).thenReturn(java.util.Set.of(marked, other));
-        open = ReflectionTestUtils.invokeMethod(service, "derivedRequirementsNoTestAnswers", root);
-        assertThat(open).as("every marked line answered by a kept test").isEmpty();
-        when(gate.isLive()).thenReturn(false);
-        open = ReflectionTestUtils.invokeMethod(service, "derivedRequirementsNoTestAnswers", root);
-        assertThat(open).as("the test gate off answers nothing: the lines go to a reading as before").isEmpty();
+        return service;
     }
 }

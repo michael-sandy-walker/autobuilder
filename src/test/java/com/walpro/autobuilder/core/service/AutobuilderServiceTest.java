@@ -1063,6 +1063,22 @@ class AutobuilderServiceTest {
                 "evolution #NoDiff — output already satisfies all criteria (T2-CC)");
     }
 
+    // --- T6-U: the root would close but for a requirement no kept test answers ---
+
+    @Test
+    void t6u_aClosureOnlyAnUnansweredRequirementRefusesHaltsTheRunAtOnce() {
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenAnswer(inv -> CycleContextData.builder().build());
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(goalPlannerService.unanswerableAtClosure()).thenReturn(Optional.of("no test could be kept for 1 requirement"));
+
+        autobuilderService.runAutobuilderCycle();
+
+        CycleContextData stored = getStoredContext();
+        assertThat(DerivedFacts.systemPaused(stored)).isTrue();
+        assertThat(stored.goalExhaustedReason()).isEqualTo(AutobuilderService.UNANSWERABLE_HALT);
+    }
+
     // --- T1-EB: build-blocked deadlock breaker ---
 
     @Test

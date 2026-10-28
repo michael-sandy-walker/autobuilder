@@ -252,6 +252,9 @@ public class AutobuilderService implements CheckpointableState {
 
     private static final int SAME_FINGERPRINT_FULFILLED_THRESHOLD = 3;
 
+    /** T6-U: the halt reason when only a requirement no kept test answers stands between the root and closure. */
+    static final String UNANSWERABLE_HALT = "requirement-no-test-answers";
+
     /**
      * T4-CJ slice 2: may this snapshot be used as proof of progress in the CURRENT run?
      *
@@ -1433,6 +1436,16 @@ public class AutobuilderService implements CheckpointableState {
             consecutivePlannerEmptyOutputCycles = 0;
         }
 
+        // T6-U: the root would have closed but for a requirement no kept test answers. The tests are frozen, so nothing
+        // the run does can lift the refusal; halt honestly now rather than refuse it every cycle to the deadline
+        // (field112: 31 to 77 refusals per receiver-questions run).
+        Optional<String> unanswerable = goalPlannerService.unanswerableAtClosure();
+        if (unanswerable.isPresent() && context.goalExhaustedReason() == null) {
+            log.error("T6-U: the root cannot close in this run -- {}. Pausing for review.", unanswerable.get());
+            emitSystemPausedOnce(context.cycleName(), UNANSWERABLE_HALT, 1);
+            context = context.withGoalExhaustedReason(UNANSWERABLE_HALT).withPausedReason(UNANSWERABLE_HALT);
+        }
+
         // T4-I (root-scoped slice): convergence brake — activity without convergence. Unlike the
         // counters above, a merge alone does NOT reset this; only a new completed-with-merge
         // subgoal (root progress the planner can't fake by re-decomposing) does.
@@ -1717,8 +1730,10 @@ public class AutobuilderService implements CheckpointableState {
      * Pauses a rewind must not override: a person asked the loop to stop, or it is waiting for the
      * model endpoint to come back rather than judging the path it is on.
      */
+    // T6-U: nor the halt on a requirement no kept test answers -- the tests are frozen, so a different path meets the
+    // same refusal the moment its work is done.
     private static final java.util.Set<String> NON_REWINDABLE_PAUSES =
-            java.util.Set.of("user-pause", LLM_BREAKER_PAUSE_REASON);
+            java.util.Set.of("user-pause", LLM_BREAKER_PAUSE_REASON, UNANSWERABLE_HALT);
 
     /**
      * T3-BY: is this cycle the one that should re-preserve? Counts MERGED cycles only — an

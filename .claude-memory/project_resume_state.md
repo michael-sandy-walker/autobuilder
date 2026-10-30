@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-28 (Opus 5.5, session 19 close) -- T6-U CLOSED; THE REFUSAL GRIND FIXED -- START HERE
+## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); SLICE 1 BUILT AND VERIFIED -- START HERE
+
+- **Nothing is live.** Head = this commit (code `a32b1eeb`), suite 4128/0. `scripts/run_outcomes.json` left for the user. The stale field111 waiter (PID 1619913, self-matching `until pgrep`) was stopped at the user's word; nothing launched.
+- **This session:** filed `T1-GG` (T6-U's three open mechanisms); restated `T5-BI` (redesign all prose output); `T4-EC` redefined with the user -- a project keeps accepting input (seed = first), several snapshots merged or projects brought into a RUNNING project, fill/extend/correct, conflicts held, per-input undo -- then the map of what assumes one seed = one run, the representation (one input ledger, graph-first, the tree's starting shape by mode), eight slices, and the measuring case (`firestarter` running + `clitarget` frozen + a third-party catalogue; fallback `edit-hunks` + a patch library). The user's long-range picture saved as [[project-living-project-vision]] (offspring whose code AND graph become a knowledge part).
+- **Slice 1 done:** input ledger + purpose service, seed as entry 1; field113 cashbook GOAL_FULFILLED 13/13, entry 1 in `meta/inputs.json` and the graph. Detail on `T4-EC` (2026-10-30 appends).
+- **NEXT:** `T4-EC` slice 2 -- the measuring case (inputs written by Claude from Autobuilder's history and imagined useful cases; the harness adds an input on an event, records arrivals, yardstick per stage). Check whether `firestarter` is too complex; switch to the fallback if so (user).
+
+## 2026-10-28 (Opus 5.5, session 19 close) -- T6-U CLOSED; THE REFUSAL GRIND FIXED
 
 - **Nothing is live.** Head = this commit (code `b103e0ef`), suite 4005/0. `scripts/run_outcomes.json` left for the user.
 - **T6-U closed `[x]`** on its DoD (the withheld-tests rung measured: field105 0/6 true + 5 false -> field112 edit-hunks 2/3 true + 1 false, receiver-questions 0 true 0 false). The user judged the ticket over-engineered (a measurement that grew into a capability); the three known limits are recorded on the ticket and NOT filed -- reopen only on evidence from another case. The whole-repository rung was never entered (gate unmet).

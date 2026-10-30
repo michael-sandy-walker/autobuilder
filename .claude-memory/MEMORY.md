@@ -48,6 +48,7 @@ Direction and orientation:
 - `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-10-28)
 - `project_wave2_structure.md`: wave 2's five layers and gate-driven sequence; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
+- `project_living_project_vision.md`: a project keeps taking inputs of any kind (seed = first); Autobuilder also builds OFFSPRING whose code AND graph become a knowledge part when included. Read before input/merge/import work. (reviewed 2026-10-30)
 - `project_three_disciplines_lens.md`: failures to priors, capabilities replace scar tissue, delete-subsumed. (reviewed 2026-07-09)
 
 Design notes, read before touching their area:

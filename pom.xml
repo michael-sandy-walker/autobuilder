@@ -235,6 +235,12 @@
                         <include>**/*TestCase.java</include>
                         <include>**/*IT.java</include>
                     </includes>
+                    <!-- T4-EC: the Spring tests without the test profile kept application.yml's default base path,
+                         so every suite run wrote into data/firestarter: it blanked meta/GoalStack.json and left a
+                         test's seed in meta/inputs.json. T4-CL closed the graph channel; this closes the file one. -->
+                    <environmentVariables>
+                        <FILE_BASE_PATH>${project.build.directory}/test-base</FILE_BASE_PATH>
+                    </environmentVariables>
                     <systemPropertyVariables>
                         <docker.host>unix:///home/anugeshtu/.docker/desktop/docker.sock</docker.host>
                         <testcontainers.docker.socket.override>/var/run/docker.sock</testcontainers.docker.socket.override>

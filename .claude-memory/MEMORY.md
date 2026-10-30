@@ -35,7 +35,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 ## Roadmap
 - `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-10-28)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-10-28)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-10-30)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)

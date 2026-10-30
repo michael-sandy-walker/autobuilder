@@ -59,7 +59,7 @@ class DerivedTestsTest {
     @BeforeEach
     void setUp() throws Exception {
         files = new FileService(base.toString(), new ObjectMapper());
-        files.writeFile(DerivedTests.SEED_PATH, SEED);
+        files.writeFile("bootstrap/seed.txt", SEED);
         obligations(REQUIREMENT);
         files.writeFile("output/src/main/java/org/ink/Quill.java",
                 "package org.ink;\npublic class Quill {\n  public int ink() { return 1 + 1; }\n}\n");
@@ -96,10 +96,18 @@ class DerivedTestsTest {
         return "```java [" + TEST_DIR + "/" + name + ".java]\npackage org.ink;\nclass " + name + " {\n" + body + "\n}\n```\n";
     }
 
+    /** T4-EC slice 1: the specification comes from the project's purpose, its seed recorded as a root sets it. */
+    private static com.walpro.autobuilder.goal.purpose.PurposeService seeded(FileService f) {
+        var p = com.walpro.autobuilder.goal.purpose.PurposeService.fileOnly(f);
+        p.recordSeed(SEED, "test");
+        return p;
+    }
+
     private static final String SPIKE = "```java [src/main/java/org/ink/Quill.java]\npackage org.ink;\npublic class Quill {}\n```\n";
 
     private DerivedTests derived() {
         DerivedTests d = new DerivedTests(llm, files);
+        d.usePurpose(seeded(files));
         d.setBench(new DerivedTests.Bench() {
             public String compiles(Path tree) {
                 if (compileResults.isEmpty()) return null;
@@ -343,11 +351,12 @@ class DerivedTestsTest {
 
         // The next run: a fresh target directory holding the same seed, obligations and starting tree.
         FileService next = new FileService(base2.toString(), new ObjectMapper());
-        for (String f : List.of(DerivedTests.SEED_PATH, SeedObligationsFile.PATH, "output/src/main/java/org/ink/Quill.java",
+        for (String f : List.of("bootstrap/seed.txt", SeedObligationsFile.PATH, "output/src/main/java/org/ink/Quill.java",
                 "output/" + TEST_DIR + "/QuillTest.java")) {
             next.writeFile(f, files.readFile(f));
         }
         DerivedTests again = new DerivedTests(llm, next);
+        again.usePurpose(seeded(next));
         again.setCacheDir(cache.toString());
         again.ensureNow(SEED);
         assertThat(asked).as("nothing asked again").hasSize(calls);
@@ -360,6 +369,7 @@ class DerivedTestsTest {
         java.nio.file.Files.delete(base2.resolve(DerivedTestsFile.PATH));
         next.writeFile("output/src/main/java/org/ink/Quill.java", "package org.ink;\npublic class Quill { int other; }\n");
         DerivedTests changed = new DerivedTests(llm, next);
+        changed.usePurpose(seeded(next));
         changed.setCacheDir(cache.toString());
         changed.ensureNow(SEED);
         assertThat(asked.size()).as("a changed tree is written again").isGreaterThan(calls);

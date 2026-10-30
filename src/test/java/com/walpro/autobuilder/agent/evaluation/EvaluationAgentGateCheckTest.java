@@ -212,6 +212,7 @@ class EvaluationAgentGateCheckTest {
         var root = new com.walpro.autobuilder.goal.GoalEntity();
         root.setDescription("Evolve the app; expose GET /books");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         // T4-CU: this re-run is the boot-gate invocation that actually fires in the field, so it
         // must hand over the behavioural requirements. Calling the two-arg form passed an empty
         // list and the criterion probes were skipped on every boot-gate run for nine runs —
@@ -249,6 +250,7 @@ class EvaluationAgentGateCheckTest {
         var root = new com.walpro.autobuilder.goal.GoalEntity();
         root.setDescription("plain spec");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(testRunGate.verifyTestsPass(eq("cycle-t4cc"), anyBoolean()))
                 .thenThrow(new IllegalStateException("gate exploded"));
         CycleContextData ctx = contextOnBlocker("goal-test", BuildResult.COMPILE_OK);

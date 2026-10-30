@@ -92,7 +92,6 @@ public class DerivedTests implements DerivedTestAuthority {
     /** Throwaway implementations a claim's test is checked on: as many as the replay measured. */
     static final int SPIKES = 3;
 
-    static final String SEED_PATH = "bootstrap/seed.txt";
     static final String TEST_ROOT = "src/test/";
     static final String MAIN_ROOT = "src/main/";
     /** Where the throwaway implementations are kept (a later proposal for a frozen test is run on them too). */
@@ -229,6 +228,19 @@ public class DerivedTests implements DerivedTestAuthority {
         this.bench = bench;
     }
 
+    /** T4-EC slice 1: the specification the marked requirements are read against; optional (none without it). */
+    @Autowired(required = false)
+    void usePurpose(com.walpro.autobuilder.goal.purpose.PurposeService purposeService) {
+        this.purposeService = purposeService;
+    }
+
+    private com.walpro.autobuilder.goal.purpose.PurposeService purposeService;
+
+    private String specification() {
+        String spec = purposeService == null ? null : purposeService.specification();
+        return spec == null ? "" : spec;
+    }
+
     /** What a check concluded, and why. */
     record Review(boolean pass, String reason) {}
 
@@ -242,7 +254,7 @@ public class DerivedTests implements DerivedTestAuthority {
 
     /** The requirements the operator marked {@code gate: derived-test}, markers removed. */
     public List<String> requirements() {
-        return requirements(read(SEED_PATH));
+        return requirements(specification());
     }
 
     private List<String> requirements(String seedText) {
@@ -823,7 +835,7 @@ public class DerivedTests implements DerivedTestAuthority {
             }
             Review review = missing.isEmpty() && onSpike
                     ? verdict(ask(REVIEW_SYSTEM, "REQUIREMENT:\n" + (current.claim() == null ? current.requirement()
-                    : current.claim()) + "\n\nSPECIFICATION:\n" + read(SEED_PATH) + "\n\nTEST:\n" + content, "derived-test-review"))
+                    : current.claim()) + "\n\nSPECIFICATION:\n" + specification() + "\n\nTEST:\n" + content, "derived-test-review"))
                     : new Review(false, missing.orElse("it passes on no throwaway implementation of the wording"));
             ok = review.pass();
             reason = review.reason();

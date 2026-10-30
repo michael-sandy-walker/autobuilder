@@ -61,9 +61,9 @@ public class EvolutionLLMAdapter {
         var gate = testRunGate == null ? null : testRunGate.getIfAvailable();
         var goals = goalPlannerService == null ? null : goalPlannerService.getIfAvailable();
         if (gate == null || goals == null) return ctx;
-        var root = goals.getRootGoal();
-        boolean required = root != null
-                && com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(root.getDescription());
+        String spec = goals.specification();
+        boolean required = spec != null
+                && com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(spec);
         boolean[] ran = {false};
         CycleContextData out = TestWorkItemNow.restate(ctx,
                 id -> goals.getGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY),

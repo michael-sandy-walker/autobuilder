@@ -229,7 +229,7 @@ public class AutobuilderController {
         // The same bytes as the seed file, for the same reason: obligations are keyed to the hash
         // of the root goal's text, and a stripped copy never matched (both adopted runs of
         // 2026-09-24 read SEED_MOVED). A seed-driven run keeps its text as written, so this does too.
-        goalPlannerServiceForGoal.addInitialGoal(goalId, goalText);
+        goalPlannerServiceForGoal.addInitialGoal(goalId, goalText, "operator");
         autobuilderService.goalProvided();
         log.warn("T4-CQ: root goal set by request on an adopted project — {}", goalId);
         return ResponseEntity.ok(Map.of("ok", true, "goalId", goalId,

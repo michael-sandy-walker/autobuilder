@@ -321,8 +321,7 @@ public class CycleExecutor implements CheckpointableState {
         }
 
         if (behaviouralSelfCheck != null) {
-            GoalEntity selfCheckRoot = goalPlannerService.getRootGoal();
-            String spec = selfCheckRoot != null ? selfCheckRoot.getDescription() : null;
+            String spec = goalPlannerService.specification();
             com.walpro.autobuilder.core.build.BehaviouralSelfCheck.SelfCheckResult selfCheck =
                     behaviouralSelfCheck.observeWithEvidence(
                             context, spec, goalPlannerService::requirementsWorthObserving);
@@ -808,7 +807,7 @@ public class CycleExecutor implements CheckpointableState {
         GoalEntity current = goalPlannerService.getCurrentSubGoal();
 
         String rootId = root != null ? root.getId() : ctx.currentGoalId();
-        String rootDesc = root != null ? root.getDescription() : ctx.currentGoalDescription();
+        String rootDesc = root != null ? goalPlannerService.specification() : ctx.currentGoalDescription();
 
         String subId = current != null ? current.getId() : null;
         String subDesc = current != null ? current.getDescription() : null;

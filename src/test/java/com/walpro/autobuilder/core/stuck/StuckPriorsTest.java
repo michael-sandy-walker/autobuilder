@@ -52,6 +52,9 @@ class StuckPriorsTest {
         StuckLayer layer = new StuckLayer();
         ReflectionTestUtils.setField(layer, "fileService", files);
         ReflectionTestUtils.setField(layer, "priors", store);
+        var purpose = com.walpro.autobuilder.goal.purpose.PurposeService.fileOnly(files);
+        purpose.recordSeed(SEED, "test");
+        ReflectionTestUtils.setField(layer, "purposeService", purpose);
         return layer;
     }
 

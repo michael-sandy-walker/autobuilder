@@ -372,7 +372,7 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
 
         GoalEntity root = goalPlannerService.getRootGoal();
         String goalId = root != null ? root.getId() : null;
-        String goalDescription = root != null ? root.getDescription() : null;
+        String goalDescription = goalPlannerService.specification();
 
         String parentDescription = parent.getDescription();
 
@@ -882,7 +882,7 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
         GoalEntity current = goalPlannerService.getCurrentSubGoal();
 
         String rootId = root != null ? root.getId() : ctx.currentGoalId();
-        String rootDesc = root != null ? root.getDescription() : ctx.currentGoalDescription();
+        String rootDesc = root != null ? goalPlannerService.specification() : ctx.currentGoalDescription();
 
         String subId = current != null ? current.getId() : ctx.currentSubGoalId();
         String subDesc = current != null ? current.getDescription() : ctx.currentSubGoalDescription();

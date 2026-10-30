@@ -120,7 +120,7 @@ public class CycleContextCoordinator {
             // call), so there is no interval to get wrong.
             com.walpro.autobuilder.analysis.coverage.SeedCoverageReadout seedCoverage =
                     seedCoverageAnalyzer != null && goal != null
-                            ? analyzeWithWrittenObligations(goal)
+                            ? analyzeWithWrittenObligations()
                             : null;
 
             // T2-EX: how much of this run is verifiable at all. Measurement only — nothing reads
@@ -311,10 +311,9 @@ public class CycleContextCoordinator {
      * to say and a per-cycle repeat would bury it.
      */
     private void reportCriteriaExecutability() {
-        var specRoot = goalPlannerService.getRootGoal();
         var counts = com.walpro.autobuilder.observability.CriteriaExecutabilityReadout
                 .over(goalPlannerService.getAllGoals(), exercisableCriterionQuery,
-                        specRoot == null ? null : specRoot.getDescription());
+                        goalPlannerService.specification());
         if (counts.isEmpty() || counts.equals(lastExecutability)) return;
         lastExecutability = counts;
         log.info("T2-EX: criteria executability — {} authored, {} address the surface, {} executable ({}%);"
@@ -380,8 +379,7 @@ public class CycleContextCoordinator {
      * readout counts the reviewed split rather than one derived per run. Absent falls through to
      * the derived split, unchanged.
      */
-    private com.walpro.autobuilder.analysis.coverage.SeedCoverageReadout analyzeWithWrittenObligations(
-            com.walpro.autobuilder.goal.GoalEntity goal) {
+    private com.walpro.autobuilder.analysis.coverage.SeedCoverageReadout analyzeWithWrittenObligations() {
         String written = null;
         try {
             written = fileService.readFile(com.walpro.autobuilder.goal.SeedObligationsFile.PATH);
@@ -389,7 +387,7 @@ public class CycleContextCoordinator {
             // No file for this target -- the ordinary case, and the derived split still runs.
         }
         return seedCoverageAnalyzer.analyze(
-                goal.getDescription(), goalPlannerService.getAllGoals(), written);
+                goalPlannerService.specification(), goalPlannerService.getAllGoals(), written);
     }
 
 }

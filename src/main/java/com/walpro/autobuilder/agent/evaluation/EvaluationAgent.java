@@ -912,14 +912,14 @@ public class EvaluationAgent implements ExecutionAgent {
                     // including the run that ended at a verified 23/23 without the loop ever being
                     // able to tell it apart from the 19/23 it had happily declared complete.
                     return bootGate.verifyBootsAndServes(cycleId,
-                            root != null ? root.getDescription() : "",
+                            root != null ? goalPlannerService.specification() : "",
                             goalPlannerService.specBoundBehaviouralCriteria());
                 }
                 case BlockerTypes.GATE_TEST -> {
                     if (testRunGate == null) return null;
                     GoalEntity root = goalPlannerService.getRootGoal();
                     boolean testsRequired = root != null
-                            && com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(root.getDescription());
+                            && com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(goalPlannerService.specification());
                     return testRunGate.verifyTestsPass(cycleId, testsRequired);
                 }
                 default -> {

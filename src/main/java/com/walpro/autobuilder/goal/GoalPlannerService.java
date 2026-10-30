@@ -240,6 +240,28 @@ public class GoalPlannerService {
     // goals from previous sessions without relying on wall-clock timestamps.
     private int currentPlanningRunId = 0;
 
+    /** T4-EC slice 1: the project's inputs; built from the files alone when no Spring context supplies one. */
+    @Autowired(required = false)
+    private com.walpro.autobuilder.goal.purpose.PurposeService purposeService;
+
+    public synchronized com.walpro.autobuilder.goal.purpose.PurposeService purpose() {
+        if (purposeService == null) purposeService = com.walpro.autobuilder.goal.purpose.PurposeService.fileOnly(fileService);
+        return purposeService;
+    }
+
+    /**
+     * T4-EC slice 1: what this project is for -- the inputs so far as one specification. Every reader of the purpose
+     * reads this, not the root goal's text; null while there is no root.
+     */
+    public String specification() {
+        GoalEntity root = getRootGoal();
+        if (root == null) return null;
+        var purpose = purpose();
+        // The boot rule (init), for a root set without recording its seed: entry 1 is made from the root's text once.
+        if (purpose.ledger().isEmpty()) purpose.ensureFor(root.getDescription());
+        return purpose.specification();
+    }
+
     public void setCurrentCycleContext(CycleContextData ctx) {
         this.currentCycleContext = ctx;
     }
@@ -284,6 +306,10 @@ public class GoalPlannerService {
         // T2-BW: advance planning run ID so this session's GIVEN_UP goals are tracked separately
         // from those in previous runs loaded from the graph.
         initPlanningRunId();
+
+        // T4-EC slice 1: a root that predates the input ledger gets its seed entry from its text.
+        GoalEntity loadedRoot = getRootGoal();
+        if (loadedRoot != null) purpose().ensureFor(loadedRoot.getDescription());
 
         persist();
 
@@ -461,7 +487,7 @@ public class GoalPlannerService {
         if (specTraceability != null) {
             GoalEntity root = getRootGoal();
             SpecTraceability.Binding binding = specTraceability.classify(
-                    root != null ? root.getDescription() : null, g);
+                    specification(), g);
             if (binding == SpecTraceability.Binding.EXTRA) {
                 if (!isExtraOrigin(g)) {
                     log.info("T4-BT: subgoal [{}] re-binned EXTRA by spec traceability (origin stamp said required): {}",
@@ -948,7 +974,7 @@ public class GoalPlannerService {
                 : com.walpro.autobuilder.core.build.BootGate.BootObservation.abstained();
 
         GoalEntity root = getRootGoal();
-        String specText = root != null ? root.getDescription() : null;
+        String specText = specification();
         Map<String, String> output = currentCycleContext != null ? currentCycleContext.previousOutput() : null;
 
         // Snapshotted before the loop: a promotion re-points currentSubGoalId and can mark
@@ -1883,6 +1909,11 @@ public class GoalPlannerService {
     }
 
     public void addInitialGoal(String id, String description) {
+        addInitialGoal(id, description, "seed-file");
+    }
+
+    /** @param addedBy who gave the seed, recorded on its input: {@code seed-file}, {@code operator}, ... */
+    public void addInitialGoal(String id, String description, String addedBy) {
         GoalEntity g = new GoalEntity(id, description, "system", GoalType.GOAL, null);
         goalMap.put(g.getId(), g);
         rootGoalId = g.getId();
@@ -1892,10 +1923,16 @@ public class GoalPlannerService {
         persistPointersToGraph();
 
         persist();
+        purpose().recordSeed(description, addedBy);
         ensureSeedObligations(description);
     }
 
     public void resetInitialGoal(String id, String description) {
+        resetInitialGoal(id, description, "seed-file");
+    }
+
+    /** @param addedBy who gave the seed, recorded on its input: {@code seed-file}, {@code reset}, ... */
+    public void resetInitialGoal(String id, String description, String addedBy) {
         goalMap.clear();
         GoalEntity g = new GoalEntity(id, description, "system", GoalType.GOAL, null);
         // T2-BW: seed run ID so subgoals added after reset share run 1 and GIVEN_UP goals
@@ -1911,6 +1948,7 @@ public class GoalPlannerService {
         persistPointersToGraph();
 
         persist();
+        purpose().recordSeed(description, addedBy);
         ensureSeedObligations(description);
     }
 
@@ -2232,9 +2270,9 @@ public class GoalPlannerService {
         } else {
             if (criteriaGroundingService == null) return;
             GoalEntity root = getRootGoal();
-            if (root == null || root.getDescription() == null || root.getDescription().isBlank()) return;
+            if (root == null || specification() == null || specification().isBlank()) return;
             Map<Integer, Boolean> grounded = criteriaGroundingService.classifyGrounded(
-                    root.getDescription(), declared);
+                    specification(), declared);
             if (grounded.isEmpty()) return; // no answer — keep the SPEC default
             for (Map.Entry<Integer, Boolean> e : grounded.entrySet()) {
                 binding.put(String.valueOf(e.getKey()), e.getValue() ? "SPEC" : "AUTHORED");
@@ -2384,7 +2422,7 @@ public class GoalPlannerService {
         if (exercisableCriterionQuery == null) return specDerived;
 
         GoalEntity root = getRootGoal();
-        String specText = root != null ? root.getDescription() : null;
+        String specText = specification();
 
         List<String> candidates = new ArrayList<>(specDerived);
         for (GoalEntity leaf : getRemainingGoals()) {
@@ -2423,11 +2461,11 @@ public class GoalPlannerService {
 
     public List<String> specDerivedRequirements() {
         List<String> out = new ArrayList<>();
-        GoalEntity specRoot = getRootGoal();
-        if (specBehaviourQuery == null || specRoot == null || specRoot.getDescription() == null) {
+        String spec = specification();
+        if (specBehaviourQuery == null || spec == null) {
             return out;
         }
-        var stated = specBehaviourQuery.statedBehaviours(specRoot.getDescription());
+        var stated = specBehaviourQuery.statedBehaviours(spec);
         for (var entry : stated.entrySet()) {
             out.addAll(specBehaviourQuery.criteriaFor(entry.getKey(), entry.getValue()));
         }
@@ -2442,9 +2480,9 @@ public class GoalPlannerService {
         // stopped those items ever closing (see coverageItemCriteria). Independent of how the
         // planner decomposed, so reach does not collapse on fine-grained plans: run 14-42-19
         // wrote 132 criteria of which only 7 were readable as assertions.
-        GoalEntity specRoot = getRootGoal();
-        if (specBehaviourQuery != null && specRoot != null && specRoot.getDescription() != null) {
-            var stated = specBehaviourQuery.statedBehaviours(specRoot.getDescription());
+        String spec = specification();
+        if (specBehaviourQuery != null && spec != null) {
+            var stated = specBehaviourQuery.statedBehaviours(spec);
             for (var entry : stated.entrySet()) {
                 out.addAll(specBehaviourQuery.criteriaFor(entry.getKey(), entry.getValue()));
             }
@@ -2919,8 +2957,7 @@ public class GoalPlannerService {
             // empty string — which left every criterion on a target with no network surface
             // unexercisable and the check silently abstaining at every closure. The planner still
             // forms no opinion about these words; it passes the ones it was given.
-            GoalEntity specRoot = getRootGoal();
-            String specText = specRoot == null ? null : specRoot.getDescription();
+            String specText = specification();
             return closureClaimVerifier.refute(goalId, criteria, specText);
         } catch (RuntimeException e) {
             log.warn("T4-CU: closure-claim check for {} failed ({}) — treating as unchecked, not as refuted",
@@ -2952,8 +2989,7 @@ public class GoalPlannerService {
             return Optional.empty();
         }
         Object claim = md.get(BlockerTypes.BOOT_CLAIM_KEY);
-        GoalEntity specRoot = getRootGoal();
-        String specText = specRoot == null ? null : specRoot.getDescription();
+        String specText = specification();
         try {
             if (BlockerTypes.CLAIM_SERVES.equals(claim)) {
                 return closureClaimVerifier.refuteObservedDefect(g.getId(), g.getDescription(), specText);
@@ -3954,7 +3990,7 @@ public class GoalPlannerService {
             // T4-CU: this caller wants only the prose — it reports an uncovered SEED obligation,
             // not one of a work item's own criteria, so there is no bank to narrow and no repair
             // item to name. Mapping to the description keeps it exactly as it was.
-            return closureClaimVerifier.refute(root.getId(), uncoveredSeed, root.getDescription())
+            return closureClaimVerifier.refute(root.getId(), uncoveredSeed, specification())
                     .map(ClaimRefutation::description);
         } catch (RuntimeException e) {
             log.warn("T4-DT: execution check of the seed's obligations failed ({}) — treating as "
@@ -3973,7 +4009,7 @@ public class GoalPlannerService {
      */
     private void injectExecutionRefutation(GoalEntity root, String refutation, List<String> uncoveredSeed) {
         List<String> doneWhen = exercisableCriterionQuery == null ? List.of()
-                : exercisableCriterionQuery.exercisable(uncoveredSeed, root.getDescription());
+                : exercisableCriterionQuery.exercisable(uncoveredSeed, specification());
         CoverageReviewResult injected = injectCoverageGaps(root, List.of(
                 "[BUILD_FIX] The running artifact contradicts the specification — " + refutation), true);
         if (injected.injected().isEmpty() || doneWhen.isEmpty()) return;
@@ -4013,15 +4049,15 @@ public class GoalPlannerService {
     private List<String> uncoveredSeedAtClosure(GoalEntity root, List<String> banked) {
         String written = writtenObligations();
         List<String> uncovered = new ArrayList<>(
-                SeedRequirements.notAlreadyCoveredVerifiable(root.getDescription(), banked, written));
+                SeedRequirements.notAlreadyCoveredVerifiable(specification(), banked, written));
         List<String> testGateLines = new ArrayList<>(SeedRequirements.answeredByGate(
-                root.getDescription(), written, SeedRequirements.GATE_TESTS));
+                specification(), written, SeedRequirements.GATE_TESTS));
         // T6-U: a line whose test was written from its wording and accepted is in the suite, so the test gate answers
         // it. One no kept test answers refuses closure before this ({@code derivedRequirementsNoTestAnswers}) while
         // the gate is live; with the gate off it stays a reading, as before.
         if (derivedTests != null) {
             Set<String> accepted = derivedTests.acceptedRequirements();
-            List<String> answered = SeedRequirements.answeredByGate(root.getDescription(), written,
+            List<String> answered = SeedRequirements.answeredByGate(specification(), written,
                     SeedRequirements.GATE_DERIVED).stream().filter(accepted::contains).toList();
             uncovered.removeAll(answered);
             testGateLines.addAll(answered);
@@ -4072,7 +4108,7 @@ public class GoalPlannerService {
      */
     private Optional<List<String>> derivedRequirementsNoTestAnswers(GoalEntity root) {
         if (derivedTests == null || testRunGate == null || !testRunGate.isLive()) return Optional.empty();
-        List<String> marked = SeedRequirements.answeredByGate(root.getDescription(), writtenObligations(),
+        List<String> marked = SeedRequirements.answeredByGate(specification(), writtenObligations(),
                 SeedRequirements.GATE_DERIVED);
         if (marked.isEmpty()) return Optional.empty();
         Set<String> accepted = derivedTests.acceptedRequirements();
@@ -4271,9 +4307,9 @@ public class GoalPlannerService {
                 // disk" on an endpoint goal) stays in the set — traceability, not wording, is the
                 // discriminator. Self-gated: a spec with no signal keeps today's collect-all
                 // (completion re-verification must not go vacuous on non-REST specs).
-                if (specTraceability != null && root.getDescription() != null
-                        && specTraceability.hasTraceabilitySignal(root.getDescription())
-                        && specTraceability.classify(root.getDescription(), sg) != SpecTraceability.Binding.REQUIRED) {
+                if (specTraceability != null && specification() != null
+                        && specTraceability.hasTraceabilitySignal(specification())
+                        && specTraceability.classify(specification(), sg) != SpecTraceability.Binding.REQUIRED) {
                     continue;
                 }
                 Object raw = sg.getMetadata() != null ? sg.getMetadata().get("acceptanceCriteria") : null;
@@ -4320,14 +4356,14 @@ public class GoalPlannerService {
                 // Abstains when the output cannot be seen — absence of evidence is not a gap.
                 List<String> missingEndpoints = new java.util.ArrayList<>();
                 boolean entryPointMissing = output != null && !output.isEmpty()
-                        && endpointSurfaceQuery.specRequiresRunnableArtifact(root.getDescription())
+                        && endpointSurfaceQuery.specRequiresRunnableArtifact(specification())
                         && !com.walpro.autobuilder.core.persistence.EntryPointScan.hasJavaEntryPointInSources(output);
                 if (entryPointMissing) {
                     missingEndpoints.add(
                             com.walpro.autobuilder.core.persistence.EntryPointScan.MISSING_ENTRY_POINT_WORK_ITEM);
                 }
                 missingEndpoints.addAll(endpointSurfaceQuery.missingEndpointWorkItems(
-                        root.getDescription(), output));
+                        specification(), output));
                 if (!missingEndpoints.isEmpty()) {
                     CoverageReviewResult injected = injectCoverageGaps(root, missingEndpoints);
                     if (!injected.injected().isEmpty()) {
@@ -4347,7 +4383,7 @@ public class GoalPlannerService {
                             }
                             endpointSurfaceQuery.endpointFromWorkItem(workItem.getDescription())
                                     .ifPresent(e -> setAcceptanceCriteria(id,
-                                            coverageItemCriteria(e, root.getDescription())));
+                                            coverageItemCriteria(e, specification())));
                         }
                         if (entryPointMissing) {
                             log.warn("T4-CV: root closure blocked — the specification names endpoints but no"
@@ -4398,7 +4434,7 @@ public class GoalPlannerService {
                 if (packagingFailure.isPresent() && brokenTestQuarantine != null
                         && packagingFailure.get().contains("src/test/")
                         && !packagingFailure.get().contains("src/main/")
-                        && !com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(root.getDescription())) {
+                        && !com.walpro.autobuilder.core.build.TestRunGate.specRequiresTests(specification())) {
                     List<String> quarantined = brokenTestQuarantine.recordBlockedVisit(
                             root.getId(), packagingFailure.get(),
                             currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge");
@@ -4459,7 +4495,7 @@ public class GoalPlannerService {
                 // cannot supply: a request body the application will accept.
                 java.util.Optional<String> bootFailure = bootGate.verifyBootsAndServes(
                         currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge",
-                        root.getDescription(),
+                        specification(),
                         specBoundBehaviouralCriteria(),
                         true);
                 if (bootFailure.isPresent()) {
@@ -4566,7 +4602,7 @@ public class GoalPlannerService {
                 // otherwise `mvn test` passes vacuously and a test-required goal completes with zero
                 // tests (observed 2026-06-22).
                 boolean testsRequired = com.walpro.autobuilder.core.build.TestRunGate
-                        .specRequiresTests(root.getDescription());
+                        .specRequiresTests(specification());
                 // T6-T: a run of the tree itself -- it is also the baseline candidates are compared with
                 java.util.Optional<String> testFailure = testRunGate.runOnTree(
                         currentCycleContext != null ? currentCycleContext.cycleName() : "completion-edge",
@@ -4631,7 +4667,7 @@ public class GoalPlannerService {
                 List<String> toVerify = new ArrayList<>(passingCriteria);
                 // T6-T: a banked criterion that restates a rule: line guides the work and never blocks it -- the
                 // obligations file says so, and the root's own obligations already leave rule lines out.
-                List<String> rules = SeedRequirements.rules(root.getDescription(), writtenObligations());
+                List<String> rules = SeedRequirements.rules(specification(), writtenObligations());
                 List<String> restated = toVerify.stream().filter(c -> SeedRequirements.restatesRule(c, rules)).toList();
                 if (!restated.isEmpty()) {
                     toVerify.removeAll(restated);
@@ -4672,7 +4708,7 @@ public class GoalPlannerService {
                 // which never calls the method, and judging it here would wall a correct run.
                 java.util.Map<String, com.walpro.autobuilder.core.build.EntryPointAssertions.Finding> unasserted =
                         com.walpro.autobuilder.core.build.EntryPointAssertions.unmet(
-                                SeedRequirements.verifiableObligationsOrSplit(root.getDescription(), writtenObligations()),
+                                SeedRequirements.verifiableObligationsOrSplit(specification(), writtenObligations()),
                                 output);
                 // T4-CQ: and where a test already calls the entry point, OBSERVE what it returns, so the
                 // work item carries the value to assert instead of asking the model to guess it.
@@ -4688,7 +4724,7 @@ public class GoalPlannerService {
                 }
                 final String observedSuffix = observedValues;
                 var completionVerification = unasserted.isEmpty()
-                        ? criteriaVerificationService.verifyCompletion(root.getDescription(), toVerify, output)
+                        ? criteriaVerificationService.verifyCompletion(specification(), toVerify, output)
                         : com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.blocked(
                                 unasserted.size() + " obligation(s) name an entry point no test calls and value-asserts: "
                                         + unasserted.values().stream().map(
@@ -4984,7 +5020,7 @@ public class GoalPlannerService {
         }
 
         List<String> missing = coverageRetrospectiveService.findMissingFeatures(
-                root.getDescription(), getAllGoals());
+                specification(), getAllGoals());
 
         if (missing.isEmpty()) {
             log.info("coverage-review: no gaps found — root goal appears fully covered");
@@ -5090,10 +5126,10 @@ public class GoalPlannerService {
      */
     public boolean requireEntryPointNow(Map<String, String> outputFiles) {
         GoalEntity root = getRootGoal();
-        if (root == null || root.getDescription() == null) return false;
+        if (root == null || specification() == null) return false;
         if (outputFiles == null || outputFiles.isEmpty()) return false;
         if (endpointSurfaceQuery == null
-                || !endpointSurfaceQuery.specRequiresRunnableArtifact(root.getDescription())) {
+                || !endpointSurfaceQuery.specRequiresRunnableArtifact(specification())) {
             return false;
         }
         if (com.walpro.autobuilder.core.persistence.EntryPointScan

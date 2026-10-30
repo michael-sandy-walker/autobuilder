@@ -95,6 +95,7 @@ class PlannerAgentTest {
         lenient().when(root.getId()).thenReturn("root-1");
         lenient().when(root.getDescription()).thenReturn("root desc");
         lenient().when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         lenient().when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
         if (goalsToRemove.isEmpty()) {
             lenient().when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
@@ -181,6 +182,7 @@ class PlannerAgentTest {
         lenient().when(root.getId()).thenReturn("root-1");
         lenient().when(root.getDescription()).thenReturn("root desc");
         lenient().when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
 
         agent.execute(ctx);
 
@@ -254,6 +256,7 @@ class PlannerAgentTest {
         when(root.getId()).thenReturn("root-1");
         when(root.getDescription()).thenReturn("root desc");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
@@ -304,6 +307,7 @@ class PlannerAgentTest {
         GoalEntity root = mock(GoalEntity.class);
         when(root.getId()).thenReturn("root-1");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
 
         GoalEntity current = mock(GoalEntity.class);
         when(current.getId()).thenReturn("sub-1");
@@ -420,6 +424,7 @@ class PlannerAgentTest {
         GoalEntity root = new GoalEntity("goal-real-root", "Evolve the application",
                 "system", GoalType.GOAL, null);
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of()); // triggers fallback
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
@@ -491,6 +496,7 @@ class PlannerAgentTest {
         when(root.getId()).thenReturn("root-1");
         when(root.getDescription()).thenReturn("Root");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
@@ -527,6 +533,7 @@ class PlannerAgentTest {
         when(root.getId()).thenReturn("root-1");
         when(root.getDescription()).thenReturn("Root desc");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
@@ -565,6 +572,7 @@ class PlannerAgentTest {
         when(root.getId()).thenReturn("root-goal");
         when(root.getDescription()).thenReturn("Root goal");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
@@ -615,6 +623,7 @@ class PlannerAgentTest {
         when(root.getId()).thenReturn("root-1");
         when(root.getDescription()).thenReturn("Root desc");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
@@ -661,6 +670,7 @@ class PlannerAgentTest {
         when(root.getId()).thenReturn("root-1");
         when(root.getDescription()).thenReturn("root-desc-refreshed");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
@@ -690,6 +700,7 @@ class PlannerAgentTest {
         when(root.getId()).thenReturn("root-1");
         when(root.getDescription()).thenReturn("Root desc");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
 
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
@@ -900,6 +911,8 @@ class PlannerAgentTest {
         when(plannerAdapter.plan(any())).thenReturn(outcome);
 
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
@@ -1105,6 +1118,7 @@ class PlannerAgentTest {
         when(root.getId()).thenReturn("root-1");
         when(root.getDescription()).thenReturn("Root");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
         when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of("Fresh replacement"));
@@ -1137,6 +1151,7 @@ class PlannerAgentTest {
         when(root.getId()).thenReturn("root-1");
         when(root.getDescription()).thenReturn("Root");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getRemainingGoals()).thenReturn(List.of());
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
@@ -1187,6 +1202,7 @@ class PlannerAgentTest {
         when(root.getId()).thenReturn("root-1");
         when(root.getDescription()).thenReturn("Root");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
         when(goalPlannerService.sanitizeProposedSubGoals(anyList())).thenReturn(List.of("Fresh replacement"));
@@ -1226,6 +1242,7 @@ class PlannerAgentTest {
         when(root.getId()).thenReturn("root-1");
         when(root.getDescription()).thenReturn("Root");
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getCompletedGoals()).thenReturn(List.of());
 
         CycleContextData ctx = CycleContextData.builder()

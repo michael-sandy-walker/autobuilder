@@ -81,6 +81,8 @@ class CycleExecutorTest {
         when(sub.getDescription()).thenReturn(subDesc);
 
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(sub);
         when(goalPlannerService.ensureAttemptIdsForCurrentScope())
                 .thenReturn(new AttemptIds("attempt-1", "attempt-parent-0"));
@@ -452,6 +454,7 @@ class CycleExecutorTest {
         // getStatus() not stubbed — returns null (not COMPLETED), which is sufficient to verify
         // the false-GOAL_FULFILLED path is blocked regardless of the exact status value.
         when(goalPlannerService.getRootGoal()).thenReturn(activeRoot);
+        { String spec = activeRoot.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
 
         // T1-DC: Engine delivers ACCEPTED + PROGRESSING via direct context writes.
         when(adaptiveExecutionEngine.runCycle(any())).thenAnswer(inv -> {
@@ -494,6 +497,7 @@ class CycleExecutorTest {
         when(completedRoot.getDescription()).thenReturn("Root goal");
         when(completedRoot.getStatus()).thenReturn(GoalStatus.COMPLETED);
         when(goalPlannerService.getRootGoal()).thenReturn(completedRoot);
+        { String spec = completedRoot.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
 
         stubIdentityPipeline();
 
@@ -711,6 +715,7 @@ class CycleExecutorTest {
         when(sub1.getDescription()).thenReturn("Sub goal 1");
         GoalEntity sub2 = mock(GoalEntity.class);
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(sub1, sub2);
         when(goalPlannerService.ensureAttemptIdsForCurrentScope())
                 .thenReturn(new AttemptIds("attempt-1", "attempt-parent-0"));
@@ -842,6 +847,7 @@ class CycleExecutorTest {
         when(root.getDescription()).thenReturn(rootDesc);
         when(root.getStatus()).thenReturn(rootStatus);
         when(goalPlannerService.getRootGoal()).thenReturn(root);
+        { String spec = root.getDescription(); lenient().when(goalPlannerService.specification()).thenReturn(spec); }
         when(goalPlannerService.getCurrentSubGoal()).thenReturn(null);
         when(goalPlannerService.ensureAttemptIdsForCurrentScope())
                 .thenReturn(new AttemptIds("attempt-1", "attempt-parent-0"));

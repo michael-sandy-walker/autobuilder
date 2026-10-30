@@ -53,6 +53,10 @@ public class StuckLayer {
     @Autowired(required = false)
     private FileService fileService;
 
+    /** T4-EC slice 1: the project's seed, as the seed authority and as the key earlier runs' priors are under; optional. */
+    @Autowired(required = false)
+    private com.walpro.autobuilder.goal.purpose.PurposeService purposeService;
+
     /** Which class a type name denotes: the JDK and the project's own classpath; optional (JDK only without it). */
     @Autowired(required = false)
     private ProjectTypeAuthority projectTypeAuthority;
@@ -79,7 +83,6 @@ public class StuckLayer {
     private String currentSubGoal;
     private boolean ledgerFileStarted;
     private Map<String, String> adoptedSources;
-    private String seed;
 
     /** The cycle and subgoal observations without their own are attributed to. */
     public synchronized void beginCycle(String cycleId, String subGoalId) {
@@ -368,7 +371,7 @@ public class StuckLayer {
     private void consultPriors(StuckObservation o) {
         if (priors == null || o == null || o.source() == null || o.signature() == null) return;
         if (ledger.has(o.source(), o.signature())) return;
-        String task = StuckPriors.taskKey(seed());
+        String task = taskKey();
         if (task == null) return;
         StuckPriors.Prior prior = priors.priorFor(task, o.source().name(), o.signature());
         if (!prior.seenBefore()) return;
@@ -386,7 +389,7 @@ public class StuckLayer {
     /** T4-CT: keeps how an entry turned out, for later runs of the task; the question is the last one asked. */
     private void recordOutcome(StuckLedger.Entry e, StuckPriors.Outcome outcome, String cycleId) {
         if (priors == null) return;
-        String task = StuckPriors.taskKey(seed());
+        String task = taskKey();
         if (task == null) return;
         List<StuckLedger.Question> asked = e.asked();
         StuckLedger.Question last = asked.isEmpty() ? null : asked.get(asked.size() - 1);
@@ -618,14 +621,14 @@ public class StuckLayer {
         return out;
     }
 
-    private synchronized String seed() {
-        if (seed != null) return seed;
-        try {
-            seed = fileService != null && fileService.exists("bootstrap/seed.txt") ? fileService.readString("bootstrap/seed.txt") : "";
-        } catch (Exception ex) {
-            seed = "";
-        }
-        return seed;
+    private String seed() {
+        String spec = purposeService == null ? null : purposeService.specification();
+        return spec == null ? "" : spec;
+    }
+
+    /** The key earlier runs of the same task stored their priors under: the digest of the seed's source text. */
+    private String taskKey() {
+        return seed().isBlank() ? null : purposeService.seedKey();
     }
 
     private void writeLedger() {

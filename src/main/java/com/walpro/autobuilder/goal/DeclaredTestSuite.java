@@ -31,7 +31,7 @@ public class DeclaredTestSuite {
         if (root == null) return false;
         try {
             if (!files.exists(SeedObligationsFile.PATH)) return false;
-            return !SeedRequirements.answeredByGate(root.getDescription(),
+            return !SeedRequirements.answeredByGate(planner.specification(),
                     files.readFile(SeedObligationsFile.PATH), SeedRequirements.GATE_TESTS).isEmpty();
         } catch (Exception e) {
             return false;

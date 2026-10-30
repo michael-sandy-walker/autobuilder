@@ -55,6 +55,7 @@ class StagedTestFailureHeuristicTest {
         GoalEntity root = mock(GoalEntity.class);
         when(root.getDescription()).thenReturn(SEED);
         when(planner.getRootGoal()).thenReturn(root);
+        when(planner.specification()).thenReturn(SEED);
         when(gate.isLive()).thenReturn(true);
         when(outcome.score()).thenReturn(0.8);
         declare(List.of("Every widget entry point is covered by a test.", "gate: tests The whole suite passes."));

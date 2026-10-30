@@ -509,8 +509,7 @@ public class MergeAgent implements ExecutionAgent {
         if (false) return false;
         String spec = context != null ? context.currentGoalDescription() : null;
         if (spec == null || spec.isBlank()) {
-            GoalEntity root = goalPlannerService.getRootGoal();
-            spec = root != null ? root.getDescription() : null;
+            spec = goalPlannerService.specification();
         }
         return com.walpro.autobuilder.core.build.UnrequestedTestSourcePolicy.isUnrequested(path, spec);
         }

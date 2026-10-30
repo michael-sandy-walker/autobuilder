@@ -148,10 +148,9 @@ public class RunEndReportService {
 
             // Reuses the readout rather than recounting: it is the one place that knows how a
             // criterion is classified, and a second count here would drift from the T2-EX line.
-            var specRootForCriteria = goalPlannerService.getRootGoal();
             var criteriaCounts = com.walpro.autobuilder.observability.CriteriaExecutabilityReadout
                     .over(goalPlannerService.getAllGoals(), exercisableCriterionQuery,
-                            specRootForCriteria == null ? null : specRootForCriteria.getDescription());
+                            goalPlannerService.specification());
             RunEndReport endReport = new RunEndReport(
                     SCHEMA_VERSION,
                     terminalReason,

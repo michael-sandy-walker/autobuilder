@@ -72,6 +72,9 @@ class StuckLayerReplayTest {
         layer = new StuckLayer();
         ReflectionTestUtils.setField(layer, "fileService", files);
         ReflectionTestUtils.setField(layer, "behaviourLogger", events);
+        var purpose = com.walpro.autobuilder.goal.purpose.PurposeService.fileOnly(files);
+        purpose.recordSeed("Add per-channel totals to ParticipationWindows.", "test");
+        ReflectionTestUtils.setField(layer, "purposeService", purpose);
         detector = new GrindDetector();
         ReflectionTestUtils.setField(detector, "stuckLayer", layer);
     }

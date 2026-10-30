@@ -108,7 +108,7 @@ public class SystemResetConfig {
         runIdentityService.renewLineage();
 
         String goalId = "goal-" + java.util.UUID.randomUUID();
-        goalPlannerService.resetInitialGoal(goalId, seedContent);
+        goalPlannerService.resetInitialGoal(goalId, seedContent, "reset");
         log.info("Goal stack reset with root goal: {}", seedContent);
     }
 

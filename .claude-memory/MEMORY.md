@@ -110,6 +110,7 @@ How to work:
 - `feedback_analyse_no_ask.md`: "analyse the last run" means proceed directly, no clarification. (reviewed 2026-07-09)
 - `feedback_run_analysis_log_order.md`: analyse runs from the behaviour ndjson first; the autobuilder log only for depth. (reviewed 2026-07-09)
 - `feedback_no_auto_commit.md`: commit only with authorization (checkpoint commits OK in authorized autonomous runs); NEVER push, except to the session's own claude/ branch in cloud-container sessions (CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud*; not Remote Control). (reviewed 2026-09-24)
+- `feedback_commit_the_run_ledger.md`: `scripts/run_outcomes.json` is committed with the session's work, never left for the user (2026-10-31). (reviewed 2026-10-31)
 - `feedback_no_branch_ops.md`: never merge/rebase/reset/branch -d/push autonomously; describe and wait for 'do it'. (reviewed 2026-09-08)
 - `feedback_operator_reviews_ports.md`: IF a loop-built solution is ever ported, the user reviews a packet first (process/, M-E); since M-F ports are off the default path. (reviewed 2026-09-27)
 - `feedback_process_apart_from_product.md`: how we work (reviews, packets, session tooling) lives in meta_process.md + process/, never as product tickets or in src/ / scripts/. (reviewed 2026-09-27)

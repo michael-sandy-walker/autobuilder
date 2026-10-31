@@ -34,8 +34,8 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 `AutobuilderService` (60s scheduler) → `CycleExecutor` → `AdaptiveExecutionEngine` (signal-driven, fitness-ranked) → 5 agents (planner / evolution / evaluation / merge / analysis) → `GoalPlannerService` + Neo4j graph
 
 ## Roadmap
-- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-10-31)
-- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-10-31)
+- `roadmap-overview.md` — thin one-line-per-ticket index over `roadmap.md`, grouped by tier. (reviewed 2026-11-01)
+- `roadmap.md` — full backlog and ticket bodies (source of truth). (reviewed 2026-11-01)
 - `tier_definitions.md` — canonical tier meanings. (reviewed 2026-09-08)
 
 ## Meta / Process (YOU+ME work, not the product)
@@ -45,7 +45,7 @@ Spring Boot 3.3 / Java 21 autonomous self-improvement loop. Evolves a target cod
 
 Direction and orientation:
 - `project_session_agenda.md`: live ordering is the 2026-08-23 REORDER section at the end; S1-S6 kept for reasoning only. Never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-10-31)
+- `project_resume_state.md`: latest session/run state, folded per run; only the NEWEST block carries the entry marker. Read before quoting any run-window number. (reviewed 2026-11-01)
 - `project_wave2_structure.md`: wave 2's five layers and gate-driven sequence; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: the goal is a loop with a self-model it consults before acting; triage lens ("substrate or patch?"). (reviewed 2026-09-08)
 - `project_living_project_vision.md`: a project keeps taking inputs of any kind (seed = first); Autobuilder also builds OFFSPRING whose code AND graph become a knowledge part when included. Read before input/merge/import work. (reviewed 2026-10-30)

@@ -11,9 +11,9 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); SLICE 1 BUILT AND VERIFIED -- START HERE
+## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); ALL EIGHT SLICES BUILT, DoD NOT MET -- START HERE
 
-- **Nothing is live.** Head = this commit (code `acc96132`), suite 4186/0 (this session's run). The stale field111 waiter (PID 1619913, self-matching `until pgrep`) was stopped at the user's word; nothing launched.
+- **Nothing is live.** Head = this commit (code `9c84e9f4`), suite 4190/0 (this session's run). The stale field111 waiter (PID 1619913, self-matching `until pgrep`) was stopped at the user's word; nothing launched.
 - **This session:** filed `T1-GG` (T6-U's three open mechanisms); restated `T5-BI` (redesign all prose output); `T4-EC` redefined with the user -- a project keeps accepting input (seed = first), several snapshots merged or projects brought into a RUNNING project, fill/extend/correct, conflicts held, per-input undo -- then the map of what assumes one seed = one run, the representation (one input ledger, graph-first, the tree's starting shape by mode), eight slices, and the measuring case (`firestarter` running + `clitarget` frozen + a third-party catalogue; fallback `edit-hunks` + a patch library). The user's long-range picture saved as [[project-living-project-vision]] (offspring whose code AND graph become a knowledge part).
 - **Slice 1 done:** input ledger + purpose service, seed as entry 1; field113 cashbook GOAL_FULFILLED 13/13, entry 1 in `meta/inputs.json` and the graph. Detail on `T4-EC` (2026-10-30 appends).
 - **field114 (firestarter baseline for slice 2, `~/.autobuilder/field114`) was NOT a measurement:** run `2026-10-30_22-48-47` lost Neo4j at 22:51:24 when a HOST OOM killed the Docker Desktop VM (the run's llama-server 6.6 GB, IntelliJ 2.8 GB, Firefox ~5 GB, Update Manager 0.6 GB; swap full); every cycle then aborted ("unable to prepare context"); stopped via `stop_run.sh`, recorded `terminal=jvm-stopped` with the reason. Docker Desktop was still down at session end; the user restarted the PC. **Before any run:** confirm Docker Desktop and Neo4j are up (`systemctl --user start docker-desktop` if not) and that memory has headroom.
@@ -29,7 +29,8 @@ metadata:
 - **Slice 5 built, NOT done (head `8339eac6` + this commit, suite 4184/0):** the landing is stable over three runs (right corrections and conflicts, no false ones); the run after it closed 0 of 4 (38/39, 39/39, 40/41, 29/41; 41/41 never reached). Detail on `T4-EC`.
 - **Spin fixed (`ef6df5c1`, suite 4184/0); field122 GOAL_FULFILLED 39/41, a FALSE completion:** failing "a refused import creates no book" and "uses shelfkit's ISBN rule", both intent lines a model confirmed. Detail on `T4-EC`.
 - **User, 2026-10-31: "Let's finish the slices first before we spiral again."** Verifying intent lines is parked on `T4-EC`; slice 6 done (one operation, `acc96132`, suite 4186/0; field124 three projects into a new one 35/41, not closed).
-- **NEXT:** `T4-EC` slices 7 (the running form) and 8 (undo).
+- **All eight `T4-EC` slices built (`9c84e9f4`, suite 4190/0).** field125: two inputs landed in a running loop, no restart, honest-halt:open-conflict. field126: an input withdrawn mid-run, 31/33. The DoD is NOT met: no run closed true (table on the ticket).
+- **NEXT, the user's call:** the parked verification of intent lines is what stands between the mechanism and closing true.
 
 ## 2026-10-28 (Opus 5.5, session 19 close) -- T6-U CLOSED; THE REFUSAL GRIND FIXED
 

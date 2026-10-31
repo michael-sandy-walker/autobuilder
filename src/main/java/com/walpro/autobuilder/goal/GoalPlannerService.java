@@ -323,6 +323,19 @@ public class GoalPlannerService {
         return new ArrayList<>(out);
     }
 
+    /**
+     * What the gate refused is not banked any more. Left true, the early exit took the item as finished every cycle and
+     * skipped the agents, the gate refused it every cycle, and nothing could change: 0.4 s cycles on one item until the
+     * convergence brake halted the run, with the work undone (field121; three runs of 2026-10-26 before it).
+     */
+    private void unbank(GoalEntity g, List<String> criteria, List<String> refused) {
+        Map<Integer, Boolean> status = new HashMap<>(getCriteriaPassStatus(g));
+        for (int i = 0; i < criteria.size(); i++) {
+            if (refused.contains(criteria.get(i))) status.put(i + 1, false);
+        }
+        saveCriteriaPassStatus(g.getId(), status);
+    }
+
     /** T4-EC slice 5: a decision lifts the halt an open conflict caused; another conflict refuses closure again by itself. */
     public void conflictDecided() {
         unanswerableAtClosure = null;
@@ -5731,6 +5744,7 @@ public class GoalPlannerService {
                             if (!stalled && !confirmedOnSecondReading) {
                                 log.warn("T6-T: refusing FULFILLED for criteria-gate work item [{}] -- the verifier that raised it"
                                         + " still does not confirm: {}", goalId, check.unconfirmed().get());
+                                unbank(g, criteria, check.unconfirmedCriteria());
                                 return new GoalProgressApplicationResult(goalId, false, currentSubGoalId, currentSubGoalId, false);
                             }
                             if (stalled) {

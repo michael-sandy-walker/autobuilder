@@ -1506,9 +1506,14 @@ public class GoalPlannerServiceClosureTest {
                 com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.CompletionVerification.blocked(
                         "1 acceptance criterion(s) not confirmed: Nib is one unit wide", java.util.List.of("Nib is one unit wide")));
 
+        service.saveCriteriaPassStatus("C", new java.util.HashMap<>(Map.of(1, true)));
+        assertThat(service.allCriteriaDefinedAndBanked("C")).isTrue();
+
         service.applyGoalProgress("C", com.walpro.autobuilder.model.GoalProgressState.FULFILLED, "score-based closure");
 
         assertThat(service.getGoalById("C").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        // field121: left banked, the early exit retried this every cycle, skipping the agents, until the brake halted the run.
+        assertThat(service.allCriteriaDefinedAndBanked("C")).as("what the gate refused is not banked").isFalse();
     }
 
     /**

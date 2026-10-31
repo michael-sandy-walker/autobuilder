@@ -470,7 +470,7 @@ public class AutobuilderController {
     }
 
     /** T4-EC slice 4: the bridge -- a confirmed session and an integration goal become a child to run the loop on. */
-    public record IntegrateRequest(MergeParent into, MergeParent brought, String layout, String goal,
+    public record IntegrateRequest(MergeParent into, MergeParent brought, String goal,
                                    java.util.List<String> obligations, String child) {
     }
 
@@ -478,11 +478,8 @@ public class AutobuilderController {
     public ResponseEntity<?> integrateMergeSession(@PathVariable String id, @RequestBody IntegrateRequest request) {
         if (mergeSessionService == null) return ResponseEntity.status(503).body(Map.of("error", "merge sessions are not enabled in this context"));
         try {
-            var r = mergeSessionService.integrate(id, parent(request.into()), parent(request.brought()),
-                    request.layout() == null ? null : com.walpro.autobuilder.core.merge.ProjectMerge.Layout.valueOf(request.layout()),
-                    request.goal(), request.obligations(), java.nio.file.Path.of(request.child()));
-            return ResponseEntity.ok(Map.of("child", request.child(), "files", r.tree().size(), "conflicts", r.conflicts(),
-                    "notes", r.notes(), "obligations", r.bootstrap().get("seed.obligations.txt")));
+            return ResponseEntity.ok(mergeSessionService.integrate(id, parent(request.into()), parent(request.brought()),
+                    request.goal(), request.obligations(), java.nio.file.Path.of(request.child())));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (java.io.IOException e) {

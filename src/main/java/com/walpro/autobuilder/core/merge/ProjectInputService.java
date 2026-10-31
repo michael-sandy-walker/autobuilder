@@ -83,6 +83,7 @@ public class ProjectInputService {
         ProjectInput.Landing landing = ProjectInput.land(before,
                 ProjectMerge.files(root.resolve(ProtectedPaths.BASELINE_DIR)), parent);
 
+        Files.createDirectories(output);
         manifest.recordIfAbsent();   // the project as it stood, before the input's files are in it
         for (Map.Entry<String, String> e : landing.files().entrySet()) {
             Path p = output.resolve(e.getKey());
@@ -169,7 +170,7 @@ public class ProjectInputService {
         });
         Map<String, String> ours = new TreeMap<>();
         receiving.forEach((p, t) -> {
-            if (p.startsWith("src/main/java/") && p.endsWith(".java")) ours.put(p, t);
+            if (p.contains("src/main/java/") && p.endsWith(".java")) ours.put(p, t);
         });
         if (theirs.isEmpty() || ours.isEmpty()) return List.of();
         String specification = goals.specification();
@@ -284,7 +285,7 @@ public class ProjectInputService {
         Optional<TestRunReport> run = testRunGate.freshReport();
         Map<String, String> tree = new LinkedHashMap<>();
         new TreeMap<>(ProjectMerge.files(files.getRootDir().resolve("output"))).forEach((p, t) -> {
-            if (p.startsWith("src/") || p.equals("pom.xml")) tree.put(p, t);
+            if (p.contains("src/") || p.endsWith("pom.xml")) tree.put(p, t);
         });
         Map<String, Verdict> byText = new LinkedHashMap<>();
         List<ProjectMerge.Criterion> open = new ArrayList<>();

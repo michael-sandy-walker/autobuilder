@@ -128,4 +128,30 @@ class ProjectInputTest {
 
         assertThat(landing.conflicts()).anyMatch(c -> c.contains(MAIN));
     }
+
+    @Test
+    void aNewProjectTakesEachInputAsAModule_keepingItsBuild() throws IOException {
+        var first = ProjectInput.land(Map.of(), Map.of(), new ProjectMerge.Parent("knots", "run-k", project("k")));
+
+        assertThat(first.files()).containsKeys("knots/pom.xml", "knots/src/main/java/org/knot/Knot.java", "knots/README.md", "pom.xml");
+        assertThat(first.files().get("pom.xml")).contains("<packaging>pom</packaging>").contains("<module>knots</module>");
+        assertThat(first.protectedLines()).contains("members: knots/src/main/**", "members: knots/src/main/java/org/knot/Knot.java",
+                "knots/src/test/java/org/knot/KnotTest.java");
+
+        Path second = tmp.resolve("rope");
+        write(second.resolve("output/pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>org.r</groupId><artifactId>rope</artifactId><version>1</version></project>");
+        write(second.resolve("output/src/main/java/org/r/Rope.java"), "package org.r;\npublic class Rope { }\n");
+        Map<String, String> tree = new TreeMap<>(first.files());
+        var next = ProjectInput.land(tree, Map.of(), new ProjectMerge.Parent("rope", "run-r", second));
+
+        assertThat(next.files()).containsKey("rope/src/main/java/org/r/Rope.java");
+        assertThat(next.files().get("pom.xml")).contains("<module>knots</module>").contains("<module>rope</module>");
+        assertThat(next.conflicts()).isEmpty();
+    }
+
+    @Test
+    void aProjectWithCodeKeepsItsLayout_itIsNotTurnedIntoModules() throws IOException {
+        var landing = ProjectInput.land(receiving(), Map.of(), new ProjectMerge.Parent("knots", "run-k", project("k")));
+        assertThat(landing.files()).containsKey("src/main/java/org/knot/Knot.java").doesNotContainKey("knots/pom.xml");
+    }
 }

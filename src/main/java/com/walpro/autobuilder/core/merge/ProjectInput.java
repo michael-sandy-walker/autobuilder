@@ -25,6 +25,10 @@ import java.util.TreeMap;
  * protected, and its code may be added to but keeps what it declares (field118: the loop made a third party's public
  * constructor private, and that party's own tests stopped compiling).
  *
+ * <p>A NEW project (no code yet, or a build that only lists modules) holds each input as a module under its artifact id,
+ * with its own build file, dependencies and tests: nothing named alike collides, and every input keeps its build.
+ * Inputs land one at a time, so each is compared with what the earlier ones brought.
+ *
  * <p>The input is a project directory ({@code output/}, {@code meta/GoalStack.json}, {@code bootstrap/}) or a bare tree
  * with no such record, as a third party's is: then only its code and its tests come.
  */
@@ -60,7 +64,11 @@ public final class ProjectInput {
         Map<String, String> theirs = ProjectMerge.files(project ? dir.resolve("output") : dir);
         Map<String, String> theirAdopted = ProjectMerge.files(dir.resolve(ProtectedPaths.BASELINE_DIR));
         List<String> conflicts = new ArrayList<>(), notes = new ArrayList<>(), provenance = new ArrayList<>();
-        Map<String, String> merged = sharesBase(adopted, theirAdopted)
+        boolean modules = holdsModules(tree);
+        String at = modules ? moduleOf(theirs, input.label()) + "/" : "";
+        Map<String, String> merged = modules
+                ? asModule(tree, theirs, at, input.label(), conflicts, provenance)
+                : sharesBase(adopted, theirAdopted)
                 ? threeWay(tree, adopted, theirAdopted, theirs, input.label(), conflicts, provenance)
                 : placed(tree, theirs, input.label(), conflicts, provenance, notes);
 
@@ -82,16 +90,49 @@ public final class ProjectInput {
         }
         String theirProtected = ProjectMerge.read(dir.resolve("bootstrap/protected-paths.txt"));
         if (theirProtected != null) {
-            theirProtected.lines().map(String::strip).filter(l -> !l.isEmpty() && !l.startsWith("#")).forEach(protect::add);
+            theirProtected.lines().map(String::strip).filter(l -> !l.isEmpty() && !l.startsWith("#"))
+                    .map(l -> l.startsWith(MEMBERS) ? ProtectedPaths.MEMBERS_LINE + at + l.substring(MEMBERS.length()).strip() : at + l)
+                    .forEach(protect::add);
         }
         for (String p : brought) {
-            if (p.startsWith("src/test/")) protect.add(p);
-            else if (p.startsWith("src/main/") && p.endsWith(".java")) protect.add(ProtectedPaths.MEMBERS_LINE + p);
+            if (p.startsWith(at + "src/test/")) protect.add(p);
+            else if (p.startsWith(at + "src/main/") && p.endsWith(".java")) protect.add(ProtectedPaths.MEMBERS_LINE + p);
         }
         List<String> conflictedFiles = conflicts.stream().filter(c -> c.contains(": both projects have it"))
                 .map(c -> c.substring(0, c.indexOf(": both projects have it"))).toList();
         return new Landing(changed, brought, conflicts, conflictedFiles, notes, goals, List.copyOf(criteria.values()), obligations,
                 List.copyOf(protect), ProjectMerge.lineageOf(input), digest(theirs));
+    }
+
+    private static final String MEMBERS = "members:";
+
+    /** No code yet, or a build that only lists modules: inputs live here as modules. */
+    private static boolean holdsModules(Map<String, String> tree) {
+        if (tree.keySet().stream().noneMatch(p -> p.contains("src/"))) return true;
+        String pom = tree.get("pom.xml");
+        return pom != null && pom.contains("<modules>");
+    }
+
+    private static String moduleOf(Map<String, String> theirs, String label) {
+        try {
+            return ProjectMerge.Pom.parse(theirs.get("pom.xml")).artifactId();
+        } catch (RuntimeException e) {
+            return label;
+        }
+    }
+
+    private static Map<String, String> asModule(Map<String, String> tree, Map<String, String> theirs, String at, String label,
+                                                List<String> conflicts, List<String> provenance) {
+        Map<String, String> out = new TreeMap<>(tree);
+        ProjectMerge.place(out, theirs, at, label, provenance, conflicts, p -> true);
+        String name = at.substring(0, at.length() - 1);
+        String pom = out.get("pom.xml");
+        if (pom == null || !pom.contains("<modules>")) {
+            out.put("pom.xml", ProjectMerge.Pom.aggregator("merged", "merged-project", "0.1.0-SNAPSHOT", List.of(name)));
+        } else if (!pom.contains("<module>" + name + "</module>")) {
+            out.put("pom.xml", pom.replace("</modules>", "    <module>" + name + "</module>\n    </modules>"));
+        }
+        return out;
     }
 
     /** Both record what they adopted, and every file both recorded is the same text. */

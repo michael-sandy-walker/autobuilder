@@ -162,16 +162,18 @@ public class MergeSessionService {
     /** Where a child records the merge session it was made from -- the loop mirrors its goal tree into that session. */
     public static final String SESSION_LINK = "meta/merge-session.json";
 
+    /** The inputs a bridge's child is to take, for {@code scripts/bring_inputs.py}. */
+    public static final String INPUT_PLAN = "bootstrap/input-plan.json";
+
     /**
-     * T4-EC slice 4, the bridge: a confirmed session and the operator's integration goal become the child the loop runs
-     * on -- {@code brought} integrated into {@code into} by {@link ProjectMerge#integrate} (the default layout unless one
-     * is given), its obligations the operator's own lines followed by one per confirmed decision of the session
+     * T4-EC, the bridge: a confirmed session and the operator's goal become a new project to run on -- {@code child} holds
+     * the goal as its seed and a plan of the inputs, which {@code scripts/bring_inputs.py} posts to the application working
+     * on it. The brought project's intent is the operator's lines followed by one per confirmed decision
      * ({@link SessionDecisions}); the child records the session under {@value #SESSION_LINK}. Nothing in the session
      * changes. Refused when the session has no confirmed decision or the child directory holds files.
      */
-    public synchronized ProjectMerge.Result integrate(String sessionId, ProjectMerge.Parent into, ProjectMerge.Parent brought,
-                                                      ProjectMerge.Layout layout, String goal, List<String> obligations,
-                                                      Path child) throws IOException {
+    public synchronized Map<String, Object> integrate(String sessionId, ProjectMerge.Parent into, ProjectMerge.Parent brought,
+                                                      String goal, List<String> obligations, Path child) throws IOException {
         requireSession(sessionId);
         if (goal == null || goal.isBlank()) throw new IllegalArgumentException("an integration needs a goal");
         if (Files.isDirectory(child)) {
@@ -183,12 +185,17 @@ public class MergeSessionService {
         if (decisions.isEmpty()) throw new IllegalArgumentException("the session has no confirmed decision to integrate from");
         List<String> lines = new ArrayList<>(obligations == null ? List.of() : obligations);
         lines.addAll(decisions);
-        ProjectMerge.Result r = ProjectMerge.integrate(into, brought, layout == null ? ProjectMerge.Layout.MODULES : layout,
-                goal, lines, Instant.now());
-        ProjectMerge.writeChild(r, child);
+        Files.createDirectories(child.resolve("bootstrap"));
+        Files.createDirectories(child.resolve("meta"));
+        Files.writeString(child.resolve("bootstrap/seed.txt"), goal);
+        Map<String, Object> plan = Map.of("inputs", List.of(
+                Map.of("label", into.label(), "runId", into.runId(), "dir", into.dir().toString(), "intent", goal),
+                Map.of("label", brought.label(), "runId", brought.runId(), "dir", brought.dir().toString(),
+                        "intent", goal.strip() + "\n" + String.join("\n", lines))));
+        Files.writeString(child.resolve(INPUT_PLAN), MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(plan));
         Files.writeString(child.resolve(SESSION_LINK), MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(
                 Map.of("sessionId", sessionId, "decisions", decisions)));
-        return r;
+        return plan;
     }
 
     public List<MergeSession.Edit> log(String sessionId) throws IOException {

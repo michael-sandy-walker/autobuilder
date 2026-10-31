@@ -264,6 +264,44 @@ public class ProjectInputService {
         return decided;
     }
 
+    /**
+     * T4-EC slice 8: an input taken back out, the work done since kept. Its files leave the tree, its module the build;
+     * its obligations, corrections and open conflicts stop counting, its goals are subsumed; the ledger records the
+     * withdrawal, so nothing of the history is lost. What referred to its files is the loop's work now: goal text names them.
+     */
+    public synchronized InputEvent withdraw(String inputId, String by) throws IOException {
+        InputEntry input = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(inputId)).findFirst().orElse(null);
+        if (input == null) throw new IllegalArgumentException("no such input: " + inputId);
+        if (input.sequence() == 1) throw new IllegalArgumentException("the seed is what the project is; it cannot be withdrawn");
+        if (goals.purpose().ledger().withdrawn(inputId)) throw new IllegalArgumentException("already withdrawn: " + inputId);
+        String dir = "meta/inputs/" + inputId;
+        List<String> placed = files.exists(dir + "/placed.txt")
+                ? files.readFile(dir + "/placed.txt").lines().filter(l -> !l.isBlank()).toList() : List.of();
+        Path output = files.getRootDir().resolve("output");
+        String module = null;
+        for (String p : placed) {
+            Files.deleteIfExists(output.resolve(p));
+            Path baseline = files.getRootDir().resolve(ProtectedPaths.BASELINE_DIR).resolve(p);
+            Files.deleteIfExists(baseline);
+            if (p.endsWith("/pom.xml")) module = p.substring(0, p.indexOf('/'));
+        }
+        if (module != null) {
+            Path pom = output.resolve("pom.xml");
+            if (Files.isRegularFile(pom)) {
+                Files.writeString(pom, Files.readString(pom).replaceAll("\\s*<module>" + java.util.regex.Pattern.quote(module) + "</module>", ""));
+            }
+        }
+        files.writeFile(dir + ProtectedPaths.INPUT_FILE, "\n");
+        manifest.removeFiles(placed);
+        InputEvent event = goals.purpose().recordWithdrawal(inputId, by, goals.withdrawGoals(inputId));
+        goals.conflictDecided();
+        if (!placed.isEmpty()) {
+            goals.addDecidedWork("The project builds and works without these files, which were withdrawn: " + String.join(", ", placed), null);
+        }
+        log.warn("T4-EC: input {} withdrawn by {} -- {} file(s) out", inputId, by, placed.size());
+        return event;
+    }
+
     /** The intent's lines, generated like a text input's, then what the input verified; the operator may edit them. */
     private int writeObligations(InputEntry input, List<String> verified, List<String> intentLines) throws IOException {
         String path = goals.purpose().obligationsPath(input);

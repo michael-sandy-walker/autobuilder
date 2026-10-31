@@ -93,6 +93,18 @@ public class AdoptionManifest {
         }
     }
 
+    /** T4-EC slice 8: a withdrawn input's files are gone on purpose: they leave the record of what was adopted. */
+    public void removeFiles(List<String> paths) {
+        try {
+            if (paths.isEmpty() || !fileService.exists(PATH)) return;
+            Map<String, String> adopted = mapper.readValue(fileService.readString(PATH), new TypeReference<TreeMap<String, String>>() { });
+            paths.forEach(adopted::remove);
+            fileService.writeString(PATH, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(adopted));
+        } catch (Exception e) {
+            log.warn("T4-EC: could not remove an input's files from the adoption manifest: {}", e.getMessage());
+        }
+    }
+
     /** The changes since adoption; empty when this tree was not adopted or the manifest is unreadable. */
     public Optional<Changes> changes() {
         try {

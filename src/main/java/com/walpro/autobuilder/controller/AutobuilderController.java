@@ -351,6 +351,19 @@ public class AutobuilderController {
     public record ConflictDecision(String decision, String by) {
     }
 
+    /** T4-EC slice 8: an input taken back out. The ledger keeps it, and the work done since stays. */
+    @PostMapping("/inputs/{id}/withdraw")
+    public ResponseEntity<?> withdrawInput(@PathVariable String id, @RequestParam(defaultValue = "operator") String by) {
+        if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(autobuilderService.withdrawInput(projectInputService, id, by));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     /** T4-EC slice 5: what waits for a decision. */
     @GetMapping("/inputs/conflicts")
     public ResponseEntity<?> openConflicts() {

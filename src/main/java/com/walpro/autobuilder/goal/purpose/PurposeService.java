@@ -124,7 +124,7 @@ public class PurposeService {
     private List<Requirement> across(java.util.function.BiFunction<String, String, List<String>> read) {
         java.util.Set<String> out_ = linesOut();
         List<Requirement> out = new ArrayList<>();
-        for (InputEntry e : ledger.entries()) {
+        for (InputEntry e : ledger.active()) {
             for (String line : read.apply(e.content(), obligationsText(e))) {
                 if (!out_.contains(line.strip())) out.add(new Requirement(e.id(), line));
             }
@@ -136,14 +136,19 @@ public class PurposeService {
     public java.util.Set<String> linesOut() {
         java.util.Set<String> out = new java.util.HashSet<>();
         for (InputEvent e : ledger.events()) {
-            if (e.keepsLineOut()) out.add(e.heldLine().strip());
-            if (e.replacedReceiving()) e.replaces().forEach(l -> out.add(l.strip()));
+            if (InputEvent.WITHDRAWAL.equals(e.kind())) {
+                e.replaces().forEach(l -> out.add(l.strip()));
+            } else if (!ledger.withdrawn(e.inputId())) {
+                if (e.keepsLineOut()) out.add(e.heldLine().strip());
+                if (e.replacedReceiving()) e.replaces().forEach(l -> out.add(l.strip()));
+            }
         }
         return out;
     }
 
     public List<InputEvent> openConflicts() {
-        return ledger.events().stream().filter(e -> InputEvent.CONFLICT.equals(e.kind()) && e.open()).toList();
+        return ledger.events().stream().filter(e -> InputEvent.CONFLICT.equals(e.kind()) && e.open())
+                .filter(e -> !ledger.withdrawn(e.inputId())).toList();
     }
 
     public InputEvent event(String id) {
@@ -162,6 +167,12 @@ public class PurposeService {
                                                  String heldLine, String heldPath) {
         return store(new InputEvent("event-" + UUID.randomUUID(), InputEvent.CONFLICT, inputId, subject, receiving, other,
                 heldLine, heldPath, List.of(), InputEvent.OPEN, null, null, Instant.now()));
+    }
+
+    /** An input taken back out: it stays in the record and asks nothing; {@code carried} are its goals' criteria. */
+    public synchronized InputEvent recordWithdrawal(String inputId, String by, List<String> carried) {
+        return store(new InputEvent("event-" + UUID.randomUUID(), InputEvent.WITHDRAWAL, inputId, "withdrawn", null, null,
+                null, null, carried, InputEvent.DECIDED, null, by, Instant.now()));
     }
 
     /** A conflict decided; the event stays in the ledger with who decided and how. */
@@ -216,7 +227,7 @@ public class PurposeService {
     public List<String> writtenLines() {
         java.util.Set<String> out_ = linesOut();
         List<String> out = new ArrayList<>();
-        for (InputEntry e : ledger.entries()) {
+        for (InputEntry e : ledger.active()) {
             String written = obligationsText(e);
             if (written != null) written.lines().filter(l -> !l.isBlank() && !l.startsWith("#") && !out_.contains(l.strip())).forEach(out::add);
         }
@@ -226,7 +237,7 @@ public class PurposeService {
     /** Every input's obligations file as it stands, for a digest of what the project was asked. */
     public String writtenText() {
         StringBuilder out = new StringBuilder();
-        for (InputEntry e : ledger.entries()) {
+        for (InputEntry e : ledger.active()) {
             String written = obligationsText(e);
             if (written != null) out.append(written);
         }

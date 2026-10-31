@@ -2047,6 +2047,24 @@ public class AutobuilderService implements CheckpointableState {
         }
     }
 
+    /** T4-EC slice 8: an input withdrawn between cycles, under the lock a cycle holds. */
+    public com.walpro.autobuilder.goal.purpose.InputEvent withdrawInput(
+            com.walpro.autobuilder.core.merge.ProjectInputService inputs, String id, String by) throws IOException {
+        lock.lock();
+        try {
+            var event = inputs.withdraw(id, by);
+            if (rootConvergenceTracker != null) rootConvergenceTracker.inputArrived();
+            if (context != null) {
+                context = context.withPausedReason(null).withGoalExhaustedReason(null)
+                        .withCycleResultState(CycleResultState.CONTINUE);
+            }
+            systemPaused = false;
+            return event;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     /** T4-EC slice 5: a conflict decided between cycles, under the lock a cycle holds. */
     public com.walpro.autobuilder.goal.purpose.InputEvent decideConflict(
             com.walpro.autobuilder.core.merge.ProjectInputService inputs, String id, String decision, String by) throws IOException {

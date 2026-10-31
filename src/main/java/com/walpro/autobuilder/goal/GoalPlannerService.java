@@ -339,6 +339,30 @@ public class GoalPlannerService {
         saveCriteriaPassStatus(g.getId(), status);
     }
 
+    /**
+     * T4-EC slice 8: an input's goals leave with it: subsumed, so closure's ledger accounts for them.
+     *
+     * @return the criteria they carried, which stop counting
+     */
+    public List<String> withdrawGoals(String inputId) {
+        List<String> carried = new ArrayList<>();
+        for (GoalEntity g : List.copyOf(goalMap.values())) {
+            if (g.getMetadata() == null || !inputId.equals(g.getMetadata().get("inputId"))) continue;
+            carried.addAll(acceptanceCriteriaOf(g));
+            if (g.getStatus() == GoalStatus.ACTIVE || g.getStatus() == GoalStatus.COMPLETED) {
+                g.setStatus(GoalStatus.SUBSUMED);
+                g.setResolution("its input was withdrawn");
+                goalGraphService.save(g);
+            }
+        }
+        if (currentSubGoalId != null && goalMap.get(currentSubGoalId) != null
+                && goalMap.get(currentSubGoalId).getStatus() != GoalStatus.ACTIVE) {
+            currentSubGoalId = null;
+        }
+        persist();
+        return carried;
+    }
+
     /** T4-EC slice 5: a decision lifts the halt an open conflict caused; another conflict refuses closure again by itself. */
     public void conflictDecided() {
         unanswerableAtClosure = null;

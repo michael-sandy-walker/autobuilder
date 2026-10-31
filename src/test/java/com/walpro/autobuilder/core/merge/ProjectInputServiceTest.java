@@ -145,6 +145,43 @@ class ProjectInputServiceTest {
         assertThat(carried.getMetadata().get("criteriaPassStatus").toString()).contains("2=false").contains("1=true");
     }
 
+    @Test
+    void aWithdrawnInputLeavesTheTreeAndTheRequirements_theLedgerKeepsIt_andLaterWorkStays() throws IOException {
+        seedLine();
+        differs(TURNS, true);
+        ProjectInputService.Report r = bring();
+        write(base.resolve("output/src/main/java/org/warp/Later.java"), "package org.warp;\nclass Later { }\n");
+
+        service.withdraw(r.inputId(), "operator");
+
+        assertThat(base.resolve("output/src/main/java/org/knot/Knot.java")).doesNotExist();
+        assertThat(base.resolve("output/src/main/java/org/warp/Later.java")).exists();
+        assertThat(goals.purpose().ledger().entries()).hasSize(2);
+        assertThat(goals.requirements().obligationsOrClauses()).as("what it replaced counts again").contains("A coil has at most 3 turns.")
+                .doesNotContain("the turn limit: at most 9 turns", "A knot holds.");
+        assertThat(goals.specification()).isEqualTo(SEED);
+        assertThat(goals.getGoalById(r.goalId()).getStatus()).isEqualTo(GoalStatus.SUBSUMED);
+        assertThat(goals.getAllGoals()).anyMatch(g -> g.getDescription().startsWith("The project builds and works without")
+                && g.getStatus() == GoalStatus.ACTIVE);
+        assertThat(new ProtectedPaths(files).isProtected("src/test/java/org/knot/KnotTest.java")).isFalse();
+        assertThat(manifest.changes()).hasValueSatisfying(c -> assertThat(c.removed()).isEmpty());
+    }
+
+    @Test
+    void aWithdrawnInputsOpenConflictsWaitForNobody_andTheSeedCannotBeWithdrawn() throws IOException {
+        seedLine();
+        differs(TURNS, false);
+        ProjectInputService.Report r = bring();
+        assertThat(goals.purpose().openConflicts()).hasSize(1);
+
+        service.withdraw(r.inputId(), "operator");
+
+        assertThat(goals.purpose().openConflicts()).isEmpty();
+        String seed = goals.purpose().ledger().seed().id();
+        assertThatThrownBy(() -> service.withdraw(seed, "operator")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.withdraw(r.inputId(), "operator")).isInstanceOf(IllegalArgumentException.class);
+    }
+
     /** T4-EC slice 7: a half-made change is not landed over. */
     @Test
     void workUnderWayFinishesFirst() throws IOException {

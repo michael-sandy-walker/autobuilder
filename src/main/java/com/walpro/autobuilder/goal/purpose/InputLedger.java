@@ -41,6 +41,15 @@ public record InputLedger(List<InputEntry> entries, List<InputEvent> events) {
         return new InputLedger(entries, out);
     }
 
+    public boolean withdrawn(String inputId) {
+        return events.stream().anyMatch(e -> InputEvent.WITHDRAWAL.equals(e.kind()) && e.inputId().equals(inputId));
+    }
+
+    /** The inputs that count: a withdrawn one stays in the record and asks nothing. */
+    public List<InputEntry> active() {
+        return entries.stream().filter(e -> !withdrawn(e.id())).toList();
+    }
+
     public boolean isEmpty() {
         return entries.isEmpty();
     }
@@ -59,16 +68,17 @@ public record InputLedger(List<InputEntry> entries, List<InputEvent> events) {
     public String specification() {
         if (entries.isEmpty()) return null;
         StringBuilder out = new StringBuilder();
-        if (entries.size() == 1) {
-            out.append(entries.get(0).content());
+        List<InputEntry> counting = active();
+        if (counting.size() == 1) {
+            out.append(counting.get(0).content());
         } else {
-            for (InputEntry e : entries) {
+            for (InputEntry e : counting) {
                 if (out.length() > 0) out.append("\n\n");
                 out.append("--- input ").append(e.sequence()).append(" (").append(e.kind()).append(") ---\n").append(e.content());
             }
         }
         for (InputEvent e : events) {
-            if (e.replacedReceiving()) {
+            if (e.replacedReceiving() && !withdrawn(e.inputId())) {
                 out.append("\n\n--- decided: ").append(e.subject()).append(" ---\n").append(e.other())
                         .append(" This replaces: ").append(e.receiving());
             }

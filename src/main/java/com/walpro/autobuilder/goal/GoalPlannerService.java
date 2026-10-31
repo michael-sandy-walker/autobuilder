@@ -309,6 +309,20 @@ public class GoalPlannerService {
         return id;
     }
 
+    /**
+     * T4-EC slice 5: every line that states a rule of this project: the obligations and the criteria banked on its goals.
+     * A rule an input changes must go from both: field120 was decided for a 200-character title, and closure went on
+     * demanding the 120 its own completed goals had banked. An input's own goals are not the receiving project's rules.
+     */
+    public List<String> statedRules() {
+        Set<String> out = new LinkedHashSet<>(requirements().obligationsOrClauses());
+        for (GoalEntity g : goalMap.values()) {
+            if (g.getMetadata() == null || g.getMetadata().containsKey("inputId")) continue;
+            if (g.getMetadata().get("acceptanceCriteria") instanceof List<?> criteria) criteria.forEach(c -> out.add(String.valueOf(c)));
+        }
+        return new ArrayList<>(out);
+    }
+
     /** T4-EC slice 5: a decision lifts the halt an open conflict caused; another conflict refuses closure again by itself. */
     public void conflictDecided() {
         unanswerableAtClosure = null;

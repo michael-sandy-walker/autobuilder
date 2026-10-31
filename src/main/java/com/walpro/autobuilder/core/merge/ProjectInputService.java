@@ -185,7 +185,7 @@ public class ProjectInputService {
                 if (!asked.add(d.what().toLowerCase(java.util.Locale.ROOT))) continue;
                 if (comparison.settledByIntent(input.content(), d)) {
                     goals.purpose().recordCorrection(input.id(), d.what(), d.receiving(), d.other(),
-                            comparison.stating(goals.requirements().obligationsOrClauses(), d));
+                            comparison.stating(goals.statedRules(), d));
                     addRequirement(input, d.what() + ": " + d.other());
                     corrections.add(d.what());
                 } else {
@@ -241,7 +241,7 @@ public class ProjectInputService {
         boolean difference = open.heldLine() == null && open.heldPath() == null;
         InputComparison.Difference d = new InputComparison.Difference(open.subject(), open.receiving(), open.other());
         List<String> replaces = InputEvent.FOR_INPUT.equals(decision) && difference
-                ? comparison.stating(goals.requirements().obligationsOrClauses(), d) : List.of();
+                ? comparison.stating(goals.statedRules(), d) : List.of();
         InputEvent decided = goals.purpose().decide(open, decision, by, replaces);
         goals.conflictDecided();
         if (InputEvent.FOR_INPUT.equals(decision)) {

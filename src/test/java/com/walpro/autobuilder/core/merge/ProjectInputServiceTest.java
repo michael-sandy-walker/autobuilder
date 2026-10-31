@@ -222,6 +222,21 @@ class ProjectInputServiceTest {
         assertThat(goals.getAllGoals()).anyMatch(g -> g.getDescription().startsWith("the turn limit") && g.getStatus() == GoalStatus.ACTIVE);
     }
 
+    /** field120: decided for 200 characters, and closure went on demanding the 120 the project's goals had banked. */
+    @Test
+    void aDecidedRuleReachesTheCriteriaBankedOnTheProjectsGoalsToo() throws IOException {
+        goals.addSubGoal("done", "Limit the turns", false);
+        goals.setAcceptanceCriteria("done", List.of("A coil of 4 turns is refused."));
+        differs(TURNS, false);
+        org.mockito.ArgumentCaptor<List<String>> asked = org.mockito.ArgumentCaptor.forClass(List.class);
+        when(comparison.stating(asked.capture(), any())).thenReturn(List.of("A coil of 4 turns is refused."));
+
+        service.decide(bring().conflicts().get(0).id(), "input", "operator");
+
+        assertThat(asked.getValue()).contains("A coil of 4 turns is refused.");
+        assertThat(goals.purpose().linesOut()).contains("A coil of 4 turns is refused.");
+    }
+
     @Test
     void aDecisionForTheReceivingProjectChangesNothing_andAConflictIsDecidedOnce() throws IOException {
         seedLine();

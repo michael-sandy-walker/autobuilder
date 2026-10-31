@@ -281,12 +281,12 @@ public class GoalPlannerService {
     }
 
     /**
-     * T4-EC slice 4: a project input lands in the goal tree: its intent a goal under the root, current, carrying what the
-     * merged tree does not yet satisfy; the input's own tree below it, every node stamped; a finished root reopened.
+     * T4-EC slice 4: a project input lands in the goal tree: its intent a goal under the root, current, carrying what
+     * closes it; the input's own tree below it, every node stamped; a finished root reopened.
      *
      * @return the id of the goal the input landed as
      */
-    public String landInput(String inputId, String intent, GoalEntity tree, List<String> unmet) {
+    public String landInput(String inputId, String intent, GoalEntity tree, List<String> criteria) {
         GoalEntity root = getRootGoal();
         if (root.getStatus() == GoalStatus.COMPLETED || root.getStatus() == GoalStatus.GIVEN_UP) {
             root.setStatus(GoalStatus.ACTIVE);
@@ -304,7 +304,7 @@ public class GoalPlannerService {
             flattenRecursive(tree, id);
             saveLanded(tree, inputId);
         }
-        if (!unmet.isEmpty()) setAcceptanceCriteria(id, unmet);
+        if (!criteria.isEmpty()) setAcceptanceCriteria(id, criteria);
         persist();
         return id;
     }

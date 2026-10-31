@@ -4,8 +4,8 @@
 # Last line: SMOKE: <pass>/<checks>.
 #
 # Stages, each cumulative: base (no input yet), clitarget (the import and export), shelfkit (its ISBN rule, the
-# decided title limit, its own tests), withdrawn (clitarget taken out again, shelfkit's part stays). SMOKE_TREE is the
-# project's tree, for the check that shelfkit's own tests pass there.
+# decided title limit, its own tests, that the project uses its rules), withdrawn (clitarget taken out again, shelfkit's
+# part stays). SMOKE_TREE is the project's tree, for the checks that read it.
 #
 # The 23 checks are smoke23.sh's, read from it, with two changes the case states. Its ISBNs fail shelfkit's check digit,
 # so they are replaced by valid ones at every stage, keeping the stages comparable and smoke23.sh itself untouched. And
@@ -68,6 +68,10 @@ PY
     rm -rf "$SCRATCH"
   fi
   chk "$ran" pass "shelfkit's own tests pass in the project"
+  # The intent says USE shelfkit's rules: a copy of them in the project passes every request above and misses that (field119).
+  uses(){ if [ -n "${SMOKE_TREE:-}" ] && grep -rlq "$1" "$SMOKE_TREE/src/main/java/com" 2>/dev/null; then echo yes; else echo no; fi; }
+  chk "$(uses 'org.shelfkit.catalogue.Isbn\|org.shelfkit.catalogue.\*\|org.shelfkit.catalogue.CatalogueEntry')" yes "the project uses shelfkit's ISBN rule"
+  chk "$(uses 'org.shelfkit.lending')" yes "the project uses shelfkit's lending policy"
 fi
 
 if [ "$STAGE" = withdrawn ]; then

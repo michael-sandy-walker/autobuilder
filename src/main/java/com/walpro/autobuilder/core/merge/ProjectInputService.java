@@ -103,7 +103,8 @@ public class ProjectInputService {
         files.ensureFolderExists(dir);
         files.writeFile(dir + "/placed.txt", String.join("\n", landing.placed()) + "\n");
         files.writeFile(dir + ProtectedPaths.INPUT_FILE, String.join("\n", landing.protectedLines()) + "\n");
-        int obligations = writeObligations(input, landing.obligations());
+        List<String> intentLines = new ArrayList<>();
+        int obligations = writeObligations(input, landing.obligations(), intentLines);
         holdFiles(input, landing, parent);
         List<String> corrections = compare(input, before, parent);
 
@@ -124,7 +125,11 @@ public class ProjectInputService {
         }
         List<String> unmet = verdicts.stream().filter(v -> Boolean.FALSE.equals(v.met())).map(Verdict::criterion)
                 .filter(c -> !out.contains(c.strip())).toList();
-        String goalId = goals.landInput(input.id(), r.intent(), tree, unmet);
+        // The goal closes on what the intent asks: without criteria nothing could ever close it (field119: the run sat on
+        // it from 39/39 to its deadline), and field117 only closed because a stale line happened to land on its goal.
+        List<String> criteria = new ArrayList<>(intentLines);
+        unmet.stream().filter(u -> !criteria.contains(u)).forEach(criteria::add);
+        String goalId = goals.landInput(input.id(), r.intent(), tree, criteria);
         String sourceRoot = landing.tree() == null ? null : landing.tree().path("metadata").path("sourceGoalId").asText(null);
         goals.purpose().linkInput(input.id(), goalId, sourceRoot);
 
@@ -255,13 +260,16 @@ public class ProjectInputService {
     }
 
     /** The intent's lines, generated like a text input's, then what the input verified; the operator may edit them. */
-    private int writeObligations(InputEntry input, List<String> verified) throws IOException {
+    private int writeObligations(InputEntry input, List<String> verified, List<String> intentLines) throws IOException {
         String path = goals.purpose().obligationsPath(input);
         SeedObligationsGenerator g = generator.getIfAvailable();
         if (g != null) g.ensureFor(input.content(), path);
         List<String> lines = new ArrayList<>();
         if (files.exists(path)) lines.addAll(SeedObligationsFile.read(files.readFile(path), input.content()).obligations());
         if (lines.isEmpty()) lines.addAll(SeedRequirements.statedVerifiableIn(input.content()));
+        for (String l : lines) {
+            if (!SeedRequirements.isRule(l) && SeedRequirements.gateOf(l) == null) intentLines.add(l);
+        }
         for (String v : verified) {
             if (!lines.contains(v)) lines.add(v);
         }

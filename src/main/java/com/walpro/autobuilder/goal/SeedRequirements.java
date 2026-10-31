@@ -305,7 +305,7 @@ public final class SeedRequirements {
      */
     public static final String RULE_MARKER = "rule:";
 
-    static boolean isRule(String line) {
+    public static boolean isRule(String line) {
         return line != null && line.strip().toLowerCase(java.util.Locale.ROOT).startsWith(RULE_MARKER);
     }
 
@@ -329,7 +329,7 @@ public final class SeedRequirements {
     public static final String GATE_DERIVED = "derived-test";
 
     /** The gate a line names, or null when it names none. */
-    static String gateOf(String line) {
+    public static String gateOf(String line) {
         if (line == null) return null;
         String l = line.strip();
         if (!l.toLowerCase(java.util.Locale.ROOT).startsWith(GATE_MARKER)) return null;

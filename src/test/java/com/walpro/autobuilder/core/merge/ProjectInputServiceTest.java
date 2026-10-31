@@ -120,6 +120,14 @@ class ProjectInputServiceTest {
         assertThat(files.readFile("meta/inputs/" + input.id() + "/placed.txt")).contains("org/knot/Knot.java");
     }
 
+    /** field119: a goal with no criteria could never close, and the run sat on it from 39/39 to its deadline. */
+    @Test
+    void theInputsGoalClosesOnWhatTheIntentAsks() throws IOException {
+        ProjectInputService.Report r = bring();
+
+        assertThat(goals.getGoalById(r.goalId()).getMetadata().get("acceptanceCriteria")).asList().isNotEmpty();
+    }
+
     @Test
     void whatTheMergedTreeDoesNotSatisfyStaysAsWork_andIsNotLeftToABootSideEffect() throws IOException {
         when(verifier.verifyWithTestRun(anyString(), any(), any())).thenAnswer(i -> {
@@ -132,7 +140,7 @@ class ProjectInputServiceTest {
 
         assertThat(r.unmet()).containsExactly("Knot is final");
         assertThat(r.byModel()).isGreaterThan(0);
-        assertThat(goals.getGoalById(r.goalId()).getMetadata().get("acceptanceCriteria")).asList().containsExactly("Knot is final");
+        assertThat(goals.getGoalById(r.goalId()).getMetadata().get("acceptanceCriteria")).asList().contains("Knot is final");
         GoalEntity carried = goals.getAllGoals().stream().filter(g -> "Tie knots".equals(g.getDescription())).findFirst().orElseThrow();
         assertThat(carried.getMetadata().get("criteriaPassStatus").toString()).contains("2=false").contains("1=true");
     }

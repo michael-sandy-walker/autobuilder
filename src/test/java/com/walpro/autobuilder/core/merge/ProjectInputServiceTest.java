@@ -145,6 +145,17 @@ class ProjectInputServiceTest {
         assertThat(carried.getMetadata().get("criteriaPassStatus").toString()).contains("2=false").contains("1=true");
     }
 
+    /** T4-EC slice 7: a half-made change is not landed over. */
+    @Test
+    void workUnderWayFinishesFirst() throws IOException {
+        goals.addSubGoal("under-way", "Wind the coil", true);
+
+        ProjectInputService.Report r = bring();
+
+        assertThat(goals.getCurrentSubGoal().getId()).isEqualTo("under-way");
+        assertThat(goals.getGoalById(r.goalId()).getStatus()).isEqualTo(GoalStatus.ACTIVE);
+    }
+
     @Test
     void theInputsFilesAreNotTheLoopsChanges_andItsTestsAreProtected() throws IOException {
         bring();

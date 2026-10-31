@@ -309,4 +309,15 @@ class RootConvergenceTrackerTest {
         assertThat(DerivedFacts.goalExhausted(result)).isTrue();
         assertThat(result.pausedReason()).isEqualTo("root-convergence-stall");
     }
+
+    /** T4-EC slice 7: the streak counted cycles without progress toward the purpose as it was. */
+    @org.junit.jupiter.api.Test
+    void anArrivingInputEndsTheStreak() {
+        RootConvergenceTracker tracker = new RootConvergenceTracker(org.mockito.Mockito.mock(com.walpro.autobuilder.goal.GoalPlannerService.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(tracker, "cyclesSinceProgress", 15);
+
+        tracker.inputArrived();
+
+        org.assertj.core.api.Assertions.assertThat(org.springframework.test.util.ReflectionTestUtils.getField(tracker, "cyclesSinceProgress")).isEqualTo(0);
+    }
 }

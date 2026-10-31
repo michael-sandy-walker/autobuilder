@@ -79,6 +79,15 @@ public class RootConvergenceTracker implements CheckpointableState {
     private int lastInjectionCount = 0;
     private int cyclesSinceProgress = 0;
 
+    /**
+     * T4-EC slice 7: an input arrived. The streak counted cycles without progress toward the purpose as it was; that stops
+     * here by itself, as the rest of a run's record fades (refusals and recurrences are keyed to what they saw, and new
+     * work has new keys). The budget and the merges per cycle stand: the run is the same run.
+     */
+    public void inputArrived() {
+        cyclesSinceProgress = 0;
+    }
+
     /** T2-FH: merges per cycle, the one measure that still varies inside a root-progress drought. */
     private final java.util.List<Integer> mergesPerCycle = new java.util.ArrayList<>();
 

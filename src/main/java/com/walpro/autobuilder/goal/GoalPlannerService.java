@@ -282,7 +282,8 @@ public class GoalPlannerService {
 
     /**
      * T4-EC slice 4: a project input lands in the goal tree: its intent a goal under the root, current, carrying what
-     * closes it; the input's own tree below it, every node stamped; a finished root reopened.
+     * closes it, and current unless work is under way; the input's own tree below it, every node stamped; a finished
+     * root reopened.
      *
      * @return the id of the goal the input landed as
      */
@@ -298,7 +299,9 @@ public class GoalPlannerService {
         unanswerableAtClosure = null;
         conflictAtClosure = false;
         String id = "goal-" + java.util.UUID.randomUUID();
-        addSubGoal(id, intent, true, rootGoalId, "planner", null);
+        // Work under way finishes first: a half-made change is not landed over, and the planner reaches this goal next.
+        GoalEntity current = getCurrentSubGoal();
+        addSubGoal(id, intent, current == null || current.getStatus() != GoalStatus.ACTIVE, rootGoalId, "planner", null);
         setGoalMetadataString(id, "inputId", inputId);
         if (tree != null) {
             flattenRecursive(tree, id);

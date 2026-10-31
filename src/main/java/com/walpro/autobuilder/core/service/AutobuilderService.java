@@ -2035,6 +2035,7 @@ public class AutobuilderService implements CheckpointableState {
         lock.lock();
         try {
             var report = inputs.bring(request);
+            if (rootConvergenceTracker != null) rootConvergenceTracker.inputArrived();
             if (context != null) {
                 context = context.withPausedReason(null).withGoalExhaustedReason(null)
                         .withCycleResultState(CycleResultState.CONTINUE);

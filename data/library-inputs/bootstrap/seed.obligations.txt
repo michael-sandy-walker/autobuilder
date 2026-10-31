@@ -1,0 +1,35 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# seed-sha256: ff7175d97aff8c24174d154958fb3f7cfe9189fdd7f698ee7ba0b61f40bcb625
+# body-sha256: b499592a37f4301b582ab5f6f50d903bf7e47263bb754a5f4d8ba25d75501399
+The application is implemented in Java 21 using Spring Boot as a REST API.
+POST /books creates a book.
+POST /books requires title.
+POST /books title must be at most 120 characters.
+POST /books requires isbn.
+POST /books isbn must match \d{13}.
+GET /books lists all books.
+GET /books/{id} returns a single book.
+GET /books/{id} returns 404 when the book is absent.
+POST /members creates a member.
+POST /members requires name.
+POST /members requires email.
+POST /members email must be unique, returning 409 on duplicate.
+GET /members/{id} returns a single member.
+GET /members/{id} returns 404 when the member is absent.
+POST /loans lends a book.
+POST /loans body contains bookId and memberId.
+POST /loans returns 404 when the book is not found.
+POST /loans returns 404 when the member is not found.
+POST /loans returns 409 when the book is already on loan.
+POST /loans enforces that a member may hold at most 3 active loans, returning 422 if exceeded.
+POST /loans/{id}/return marks the loan as returned.
+POST /loans/{id}/return returns 404 when the loan is absent.
+POST /loans/{id}/return returns 409 when the loan is already returned.
+GET /loans?memberId={id} lists all loans for a member, active and returned.
+All data is stored in in-memory collections with no database.
+Invalid input returns HTTP 400 with JSON body {"message": "<reason>"}.
+Business-rule violations use the specified status codes with the same JSON shape {"message": "<reason>"}.
+A create endpoint returns HTTP 201 with the created object as the body.
+A successful read returns HTTP 200.
+A successful return of a loan returns HTTP 200.

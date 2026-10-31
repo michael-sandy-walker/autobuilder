@@ -13,3 +13,8 @@ Versions v1..v1 are reconstructed from the git history of `data/library-inputs/b
 
 - reason: clitarget input laid out as a project directory (bootstrap/, meta/), for POST /autobuilder/inputs
 - bootstrap digest: `ffa8a60535319c33`
+
+## v3 -- 2026-11-01
+
+- reason: firestarter's obligations alongside its seed, so a run does not generate its own
+- bootstrap digest: `79a5e8fc8dce3406`

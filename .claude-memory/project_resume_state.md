@@ -13,7 +13,7 @@ metadata:
 
 ## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); SLICE 1 BUILT AND VERIFIED -- START HERE
 
-- **Nothing is live.** Head = this commit (code `dbdbf34f` + the case), suite 4132/0 (this session's run). `scripts/run_outcomes.json` left for the user. The stale field111 waiter (PID 1619913, self-matching `until pgrep`) was stopped at the user's word; nothing launched.
+- **Nothing is live.** Head = this commit (code `ffbc062c`), suite 4165/0 (this session's run). `scripts/run_outcomes.json` left for the user. The stale field111 waiter (PID 1619913, self-matching `until pgrep`) was stopped at the user's word; nothing launched.
 - **This session:** filed `T1-GG` (T6-U's three open mechanisms); restated `T5-BI` (redesign all prose output); `T4-EC` redefined with the user -- a project keeps accepting input (seed = first), several snapshots merged or projects brought into a RUNNING project, fill/extend/correct, conflicts held, per-input undo -- then the map of what assumes one seed = one run, the representation (one input ledger, graph-first, the tree's starting shape by mode), eight slices, and the measuring case (`firestarter` running + `clitarget` frozen + a third-party catalogue; fallback `edit-hunks` + a patch library). The user's long-range picture saved as [[project-living-project-vision]] (offspring whose code AND graph become a knowledge part).
 - **Slice 1 done:** input ledger + purpose service, seed as entry 1; field113 cashbook GOAL_FULFILLED 13/13, entry 1 in `meta/inputs.json` and the graph. Detail on `T4-EC` (2026-10-30 appends).
 - **field114 (firestarter baseline for slice 2, `~/.autobuilder/field114`) was NOT a measurement:** run `2026-10-30_22-48-47` lost Neo4j at 22:51:24 when a HOST OOM killed the Docker Desktop VM (the run's llama-server 6.6 GB, IntelliJ 2.8 GB, Firefox ~5 GB, Update Manager 0.6 GB; swap full); every cycle then aborted ("unable to prepare context"); stopped via `stop_run.sh`, recorded `terminal=jvm-stopped` with the reason. Docker Desktop was still down at session end; the user restarted the PC. **Before any run:** confirm Docker Desktop and Neo4j are up (`systemctl --user start docker-desktop` if not) and that memory has headroom.
@@ -22,7 +22,8 @@ metadata:
 - `scripts/run_outcomes.json` now also holds field113 and field114 -- left for the user as usual.
 - **field115:** the firestarter baseline rerun GOAL_FULFILLED 23/23 in 14.2 min, `addedBy: reset` -- fit to be the receiving project.
 - **Slice 2 done (2026-10-31):** `data/library-inputs` v1 + `scripts/smoke_library_inputs.sh`, calibrated both ways against private references in `~/.autobuilder/libinputs` (full on the diagonal: 23/23, 34/34, 39/39, 31/31); suite 4132/0. No loop ran: it is an instrument, not a measurement.
-- **NEXT:** `T4-EC` slice 3 -- obligations, derived tests and the adoption baseline belong to an input, keyed by its id; closure's seed-level authority becomes input-level. Design first, to the user, before building.
+- **Slice 3 done (2026-10-31):** requirements read across every input, seed-level authority input-level (`ffbc062c`, suite 4165/0); field116 firestarter 23/23 in 19.9 min, edit-hunks-withheld 11/11 in 8.6 min with its writing reused from the cache. `addInput` has no production caller yet.
+- **NEXT:** `T4-EC` slice 4 -- one project input into a stopped project (code placed, goal tree and criteria landed with provenance, its graph under its own lineage linked through the ledger, today's two merge paths replaced and deleted), with the adoption baseline and the test-runner gap moved here. Design first, to the user, before building.
 
 ## 2026-10-28 (Opus 5.5, session 19 close) -- T6-U CLOSED; THE REFUSAL GRIND FIXED
 

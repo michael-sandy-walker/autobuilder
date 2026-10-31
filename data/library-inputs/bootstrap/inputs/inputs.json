@@ -1,0 +1,21 @@
+{
+  "receiving": {"name": "firestarter", "form": "running from its seed", "seed": "seed.txt"},
+  "inputs": [
+    {"name": "clitarget", "kind": "project", "source": "inputs/clitarget", "frozenFrom": "run 2026-10-19_21-39-51, clitarget v5, GOAL_FULFILLED 19/19",
+     "arrives": "first cycle boundary",
+     "intent": "Books can be imported and exported as delimited text, read with clitarget's own reader, not a second one. POST /books/import takes a delimited-text body whose header is title,isbn, in clitarget's FIELD SYNTAX; every row is validated as POST /books validates a book. When every row is valid the books are created in file order and the answer is HTTP 201 with the JSON body {\"imported\": <n>}. When any row is invalid or has the wrong number of fields the answer is HTTP 400 with the JSON body {\"message\": \"<reason>\"} and no book is created. GET /books/export answers HTTP 200 with the header title,isbn and one row per book in the order GET /books lists them, a field quoted in clitarget's FIELD SYNTAX when it contains a comma, a double quote or a newline."},
+    {"name": "shelfkit", "kind": "project", "source": "inputs/shelfkit", "thirdParty": true,
+     "arrives": "first merge",
+     "intent": "Use shelfkit's ISBN rule for every book: POST /books and the import answer HTTP 400 for an ISBN whose check digit is wrong. Use shelfkit's lending policy for POST /loans."}
+  ],
+  "expected": {
+    "extend": "the import and export of books",
+    "correct": "the ISBN rule: firestarter's thirteen digits become shelfkit's checksum, by the intent",
+    "fill": "LendingPolicy, when loans are not built on arrival; otherwise an overlap, and the case records which",
+    "conflict": "the title limit: 120 in firestarter's seed, 200 in shelfkit's CatalogueEntry; no intent decides it"
+  },
+  "decisions": [
+    {"conflict": "the title limit", "decision": "200 wins", "by": "operator, scripted so runs stay repeatable"}
+  ],
+  "withdraw": "clitarget"
+}

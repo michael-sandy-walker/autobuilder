@@ -1,0 +1,278 @@
+{
+  "currentGoalId" : "goal-5e30632c-aa6c-466b-9839-2c77c453f9b9",
+  "currentSubGoalId" : null,
+  "goalTree" : {
+    "id" : "goal-5e30632c-aa6c-466b-9839-2c77c453f9b9",
+    "description" : "  Evolve the Java 21 application into a COMMAND-LINE tool that validates and summarises delimited\n  text files. It is not a service: it has no network surface, no HTTP, and no long-running process.\n  It reads argv, reads files from disk, writes to stdout and stderr, and terminates with an exit\n  status.\n\n  Invocation: java -jar app.jar <command> [arguments]\n\n  FIELD SYNTAX. Fields are separated by commas. A field MAY be wrapped in double quotes, and a\n  quoted field may contain commas and newlines, which are then part of the value and NOT\n  separators. Inside a quoted field, two consecutive double quotes mean one literal double quote.\n  Quotes are removed from the value. So the line  a,\"b,c\",\"d\"\"e\"  has THREE fields: a / b,c / d\"e.\n  A naive split on commas is not a correct reader.\n\n  Commands:\n\n  check <file> — read the file and report malformed rows. A row is malformed when its field count\n  differs from the header's. Print one line per malformed row to stdout as\n  \"line <n>: expected <h> fields, found <f>\", in ascending line order, where <n> counts PHYSICAL\n  lines from 1 including any newlines inside quoted fields. Exit 0 when every row is well formed,\n  exit 2 when at least one row is malformed.\n\n  count <file> — print the number of data rows (excluding the header) to stdout as a bare integer.\n  A row spanning several physical lines inside a quoted field counts as ONE row. Exit 0.\n\n  column <file> <name> — print every value of the named column, one per line, in file order, with\n  quoting removed. Exit 0. Exit 4 when the named column is not present in the header, printing\n  \"no such column: <name>\" to stderr.\n\n  Common rules: exit 1 when the file argument names a path that does not exist, printing\n  \"no such file: <path>\" to stderr. Exit 3 when the command word is not one of the three above,\n  printing \"unknown command: <word>\" to stderr. Command words are case sensitive. Exit 5 when the\n  wrong number of arguments is given for a known command. The first line of a file is always its\n  header. An empty file (zero bytes) has no header: exit 2 for check, and print 0 for count.\n",
+    "role" : "system",
+    "type" : "GOAL",
+    "status" : "COMPLETED",
+    "created" : 1792438802.216004592,
+    "completed" : 1792439212.78944795,
+    "resolution" : "root goal satisfied: closure ledger clear: 6 subgoal(s) accounted for",
+    "metadata" : {
+      "planningRunId" : 3,
+      "activeAttemptId" : "attempt-fb502702-3631-4969-ae6a-b2cc7c1f9cb7",
+      "planRationale" : "The root goal is a single CLI tool with one shared CSV parsing core and three commands; I will build the foundational shared pieces first (the RFC-style field parser and the argument/exit-code dispatch skeleton) so that the three command subgoals can be added in the next cycle on a stable base.",
+      "plannedOnce" : true
+    },
+    "expectedArtifacts" : [ ],
+    "subGoals" : [ {
+      "id" : "goal-33ad258a-e2c2-480e-baad-a453a3e1957e",
+      "description" : "Implement the shared CSV field parser that reads a delimited text file and yields logical rows (each a list of fields) honouring the field syntax: comma-separated, double-quoted fields may contain commas and newlines, and two consecutive double quotes inside a quoted field decode to one literal double quote; quotes are stripped from the value.",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1792438815.169020802,
+      "completed" : 1792438850.619811235,
+      "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+      "metadata" : {
+        "planningRunId" : 2,
+        "lastProgressState" : "FULFILLED",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "Parsing the line `a,\"b,c\",\"d\"\"e\"` yields exactly three fields: `a`, `b,c`, `d\"e`", "A quoted field containing a newline produces one logical row whose field value contains that newline", "Two consecutive double quotes inside a quoted field decode to a single literal double quote in the resulting field value", "Unquoted fields are returned verbatim with no surrounding whitespace trimming" ],
+        "lastUpdated" : "2026-10-19T19:40:48.927838799Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-fb502702-3631-4969-ae6a-b2cc7c1f9cb7",
+        "activeAttemptId" : "attempt-813d73cc-5751-44c6-841c-175eb0f98d64",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC",
+          "3" : "SPEC",
+          "4" : "AUTHORED"
+        },
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true
+        },
+        "mergedFiles" : [ "CsvParser.java", "pom.xml" ],
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0
+        },
+        "mergeCount" : 1
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-3d78e75b-5016-4bb1-891e-c031d50b555c",
+      "description" : "Implement the CLI entry point that parses argv and dispatches to the three commands (`check`, `count`, `column`) with the common error handling: exit 1 with `no such file: <path>` on stderr when the file path does not exist; exit 3 with `unknown command: <word>` on stderr for an unrecognised command word (case sensitive); exit 5 when the argument count for a known command is wrong; an empty (zero-byte) file is treated as having no header.",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1792438817.651539416,
+      "completed" : 1792438899.155628335,
+      "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+      "metadata" : {
+        "planningRunId" : 2,
+        "acceptanceCriteria" : [ "Invoking with an unknown command word prints `unknown command: <word>` to stderr and exits with status 3", "Invoking a known command with a non-existent file path prints `no such file: <path>` to stderr and exits with status 1", "Invoking a known command with the wrong number of arguments exits with status 5", "Command words are matched case-sensitively (e.g. `CHECK` is treated as unknown)" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-fb502702-3631-4969-ae6a-b2cc7c1f9cb7",
+        "activeAttemptId" : "attempt-82d0a17d-5ff6-4978-bf19-5a15e9e82d7f",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC",
+          "3" : "SPEC",
+          "4" : "SPEC"
+        },
+        "goalKind" : "HYBRID",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "Main.java" ],
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-10-19T19:41:36.738502837Z"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-2f60e11e-1ec2-48aa-b4ed-bdee7f9b086b",
+      "description" : "[BUILD_FIX] The running artifact contradicts the specification — the tool runs, but acceptance criteria fail when exercised against it: \"check prints one line per malformed row to stdout as \"line <n>: expected <h> fields, found <f>\".\" — check <malformed_file> saying \"line <n>: expected <h> fields, found <f>\", and its fixture establishes 6, but nothing it printed names that: \"line 5: expected 3 fields, found 4\"",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1792438904.554854509,
+      "completed" : 1792439033.977439494,
+      "resolution" : "all acceptance criteria banked",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "check prints one line per malformed row to stdout as \"line <n>: expected <h> fields, found <f>\".", "check exits 0 when every row is well formed.", "check exits 2 when at least one row is malformed.", "column <file> <name> prints every value of the named column, one per line, in file order, with quoting removed.", "column exits 0 on success.", "column exits 4 when the named column is not present in the header.", "The application exits 1 when the file argument names a path that does not exist.", "For an empty file (zero bytes), check exits 2." ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-fb502702-3631-4969-ae6a-b2cc7c1f9cb7",
+        "activeAttemptId" : "attempt-dd293a00-e286-4dcc-83ae-b3da1206a51c",
+        "originatingGate" : "criteria-gate",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC",
+          "3" : "SPEC",
+          "4" : "SPEC",
+          "5" : "SPEC",
+          "6" : "SPEC",
+          "7" : "SPEC",
+          "8" : "SPEC"
+        },
+        "blockerType" : "BUILD_FIX",
+        "goalKind" : "HYBRID",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "CsvParser.java", "Main.java" ],
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true,
+          "5" : true,
+          "6" : true,
+          "7" : true,
+          "8" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0,
+          "5" : 0,
+          "6" : 0,
+          "7" : 0,
+          "8" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-10-19T19:43:47.094823644Z"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-4125ef0b-d068-4adc-93e4-65c5f8540c8d",
+      "description" : "Implement the `check` command: read the file, parse rows using the shared CSV field parser, compare each data row's field count to the header's, and print one line per malformed row to stdout in the exact format \"line <n>: expected <h> fields, found <f>\" in ascending physical-line order; exit 0 when all rows are well formed, exit 2 when at least one row is malformed; for an empty (zero-byte) file exit 2 with no output.",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1792438924.428055272,
+      "completed" : 1792439065.417705491,
+      "resolution" : "acceptance criteria verified against current code -- fulfilled instead of superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 3,
+        "acceptanceCriteria" : [ "`check <file>` on a file where every data row has the same field count as the header prints nothing to stdout and exits with status 0", "`check <file>` on a file containing at least one data row whose field count differs from the header prints one line per malformed row to stdout in the exact format \"line <n>: expected <h> fields, found <f>\" in ascending physical-line order and exits with status 2", "`check <file>` on a zero-byte file exits with status 2 and prints nothing to stdout", "`check <file>` on a non-existent path prints \"no such file: <path>\" to stderr and exits with status 1" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-fb502702-3631-4969-ae6a-b2cc7c1f9cb7",
+        "activeAttemptId" : "attempt-90b2d81a-3b00-4cbe-9d5e-063dafd49830",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC",
+          "3" : "SPEC",
+          "4" : "SPEC"
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-10-19T19:44:23.327391007Z",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true
+        }
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-d8ff3669-a8cb-4669-b547-c961787e45cb",
+      "description" : "Implement the `count` command: read the file, parse rows using the shared CSV field parser, count data rows (excluding the header), and print the count to stdout as a bare integer; a row spanning several physical lines inside a quoted field counts as ONE row; exit 0 on success; for an empty (zero-byte) file print 0 and exit 0.",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1792438927.478710119,
+      "completed" : 1792439095.971572546,
+      "resolution" : "criteria already banked -- fulfilled instead of superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 3,
+        "acceptanceCriteria" : [ "`count <file>` on a file with a header and N data rows prints the bare integer N to stdout and exits with status 0", "`count <file>` on a file where a data row spans multiple physical lines due to a quoted field containing newlines counts that row as ONE row in the output", "`count <file>` on a zero-byte file prints 0 to stdout and exits with status 0", "`count <file>` on a non-existent path prints \"no such file: <path>\" to stderr and exits with status 1" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-fb502702-3631-4969-ae6a-b2cc7c1f9cb7",
+        "activeAttemptId" : "attempt-3bf0ef2a-3bed-4033-9cb1-27d2d81dcb0b",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC",
+          "3" : "SPEC",
+          "4" : "SPEC"
+        },
+        "goalKind" : "EXECUTABLE",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-10-19T19:44:54.098928571Z",
+        "cumulativeStagnatingCycles" : 1
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-f2c1922e-ed82-493b-913e-b265881cfae6",
+      "description" : "Implement the `column` command: read the file, parse rows using the shared CSV field parser, locate the named column in the header (case-sensitive match), and print every value of that column from all data rows one per line in file order with quoting removed; exit 0 on success; exit 4 when the named column is not present in the header, printing \"no such column: <name>\" to stderr.",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1792438929.546491226,
+      "completed" : 1792439195.388520514,
+      "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+      "metadata" : {
+        "planningRunId" : 3,
+        "acceptanceCriteria" : [ "`column <file> <name>` on a file where the header contains the named column prints every value of that column from all data rows, one per line, in file order, with quoting removed, and exits with status 0", "`column <file> <name>` on a file where the header does not contain the named column prints \"no such column: <name>\" to stderr and exits with status 4", "`column <file> <name>` on a non-existent path prints \"no such file: <path>\" to stderr and exits with status 1" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-fb502702-3631-4969-ae6a-b2cc7c1f9cb7",
+        "activeAttemptId" : "attempt-85ff0674-fdd1-42b2-96d9-849eb697b152",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC",
+          "3" : "SPEC"
+        },
+        "goalKind" : "EXECUTABLE",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-10-19T19:46:33.521694505Z",
+        "subgoalRequests" : {
+          "LOW_CONFIDENCE" : {
+            "urgency" : 1.0,
+            "age" : 1,
+            "source" : "evaluation",
+            "validForCycles" : 7
+          }
+        },
+        "mergeCount" : 1,
+        "mergedFiles" : [ "CsvParser.java", "Main.java" ]
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    } ]
+  }
+}

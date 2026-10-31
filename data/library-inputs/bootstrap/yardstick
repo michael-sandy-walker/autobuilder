@@ -1,0 +1,2 @@
+# T4-EC: the yardstick this case is scored by, per stage (SMOKE_STAGE).
+scripts/smoke_library_inputs.sh serving

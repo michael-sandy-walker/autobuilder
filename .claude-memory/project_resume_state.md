@@ -25,7 +25,8 @@ metadata:
 - **Slice 3 done (2026-10-31):** requirements read across every input, seed-level authority input-level (`ffbc062c`, suite 4165/0); field116 firestarter 23/23 in 19.9 min, edit-hunks-withheld 11/11 in 8.6 min with its writing reused from the cache. `addInput` has no production caller yet.
 - **Slice 4 done (2026-10-31, `72e4a84c`, suite 4168/0):** `POST /autobuilder/inputs`, one operation under the cycle lock; a finished project is held (`start.mode=ASK`), given the input, released with `ADOPT_PROJECT` (`CONTINUE_LINEAGE` would restore the preserved artifact over output/). **field117: firestarter + clitarget GOAL_FULFILLED 34/34 in 18.5 min** (reader really used, graph linked). Deleted `ProjectMerge.merge`, `ProjectMergeService`, `/merge-projects`, the dependency layout and case; `integrate` stays until slice 6.
 - **Open finding for slice 5:** clitarget's "no HTTP" obligation contradicts the REST project; landing said unmet, a model later confirmed it, closure passed it. Such a claim is a conflict to hold, not a criterion to verify.
-- **NEXT:** `T4-EC` slice 5 -- matching and the three effects (structure first, fill/extend/correct as the intent allows, conflicts raised and held, decided by an event). Design first, to the user, before building.
+- **Slice 5 offline replay passed (`~/.autobuilder/replay5`, on `T4-EC`):** ask about unmet lines only (every-claim rejected: 6 false conflicts); differences found for title and check digit, none invented; a model finds candidate types, structure only EXACT ones; show referred types.
+- **NEXT:** `T4-EC` slice 5, build, once the user confirms after the replay.
 
 ## 2026-10-28 (Opus 5.5, session 19 close) -- T6-U CLOSED; THE REFUSAL GRIND FIXED
 

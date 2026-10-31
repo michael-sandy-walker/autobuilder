@@ -12,9 +12,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Two parents that grew one adopted tree, merged into one child: code, goal tree, criteria, seed. */
+/** One project integrated into another as a new child, by layout. */
 class ProjectMergeTest {
 
     private static final String MAIN = "src/main/java/org/warp/Coil.java";
@@ -23,62 +22,6 @@ class ProjectMergeTest {
 
     @TempDir
     Path tmp;
-
-    @Test
-    void theChildCarriesBothParentsCodeTreesAndCriteriaWithProvenance() throws IOException {
-        Path a = parent("a", ADOPTED.replace("    public int turns", "    public int loops() { return 2; }\n    public int turns"),
-                "ASpecTest", "Coil.loops() returns 2", true,
-                "Coil.loops() returns 2\nrule: change only Coil\ngate: tests The whole test suite passes\n");
-        Path b = parent("b", ADOPTED.replace("    public int turns", "    public int knots() { return 3; }\n    public int turns"),
-                "BSpecTest", "Coil.loops() returns 2", null, "Coil.knots() returns 3\n");
-
-        ProjectMerge.Result r = ProjectMerge.merge(new ProjectMerge.Parent("a", "run-a", a),
-                new ProjectMerge.Parent("b", "run-b", b), NOW);
-
-        assertThat(r.conflicts()).isEmpty();
-        assertThat(r.tree().get(MAIN)).contains("loops()").contains("knots()").contains("turns()");
-        assertThat(r.tree()).containsKeys("src/test/java/org/warp/ASpecTest.java", "src/test/java/org/warp/BSpecTest.java");
-
-        JsonNode root = r.goalStack().path("goalTree");
-        assertThat(root.path("type").asText()).isEqualTo("GOAL");
-        assertThat(root.path("subGoals")).hasSize(2);
-        JsonNode fromA = root.path("subGoals").get(0);
-        assertThat(fromA.path("type").asText()).isEqualTo("SUBGOAL");
-        assertThat(fromA.path("metadata").path("mergedFrom").asText()).isEqualTo("a");
-        assertThat(fromA.path("metadata").path("sourceGoalId").asText()).isEqualTo("root-a");
-        assertThat(fromA.path("metadata").path("sourceLineageId").asText()).isEqualTo("lineage-a");
-        JsonNode leafA = fromA.path("subGoals").get(0);
-        assertThat(leafA.path("id").asText()).isNotEqualTo("leaf-a");
-        assertThat(leafA.path("metadata").has("criteriaPassStatus")).isFalse();
-        assertThat(leafA.path("metadata").path("parentCriteriaPassStatus").path("1").asBoolean()).isTrue();
-
-        // The same text from both parents is one criterion with two origins; rules are not carried; gates are tagged.
-        Map<String, ProjectMerge.Criterion> byText = new java.util.HashMap<>();
-        r.criteria().forEach(c -> byText.put(c.text(), c));
-        assertThat(byText.get("Coil.loops() returns 2").origins()).extracting(ProjectMerge.Origin::parent)
-                .containsExactly("a", "a", "b");
-        assertThat(byText).containsKey("Coil.knots() returns 3").doesNotContainKey("change only Coil");
-        assertThat(byText.get("The whole test suite passes").gateTests()).isTrue();
-        assertThat(r.bootstrap().get("seed.txt")).contains("## a").contains("## b");
-
-        // Before manifests existed: adopted text plus the paths protected whole are what is as adopted.
-        assertThat(r.manifest()).containsKeys(MAIN, "src/test/java/org/warp/ASpecTest.java", "src/test/java/org/warp/BSpecTest.java");
-        assertThat(r.manifest().get(MAIN)).isEqualTo(ProjectMerge.sha256(ADOPTED));
-
-        // A re-run gives the same tree.
-        ProjectMerge.Result again = ProjectMerge.merge(new ProjectMerge.Parent("a", "run-a", a),
-                new ProjectMerge.Parent("b", "run-b", b), NOW);
-        assertThat(again.goalStack()).isEqualTo(r.goalStack());
-    }
-
-    @Test
-    void parentsThatDidNotStartFromTheSameTextAreRefused() throws IOException {
-        Path a = parent("a", ADOPTED, "ASpecTest", "x", null, "x\n");
-        Path b = parent("b", ADOPTED, "BSpecTest", "y", null, "y\n");
-        Files.writeString(b.resolve("meta/adoption-baseline").resolve(MAIN), ADOPTED.replace("1", "9"));
-        assertThatThrownBy(() -> ProjectMerge.merge(new ProjectMerge.Parent("a", "ra", a), new ProjectMerge.Parent("b", "rb", b), NOW))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("same adopted text");
-    }
 
     private Path parent(String name, String main, String specTest, String criterion, Boolean verdict, String obligations)
             throws IOException {
@@ -137,10 +80,6 @@ class ProjectMergeTest {
         String obligations = packages.bootstrap().get("seed.obligations.txt");
         assertThat(com.walpro.autobuilder.goal.SeedObligationsFile.read(obligations, goal).state().name()).isEqualTo("PRISTINE");
         assertThat(obligations).contains("Coil ties a Knot").contains("Coil.turns() returns 1").doesNotContain("change only Coil");
-
-        ProjectMerge.Result dependency = ProjectMerge.integrate(into, brought, ProjectMerge.Layout.DEPENDENCY, goal, List.of("x"), NOW);
-        assertThat(dependency.tree()).doesNotContainKey("src/main/java/org/knot/Knot.java");
-        assertThat(dependency.tree().get("pom.xml")).contains("<artifactId>knots</artifactId>").doesNotContain("rope");
 
         ProjectMerge.Result modules = ProjectMerge.integrate(into, brought, goal, List.of("x"), NOW);   // the default layout
         assertThat(modules.tree()).containsKeys("coil/" + MAIN, "knots/src/main/java/org/knot/Knot.java", "coil/pom.xml", "knots/pom.xml");

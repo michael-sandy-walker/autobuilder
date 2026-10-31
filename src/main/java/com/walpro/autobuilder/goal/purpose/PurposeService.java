@@ -184,7 +184,7 @@ public class PurposeService {
         InputEntry seed = new InputEntry("input-" + UUID.randomUUID(), 1, InputEntry.KIND_SEED, content,
                 sha256(sourceText(content)), addedBy, Instant.now(),
                 runIdentity == null ? null : runIdentity.runId(),
-                runIdentity == null ? null : runIdentity.lineageId());
+                runIdentity == null ? null : runIdentity.lineageId(), null, null);
         ledger = InputLedger.seeded(seed);
         persist(seed);
     }
@@ -202,13 +202,34 @@ public class PurposeService {
 
     /** A further input arrived: appended to the ledger, never replacing what is there. */
     public synchronized InputEntry addInput(String kind, String content, String addedBy) {
+        return append(kind, content, sha256(content), addedBy, null, null);
+    }
+
+    /** A project brought in: {@code intent} is what it is for; its run and lineage say where it came from. */
+    public synchronized InputEntry addProjectInput(String intent, String addedBy, String sourceRunId, String sourceLineageId,
+                                                   String treeDigest) {
+        return append(InputEntry.KIND_PROJECT, intent, treeDigest, addedBy, sourceRunId, sourceLineageId);
+    }
+
+    private InputEntry append(String kind, String content, String digest, String addedBy, String sourceRunId,
+                              String sourceLineageId) {
         InputEntry input = new InputEntry("input-" + UUID.randomUUID(), ledger.entries().size() + 1, kind, content,
-                sha256(content), addedBy, Instant.now(),
+                digest, addedBy, Instant.now(),
                 runIdentity == null ? null : runIdentity.runId(),
-                runIdentity == null ? null : runIdentity.lineageId());
+                runIdentity == null ? null : runIdentity.lineageId(), sourceRunId, sourceLineageId);
         ledger = ledger.with(input);
         persist(input);
         return input;
+    }
+
+    /** The goal an input landed as, and its own root where the graph holds that; the graph's links are provenance. */
+    public void linkInput(String inputId, String goalId, String sourceRootGoalId) {
+        if (graph == null) return;
+        try {
+            graph.link(inputId, goalId, sourceRootGoalId);
+        } catch (Exception e) {
+            log.warn("T4-EC: input {} was not linked in the graph: {}", inputId, e.getMessage());
+        }
     }
 
     /**

@@ -40,6 +40,9 @@ public class ProtectedPaths {
     /** Where the adopted text of member-protected files is kept, relative to the target. */
     public static final String BASELINE_DIR = "meta/adoption-baseline";
 
+    /** T4-EC: under {@code meta/inputs/<id>}, what a project brought in protects: its own lines and its tests. */
+    public static final String INPUT_FILE = "/protected.txt";
+
     static final String MEMBERS_MARKER = "members:";
 
     private final FileService fileService;
@@ -335,6 +338,21 @@ public class ProtectedPaths {
         return out;
     }
 
+    /** Every input's protected lines; none where no project was brought in. */
+    private String inputLines() {
+        StringBuilder out = new StringBuilder();
+        try {
+            if (!Boolean.TRUE.equals(fileService.exists("meta/inputs"))) return "";
+            for (java.nio.file.Path dir : fileService.listSubfolders("meta/inputs")) {
+                String file = "meta/inputs/" + dir.getFileName() + INPUT_FILE;
+                if (fileService.exists(file)) out.append('\n').append(fileService.readString(file));
+            }
+        } catch (Exception e) {
+            log.debug("T4-EC: inputs' protected paths unreadable: {}", e.getMessage());
+        }
+        return out.toString();
+    }
+
     private synchronized List<PathMatcher> matchers() {
         String text;
         try {
@@ -342,6 +360,7 @@ public class ProtectedPaths {
         } catch (Exception e) {
             text = "";
         }
+        text += inputLines();
         if (text.equals(cachedText)) return cachedMatchers;
         List<PathMatcher> out = new ArrayList<>();
         List<PathMatcher> members = new ArrayList<>();

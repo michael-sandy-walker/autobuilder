@@ -446,21 +446,11 @@ combined into a child: `LineageTestMerge` merges test layers over identical libr
 `LineageCodeMerge` merges differing library code three-way against the tree both started from, with the
 declaration as the unit (`scripts/merge_lineages.sh`).
 
-**Merging projects** (`core.merge.ProjectMerge`, `ProjectMergeService`, `POST /autobuilder/merge-projects`). Two
-parents -- target directories as their runs left them -- become one child in one operation: code (the two merges
-above, against the adopted text both share), goal tree (a new root over both parents' trees, every node with a new
-id and its parent, run, lineage and former id kept), every criterion and every non-rule obligation of both parents
-(listed once per distinct text with all its origins), seed, obligations and protected paths. The child is written
-under `file.base-path`, which must hold no code; its test gate runs, and each criterion is answered against it --
-structure first (`CriteriaVerificationService.structuralAnswer`: the test run, the changes since adoption, the
-declarations as adopted), a model for the rest -- with who answered kept beside each verdict (`MERGE-REPORT.tsv`,
-and per node in `meta/GoalStack.json`). The child's goal tree is written to the graph.
+**Bringing a project in** (`core.merge.ProjectInput`, `ProjectInputService`, `POST /autobuilder/inputs`): one project joins the project the application is working on, as one operation over code, goal tree, criteria and graph, under the lock a cycle holds, so a stopped project and a running one between cycles are the same call. The input is recorded in the ledger (`goal.purpose`); its code merges three-way with a common base and is placed beside the receiving code without one (nothing of the receiving project moves); its intent becomes a goal under the root with its own tree below, every node stamped with the input's id, and a finished root reopens; its obligations join the requirements at the seed's authority, under `meta/inputs/<id>/`, with its tests protected; each carried criterion is answered once against the merged tree, structure first, and what fails stays on the intent's goal as work. To bring a project into a finished one: boot with `--autobuilder.start.mode=ASK`, post the input, then `POST /autobuilder/start?mode=ADOPT_PROJECT` (`CONTINUE_LINEAGE` restores the preserved artifact over `output/`). Merging into a NEW project is still `ProjectMerge.integrate` until T4-EC slice 6.
 
-Two projects with no common base are merged by `ProjectMerge.integrate`: one is brought into the other toward a goal,
-the child's root is that goal over both parents' trees, and the integration is the loop's work from that tree. The
-default layout is `MODULES` -- each project a module of one reactor build, keeping its own build file, dependencies and
-tests; `PACKAGES` (one build, both projects' packages) suits two small libraries with compatible builds; `DEPENDENCY`
-(the receiving build depends on the other's artifact) uses a library rather than merging it.
+Merging into a new child is `ProjectMerge.integrate`, a temporary second path until T4-EC slice 6: the child's root is the
+goal over both parents' trees, and the integration is the loop's work from that tree. Its default layout is `MODULES` --
+each project a module of one reactor build; `PACKAGES` puts both projects' packages in one build.
 
 What two projects share is matched by `ProjectMatcher` and `ProjectMatchService` (`POST /autobuilder/match-projects`):
 structure first -- top-level types by public surface (each type's own name read as "self"), one operation name on two

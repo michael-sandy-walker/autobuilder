@@ -2022,6 +2022,27 @@ public class AutobuilderService implements CheckpointableState {
      *
      * @return list of injected feature descriptions; empty if no gaps found
      */
+    /**
+     * T4-EC slice 4: a project brought in between cycles, under the lock a cycle holds; a held or paused project goes on
+     * from the new state when it runs.
+     */
+    public com.walpro.autobuilder.core.merge.ProjectInputService.Report bringInput(
+            com.walpro.autobuilder.core.merge.ProjectInputService inputs,
+            com.walpro.autobuilder.core.merge.ProjectInputService.Request request) throws IOException {
+        lock.lock();
+        try {
+            var report = inputs.bring(request);
+            if (context != null) {
+                context = context.withPausedReason(null).withGoalExhaustedReason(null)
+                        .withCycleResultState(CycleResultState.CONTINUE);
+            }
+            systemPaused = false;
+            return report;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     public CoverageReviewResult triggerCoverageReview() {
         lock.lock();
         try {

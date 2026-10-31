@@ -39,6 +39,8 @@ public class Neo4jInputGraphService implements InputGraphService {
         p.put("addedAt", e.addedAt() == null ? null : e.addedAt().toString());
         p.put("lineageId", e.lineageId() != null ? e.lineageId() : runIdentity.lineageId());
         p.put("runId", e.runId() != null ? e.runId() : runIdentity.runId());
+        p.put("sourceRunId", e.sourceRunId());
+        p.put("sourceLineageId", e.sourceLineageId());
         neo4jClient.query("""
                 MERGE (i:Input {id: $id})
                 ON CREATE SET
@@ -49,8 +51,28 @@ public class Neo4jInputGraphService implements InputGraphService {
                     i.addedBy = $addedBy,
                     i.addedAt = $addedAt,
                     i.lineageId = $lineageId,
-                    i.createdInRunId = $runId
+                    i.createdInRunId = $runId,
+                    i.sourceRunId = $sourceRunId,
+                    i.sourceLineageId = $sourceLineageId
                 SET i.runId = $runId
+                """)
+                .bindAll(p)
+                .run();
+    }
+
+    @Override
+    public void link(String inputId, String goalId, String sourceRootGoalId) {
+        Map<String, Object> p = new HashMap<>();
+        p.put("inputId", inputId);
+        p.put("goalId", goalId);
+        p.put("sourceRootGoalId", sourceRootGoalId);
+        neo4jClient.query("""
+                MATCH (i:Input {id: $inputId})
+                MATCH (g:Goal {id: $goalId})
+                MERGE (i)-[:LANDED_AS]->(g)
+                WITH i
+                OPTIONAL MATCH (s:Goal {id: $sourceRootGoalId})
+                FOREACH (x IN CASE WHEN s IS NULL THEN [] ELSE [s] END | MERGE (i)-[:CAME_FROM]->(x))
                 """)
                 .bindAll(p)
                 .run();
@@ -65,7 +87,8 @@ public class Neo4jInputGraphService implements InputGraphService {
                 WHERE i.lineageId = $lineageId
                 RETURN i.id AS id, i.sequence AS sequence, i.kind AS kind, i.content AS content,
                        i.sourceDigest AS sourceDigest, i.addedBy AS addedBy, i.addedAt AS addedAt,
-                       i.createdInRunId AS runId, i.lineageId AS lineageId
+                       i.createdInRunId AS runId, i.lineageId AS lineageId,
+                       i.sourceRunId AS sourceRunId, i.sourceLineageId AS sourceLineageId
                 ORDER BY i.sequence
                 """)
                 .bind(runIdentity.lineageId()).to("lineageId")
@@ -75,7 +98,8 @@ public class Neo4jInputGraphService implements InputGraphService {
                 .map(r -> new InputEntry((String) r.get("id"), ((Number) r.get("sequence")).intValue(),
                         (String) r.get("kind"), (String) r.get("content"), (String) r.get("sourceDigest"),
                         (String) r.get("addedBy"), r.get("addedAt") == null ? null : Instant.parse((String) r.get("addedAt")),
-                        (String) r.get("runId"), (String) r.get("lineageId")))
+                        (String) r.get("runId"), (String) r.get("lineageId"),
+                        (String) r.get("sourceRunId"), (String) r.get("sourceLineageId")))
                 .toList();
     }
 }

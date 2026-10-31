@@ -1,7 +1,7 @@
 #!/bin/bash
 # prepare_integration_case.sh -- T4-EC stage 2: make a toy case's CHILD from two parent snapshots, once. The child is the
 # input of every run of the case, so it is written into data/<case>/bootstrap/child and tracked (the parents live
-# outside the repository). Layout from the case name (ledger-import-packages|dependency|modules).
+# outside the repository). Layout from the case name (ledger-import-packages|modules).
 #
 # Usage: scripts/prepare_integration_case.sh <case>
 #   INTO / BROUGHT: the parent snapshots (default ~/.autobuilder/cashbook-after-run1, ~/.autobuilder/linetokens-after-run1)
@@ -22,10 +22,6 @@ java -cp "$JAR" -Dloader.main=com.walpro.autobuilder.core.merge.ProjectMerge org
 # The integration's specification goes with the receiving project's tests.
 T=src/test/java; [ "$LAYOUT" = MODULES ] && T=cashbook/src/test/java
 mkdir -p "$B/child/output/$T"; cp -a "$B/integration/spec/." "$B/child/output/$T/"
-# A dependency is installed from the brought project's own tree, kept with the case.
-if [ "$LAYOUT" = DEPENDENCY ]; then
-    mkdir -p "$B/child/dependency"; cp -a "$BROUGHT/output" "$B/child/dependency/linetokens"; rm -rf "$B/child/dependency/linetokens/target"
-fi
 # The loop reads the seed, obligations and protected paths from bootstrap/.
 cp "$B/child/bootstrap/seed.txt" "$B/child/bootstrap/seed.obligations.txt" "$B/"
 [ -f "$B/child/bootstrap/protected-paths.txt" ] && cp "$B/child/bootstrap/protected-paths.txt" "$B/"

@@ -321,33 +321,34 @@ public class AutobuilderController {
         ));
     }
 
-    /** T4-EC: merges two parent projects into a child written under {@code file.base-path}; optional. */
+    /** T4-EC slice 4: bringing a project into this one; optional. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private com.walpro.autobuilder.core.merge.ProjectMergeService projectMergeService;
+    private com.walpro.autobuilder.core.merge.ProjectInputService projectInputService;
 
-    /** One parent of a merge: its label, the run that grew it, and its target directory as that run left it. */
-    public record MergeParent(String label, String runId, String dir) {
-    }
-
-    /** The two parents of a merge, the first one's other files kept where they differ. */
-    public record MergeRequest(MergeParent first, MergeParent second) {
+    /** A project to bring in: its label, the run that grew it (or none, for a third party's), its directory, what it is for. */
+    public record InputRequest(String label, String runId, String dir, String intent, String addedBy) {
     }
 
     /**
-     * T4-EC stage 1: two parents that grew one adopted project into ONE child -- code, goal tree, criteria and seed --
-     * written under {@code file.base-path} (which must hold no code), every parent criterion answered against the
-     * child (structure first, a model for the rest, who answered kept), and the child's goal tree put in the graph.
+     * T4-EC slice 4: one project brought into the project this application is working on -- code, goal tree, criteria
+     * and graph as one operation, between cycles. Further input does not start over: the work goes on from the new state.
      */
-    @PostMapping("/merge-projects")
-    public ResponseEntity<?> mergeProjects(@RequestBody MergeRequest request) {
-        if (projectMergeService == null) return ResponseEntity.status(503).body(Map.of("error", "merge is not enabled in this context"));
+    @PostMapping("/inputs")
+    public ResponseEntity<?> bringInput(@RequestBody InputRequest r) {
+        if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        if (r.label() == null || r.dir() == null) return ResponseEntity.badRequest().body(Map.of("error", "an input needs a label and a dir"));
         try {
-            return ResponseEntity.ok(projectMergeService.merge(parent(request.first()), parent(request.second())));
+            return ResponseEntity.ok(autobuilderService.bringInput(projectInputService, new com.walpro.autobuilder.core.merge.ProjectInputService.Request(
+                    r.label(), r.runId(), java.nio.file.Path.of(r.dir()), r.intent(), r.addedBy() == null ? "operator" : r.addedBy())));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (java.io.IOException e) {
             return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    /** One parent of a merge: its label, the run that grew it, and its target directory as that run left it. */
+    public record MergeParent(String label, String runId, String dir) {
     }
 
     /** T4-EC stage 3: matching two projects; optional. */

@@ -10,6 +10,9 @@ public interface InputGraphService {
     /** Upserts one input; its lineage and creating run are stamped once, on create. */
     void save(InputEntry entry);
 
+    /** {@code inputId} landed as {@code goalId}; it came from {@code sourceRootGoalId} when the graph holds that goal. */
+    void link(String inputId, String goalId, String sourceRootGoalId);
+
     /** This lineage's inputs in arrival order. */
     List<InputEntry> findAll();
 }

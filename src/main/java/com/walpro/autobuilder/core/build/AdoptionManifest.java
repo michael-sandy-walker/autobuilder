@@ -78,6 +78,21 @@ public class AdoptionManifest {
         }
     }
 
+    /** T4-EC: files an input brought are as adopted, not the loop's changes: their digests join the manifest. */
+    public void addFiles(List<String> paths) {
+        try {
+            if (paths.isEmpty() || !fileService.exists(PATH)) return;
+            Map<String, String> adopted = mapper.readValue(fileService.readString(PATH), new TypeReference<TreeMap<String, String>>() { });
+            Map<String, String> now = digests(fileService.resolveSecurePath("output"));
+            for (String p : paths) {
+                if (now.containsKey(p)) adopted.put(p, now.get(p));
+            }
+            fileService.writeString(PATH, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(adopted));
+        } catch (Exception e) {
+            log.warn("T4-EC: could not add an input's files to the adoption manifest: {}", e.getMessage());
+        }
+    }
+
     /** The changes since adoption; empty when this tree was not adopted or the manifest is unreadable. */
     public Optional<Changes> changes() {
         try {

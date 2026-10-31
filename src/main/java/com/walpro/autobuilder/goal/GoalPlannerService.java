@@ -280,6 +280,41 @@ public class GoalPlannerService {
         return input;
     }
 
+    /**
+     * T4-EC slice 4: a project input lands in the goal tree: its intent a goal under the root, current, carrying what the
+     * merged tree does not yet satisfy; the input's own tree below it, every node stamped; a finished root reopened.
+     *
+     * @return the id of the goal the input landed as
+     */
+    public String landInput(String inputId, String intent, GoalEntity tree, List<String> unmet) {
+        GoalEntity root = getRootGoal();
+        if (root.getStatus() == GoalStatus.COMPLETED || root.getStatus() == GoalStatus.GIVEN_UP) {
+            root.setStatus(GoalStatus.ACTIVE);
+            root.setCompleted(null);
+            root.setGivenUp(null);
+            goalGraphService.save(root);
+            log.info("T4-EC: root goal reset to ACTIVE: an input arrived");
+        }
+        unanswerableAtClosure = null;
+        String id = "goal-" + java.util.UUID.randomUUID();
+        addSubGoal(id, intent, true, rootGoalId, "planner", null);
+        setGoalMetadataString(id, "inputId", inputId);
+        if (tree != null) {
+            flattenRecursive(tree, id);
+            saveLanded(tree, inputId);
+        }
+        if (!unmet.isEmpty()) setAcceptanceCriteria(id, unmet);
+        persist();
+        return id;
+    }
+
+    private void saveLanded(GoalEntity node, String inputId) {
+        node.getMetadata().put("inputId", inputId);
+        goalGraphService.save(node);
+        goalGraphService.setParent(node.getId(), node.getParentId());
+        for (GoalEntity child : node.getSubGoals()) saveLanded(child, inputId);
+    }
+
     public void setCurrentCycleContext(CycleContextData ctx) {
         this.currentCycleContext = ctx;
     }

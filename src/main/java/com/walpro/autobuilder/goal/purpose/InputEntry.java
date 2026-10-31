@@ -5,7 +5,7 @@ import java.time.Instant;
 /**
  * T4-EC slice 1: one input a project was given -- what was ASKED, never what was derived from it.
  *
- * <p>The seed is entry 1. Later inputs (another project, instructions, an example) are entries 2..n; what is
+ * <p>What was decided about an input is an {@link InputEvent} beside it. The seed is entry 1. Later inputs (another project, instructions, an example) are entries 2..n; what is
  * derived from an input (its obligations, derived tests, adoption baseline, goals) stays in its own home and
  * points back here by {@link #id}.
  *

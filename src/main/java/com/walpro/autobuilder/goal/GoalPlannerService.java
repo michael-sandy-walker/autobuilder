@@ -296,6 +296,7 @@ public class GoalPlannerService {
             log.info("T4-EC: root goal reset to ACTIVE: an input arrived");
         }
         unanswerableAtClosure = null;
+        conflictAtClosure = false;
         String id = "goal-" + java.util.UUID.randomUUID();
         addSubGoal(id, intent, true, rootGoalId, "planner", null);
         setGoalMetadataString(id, "inputId", inputId);
@@ -304,6 +305,31 @@ public class GoalPlannerService {
             saveLanded(tree, inputId);
         }
         if (!unmet.isEmpty()) setAcceptanceCriteria(id, unmet);
+        persist();
+        return id;
+    }
+
+    /** T4-EC slice 5: a decision lifts the halt an open conflict caused; another conflict refuses closure again by itself. */
+    public void conflictDecided() {
+        unanswerableAtClosure = null;
+        conflictAtClosure = false;
+    }
+
+    /** T4-EC slice 5: a decided rule as work: under the root, carrying the rule as its criterion; a finished root reopened. */
+    public String addDecidedWork(String description, String inputId) {
+        GoalEntity root = getRootGoal();
+        if (root.getStatus() == GoalStatus.COMPLETED || root.getStatus() == GoalStatus.GIVEN_UP) {
+            root.setStatus(GoalStatus.ACTIVE);
+            root.setCompleted(null);
+            root.setGivenUp(null);
+            goalGraphService.save(root);
+        }
+        unanswerableAtClosure = null;
+        conflictAtClosure = false;
+        String id = "goal-" + java.util.UUID.randomUUID();
+        addSubGoal(id, description, currentSubGoalId == null, rootGoalId, "planner", null);
+        setGoalMetadataString(id, "inputId", inputId);
+        setAcceptanceCriteria(id, List.of(description));
         persist();
         return id;
     }
@@ -4122,6 +4148,16 @@ public class GoalPlannerService {
      * frozen); one of them had reached 16/16. Asked here, the refusal comes once, when the work is otherwise done.
      */
     private boolean completeRootUnlessUnanswerable(GoalEntity root) {
+        var conflicts = purpose().openConflicts();
+        if (!conflicts.isEmpty()) {
+            List<String> subjects = conflicts.stream().map(com.walpro.autobuilder.goal.purpose.InputEvent::subject).toList();
+            String reason = conflicts.size() + " conflict(s) between inputs wait for a decision: " + String.join("; ", subjects);
+            log.warn("T4-EC: root closure REFUSED -- {}", reason);
+            recordClosureRefusal("T4-EC", root.getId(), reason, subjects);
+            unanswerableAtClosure = reason;
+            conflictAtClosure = true;
+            return false;
+        }
         Optional<List<String>> open = derivedRequirementsNoTestAnswers(root);
         if (open.isEmpty()) return true;
         String reason = "no test written from the requirement's wording could be kept for " + open.get().size()
@@ -4130,6 +4166,13 @@ public class GoalPlannerService {
         recordClosureRefusal("T6-U", root.getId(), reason, open.get());
         unanswerableAtClosure = reason;
         return false;
+    }
+
+    /** T4-EC slice 5: closure was refused for an open conflict, which a decision lifts: the halt is named for that. */
+    private volatile boolean conflictAtClosure;
+
+    public boolean conflictAtClosure() {
+        return conflictAtClosure;
     }
 
     /** T6-U: set when closure was refused only for a line no kept test answers; the run halts on it. */
@@ -4217,6 +4260,9 @@ public class GoalPlannerService {
     /** The tree the closure gates judge, plus every goal's state and criteria. */
     private String closureInputsFingerprint() {
         StringBuilder sb = new StringBuilder();
+        // T4-EC slice 5: what was decided about the inputs is judged too: a conflict decided for the receiving project
+        // changes neither the tree nor a goal, and without this the root would never be asked again.
+        sb.append(purpose().ledger().hashCode()).append('|');
         Map<String, String> output = outputNow();
         if (output != null) {
             new java.util.TreeMap<>(output).forEach((path, content) ->
@@ -4710,6 +4756,8 @@ public class GoalPlannerService {
                 // T6-T: a banked criterion that restates a rule: line guides the work and never blocks it -- the
                 // obligations file says so, and the root's own obligations already leave rule lines out.
                 List<String> rules = requirements().rules();
+                // T4-EC slice 5: a claim held as a conflict, or set aside by a decision, is no requirement to verify.
+                toVerify.removeIf(c -> purpose().linesOut().contains(c.strip()));
                 List<String> restated = toVerify.stream().filter(c -> SeedRequirements.restatesRule(c, rules)).toList();
                 if (!restated.isEmpty()) {
                     toVerify.removeAll(restated);

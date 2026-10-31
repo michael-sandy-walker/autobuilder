@@ -74,16 +74,15 @@ public class PurposeService {
 
     @PostConstruct
     public void load() {
-        List<InputEntry> entries = List.of();
+        InputLedger loaded = InputLedger.EMPTY;
         if (loadFromGraph && graph != null) {
             try {
-                entries = graph.findAll();
+                loaded = new InputLedger(graph.findAll(), graph.findEvents());
             } catch (Exception e) {
                 log.warn("T4-EC: inputs not readable from the graph ({}) -- reading {}", e.getMessage(), PATH);
             }
         }
-        if (entries.isEmpty()) entries = readFile();
-        ledger = new InputLedger(entries);
+        ledger = loaded.isEmpty() ? readFile() : loaded;
     }
 
     public InputLedger ledger() {
@@ -123,11 +122,65 @@ public class PurposeService {
     }
 
     private List<Requirement> across(java.util.function.BiFunction<String, String, List<String>> read) {
+        java.util.Set<String> out_ = linesOut();
         List<Requirement> out = new ArrayList<>();
         for (InputEntry e : ledger.entries()) {
-            for (String line : read.apply(e.content(), obligationsText(e))) out.add(new Requirement(e.id(), line));
+            for (String line : read.apply(e.content(), obligationsText(e))) {
+                if (!out_.contains(line.strip())) out.add(new Requirement(e.id(), line));
+            }
         }
         return out;
+    }
+
+    /** Lines that are not requirements now: a claim held or set aside, and what a decided rule replaced. */
+    public java.util.Set<String> linesOut() {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        for (InputEvent e : ledger.events()) {
+            if (e.keepsLineOut()) out.add(e.heldLine().strip());
+            if (e.replacedReceiving()) e.replaces().forEach(l -> out.add(l.strip()));
+        }
+        return out;
+    }
+
+    public List<InputEvent> openConflicts() {
+        return ledger.events().stream().filter(e -> InputEvent.CONFLICT.equals(e.kind()) && e.open()).toList();
+    }
+
+    public InputEvent event(String id) {
+        return ledger.events().stream().filter(e -> e.id().equals(id)).findFirst().orElse(null);
+    }
+
+    /** A difference the operator's intent settled for the input. */
+    public synchronized InputEvent recordCorrection(String inputId, String subject, String receiving, String other,
+                                                    List<String> replaces) {
+        return store(new InputEvent("event-" + UUID.randomUUID(), InputEvent.CORRECTION, inputId, subject, receiving, other,
+                null, null, replaces, InputEvent.DECIDED, InputEvent.FOR_INPUT, "intent", Instant.now()));
+    }
+
+    /** Something nothing settled: held until someone decides. */
+    public synchronized InputEvent raiseConflict(String inputId, String subject, String receiving, String other,
+                                                 String heldLine, String heldPath) {
+        return store(new InputEvent("event-" + UUID.randomUUID(), InputEvent.CONFLICT, inputId, subject, receiving, other,
+                heldLine, heldPath, List.of(), InputEvent.OPEN, null, null, Instant.now()));
+    }
+
+    /** A conflict decided; the event stays in the ledger with who decided and how. */
+    public synchronized InputEvent decide(InputEvent open, String decision, String by, List<String> replaces) {
+        return store(new InputEvent(open.id(), open.kind(), open.inputId(), open.subject(), open.receiving(), open.other(),
+                open.heldLine(), open.heldPath(), replaces, InputEvent.DECIDED, decision, by, Instant.now()));
+    }
+
+    private InputEvent store(InputEvent event) {
+        ledger = ledger.with(event);
+        if (graph != null) {
+            try {
+                graph.saveEvent(event, runIdentity == null ? null : runIdentity.lineageId());
+            } catch (Exception e) {
+                log.warn("T4-EC: event {} was not written to the graph: {}", event.id(), e.getMessage());
+            }
+        }
+        writeFile();
+        return event;
     }
 
     private static List<String> texts(List<Requirement> requirements) {
@@ -161,10 +214,11 @@ public class PurposeService {
 
     /** Every input's written obligation lines as written, markers kept. */
     public List<String> writtenLines() {
+        java.util.Set<String> out_ = linesOut();
         List<String> out = new ArrayList<>();
         for (InputEntry e : ledger.entries()) {
             String written = obligationsText(e);
-            if (written != null) written.lines().filter(l -> !l.isBlank() && !l.startsWith("#")).forEach(out::add);
+            if (written != null) written.lines().filter(l -> !l.isBlank() && !l.startsWith("#") && !out_.contains(l.strip())).forEach(out::add);
         }
         return out;
     }
@@ -256,16 +310,18 @@ public class PurposeService {
         return content;
     }
 
-    private List<InputEntry> readFile() {
+    private InputLedger readFile() {
         try {
-            if (!fileService.exists(PATH)) return List.of();
-            JsonNode inputs = MAPPER.readTree(fileService.readString(PATH)).path("inputs");
-            List<InputEntry> out = new ArrayList<>();
-            for (JsonNode n : inputs) out.add(MAPPER.treeToValue(n, InputEntry.class));
-            return out;
+            if (!fileService.exists(PATH)) return InputLedger.EMPTY;
+            JsonNode doc = MAPPER.readTree(fileService.readString(PATH));
+            List<InputEntry> entries = new ArrayList<>();
+            for (JsonNode n : doc.path("inputs")) entries.add(MAPPER.treeToValue(n, InputEntry.class));
+            List<InputEvent> events = new ArrayList<>();
+            for (JsonNode n : doc.path("events")) events.add(MAPPER.treeToValue(n, InputEvent.class));
+            return new InputLedger(entries, events);
         } catch (Exception e) {
             log.warn("T4-EC: {} unreadable: {}", PATH, e.getMessage());
-            return List.of();
+            return InputLedger.EMPTY;
         }
     }
 
@@ -273,6 +329,7 @@ public class PurposeService {
         try {
             Map<String, Object> doc = new LinkedHashMap<>();
             doc.put("inputs", ledger.entries());
+            if (!ledger.events().isEmpty()) doc.put("events", ledger.events());
             fileService.ensureFolderExists("meta");
             fileService.writeFile(PATH, MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(doc));
         } catch (Exception e) {

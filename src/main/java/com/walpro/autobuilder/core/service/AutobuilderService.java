@@ -254,6 +254,8 @@ public class AutobuilderService implements CheckpointableState {
 
     /** T6-U: the halt reason when only a requirement no kept test answers stands between the root and closure. */
     static final String UNANSWERABLE_HALT = "requirement-no-test-answers";
+    /** T4-EC slice 5: everything else is done and a conflict waits for a decision; a decision lifts this halt. */
+    static final String CONFLICT_HALT = "open-conflict";
 
     /**
      * T4-CJ slice 2: may this snapshot be used as proof of progress in the CURRENT run?
@@ -1442,8 +1444,9 @@ public class AutobuilderService implements CheckpointableState {
         Optional<String> unanswerable = goalPlannerService.unanswerableAtClosure();
         if (unanswerable.isPresent() && context.goalExhaustedReason() == null) {
             log.error("T6-U: the root cannot close in this run -- {}. Pausing for review.", unanswerable.get());
-            emitSystemPausedOnce(context.cycleName(), UNANSWERABLE_HALT, 1);
-            context = context.withGoalExhaustedReason(UNANSWERABLE_HALT).withPausedReason(UNANSWERABLE_HALT);
+            String halt = goalPlannerService.conflictAtClosure() ? CONFLICT_HALT : UNANSWERABLE_HALT;
+            emitSystemPausedOnce(context.cycleName(), halt, 1);
+            context = context.withGoalExhaustedReason(halt).withPausedReason(halt);
         }
 
         // T4-I (root-scoped slice): convergence brake — activity without convergence. Unlike the
@@ -1733,7 +1736,7 @@ public class AutobuilderService implements CheckpointableState {
     // T6-U: nor the halt on a requirement no kept test answers -- the tests are frozen, so a different path meets the
     // same refusal the moment its work is done.
     private static final java.util.Set<String> NON_REWINDABLE_PAUSES =
-            java.util.Set.of("user-pause", LLM_BREAKER_PAUSE_REASON, UNANSWERABLE_HALT);
+            java.util.Set.of("user-pause", LLM_BREAKER_PAUSE_REASON, UNANSWERABLE_HALT, CONFLICT_HALT);
 
     /**
      * T3-BY: is this cycle the one that should re-preserve? Counts MERGED cycles only — an
@@ -2038,6 +2041,23 @@ public class AutobuilderService implements CheckpointableState {
             }
             systemPaused = false;
             return report;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** T4-EC slice 5: a conflict decided between cycles, under the lock a cycle holds. */
+    public com.walpro.autobuilder.goal.purpose.InputEvent decideConflict(
+            com.walpro.autobuilder.core.merge.ProjectInputService inputs, String id, String decision, String by) throws IOException {
+        lock.lock();
+        try {
+            var event = inputs.decide(id, decision, by);
+            if (context != null) {
+                context = context.withPausedReason(null).withGoalExhaustedReason(null)
+                        .withCycleResultState(CycleResultState.CONTINUE);
+            }
+            systemPaused = false;
+            return event;
         } finally {
             lock.unlock();
         }

@@ -10,12 +10,17 @@ import java.util.List;
  *
  * <p>A new root is a new purpose (a reset renews the lineage too), so it starts a new ledger; a later input is appended.
  */
-public record InputLedger(List<InputEntry> entries) {
+public record InputLedger(List<InputEntry> entries, List<InputEvent> events) {
 
     public static final InputLedger EMPTY = new InputLedger(List.of());
 
+    public InputLedger(List<InputEntry> entries) {
+        this(entries, List.of());
+    }
+
     public InputLedger {
         entries = List.copyOf(entries);
+        events = List.copyOf(events);
     }
 
     public static InputLedger seeded(InputEntry seed) {
@@ -25,7 +30,15 @@ public record InputLedger(List<InputEntry> entries) {
     public InputLedger with(InputEntry input) {
         List<InputEntry> out = new java.util.ArrayList<>(entries);
         out.add(input);
-        return new InputLedger(out);
+        return new InputLedger(out, events);
+    }
+
+    /** {@code event} recorded, or replacing the one with its id: events are decided, never removed. */
+    public InputLedger with(InputEvent event) {
+        List<InputEvent> out = new java.util.ArrayList<>(events);
+        out.removeIf(e -> e.id().equals(event.id()));
+        out.add(event);
+        return new InputLedger(entries, out);
     }
 
     public boolean isEmpty() {
@@ -40,15 +53,25 @@ public record InputLedger(List<InputEntry> entries) {
     /**
      * The inputs so far as one specification -- the text every reader of the purpose works from. While the ledger
      * holds only the seed, the seed itself, byte for byte. Several inputs follow one another in arrival order, each
-     * under a line naming it; a reader that must tell them apart reads {@link #entries()}.
+     * under a line naming it, and what was decided about them follows; a reader that must tell them apart reads
+     * {@link #entries()}.
      */
     public String specification() {
         if (entries.isEmpty()) return null;
-        if (entries.size() == 1) return entries.get(0).content();
         StringBuilder out = new StringBuilder();
-        for (InputEntry e : entries) {
-            if (out.length() > 0) out.append("\n\n");
-            out.append("--- input ").append(e.sequence()).append(" (").append(e.kind()).append(") ---\n").append(e.content());
+        if (entries.size() == 1) {
+            out.append(entries.get(0).content());
+        } else {
+            for (InputEntry e : entries) {
+                if (out.length() > 0) out.append("\n\n");
+                out.append("--- input ").append(e.sequence()).append(" (").append(e.kind()).append(") ---\n").append(e.content());
+            }
+        }
+        for (InputEvent e : events) {
+            if (e.replacedReceiving()) {
+                out.append("\n\n--- decided: ").append(e.subject()).append(" ---\n").append(e.other())
+                        .append(" This replaces: ").append(e.receiving());
+            }
         }
         return out.toString();
     }

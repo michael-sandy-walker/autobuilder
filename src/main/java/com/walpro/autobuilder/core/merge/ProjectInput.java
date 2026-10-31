@@ -32,6 +32,7 @@ public final class ProjectInput {
      * @param files         every file to write under {@code output/}, new or changed
      * @param placed        the files the input brought, for its manifest entry and its undo
      * @param conflicts     what could not be joined, in words
+     * @param conflictedFiles the files both projects have with different text, the receiving one kept
      * @param notes         what else was done
      * @param tree          the input's goal tree restamped for the receiving project, or null with none
      * @param criteria      its criteria and obligations with their origins
@@ -40,7 +41,8 @@ public final class ProjectInput {
      * @param sourceLineage its lineage, or null
      * @param treeDigest    a digest of the tree it arrived with
      */
-    public record Landing(Map<String, String> files, List<String> placed, List<String> conflicts, List<String> notes,
+    public record Landing(Map<String, String> files, List<String> placed, List<String> conflicts,
+                          List<String> conflictedFiles, List<String> notes,
                           ObjectNode tree, List<ProjectMerge.Criterion> criteria, List<String> obligations,
                           List<String> protectedLines, String sourceLineage, String treeDigest) {
     }
@@ -83,7 +85,9 @@ public final class ProjectInput {
         for (String p : brought) {
             if (p.startsWith("src/test/")) protect.add(p);
         }
-        return new Landing(changed, brought, conflicts, notes, goals, List.copyOf(criteria.values()), obligations,
+        List<String> conflictedFiles = conflicts.stream().filter(c -> c.contains(": both projects have it"))
+                .map(c -> c.substring(0, c.indexOf(": both projects have it"))).toList();
+        return new Landing(changed, brought, conflicts, conflictedFiles, notes, goals, List.copyOf(criteria.values()), obligations,
                 List.copyOf(protect), ProjectMerge.lineageOf(input), digest(theirs));
     }
 

@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.graph.input;
 
 import com.walpro.autobuilder.goal.purpose.InputEntry;
+import com.walpro.autobuilder.goal.purpose.InputEvent;
 
 import java.util.List;
 
@@ -12,6 +13,12 @@ public interface InputGraphService {
 
     /** {@code inputId} landed as {@code goalId}; it came from {@code sourceRootGoalId} when the graph holds that goal. */
     void link(String inputId, String goalId, String sourceRootGoalId);
+
+    /** Upserts one event: a conflict's decision replaces its open state. */
+    void saveEvent(InputEvent event, String lineageId);
+
+    /** This lineage's events in order. */
+    List<InputEvent> findEvents();
 
     /** This lineage's inputs in arrival order. */
     List<InputEntry> findAll();

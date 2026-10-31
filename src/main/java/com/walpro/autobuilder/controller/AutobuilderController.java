@@ -347,6 +347,29 @@ public class AutobuilderController {
         }
     }
 
+    /** T4-EC slice 5: how a held conflict is decided: for {@code input} or for {@code receiving}, and by whom. */
+    public record ConflictDecision(String decision, String by) {
+    }
+
+    /** T4-EC slice 5: what waits for a decision. */
+    @GetMapping("/inputs/conflicts")
+    public ResponseEntity<?> openConflicts() {
+        if (goalPlannerServiceForGoal == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        return ResponseEntity.ok(goalPlannerServiceForGoal.purpose().openConflicts());
+    }
+
+    @PostMapping("/inputs/conflicts/{id}")
+    public ResponseEntity<?> decideConflict(@PathVariable String id, @RequestBody ConflictDecision d) {
+        if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(autobuilderService.decideConflict(projectInputService, id, d.decision(), d.by() == null ? "operator" : d.by()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     /** One parent of a merge: its label, the run that grew it, and its target directory as that run left it. */
     public record MergeParent(String label, String runId, String dir) {
     }

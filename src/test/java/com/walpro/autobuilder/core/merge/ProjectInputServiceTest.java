@@ -49,6 +49,7 @@ class ProjectInputServiceTest {
     private AdoptionManifest manifest;
     private ProjectInputService service;
     private final CriteriaVerificationService verifier = mock(CriteriaVerificationService.class);
+    private final InputComparison comparison = mock(InputComparison.class);
 
     private static void write(Path p, String text) throws IOException {
         Files.createDirectories(p.getParent());
@@ -84,7 +85,7 @@ class ProjectInputServiceTest {
         when(verifier.structuralAnswer(anyString(), any(), any())).thenReturn(null);
         when(verifier.verifyWithTestRun(anyString(), any(), any())).thenReturn(Map.of(1, true, 2, false));
         ObjectProvider<SeedObligationsGenerator> none = mock(ObjectProvider.class);
-        service = new ProjectInputService(goals, files, manifest, gate, verifier, none);
+        service = new ProjectInputService(goals, files, manifest, gate, verifier, none, comparison);
     }
 
     private ProjectInputService.Report bring() throws IOException {
@@ -149,5 +150,114 @@ class ProjectInputServiceTest {
     void thereIsNothingToBringItIntoBeforeAProjectExists_andAnInputNeedsAnIntent() throws Exception {
         assertThatThrownBy(() -> service.bring(new ProjectInputService.Request("knots", "r", brought, " ", "operator")))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private void differs(InputComparison.Difference d, boolean settled) {
+        when(comparison.sameConcept(anyString(), any(), anyString())).thenReturn(List.of("Coil"));
+        when(comparison.differences(anyString(), anyString(), anyString())).thenReturn(List.of(d));
+        when(comparison.settledByIntent(anyString(), any())).thenReturn(settled);
+        when(comparison.stating(any(), any())).thenReturn(List.of("A coil has at most 3 turns."));
+    }
+
+    private void seedLine() throws IOException {
+        files.writeFile(com.walpro.autobuilder.goal.SeedObligationsFile.PATH,
+                com.walpro.autobuilder.goal.SeedObligationsFile.render(SEED, List.of("A coil has at most 3 turns.")));
+    }
+
+    private static final InputComparison.Difference TURNS = new InputComparison.Difference("the turn limit", "at most 3 turns", "at most 9 turns");
+
+    @Test
+    void aDifferenceTheIntentSettlesIsACorrection_theOldLineStopsCounting_andTheNewRuleIsARequirement() throws IOException {
+        seedLine();
+        differs(TURNS, true);
+
+        ProjectInputService.Report r = bring();
+
+        assertThat(r.corrections()).containsExactly("the turn limit");
+        assertThat(r.conflicts()).isEmpty();
+        assertThat(goals.requirements().obligationsOrClauses()).doesNotContain("A coil has at most 3 turns.")
+                .contains("the turn limit: at most 9 turns");
+        assertThat(goals.specification()).contains("--- decided: the turn limit ---").contains("This replaces: at most 3 turns");
+    }
+
+    @Test
+    void aDifferenceNothingSettlesIsHeld_andADecisionForTheInputReplacesTheRuleAndBecomesWork() throws IOException {
+        seedLine();
+        differs(TURNS, false);
+
+        ProjectInputService.Report r = bring();
+
+        assertThat(r.conflicts()).singleElement().satisfies(c -> assertThat(c.subject()).isEqualTo("the turn limit"));
+        assertThat(goals.requirements().obligationsOrClauses()).as("still the receiving rule while open").contains("A coil has at most 3 turns.");
+        assertThat(goals.purpose().openConflicts()).hasSize(1);
+
+        var decided = service.decide(r.conflicts().get(0).id(), "input", "operator");
+
+        assertThat(decided.status()).isEqualTo("decided");
+        assertThat(decided.by()).isEqualTo("operator");
+        assertThat(goals.purpose().openConflicts()).isEmpty();
+        assertThat(goals.requirements().obligationsOrClauses()).doesNotContain("A coil has at most 3 turns.")
+                .contains("the turn limit: at most 9 turns");
+        assertThat(goals.getAllGoals()).anyMatch(g -> g.getDescription().startsWith("the turn limit") && g.getStatus() == GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void aDecisionForTheReceivingProjectChangesNothing_andAConflictIsDecidedOnce() throws IOException {
+        seedLine();
+        differs(TURNS, false);
+        String id = bring().conflicts().get(0).id();
+
+        service.decide(id, "receiving", "operator");
+
+        assertThat(goals.requirements().obligationsOrClauses()).contains("A coil has at most 3 turns.");
+        assertThat(goals.specification()).doesNotContain("decided:");
+        assertThatThrownBy(() -> service.decide(id, "input", "operator")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.decide(id, "either", "operator")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void aCarriedClaimThatCannotBeTrueHereIsHeldOutOfTheRequirementsAndOutOfTheWork() throws IOException {
+        when(comparison.contradicts(anyString(), anyString(), org.mockito.ArgumentMatchers.eq("Knot is final"))).thenReturn(true);
+        when(verifier.verifyWithTestRun(anyString(), any(), any())).thenAnswer(i -> {
+            List<String> asked = i.getArgument(1);
+            java.util.Map<Integer, Boolean> out = new java.util.HashMap<>();
+            for (int n = 0; n < asked.size(); n++) out.put(n + 1, !asked.get(n).equals("Knot is final"));
+            return out;
+        });
+        write(brought.resolve("bootstrap/seed.obligations.txt"), com.walpro.autobuilder.goal.SeedObligationsFile.render("Tie knots.",
+                List.of("A knot holds.", "Knot is final")));
+
+        ProjectInputService.Report r = bring();
+
+        assertThat(r.conflicts()).singleElement().satisfies(c -> assertThat(c.heldLine()).isEqualTo("Knot is final"));
+        assertThat(r.unmet()).as("not work to do").isEmpty();
+        assertThat(goals.requirements().obligationsOrClauses()).doesNotContain("Knot is final").contains("A knot holds.");
+
+        service.decide(r.conflicts().get(0).id(), "input", "operator");
+        assertThat(goals.requirements().obligationsOrClauses()).as("decided to stand").contains("Knot is final");
+    }
+
+    @Test
+    void aFileBothHaveIsHeld_theReceivingOneStays_untilADecisionForTheInputPutsItsCopyInPlace() throws IOException {
+        write(base.resolve("output/src/main/java/org/knot/Knot.java"), "package org.knot;\nclass Ours { }\n");
+        ProjectInputService.Report r = bring();
+
+        assertThat(r.conflicts()).singleElement().satisfies(c -> assertThat(c.subject()).endsWith("org/knot/Knot.java"));
+        assertThat(Files.readString(base.resolve("output/src/main/java/org/knot/Knot.java"))).contains("Ours");
+
+        service.decide(r.conflicts().get(0).id(), "input", "operator");
+        assertThat(Files.readString(base.resolve("output/src/main/java/org/knot/Knot.java"))).contains("public class Knot");
+    }
+
+    @Test
+    void aLandingShowsEachSideWithWhatItRefersTo() throws IOException {
+        write(brought.resolve("output/src/main/java/org/knot/Rope.java"), "package org.knot;\npublic class Rope { Knot knot; }\n");
+        when(comparison.sameConcept(anyString(), any(), org.mockito.ArgumentMatchers.contains("class Rope"))).thenReturn(List.of("Coil"));
+        org.mockito.ArgumentCaptor<String> other = org.mockito.ArgumentCaptor.forClass(String.class);
+        when(comparison.differences(anyString(), anyString(), other.capture())).thenReturn(List.of());
+
+        bring();
+
+        assertThat(other.getValue()).contains("class Rope").contains("class Knot");
     }
 }

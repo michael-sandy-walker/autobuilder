@@ -15,6 +15,7 @@ import com.walpro.autobuilder.goal.SeedObligationsFile;
 import com.walpro.autobuilder.goal.SeedObligationsGenerator;
 import com.walpro.autobuilder.goal.SeedRequirements;
 import com.walpro.autobuilder.goal.purpose.InputEntry;
+import com.walpro.autobuilder.goal.purpose.InputEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -47,9 +48,9 @@ public class ProjectInputService {
     public record Verdict(String criterion, Boolean met, String source, List<ProjectMerge.Origin> origins) {
     }
 
-    public record Report(String inputId, String goalId, List<String> placed, List<String> conflicts, List<String> notes,
-                         int criteria, long byStructure, long byModel, long unanswered, List<String> unmet,
-                         int obligations) {
+    public record Report(String inputId, String goalId, List<String> placed, List<String> corrections, List<InputEvent> conflicts,
+                         List<String> notes, int criteria, long byStructure, long byModel, long unanswered,
+                         List<String> unmet, int obligations) {
     }
 
     private final GoalPlannerService goals;
@@ -58,15 +59,18 @@ public class ProjectInputService {
     private final TestRunGate testRunGate;
     private final CriteriaVerificationService verifier;
     private final ObjectProvider<SeedObligationsGenerator> generator;
+    private final InputComparison comparison;
 
     public ProjectInputService(GoalPlannerService goals, FileService files, AdoptionManifest manifest, TestRunGate testRunGate,
-                               CriteriaVerificationService verifier, ObjectProvider<SeedObligationsGenerator> generator) {
+                               CriteriaVerificationService verifier, ObjectProvider<SeedObligationsGenerator> generator,
+                               InputComparison comparison) {
         this.goals = goals;
         this.files = files;
         this.manifest = manifest;
         this.testRunGate = testRunGate;
         this.verifier = verifier;
         this.generator = generator;
+        this.comparison = comparison;
     }
 
     public synchronized Report bring(Request r) throws IOException {
@@ -75,7 +79,8 @@ public class ProjectInputService {
         Path root = files.getRootDir();
         Path output = root.resolve("output");
         ProjectMerge.Parent parent = new ProjectMerge.Parent(r.label(), r.runId(), r.dir());
-        ProjectInput.Landing landing = ProjectInput.land(ProjectMerge.files(output),
+        Map<String, String> before = ProjectMerge.files(output);
+        ProjectInput.Landing landing = ProjectInput.land(before,
                 ProjectMerge.files(root.resolve(ProtectedPaths.BASELINE_DIR)), parent);
 
         manifest.recordIfAbsent();   // the project as it stood, before the input's files are in it
@@ -93,24 +98,154 @@ public class ProjectInputService {
         files.writeFile(dir + "/placed.txt", String.join("\n", landing.placed()) + "\n");
         files.writeFile(dir + ProtectedPaths.INPUT_FILE, String.join("\n", landing.protectedLines()) + "\n");
         int obligations = writeObligations(input, landing.obligations());
+        holdFiles(input, landing, parent);
+        List<String> corrections = compare(input, before, parent);
 
         List<Verdict> verdicts = answer(landing, r.intent());
+        // A carried claim that failed here is unfinished work, unless it cannot be true of this project at all.
+        String specification = goals.specification();
+        for (Verdict v : verdicts) {
+            if (Boolean.FALSE.equals(v.met()) && comparison.contradicts(specification, r.intent(), v.criterion())) {
+                goals.purpose().raiseConflict(input.id(), v.criterion(), specification.strip().lines().findFirst().orElse(""),
+                        v.criterion(), v.criterion(), null);
+            }
+        }
+        java.util.Set<String> out = goals.purpose().linesOut();
         GoalEntity tree = null;
         if (landing.tree() != null) {
             stamp(landing.tree(), verdicts);
             tree = MAPPER.treeToValue(landing.tree(), GoalEntity.class);
         }
-        List<String> unmet = verdicts.stream().filter(v -> Boolean.FALSE.equals(v.met())).map(Verdict::criterion).toList();
+        List<String> unmet = verdicts.stream().filter(v -> Boolean.FALSE.equals(v.met())).map(Verdict::criterion)
+                .filter(c -> !out.contains(c.strip())).toList();
         String goalId = goals.landInput(input.id(), r.intent(), tree, unmet);
         String sourceRoot = landing.tree() == null ? null : landing.tree().path("metadata").path("sourceGoalId").asText(null);
         goals.purpose().linkInput(input.id(), goalId, sourceRoot);
 
-        log.warn("T4-EC: {} brought in as {} -- {} file(s) placed, {} conflict(s), {} criteria answered, {} unmet, {} obligation(s)",
-                r.label(), input.id(), landing.placed().size(), landing.conflicts().size(), verdicts.size(), unmet.size(), obligations);
-        return new Report(input.id(), goalId, landing.placed(), landing.conflicts(), landing.notes(), verdicts.size(),
+        log.warn("T4-EC: {} brought in as {} -- {} file(s) placed, {} correction(s), {} conflict(s) held, {} criteria answered, {} unmet, {} obligation(s)",
+                r.label(), input.id(), landing.placed().size(), corrections.size(), goals.purpose().openConflicts().size(),
+                verdicts.size(), unmet.size(), obligations);
+        List<InputEvent> conflicts = goals.purpose().openConflicts().stream().filter(e -> e.inputId().equals(input.id())).toList();
+        return new Report(input.id(), goalId, landing.placed(), corrections, conflicts, landing.notes(), verdicts.size(),
                 verdicts.stream().filter(v -> v.source().startsWith("structure")).count(),
                 verdicts.stream().filter(v -> v.source().equals("model")).count(),
                 verdicts.stream().filter(v -> v.met() == null).count(), unmet, obligations);
+    }
+
+    /** A file both projects have: the receiving one stays, the input's copy is kept with the conflict. */
+    private void holdFiles(InputEntry input, ProjectInput.Landing landing, ProjectMerge.Parent parent) throws IOException {
+        Path source = Files.isDirectory(parent.dir().resolve("output")) ? parent.dir().resolve("output") : parent.dir();
+        for (String path : landing.conflictedFiles()) {
+            String held = "meta/inputs/" + input.id() + "/held/" + path;
+            Path to = files.getRootDir().resolve(held);
+            Files.createDirectories(to.getParent());
+            Files.copy(source.resolve(path), to, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            goals.purpose().raiseConflict(input.id(), path, "the receiving project's file", "the input's file", null, held);
+        }
+    }
+
+    /**
+     * Each of the input's types against what deals with the same thing here: structure names nothing a model has not
+     * got to name better (it pairs by method names, so {@code getTitle()} and {@code title()} never meet), so a model
+     * finds the candidates, and every side is shown with the types it refers to: shown alone, a type reads as having no
+     * rule at all where the rule sits in a type it uses.
+     */
+    private List<String> compare(InputEntry input, Map<String, String> receiving, ProjectMerge.Parent parent) throws IOException {
+        Path dir = parent.dir();
+        Map<String, String> theirs = new TreeMap<>();
+        ProjectMerge.files(Files.isDirectory(dir.resolve("output")) ? dir.resolve("output") : dir).forEach((p, t) -> {
+            if (p.startsWith("src/main/java/") && p.endsWith(".java")) theirs.put(p, t);
+        });
+        Map<String, String> ours = new TreeMap<>();
+        receiving.forEach((p, t) -> {
+            if (p.startsWith("src/main/java/") && p.endsWith(".java")) ours.put(p, t);
+        });
+        if (theirs.isEmpty() || ours.isEmpty()) return List.of();
+        String specification = goals.specification();
+        List<String> names = ours.keySet().stream().map(ProjectInputService::simpleName).sorted().toList();
+        List<String> corrections = new ArrayList<>();
+        java.util.Set<String> asked = new java.util.HashSet<>();
+        for (Map.Entry<String, String> type : theirs.entrySet()) {
+            List<String> same = comparison.sameConcept(specification, names, type.getValue());
+            if (same.isEmpty()) continue;
+            String ourCode = named(ours, same);
+            String theirCode = withWhatItRefersTo(type, theirs);
+            for (InputComparison.Difference d : comparison.differences(specification, ourCode, theirCode)) {
+                if (!asked.add(d.what().toLowerCase(java.util.Locale.ROOT))) continue;
+                if (comparison.settledByIntent(input.content(), d)) {
+                    goals.purpose().recordCorrection(input.id(), d.what(), d.receiving(), d.other(),
+                            comparison.stating(goals.requirements().obligationsOrClauses(), d));
+                    addRequirement(input, d.what() + ": " + d.other());
+                    corrections.add(d.what());
+                } else {
+                    goals.purpose().raiseConflict(input.id(), d.what(), d.receiving(), d.other(), null, null);
+                }
+            }
+        }
+        return corrections;
+    }
+
+    private static String simpleName(String path) {
+        return path.substring(path.lastIndexOf('/') + 1).replace(".java", "");
+    }
+
+    /** Every receiving file named after a candidate: a rule of {@code Book} may sit in {@code BookService}. */
+    private static String named(Map<String, String> ours, List<String> same) {
+        StringBuilder out = new StringBuilder();
+        ours.forEach((p, t) -> {
+            if (same.stream().anyMatch(simpleName(p)::startsWith)) out.append(t).append("\n\n");
+        });
+        return out.toString();
+    }
+
+    private static String withWhatItRefersTo(Map.Entry<String, String> type, Map<String, String> theirs) {
+        StringBuilder out = new StringBuilder(type.getValue());
+        theirs.forEach((p, t) -> {
+            if (!p.equals(type.getKey()) && java.util.regex.Pattern.compile("\\b" + simpleName(p) + "\\b").matcher(type.getValue()).find()) {
+                out.append("\n\n").append(t);
+            }
+        });
+        return out.toString();
+    }
+
+    private void addRequirement(InputEntry input, String line) throws IOException {
+        String path = goals.purpose().obligationsPath(input);
+        List<String> lines = new ArrayList<>();
+        if (files.exists(path)) lines.addAll(SeedObligationsFile.read(files.readFile(path), input.content()).obligations());
+        if (!lines.contains(line)) lines.add(line);
+        files.writeFile(path, SeedObligationsFile.render(input.content(), lines));
+    }
+
+    /**
+     * A held conflict decided. For the input: a difference's rule replaces the receiving one and becomes work; a claim
+     * goes back to being a requirement; a held file takes the receiving file's place. For the receiving project: a
+     * claim stays out for good, and nothing else changes.
+     */
+    public synchronized InputEvent decide(String id, String decision, String by) throws IOException {
+        if (!InputEvent.FOR_INPUT.equals(decision) && !InputEvent.FOR_RECEIVING.equals(decision)) {
+            throw new IllegalArgumentException("a decision is input or receiving");
+        }
+        InputEvent open = goals.purpose().event(id);
+        if (open == null || !open.open()) throw new IllegalArgumentException("no open conflict: " + id);
+        boolean difference = open.heldLine() == null && open.heldPath() == null;
+        InputComparison.Difference d = new InputComparison.Difference(open.subject(), open.receiving(), open.other());
+        List<String> replaces = InputEvent.FOR_INPUT.equals(decision) && difference
+                ? comparison.stating(goals.requirements().obligationsOrClauses(), d) : List.of();
+        InputEvent decided = goals.purpose().decide(open, decision, by, replaces);
+        goals.conflictDecided();
+        if (InputEvent.FOR_INPUT.equals(decision)) {
+            if (open.heldPath() != null) {
+                Path to = files.getRootDir().resolve("output").resolve(open.subject());
+                Files.copy(files.getRootDir().resolve(open.heldPath()), to, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } else if (difference) {
+                String line = open.subject() + ": " + open.other();
+                InputEntry input = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(open.inputId())).findFirst().orElseThrow();
+                addRequirement(input, line);
+                goals.addDecidedWork(line, open.inputId());
+            }
+        }
+        log.warn("T4-EC: conflict '{}' decided for {} by {}", open.subject(), decision, by);
+        return decided;
     }
 
     /** The intent's lines, generated like a text input's, then what the input verified; the operator may edit them. */

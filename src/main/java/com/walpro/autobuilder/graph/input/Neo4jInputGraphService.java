@@ -2,6 +2,7 @@ package com.walpro.autobuilder.graph.input;
 
 import com.walpro.autobuilder.core.init.RunIdentityService;
 import com.walpro.autobuilder.goal.purpose.InputEntry;
+import com.walpro.autobuilder.goal.purpose.InputEvent;
 import com.walpro.autobuilder.graph.HistoryRead;
 import com.walpro.autobuilder.graph.HistorySpan;
 import com.walpro.autobuilder.graph.HistoryUse;
@@ -58,6 +59,62 @@ public class Neo4jInputGraphService implements InputGraphService {
                 """)
                 .bindAll(p)
                 .run();
+    }
+
+    @Override
+    public void saveEvent(InputEvent e, String lineageId) {
+        Map<String, Object> p = new HashMap<>();
+        p.put("id", e.id());
+        p.put("kind", e.kind());
+        p.put("inputId", e.inputId());
+        p.put("subject", e.subject());
+        p.put("receiving", e.receiving());
+        p.put("other", e.other());
+        p.put("heldLine", e.heldLine());
+        p.put("heldPath", e.heldPath());
+        p.put("replaces", e.replaces());
+        p.put("status", e.status());
+        p.put("decision", e.decision());
+        p.put("by", e.by());
+        p.put("at", e.at() == null ? null : e.at().toString());
+        p.put("lineageId", lineageId != null ? lineageId : runIdentity.lineageId());
+        neo4jClient.query("""
+                MERGE (v:InputEvent {id: $id})
+                ON CREATE SET v.lineageId = $lineageId
+                SET v.kind = $kind, v.inputId = $inputId, v.subject = $subject, v.receiving = $receiving, v.other = $other,
+                    v.heldLine = $heldLine, v.heldPath = $heldPath, v.replaces = $replaces, v.status = $status,
+                    v.decision = $decision, v.by = $by, v.at = $at
+                WITH v
+                MATCH (i:Input {id: $inputId})
+                MERGE (i)-[:RAISED]->(v)
+                """)
+                .bindAll(p)
+                .run();
+    }
+
+    @HistoryRead(span = HistorySpan.LINEAGE, use = HistoryUse.BINDING,
+            note = "What was decided about the project's inputs, loaded at boot: held lines and replaced requirements follow from them.")
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<InputEvent> findEvents() {
+        return neo4jClient.query("""
+                MATCH (v:InputEvent)
+                WHERE v.lineageId = $lineageId
+                RETURN v.id AS id, v.kind AS kind, v.inputId AS inputId, v.subject AS subject, v.receiving AS receiving,
+                       v.other AS other, v.heldLine AS heldLine, v.heldPath AS heldPath, v.replaces AS replaces,
+                       v.status AS status, v.decision AS decision, v.by AS by, v.at AS at
+                ORDER BY v.at
+                """)
+                .bind(runIdentity.lineageId()).to("lineageId")
+                .fetch()
+                .all()
+                .stream()
+                .map(r -> new InputEvent((String) r.get("id"), (String) r.get("kind"), (String) r.get("inputId"),
+                        (String) r.get("subject"), (String) r.get("receiving"), (String) r.get("other"),
+                        (String) r.get("heldLine"), (String) r.get("heldPath"), (List<String>) r.get("replaces"),
+                        (String) r.get("status"), (String) r.get("decision"), (String) r.get("by"),
+                        r.get("at") == null ? null : Instant.parse((String) r.get("at"))))
+                .toList();
     }
 
     @Override

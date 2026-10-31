@@ -99,7 +99,7 @@ False completions and diagnosis lenses:
 - `project_meta_concrete_target_hint_idea.md`: historical note; read only if reintroducing a concrete-target hint via a non-LLM path. (reviewed 2026-07-09)
 
 Operations:
-- `project_run_lifecycle_runbook.md`: start/stop/monitor runs; watcher traps; adopted-target runs, `early_stop.sh`, `bundle.py`. Prove a monitor STREAMS first: `scripts/prove_watcher_streams.sh`. Toy cases are versioned (`toycase_version.py`). (reviewed 2026-10-22)
+- `project_run_lifecycle_runbook.md`: start/stop/monitor runs; watcher traps; adopted-target runs, `early_stop.sh`, `bundle.py`. Prove a monitor STREAMS first: `scripts/prove_watcher_streams.sh`. Toy cases are versioned (`toycase_version.py`). (reviewed 2026-11-01)
 - `project_log_and_backup_conventions.md`: current run is UNSUFFIXED `logs/behaviour.ndjson`; files are concatenated pretty JSON, not line-JSON. (reviewed 2026-09-08)
 - `project_tests_rotate_live_logs.md`: SUPERSEDED: redirect `FILE_BASE_PATH` to a scratch dir instead of stopping the app. (reviewed 2026-09-08)
 

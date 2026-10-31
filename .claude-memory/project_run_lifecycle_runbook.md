@@ -75,3 +75,7 @@ See [[project-log-and-backup-conventions]] for which log files to read and [[pro
 
 **2026-10-22, watching a run on the merge canvas:** a canvas served by an Autobuilder app on another port makes preflight refuse the run (G1: any live Autobuilder JVM reads as a run in progress -- by design). During a run, open the canvas on the run's own port (`:8081/merge.html?session=<id>&follow=1`, gone when the run ends) or serve it read-only from outside the JVM (a static server for `src/main/resources/static` plus the session's `graph.json`, which the run's app rewrites after every edit). The run's session id is printed by `prepare_integration_run.sh` before launch.
 
+**2026-11-01, `POST /goal` writes the target's `bootstrap/seed.txt`.** A new-project case that sets its goal on a target with a tracked seed overwrites that seed, and the next NEW_PROJECT run builds from it: field125 did, on `library-inputs`. A new-project case needs its own target; after any run, `git status` on `data/<t>/bootstrap` before trusting the next one.
+
+**2026-11-01, bringing input into a project:** a finished project is held (`--autobuilder.start.mode=ASK`), given inputs with `scripts/bring_inputs.py <plan.json>`, and released with `ADOPT_PROJECT`, which that script does; `CONTINUE_LINEAGE` restores the preserved artifact over `output/` and would wipe a placed input. Into a running loop: `--no-start --log <autobuilder.log>`, with `"after": "<regex>"` per input. A scoped `SMOKE_STAGE`/`SMOKE_TREE` is exported by the driver.
+

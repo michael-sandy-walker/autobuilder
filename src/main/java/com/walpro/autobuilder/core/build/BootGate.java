@@ -1572,7 +1572,7 @@ public class BootGate {
      * classifier archives that are never the runnable artifact.
      */
     private Optional<Path> findPackagedArtifact(Path workingDir) {
-        Path target = workingDir.resolve("target");
+        Path target = ProjectLayout.runnableRoot(workingDir).resolve("target");
         if (!Files.isDirectory(target)) return Optional.empty();
         try (Stream<Path> entries = Files.list(target)) {
             return entries
@@ -1597,7 +1597,7 @@ public class BootGate {
      */
     private boolean artifactOlderThanSources(Path artifact, Path workingDir) {
         long artifactModified = artifact.toFile().lastModified();
-        Path sourceRoot = workingDir.resolve("src");
+        Path sourceRoot = ProjectLayout.runnableRoot(workingDir).resolve("src");
         if (!Files.isDirectory(sourceRoot)) return false;
         try (Stream<Path> walk = Files.walk(sourceRoot)) {
             return walk.anyMatch(p -> Files.isRegularFile(p)

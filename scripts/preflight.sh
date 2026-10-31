@@ -162,6 +162,7 @@ build_boot_smoke() {
     local ajar
     ajar=$(ls "$tree"/target/*.jar 2>/dev/null | head -1)
     # T4-EC: a multi-module build has its jars in its modules (the yardstick finds the build root from one).
+    [ -f "$tree/.run-module" ] && ajar=$(ls "$tree/$(cat "$tree/.run-module")"/target/*.jar 2>/dev/null | grep -v original | head -1)
     [ -n "$ajar" ] || ajar=$(ls "$tree"/*/target/*.jar 2>/dev/null | grep -v original | head -1)
     [ -n "$ajar" ] || { echo "no-jar"; return; }
     # T4-DD item 3: the yardstick must ask the question the TARGET's completion model licenses.

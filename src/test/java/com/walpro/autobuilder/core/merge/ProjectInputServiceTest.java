@@ -89,7 +89,7 @@ class ProjectInputServiceTest {
     }
 
     private ProjectInputService.Report bring() throws IOException {
-        return service.bring(new ProjectInputService.Request("knots", "run-k", brought, INTENT, "operator"));
+        return service.bring(new ProjectInputService.Request("knots", "run-k", brought, INTENT, "operator", false));
     }
 
     @Test
@@ -169,7 +169,7 @@ class ProjectInputServiceTest {
 
     @Test
     void thereIsNothingToBringItIntoBeforeAProjectExists_andAnInputNeedsAnIntent() throws Exception {
-        assertThatThrownBy(() -> service.bring(new ProjectInputService.Request("knots", "r", brought, " ", "operator")))
+        assertThatThrownBy(() -> service.bring(new ProjectInputService.Request("knots", "r", brought, " ", "operator", false)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

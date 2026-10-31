@@ -3,7 +3,7 @@
 
   scripts/bring_inputs.py <plan.json> [--port 8081] [--goal-file FILE] [--no-start]
 
-The plan: {"inputs": [{"label", "runId", "dir", "intent"}...], "decisions": [{"match": "<words of the subject>", "decide": "input|receiving"}...]}
+The plan: {"inputs": [{"label", "runId", "dir", "intent", "runs"}...], runs on the module that runs, "decisions": [{"match": "<words of the subject>", "decide": "input|receiving"}...]}
 --goal-file first sets the goal of a NEW project. A conflict no decision matches stays open, is printed, and fails the
 call: an open conflict refuses closure, so it should not pass unnoticed.
 """
@@ -34,7 +34,7 @@ def main():
     if a.goal_file:
         print('goal', call(base, '/goal', text=open(a.goal_file).read()).get('goalId'), flush=True)
     for i in plan['inputs']:
-        body = {k: i.get(k) for k in ('label', 'runId', 'dir', 'intent')} | {'addedBy': 'operator'}
+        body = {k: i.get(k) for k in ('label', 'runId', 'dir', 'intent', 'runs') if k in i or k != 'runs'} | {'addedBy': 'operator'}
         r = call(base, '/inputs', body)
         print(i['label'], 'corrections', r['corrections'], 'unmet', r['unmet'], 'conflicts', [c['subject'] for c in r['conflicts']], flush=True)
     left = []

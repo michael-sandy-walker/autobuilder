@@ -25,6 +25,23 @@ public final class ProjectLayout {
     private ProjectLayout() {
     }
 
+    /** T4-EC: names the module that runs, in a build of several: a fact about the project, the operator's, kept in its tree. */
+    public static final String RUN_MODULE_FILE = ".run-module";
+
+    /** Where the runnable artifact is built: the module {@value #RUN_MODULE_FILE} names, else the build root. */
+    public static Path runnableRoot(Path projectRoot) {
+        try {
+            Path marker = projectRoot.resolve(RUN_MODULE_FILE);
+            if (Files.isRegularFile(marker)) {
+                Path module = projectRoot.resolve(Files.readString(marker).strip()).normalize();
+                if (Files.isDirectory(module)) return module;
+            }
+        } catch (Exception e) {
+            // an unreadable marker names nothing: the root
+        }
+        return projectRoot;
+    }
+
     /** The build root first, then every module its build file lists (depth first), each once; only those that exist. */
     public static List<Path> moduleRoots(Path projectRoot) {
         Set<Path> out = new LinkedHashSet<>();

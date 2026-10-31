@@ -46,11 +46,12 @@ public final class ProjectInput {
      * @param protectedLines its protected paths and its own test files
      * @param sourceLineage its lineage, or null
      * @param treeDigest    a digest of the tree it arrived with
+     * @param module        the module it became, in a project of modules; null otherwise
      */
     public record Landing(Map<String, String> files, List<String> placed, List<String> conflicts,
                           List<String> conflictedFiles, List<String> notes,
                           ObjectNode tree, List<ProjectMerge.Criterion> criteria, List<String> obligations,
-                          List<String> protectedLines, String sourceLineage, String treeDigest) {
+                          List<String> protectedLines, String sourceLineage, String treeDigest, String module) {
     }
 
     private ProjectInput() {
@@ -101,7 +102,8 @@ public final class ProjectInput {
         List<String> conflictedFiles = conflicts.stream().filter(c -> c.contains(": both projects have it"))
                 .map(c -> c.substring(0, c.indexOf(": both projects have it"))).toList();
         return new Landing(changed, brought, conflicts, conflictedFiles, notes, goals, List.copyOf(criteria.values()), obligations,
-                List.copyOf(protect), ProjectMerge.lineageOf(input), digest(theirs));
+                List.copyOf(protect), ProjectMerge.lineageOf(input), digest(theirs),
+                modules ? at.substring(0, at.length() - 1) : null);
     }
 
     private static final String MEMBERS = "members:";

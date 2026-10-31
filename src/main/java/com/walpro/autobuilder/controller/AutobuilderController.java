@@ -326,7 +326,7 @@ public class AutobuilderController {
     private com.walpro.autobuilder.core.merge.ProjectInputService projectInputService;
 
     /** A project to bring in: its label, the run that grew it (or none, for a third party's), its directory, what it is for. */
-    public record InputRequest(String label, String runId, String dir, String intent, String addedBy) {
+    public record InputRequest(String label, String runId, String dir, String intent, String addedBy, boolean runs) {
     }
 
     /**
@@ -339,7 +339,7 @@ public class AutobuilderController {
         if (r.label() == null || r.dir() == null) return ResponseEntity.badRequest().body(Map.of("error", "an input needs a label and a dir"));
         try {
             return ResponseEntity.ok(autobuilderService.bringInput(projectInputService, new com.walpro.autobuilder.core.merge.ProjectInputService.Request(
-                    r.label(), r.runId(), java.nio.file.Path.of(r.dir()), r.intent(), r.addedBy() == null ? "operator" : r.addedBy())));
+                    r.label(), r.runId(), java.nio.file.Path.of(r.dir()), r.intent(), r.addedBy() == null ? "operator" : r.addedBy(), r.runs())));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (java.io.IOException e) {

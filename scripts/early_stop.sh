@@ -65,6 +65,7 @@ while alive; do
         line=""
         if (cd "$WORK/output" && timeout 300 mvn -B -q -o package -DskipTests > "$WORK/build.log" 2>&1); then
             AJAR=$(ls "$WORK"/output/target/*.jar 2>/dev/null | grep -v original | head -1)
+            [ -f "$WORK/output/.run-module" ] && AJAR=$(ls "$WORK/output/$(cat "$WORK/output/.run-module")"/target/*.jar 2>/dev/null | grep -v original | head -1)
             [ -n "$AJAR" ] || AJAR=$(ls "$WORK"/output/*/target/*.jar 2>/dev/null | grep -v original | head -1)   # a multi-module build (T4-EC)
             if [ -n "$AJAR" ]; then
                 java -jar "$AJAR" --server.port="$APORT" > "$WORK/boot.log" 2>&1 &

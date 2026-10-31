@@ -41,7 +41,8 @@ public class ProjectInputService {
 
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
-    public record Request(String label, String runId, Path dir, String intent, String addedBy) {
+    /** @param runs this input's module is what the project runs, in a project of modules */
+    public record Request(String label, String runId, Path dir, String intent, String addedBy, boolean runs) {
     }
 
     /** One carried criterion's verdict in the merged tree: met (null when unanswered) and who answered. */
@@ -89,6 +90,9 @@ public class ProjectInputService {
             Path p = output.resolve(e.getKey());
             Files.createDirectories(p.getParent());
             Files.writeString(p, e.getValue());
+        }
+        if (r.runs() && landing.module() != null) {
+            Files.writeString(output.resolve(com.walpro.autobuilder.core.build.ProjectLayout.RUN_MODULE_FILE), landing.module() + "\n");
         }
         manifest.addFiles(landing.placed());
         for (String p : landing.placed()) {

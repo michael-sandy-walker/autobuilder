@@ -51,7 +51,10 @@ class StagedTestFailureHeuristicTest {
     @BeforeEach
     void setUp() throws Exception {
         heuristic = new StagedTestFailureHeuristic(provider(gate),
-                provider(new com.walpro.autobuilder.goal.DeclaredTestSuite(provider(planner), provider(files))), provider(files), provider(probe));
+                provider(new com.walpro.autobuilder.goal.DeclaredTestSuite(provider(planner))), provider(planner), provider(probe));
+        var purpose = com.walpro.autobuilder.goal.purpose.PurposeService.fileOnly(files);
+        purpose.recordSeed(SEED, "test");
+        when(planner.requirements()).thenReturn(purpose);
         GoalEntity root = mock(GoalEntity.class);
         when(root.getDescription()).thenReturn(SEED);
         when(planner.getRootGoal()).thenReturn(root);

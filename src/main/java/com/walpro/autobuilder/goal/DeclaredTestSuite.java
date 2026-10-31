@@ -1,6 +1,5 @@
 package com.walpro.autobuilder.goal;
 
-import com.walpro.autobuilder.core.service.FileService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
@@ -16,23 +15,18 @@ import org.springframework.stereotype.Component;
 public class DeclaredTestSuite {
 
     private final ObjectProvider<GoalPlannerService> goalPlanner;
-    private final ObjectProvider<FileService> fileService;
 
-    public DeclaredTestSuite(ObjectProvider<GoalPlannerService> goalPlanner, ObjectProvider<FileService> fileService) {
+    public DeclaredTestSuite(ObjectProvider<GoalPlannerService> goalPlanner) {
         this.goalPlanner = goalPlanner;
-        this.fileService = fileService;
     }
 
     public boolean isDeclared() {
         GoalPlannerService planner = goalPlanner.getIfAvailable();
-        FileService files = fileService.getIfAvailable();
-        if (planner == null || files == null) return false;
+        if (planner == null) return false;
         GoalEntity root = planner.getRootGoal();
         if (root == null) return false;
         try {
-            if (!files.exists(SeedObligationsFile.PATH)) return false;
-            return !SeedRequirements.answeredByGate(planner.specification(),
-                    files.readFile(SeedObligationsFile.PATH), SeedRequirements.GATE_TESTS).isEmpty();
+            return !planner.requirements().answeredByGate(SeedRequirements.GATE_TESTS).isEmpty();
         } catch (Exception e) {
             return false;
         }

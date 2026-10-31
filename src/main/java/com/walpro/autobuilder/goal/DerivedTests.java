@@ -254,11 +254,7 @@ public class DerivedTests implements DerivedTestAuthority {
 
     /** The requirements the operator marked {@code gate: derived-test}, markers removed. */
     public List<String> requirements() {
-        return requirements(specification());
-    }
-
-    private List<String> requirements(String seedText) {
-        return SeedRequirements.answeredByGate(seedText, read(SeedObligationsFile.PATH), SeedRequirements.GATE_DERIVED);
+        return purposeService == null ? List.of() : purposeService.answeredByGate(SeedRequirements.GATE_DERIVED);
     }
 
     /**
@@ -304,7 +300,7 @@ public class DerivedTests implements DerivedTestAuthority {
      * root goal is set, beside the obligations file it reads; tests already written are kept across restarts.
      */
     public void ensureFor(String seedText) {
-        if (seedText == null || seedText.isBlank() || requirements(seedText).isEmpty()) return;
+        if (seedText == null || seedText.isBlank() || requirements().isEmpty()) return;
         pending = true;
         // The key of the starting tree is taken HERE, before the loop's first cycle can change the tree; taken on the
         // writer's thread it would race the loop and miss a kept writing.
@@ -324,7 +320,7 @@ public class DerivedTests implements DerivedTestAuthority {
     }
 
     private void ensureNow(String seedText, String key) {
-        List<String> lines = requirements(seedText);
+        List<String> lines = requirements();
         if (lines.isEmpty()) return;
         pending = true;
         try {
@@ -445,7 +441,8 @@ public class DerivedTests implements DerivedTestAuthority {
         try {
             // The prompts too: a changed way of writing must never reuse what the old one wrote.
             StringBuilder sb = new StringBuilder(DECOMPOSE_SYSTEM + WRITE_SYSTEM + REWRITE_SYSTEM + SPIKE_SYSTEM + REPAIR_SYSTEM).append('\u0000')
-                    .append(seedText).append('\u0000').append(read(SeedObligationsFile.PATH));
+                    .append(seedText).append('\u0000')
+                    .append(purposeService == null ? "" : purposeService.writtenText());
             Path out = files.resolveSecurePath("output");
             try (var walk = Files.walk(out)) {
                 for (Path p : walk.filter(Files::isRegularFile).sorted().toList()) {

@@ -380,14 +380,8 @@ public class CycleContextCoordinator {
      * the derived split, unchanged.
      */
     private com.walpro.autobuilder.analysis.coverage.SeedCoverageReadout analyzeWithWrittenObligations() {
-        String written = null;
-        try {
-            written = fileService.readFile(com.walpro.autobuilder.goal.SeedObligationsFile.PATH);
-        } catch (Exception ignored) {
-            // No file for this target -- the ordinary case, and the derived split still runs.
-        }
-        return seedCoverageAnalyzer.analyze(
-                goalPlannerService.specification(), goalPlannerService.getAllGoals(), written);
+        return seedCoverageAnalyzer.analyze(goalPlannerService.specification(), goalPlannerService.getAllGoals(),
+                goalPlannerService.requirements().obligationsOrClauses());
     }
 
 }

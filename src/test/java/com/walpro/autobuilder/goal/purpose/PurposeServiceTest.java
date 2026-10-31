@@ -2,6 +2,7 @@ package com.walpro.autobuilder.goal.purpose;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.goal.SeedObligationsFile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -10,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** T4-EC slice 1: the seed as entry 1 of the input ledger. */
 class PurposeServiceTest {
@@ -88,10 +88,45 @@ class PurposeServiceTest {
     }
 
     @Test
-    void moreThanOneInputIsNotReadAsOneSpecificationYet() {
-        InputEntry a = new InputEntry("input-a", 1, "seed", "a", null, "seed-file", null, null, null);
-        InputEntry b = new InputEntry("input-b", 2, "project", "b", null, "operator", null, null, null);
-        assertThatThrownBy(() -> new InputLedger(java.util.List.of(a, b)).specification())
-                .isInstanceOf(IllegalStateException.class);
+    void aLaterInputIsAppended_andSeveralReadInArrivalOrderEachNamed() {
+        PurposeService purpose = PurposeService.fileOnly(files);
+        purpose.recordSeed("Build a quill registry.", "seed-file");
+        InputEntry second = purpose.addInput(InputEntry.KIND_TEXT, "Add an ink ledger.", "operator");
+
+        assertThat(second.sequence()).isEqualTo(2);
+        assertThat(purpose.ledger().seed().content()).isEqualTo("Build a quill registry.");
+        assertThat(purpose.specification()).isEqualTo("--- input 1 (seed) ---\nBuild a quill registry.\n\n"
+                + "--- input 2 (text) ---\nAdd an ink ledger.");
+        assertThat(PurposeService.fileOnly(files).ledger()).isEqualTo(purpose.ledger());
+    }
+
+    @Test
+    void requirementsAreReadAcrossEveryInput_eachCheckedAgainstItsOwnText_andKnowTheirInput() throws Exception {
+        PurposeService purpose = PurposeService.fileOnly(files);
+        purpose.recordSeed("Build a quill registry.", "seed-file");
+        InputEntry seed = purpose.ledger().seed();
+        InputEntry second = purpose.addInput(InputEntry.KIND_TEXT, "Add an ink ledger.", "operator");
+        files.writeFile(purpose.obligationsPath(seed), SeedObligationsFile.render(seed.content(),
+                java.util.List.of("gate: tests The whole suite passes.", "rule: Keep the names.", "A quill has a nib.")));
+        files.ensureFolderExists("meta/inputs/" + second.id());
+        files.writeFile(purpose.obligationsPath(second), SeedObligationsFile.render(second.content(),
+                java.util.List.of("gate: tests The ink tests pass.", "rule: Keep the units.", "A ledger holds ink in millilitres.")));
+
+        assertThat(purpose.obligationsPath(seed)).isEqualTo(SeedObligationsFile.PATH);
+        assertThat(purpose.obligationsPath(second)).isEqualTo("meta/inputs/" + second.id() + "/obligations.txt");
+        assertThat(purpose.answeredByGate("tests")).containsExactly("The whole suite passes.", "The ink tests pass.");
+        assertThat(purpose.gated("tests")).extracting(PurposeService.Requirement::inputId).containsExactly(seed.id(), second.id());
+        assertThat(purpose.rules()).hasSize(2);
+        assertThat(purpose.obligationsOrClauses()).contains("A quill has a nib.", "A ledger holds ink in millilitres.");
+        assertThat(purpose.writtenLines()).hasSize(6);
+    }
+
+    @Test
+    void aLaterInputWithoutAFileAddsNothingWritten() throws Exception {
+        PurposeService purpose = PurposeService.fileOnly(files);
+        purpose.recordSeed("Build a quill registry.", "seed-file");
+        purpose.addInput(InputEntry.KIND_TEXT, "Add an ink ledger.", "operator");
+        assertThat(purpose.answeredByGate("tests")).isEmpty();
+        assertThat(purpose.writtenLines()).isEmpty();
     }
 }

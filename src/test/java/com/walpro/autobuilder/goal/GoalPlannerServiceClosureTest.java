@@ -1665,6 +1665,36 @@ public class GoalPlannerServiceClosureTest {
     }
 
     /**
+     * T4-EC slice 3: seed-level authority is every input's. A line marked in a LATER input's obligations refuses closure
+     * exactly as the seed's own does; read from the seed alone, this root would close.
+     */
+    @Test
+    void autoCompleteRoot_aMarkedLineOfALaterInputRefusesClosureAsTheSeedsOwnDoes() throws IOException {
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+        String seed = "Answer the failure.\n\nOBJECTIVE: the failure is answered, and the whole suite passes.\n";
+        String input = "Also answer the timeout.";
+        String marked = "answer() names the timeout's limit";
+        lenient().when(fileService.readFile(SeedObligationsFile.PATH)).thenThrow(new java.io.IOException("none"));
+        lenient().when(fileService.readFile(org.mockito.ArgumentMatchers.startsWith("meta/inputs/")))
+                .thenReturn(SeedObligationsFile.render(input, List.of(
+                        SeedRequirements.GATE_MARKER + " " + SeedRequirements.GATE_DERIVED + " " + marked)));
+        DerivedTests derived = mock(DerivedTests.class);
+        when(derived.acceptedRequirements()).thenReturn(java.util.Set.of());
+        com.walpro.autobuilder.core.build.TestRunGate passing = mock(com.walpro.autobuilder.core.build.TestRunGate.class);
+        when(passing.isLive()).thenReturn(true);
+
+        GoalPlannerService service = derivedClosureService(seed, passing, derived);
+        service.addInput(input, "operator");
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.unanswerableAtClosure()).hasValueSatisfying(r -> assertThat(r).contains(marked));
+    }
+
+    /**
      * T6-U, field111: receiver-questions closed GOAL_FULFILLED at 14/16 twice on a reading of the one requirement no
      * kept test answered. A line the operator marked for the derived tests is never put to a reading.
      */

@@ -7,9 +7,8 @@ import com.walpro.autobuilder.core.build.TestRunGate;
 import com.walpro.autobuilder.core.build.TestRunReport;
 import com.walpro.autobuilder.core.build.ValueObservationProbe;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
-import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.goal.DeclaredTestSuite;
-import com.walpro.autobuilder.goal.SeedObligationsFile;
+import com.walpro.autobuilder.goal.GoalPlannerService;
 import com.walpro.autobuilder.model.GoalProgressState;
 import com.walpro.autobuilder.model.MutationAcceptanceState;
 import lombok.extern.slf4j.Slf4j;
@@ -51,16 +50,16 @@ public class StagedTestFailureHeuristic implements EvaluationHeuristic {
 
     private final ObjectProvider<TestRunGate> testRunGate;
     private final ObjectProvider<DeclaredTestSuite> declaredSuite;
-    private final ObjectProvider<FileService> fileService;
+    private final ObjectProvider<GoalPlannerService> goalPlanner;
     private final ObjectProvider<ValueObservationProbe> valueProbe;
 
     public StagedTestFailureHeuristic(ObjectProvider<TestRunGate> testRunGate,
                                       ObjectProvider<DeclaredTestSuite> declaredSuite,
-                                      ObjectProvider<FileService> fileService,
+                                      ObjectProvider<GoalPlannerService> goalPlanner,
                                       ObjectProvider<ValueObservationProbe> valueProbe) {
         this.testRunGate = testRunGate;
         this.declaredSuite = declaredSuite;
-        this.fileService = fileService;
+        this.goalPlanner = goalPlanner;
         this.valueProbe = valueProbe;
     }
 
@@ -98,11 +97,11 @@ public class StagedTestFailureHeuristic implements EvaluationHeuristic {
      */
     private String observed(List<TestRunReport.Failure> own, String cycleName) {
         ValueObservationProbe probe = valueProbe.getIfAvailable();
-        FileService files = fileService.getIfAvailable();
-        if (probe == null || files == null) return "";
+        var planner = goalPlanner.getIfAvailable();
+        if (probe == null || planner == null) return "";
         try {
-            List<String> obligations = files.readFile(SeedObligationsFile.PATH).lines()
-                    .filter(l -> !l.isBlank() && !l.startsWith("#")).toList();
+            List<String> obligations = planner.requirements().writtenLines();
+            if (obligations.isEmpty()) return "";
             var observations = probe.observeFailing(own, obligations, cycleName + "-staged-observe");
             if (observations.isEmpty()) return "";
             return " Observed by running each failing test up to the call: " + observations.stream()

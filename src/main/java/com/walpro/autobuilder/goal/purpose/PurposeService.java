@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
 import com.walpro.autobuilder.core.init.RunIdentityService;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.goal.SeedObligationsFile;
+import com.walpro.autobuilder.goal.SeedRequirements;
 import com.walpro.autobuilder.graph.input.InputGraphService;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -102,6 +104,81 @@ public class PurposeService {
         return seed == null ? null : seed.sourceDigest();
     }
 
+    /** Where {@code input}'s obligations are kept: the seed's stay the target's tracked file, a later input's beside it in meta. */
+    public String obligationsPath(InputEntry input) {
+        return input.sequence() == 1 ? SeedObligationsFile.PATH : "meta/inputs/" + input.id() + "/obligations.txt";
+    }
+
+    /** {@code input}'s obligations file, or null without one. Read per call: an operator's edit takes effect mid-run. */
+    private String obligationsText(InputEntry input) {
+        try {
+            return fileService.readFile(obligationsPath(input));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** A line of what the project must do, and the input it came from. */
+    public record Requirement(String inputId, String text) {
+    }
+
+    private List<Requirement> across(java.util.function.BiFunction<String, String, List<String>> read) {
+        List<Requirement> out = new ArrayList<>();
+        for (InputEntry e : ledger.entries()) {
+            for (String line : read.apply(e.content(), obligationsText(e))) out.add(new Requirement(e.id(), line));
+        }
+        return out;
+    }
+
+    private static List<String> texts(List<Requirement> requirements) {
+        return requirements.stream().map(Requirement::text).toList();
+    }
+
+    /** Every input's lines answered by {@code gate}, each with its input. */
+    public List<Requirement> gated(String gate) {
+        return across((spec, written) -> SeedRequirements.answeredByGate(spec, written, gate));
+    }
+
+    public List<String> answeredByGate(String gate) {
+        return texts(gated(gate));
+    }
+
+    public List<String> rules() {
+        return texts(across(SeedRequirements::rules));
+    }
+
+    public List<String> obligationsOrClauses() {
+        return texts(across(SeedRequirements::obligationsOrClauses));
+    }
+
+    public List<String> verifiableObligationsOrSplit() {
+        return texts(across(SeedRequirements::verifiableObligationsOrSplit));
+    }
+
+    public List<String> notAlreadyCoveredVerifiable(List<String> banked) {
+        return texts(across((spec, written) -> SeedRequirements.notAlreadyCoveredVerifiable(spec, banked, written)));
+    }
+
+    /** Every input's written obligation lines as written, markers kept. */
+    public List<String> writtenLines() {
+        List<String> out = new ArrayList<>();
+        for (InputEntry e : ledger.entries()) {
+            String written = obligationsText(e);
+            if (written != null) written.lines().filter(l -> !l.isBlank() && !l.startsWith("#")).forEach(out::add);
+        }
+        return out;
+    }
+
+    /** Every input's obligations file as it stands, for a digest of what the project was asked. */
+    public String writtenText() {
+        StringBuilder out = new StringBuilder();
+        for (InputEntry e : ledger.entries()) {
+            String written = obligationsText(e);
+            if (written != null) out.append(written);
+        }
+        return out.toString();
+    }
+
     /** A root goal was set: its text is the project's seed, and a new root starts a new ledger. */
     public synchronized void recordSeed(String content, String addedBy) {
         InputEntry seed = new InputEntry("input-" + UUID.randomUUID(), 1, InputEntry.KIND_SEED, content,
@@ -109,14 +186,29 @@ public class PurposeService {
                 runIdentity == null ? null : runIdentity.runId(),
                 runIdentity == null ? null : runIdentity.lineageId());
         ledger = InputLedger.seeded(seed);
+        persist(seed);
+    }
+
+    private void persist(InputEntry input) {
         if (graph != null) {
             try {
-                graph.save(seed);
+                graph.save(input);
             } catch (Exception e) {
-                log.warn("T4-EC: the seed input was not written to the graph: {}", e.getMessage());
+                log.warn("T4-EC: input {} was not written to the graph: {}", input.id(), e.getMessage());
             }
         }
         writeFile();
+    }
+
+    /** A further input arrived: appended to the ledger, never replacing what is there. */
+    public synchronized InputEntry addInput(String kind, String content, String addedBy) {
+        InputEntry input = new InputEntry("input-" + UUID.randomUUID(), ledger.entries().size() + 1, kind, content,
+                sha256(content), addedBy, Instant.now(),
+                runIdentity == null ? null : runIdentity.runId(),
+                runIdentity == null ? null : runIdentity.lineageId());
+        ledger = ledger.with(input);
+        persist(input);
+        return input;
     }
 
     /**

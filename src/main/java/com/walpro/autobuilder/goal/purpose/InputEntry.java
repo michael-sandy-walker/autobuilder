@@ -11,7 +11,7 @@ import java.time.Instant;
  *
  * @param id           stable id, {@code input-<uuid>}
  * @param sequence     1 for the seed; arrival order after it
- * @param kind         {@code seed} for now
+ * @param kind         {@code seed}, or what a later input is: {@code text}
  * @param content      the input's text exactly as the root goal holds it
  * @param sourceDigest SHA-256 hex of the source text the input was read from ({@code bootstrap/seed.txt} where it
  *                     exists), so a key computed from those bytes before the ledger existed stays the same
@@ -24,4 +24,5 @@ public record InputEntry(String id, int sequence, String kind, String content, S
                          String addedBy, Instant addedAt, String runId, String lineageId) {
 
     public static final String KIND_SEED = "seed";
+    public static final String KIND_TEXT = "text";
 }

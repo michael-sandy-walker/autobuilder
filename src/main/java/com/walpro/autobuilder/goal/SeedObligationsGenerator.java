@@ -76,14 +76,18 @@ public class SeedObligationsGenerator {
      * throws: without a file the derived split runs exactly as before.
      */
     public void ensureFor(String seedText) {
+        ensureFor(seedText, SeedObligationsFile.PATH);
+    }
+
+    /** T4-EC: the same for one input's text, its file at {@code path}. */
+    public void ensureFor(String seedText, String path) {
         if (seedText == null || seedText.isBlank()) return;
         try {
-            String existing = fileService.exists(SeedObligationsFile.PATH)
-                    ? fileService.readFile(SeedObligationsFile.PATH) : null;
+            String existing = fileService.exists(path) ? fileService.readFile(path) : null;
             var state = SeedObligationsFile.read(existing, seedText).state();
             if (state != SeedObligationsFile.State.ABSENT && state != SeedObligationsFile.State.MALFORMED
                     && state != SeedObligationsFile.State.SEED_MOVED) {
-                log.info("T4-CQ: {} is {} -- kept, not regenerated", SeedObligationsFile.PATH, state);
+                log.info("T4-CQ: {} is {} -- kept, not regenerated", path, state);
                 return;
             }
             List<String> lines = parse(ask(seedText, List.of()));
@@ -113,15 +117,15 @@ public class SeedObligationsGenerator {
                 lines.addAll(missing);
             }
             fileService.ensureFolderExists("bootstrap");
-            fileService.writeFile(SeedObligationsFile.PATH, SeedObligationsFile.render(seedText, lines));
+            fileService.writeFile(path, SeedObligationsFile.render(seedText, lines));
             long rules = lines.stream().filter(SeedRequirements::isRule).count();
             long gates = lines.stream().filter(l -> SeedRequirements.gateOf(l) != null).count();
             log.warn("T4-CQ: wrote {} ({} was {}): {} obligations, {} marked rule:, {} marked gate: tests "
-                    + "-- review it; a hand edit is kept", SeedObligationsFile.PATH, SeedObligationsFile.PATH,
+                    + "-- review it; a hand edit is kept", path, path,
                     state, lines.size(), rules, gates);
         } catch (Exception e) {
             log.warn("T4-CQ: could not generate {}: {} -- the derived split stands",
-                    SeedObligationsFile.PATH, e.getMessage());
+                    path, e.getMessage());
         }
     }
 

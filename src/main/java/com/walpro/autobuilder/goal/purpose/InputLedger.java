@@ -8,8 +8,7 @@ import java.util.List;
  *
  * <p>Named for the inputs it records: the stuck layer and closure already keep ledgers of their own.
  *
- * <p>Slice 1 holds one entry, the seed. A new root is a new purpose (a reset renews the lineage too), so it starts
- * a new ledger rather than appending to the old one; appending arrives with the slices that add a second input.
+ * <p>A new root is a new purpose (a reset renews the lineage too), so it starts a new ledger; a later input is appended.
  */
 public record InputLedger(List<InputEntry> entries) {
 
@@ -23,6 +22,12 @@ public record InputLedger(List<InputEntry> entries) {
         return new InputLedger(List.of(seed));
     }
 
+    public InputLedger with(InputEntry input) {
+        List<InputEntry> out = new java.util.ArrayList<>(entries);
+        out.add(input);
+        return new InputLedger(out);
+    }
+
     public boolean isEmpty() {
         return entries.isEmpty();
     }
@@ -34,14 +39,17 @@ public record InputLedger(List<InputEntry> entries) {
 
     /**
      * The inputs so far as one specification -- the text every reader of the purpose works from. While the ledger
-     * holds only the seed, the seed itself. Readers that must tell inputs apart read {@link #entries()} instead;
-     * they move there when a second input can exist.
+     * holds only the seed, the seed itself, byte for byte. Several inputs follow one another in arrival order, each
+     * under a line naming it; a reader that must tell them apart reads {@link #entries()}.
      */
     public String specification() {
-        if (entries.size() > 1) {
-            throw new IllegalStateException("the ledger holds " + entries.size()
-                    + " inputs; reading them as one specification is not defined yet");
+        if (entries.isEmpty()) return null;
+        if (entries.size() == 1) return entries.get(0).content();
+        StringBuilder out = new StringBuilder();
+        for (InputEntry e : entries) {
+            if (out.length() > 0) out.append("\n\n");
+            out.append("--- input ").append(e.sequence()).append(" (").append(e.kind()).append(") ---\n").append(e.content());
         }
-        return entries.isEmpty() ? null : entries.get(0).content();
+        return out.toString();
     }
 }

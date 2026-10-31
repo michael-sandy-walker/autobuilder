@@ -72,7 +72,7 @@ public class SeedCoverageAnalyzer {
      *              their part of the seed just as active ones do
      */
     public SeedCoverageReadout analyze(String seed, Collection<GoalEntity> goals) {
-        return analyze(seed, goals, null);
+        return analyze(seed, goals, (String) null);
     }
 
     /**
@@ -85,11 +85,16 @@ public class SeedCoverageAnalyzer {
      */
     public SeedCoverageReadout analyze(String seed, Collection<GoalEntity> goals,
                                        String writtenObligations) {
+        return analyze(seed, goals, SeedRequirements.obligationsOrClauses(seed, writtenObligations));
+    }
+
+    /** T4-EC slice 3: as above, with the sentences already read -- every input's, from the purpose. */
+    public SeedCoverageReadout analyze(String seed, Collection<GoalEntity> goals, List<String> obligations) {
         if (seed == null || seed.isBlank() || goals == null || goals.isEmpty()) {
             return SeedCoverageReadout.empty();
         }
 
-        List<String> clauses = clausesOf(seed, writtenObligations);
+        List<String> clauses = clausesOf(obligations);
         if (clauses.isEmpty()) return SeedCoverageReadout.empty();
 
         Set<String> planTerms = new LinkedHashSet<>();
@@ -181,12 +186,12 @@ public class SeedCoverageAnalyzer {
      * covering one of its several obligations could no longer clear it. The second stage splits a
      * sentence long enough to be bundling obligations back into separable ones.
      */
-    private List<String> clausesOf(String seed, String writtenObligations) {
+    private List<String> clausesOf(List<String> obligations) {
         List<String> out = new ArrayList<>();
         // T6-S: the obligations file, when the target has one, IS the clause list -- reviewed,
         // correctable, and identical on every run. Its absence falls through to the derived split,
         // so a target without one behaves exactly as before.
-        for (String sentence : SeedRequirements.obligationsOrClauses(seed, writtenObligations)) {
+        for (String sentence : obligations) {
             // Whitespace is normalised because a clause reaches three prompts verbatim, and a
             // sentence rejoined across a wrap otherwise carries its line breaks into them.
             String clause = sentence.strip().replaceAll("\\s+", " ");

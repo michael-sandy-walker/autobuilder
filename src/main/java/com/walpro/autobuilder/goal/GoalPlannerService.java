@@ -262,6 +262,24 @@ public class GoalPlannerService {
         return purpose.specification();
     }
 
+    /** T4-EC slice 3: what the project must do, across every input; the seed's authority is every input's. */
+    public com.walpro.autobuilder.goal.purpose.PurposeService requirements() {
+        specification();
+        return purpose();
+    }
+
+    /**
+     * T4-EC slice 3: a further text input, its obligations generated like the seed's and editable like them. A
+     * project input brings the obligations it verified instead (slice 4).
+     */
+    public com.walpro.autobuilder.goal.purpose.InputEntry addInput(String content, String addedBy) {
+        specification();
+        var input = purpose().addInput(com.walpro.autobuilder.goal.purpose.InputEntry.KIND_TEXT, content, addedBy);
+        if (seedObligationsGenerator != null) seedObligationsGenerator.ensureFor(content, purpose().obligationsPath(input));
+        if (derivedTests != null) derivedTests.ensureFor(specification());
+        return input;
+    }
+
     public void setCurrentCycleContext(CycleContextData ctx) {
         this.currentCycleContext = ctx;
     }
@@ -4032,14 +4050,6 @@ public class GoalPlannerService {
      * the ordinary case for a target that has not had one generated, and it costs the caller
      * nothing — the derived split runs exactly as before.
      */
-    private String writtenObligations() {
-        try {
-            return fileService.readFile(SeedObligationsFile.PATH);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
     /**
      * The seed obligations closure still has to ask about. A line the operator marked
      * {@code gate: tests} is the test gate's -- which ran above and passed, or closure would not be
@@ -4047,18 +4057,16 @@ public class GoalPlannerService {
      * nothing, and the line goes back to the model like any other.
      */
     private List<String> uncoveredSeedAtClosure(GoalEntity root, List<String> banked) {
-        String written = writtenObligations();
-        List<String> uncovered = new ArrayList<>(
-                SeedRequirements.notAlreadyCoveredVerifiable(specification(), banked, written));
-        List<String> testGateLines = new ArrayList<>(SeedRequirements.answeredByGate(
-                specification(), written, SeedRequirements.GATE_TESTS));
+        var requirements = requirements();
+        List<String> uncovered = new ArrayList<>(requirements.notAlreadyCoveredVerifiable(banked));
+        List<String> testGateLines = new ArrayList<>(requirements.answeredByGate(SeedRequirements.GATE_TESTS));
         // T6-U: a line whose test was written from its wording and accepted is in the suite, so the test gate answers
         // it. One no kept test answers refuses closure before this ({@code derivedRequirementsNoTestAnswers}) while
         // the gate is live; with the gate off it stays a reading, as before.
         if (derivedTests != null) {
             Set<String> accepted = derivedTests.acceptedRequirements();
-            List<String> answered = SeedRequirements.answeredByGate(specification(), written,
-                    SeedRequirements.GATE_DERIVED).stream().filter(accepted::contains).toList();
+            List<String> answered = requirements.answeredByGate(SeedRequirements.GATE_DERIVED).stream()
+                    .filter(accepted::contains).toList();
             uncovered.removeAll(answered);
             testGateLines.addAll(answered);
         }
@@ -4108,8 +4116,7 @@ public class GoalPlannerService {
      */
     private Optional<List<String>> derivedRequirementsNoTestAnswers(GoalEntity root) {
         if (derivedTests == null || testRunGate == null || !testRunGate.isLive()) return Optional.empty();
-        List<String> marked = SeedRequirements.answeredByGate(specification(), writtenObligations(),
-                SeedRequirements.GATE_DERIVED);
+        List<String> marked = requirements().answeredByGate(SeedRequirements.GATE_DERIVED);
         if (marked.isEmpty()) return Optional.empty();
         Set<String> accepted = derivedTests.acceptedRequirements();
         List<String> open = marked.stream().filter(l -> !accepted.contains(l)).toList();
@@ -4667,7 +4674,7 @@ public class GoalPlannerService {
                 List<String> toVerify = new ArrayList<>(passingCriteria);
                 // T6-T: a banked criterion that restates a rule: line guides the work and never blocks it -- the
                 // obligations file says so, and the root's own obligations already leave rule lines out.
-                List<String> rules = SeedRequirements.rules(specification(), writtenObligations());
+                List<String> rules = requirements().rules();
                 List<String> restated = toVerify.stream().filter(c -> SeedRequirements.restatesRule(c, rules)).toList();
                 if (!restated.isEmpty()) {
                     toVerify.removeAll(restated);
@@ -4708,7 +4715,7 @@ public class GoalPlannerService {
                 // which never calls the method, and judging it here would wall a correct run.
                 java.util.Map<String, com.walpro.autobuilder.core.build.EntryPointAssertions.Finding> unasserted =
                         com.walpro.autobuilder.core.build.EntryPointAssertions.unmet(
-                                SeedRequirements.verifiableObligationsOrSplit(specification(), writtenObligations()),
+                                requirements().verifiableObligationsOrSplit(),
                                 output);
                 // T4-CQ: and where a test already calls the entry point, OBSERVE what it returns, so the
                 // work item carries the value to assert instead of asking the model to guess it.

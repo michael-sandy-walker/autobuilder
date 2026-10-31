@@ -63,8 +63,9 @@ public class InputComparison {
         String answer = ask(DIFFERENCES_SYSTEM, "THE RECEIVING PROJECT'S SPECIFICATION:\n" + specification
                 + "\n\nTHE RECEIVING PROJECT'S CODE:\n" + receiving + "\n\nTHE OTHER PROJECT'S CODE:\n" + other
                 + "\n\nList every rule or limit on which the two would give a different result for the same input: one"
-                + " line each, in this form. Do not list differences of style, naming or structure. If there are none,"
-                + " write NONE.\n\nDIFFERENCE: <what> | RECEIVING: <its rule> | OTHER: <its rule>");
+                + " line each, in this form. Only list a rule the receiving project actually has. If it has no rule on"
+                + " this, that is not a difference. Do not list differences of style, naming or structure. If there are"
+                + " none, write NONE.\n\nDIFFERENCE: <what> | RECEIVING: <its rule> | OTHER: <its rule>");
         List<Difference> out = new ArrayList<>();
         Matcher m = DIFFERENCE.matcher(answer);
         while (m.find()) out.add(new Difference(m.group(1), m.group(2), m.group(3)));

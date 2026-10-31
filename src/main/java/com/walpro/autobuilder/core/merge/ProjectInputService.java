@@ -90,6 +90,12 @@ public class ProjectInputService {
             Files.writeString(p, e.getValue());
         }
         manifest.addFiles(landing.placed());
+        for (String p : landing.placed()) {
+            // The text its declarations are kept against.
+            if (landing.protectedLines().contains(ProtectedPaths.MEMBERS_LINE + p)) {
+                files.writeFile(ProtectedPaths.BASELINE_DIR + "/" + p, landing.files().get(p));
+            }
+        }
 
         InputEntry input = goals.purpose().addProjectInput(r.intent(), r.addedBy(), r.runId(), landing.sourceLineage(),
                 landing.treeDigest());

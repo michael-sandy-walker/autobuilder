@@ -23,7 +23,7 @@ public final class EndpointPaths {
      * identical private copy of it.
      */
     public static final Pattern MENTION = Pattern.compile(
-            "\\b(GET|POST|PUT|PATCH|DELETE)\\s+(/[A-Za-z0-9_\\-{}/.?=&]*)");
+            "\\b(GET|POST|PUT|PATCH|DELETE)\\s+(/(?:[A-Za-z0-9_\\-{}/.?=&]*[A-Za-z0-9_\\-{}/?=&])?)");
 
     private EndpointPaths() {
     }

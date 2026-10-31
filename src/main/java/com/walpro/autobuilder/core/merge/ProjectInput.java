@@ -21,7 +21,9 @@ import java.util.TreeMap;
  * <p>With a common base (both adopted the same text) the code merges three-way, declaration by declaration. Without
  * one it is placed beside the receiving project's, which stays where it is: moving a project into a module would pull
  * every path out from under its goals and criteria, and under a running loop. A file both have is a conflict, the
- * receiving one's kept; the build gains the input's dependencies.
+ * receiving one's kept; the build gains the input's dependencies. What it brings stays what it was: its tests are
+ * protected, and its code may be added to but keeps what it declares (field118: the loop made a third party's public
+ * constructor private, and that party's own tests stopped compiling).
  *
  * <p>The input is a project directory ({@code output/}, {@code meta/GoalStack.json}, {@code bootstrap/}) or a bare tree
  * with no such record, as a third party's is: then only its code and its tests come.
@@ -84,6 +86,7 @@ public final class ProjectInput {
         }
         for (String p : brought) {
             if (p.startsWith("src/test/")) protect.add(p);
+            else if (p.startsWith("src/main/") && p.endsWith(".java")) protect.add(ProtectedPaths.MEMBERS_LINE + p);
         }
         List<String> conflictedFiles = conflicts.stream().filter(c -> c.contains(": both projects have it"))
                 .map(c -> c.substring(0, c.indexOf(": both projects have it"))).toList();

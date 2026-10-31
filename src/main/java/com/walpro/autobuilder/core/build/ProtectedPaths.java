@@ -45,6 +45,9 @@ public class ProtectedPaths {
 
     static final String MEMBERS_MARKER = "members:";
 
+    /** T4-EC: the line protecting a file's declarations. */
+    public static final String MEMBERS_LINE = MEMBERS_MARKER + " ";
+
     private final FileService fileService;
 
     private String cachedText;

@@ -75,7 +75,8 @@ class ProjectInputTest {
         assertThat(landing.tree().path("metadata").path("sourceGoalId").asText()).isEqualTo("root-k");
         assertThat(landing.sourceLineage()).isEqualTo("lineage-knots");
         assertThat(landing.obligations()).containsExactly("A knot holds.", "gate: tests The suite passes.");
-        assertThat(landing.protectedLines()).containsExactly("members: src/main/**", "src/test/java/org/knot/KnotTest.java");
+        assertThat(landing.protectedLines()).containsExactly("members: src/main/**",
+                "members: src/main/java/org/knot/Knot.java", "src/test/java/org/knot/KnotTest.java");
         assertThat(landing.criteria()).extracting(ProjectMerge.Criterion::text).contains("Knot exists", "A knot holds.");
     }
 
@@ -100,7 +101,7 @@ class ProjectInputTest {
         assertThat(landing.placed()).hasSize(2);
         assertThat(landing.tree()).isNull();
         assertThat(landing.obligations()).isEmpty();
-        assertThat(landing.protectedLines()).containsExactly("src/test/java/org/t/TTest.java");
+        assertThat(landing.protectedLines()).containsExactly("members: src/main/java/org/t/T.java", "src/test/java/org/t/TTest.java");
         assertThat(landing.sourceLineage()).isNull();
     }
 

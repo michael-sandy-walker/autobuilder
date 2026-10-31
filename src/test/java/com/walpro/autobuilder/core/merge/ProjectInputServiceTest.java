@@ -146,6 +146,19 @@ class ProjectInputServiceTest {
         assertThat(new ProtectedPaths(files).isProtected("src/main/java/org/knot/Knot.java")).isFalse();
     }
 
+    /** field118: the loop turned a third party's public constructor into a private factory, breaking its own tests. */
+    @Test
+    void whatAnInputDeclaresIsKept_addingToItIsNot() throws IOException {
+        write(brought.resolve("output/src/main/java/org/knot/Knot.java"), "package org.knot;\npublic class Knot {\n    public Knot(int n) { }\n}\n");
+        bring();
+        ProtectedPaths protect = new ProtectedPaths(files);
+        String path = "src/main/java/org/knot/Knot.java";
+
+        String kept = protect.preserve("evolution", path, "package org.knot;\npublic class Knot {\n    private Knot(int n) { }\n    public static Knot of(int n) { return new Knot(n); }\n}\n");
+
+        assertThat(kept).contains("public Knot(int n)").contains("of(int n)");
+    }
+
     @Test
     void thereIsNothingToBringItIntoBeforeAProjectExists_andAnInputNeedsAnIntent() throws Exception {
         assertThatThrownBy(() -> service.bring(new ProjectInputService.Request("knots", "r", brought, " ", "operator")))

@@ -20,7 +20,8 @@ metadata:
 - **field128 (`87130690`):** objective-met 39/41, the refusal never fired; title limit stayed 120 after the decision. Live, the type question named nothing for clitarget: my replay omitted `reasoning-effort: none` (`none` NONE 4/4, `low` CsvParser 4/4). Nothing is live.
 - **Effort fixed, uncommitted, suite 4206/0 (15 skipped):** the naming question asks at `low`; the naming cases and slice 5's replays re-run at run settings, detail on `T4-EC`. `replay5/results2.json` overwritten by the re-run.
 - **Title limit found and fixed, uncommitted (`stating` at `low`), detail on `T4-EC`.**
-- **NEXT:** commit, then a field128-recipe run: the decided rule should hold and the refusal may at last be reached.
+- **Committed `492b60b4`. field129: both fixes confirmed live (uses.txt complete, title held at 200); operator-stop 30/41, import/export not built, the refusal still unseen.** Nothing is live.
+- **NEXT, the user's call:** prove the refusal; recommended, restore field122's final tree and goals with a `uses.txt` and let closure run, instead of another 60-minute run hoping to reach it.
 
 ## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); ALL EIGHT SLICES BUILT, DoD NOT MET
 

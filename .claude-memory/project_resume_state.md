@@ -13,11 +13,12 @@ metadata:
 
 ## 2026-11-01 (Opus 5.5, session 21) -- INTENT-LINE REPLAY: STRUCTURAL CHECK PASSES, BLANKET REFUSAL DOES NOT; NOTHING BUILT -- START HERE
 
-- **Nothing is live; no code changed.** Head `6f670fc1`; this memory update uncommitted. Replay and rule in `~/.autobuilder/replay-intent`, result and a correction to the field122 note on `T4-EC` (2026-11-01).
+- Replay and rule in `~/.autobuilder/replay-intent`, result and a correction to the field122 note on `T4-EC` (2026-11-01).
 - **Result:** a model names the types an intent says to use (3 of 3), structure says whether project code refers to them. Field122's import has its own reader, not `CsvParser`, the ticket was wrong. Field126 is really 30/33 (unused imports pass the yardstick's `uses`).
 - **User, 2026-11-01:** the `T6-U` over-engineered judgement is outdated; do not cite it (recorded on `T1-GG`, the 2026-10-28 block below still says it).
-- **Structural refusal built at the user's word, UNCOMMITTED in the working tree, suite 4205/0 (15 skipped), not seen live.** Detail on `T4-EC`. Behaviour lines stay on the model's reading.
-- **NEXT:** a short field run on `library-inputs` (new landing record, a refusal with work) per [[feedback-short-field-run-after-context-change]], then derived tests for behaviour lines.
+- **Structural refusal built at the user's word, committed `87130690`, suite 4205/0 (15 skipped), not seen live.** Detail on `T4-EC`. Behaviour lines stay on the model's reading.
+- **field128 (`87130690`):** objective-met 39/41, the refusal never fired; title limit stayed 120 after the decision. Live, the type question named nothing for clitarget: my replay omitted `reasoning-effort: none` (`none` NONE 4/4, `low` CsvParser 4/4). Nothing is live.
+- **NEXT, the user's call:** give this question its own reasoning effort, or keep one effort and reword it; re-replay all cases, and slice 5's questions, at run settings; then the decided title limit; then a run.
 
 ## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); ALL EIGHT SLICES BUILT, DoD NOT MET
 

@@ -139,7 +139,7 @@ Evidence discipline:
 - `feedback_replay_over_batches.md`: validate with deterministic corpus replay + watch items, not small live batches; a DoD names its instrument; a rule reading model answers is checked against the archive's real answers first (2026-10-19). (reviewed 2026-10-20)
 - `feedback_measure_before_widening_a_working_rule.md`: a gap seen in a run that still closes is evidence to measure, not a reason to widen the rule (user, 2026-10-19). (reviewed 2026-10-20)
 - `feedback_short_field_run_after_context_change.md`: do a short live run after any cycle-context or persisted-record change. (reviewed 2026-07-30)
-- `feedback_llm_probe_realistic_context.md`: synthetic probe contexts must match the real run distribution or they manufacture false findings. (reviewed 2026-07-24)
+- `feedback_llm_probe_realistic_context.md`: synthetic probe contexts must match the real run distribution; a replay also sends the run's request settings, reasoning effort included (2026-11-01). (reviewed 2026-11-01)
 - `feedback_runs_are_variant_by_design.md`: runs are variant BY DESIGN; keep cross-run resemblances family-level, never "same as run N". (reviewed 2026-07-09)
 - `feedback_stabilize_before_tuning_signals.md`: stabilize the substrate before signal-dynamics redesign; tune only when convergence is reproducible (gate met 2026-07-09). (reviewed 2026-07-09)
 

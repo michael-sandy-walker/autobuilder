@@ -19,7 +19,7 @@ class InputComparisonTest {
         LLMClient llm = mock(LLMClient.class);
         ChatResponse body = mock(ChatResponse.class);
         when(body.getFirstContent()).thenReturn(answer);
-        when(llm.ask(any())).thenReturn(ResponseEntity.ok(body));
+        when(llm.ask(any(), any())).thenReturn(ResponseEntity.ok(body));
         return new InputComparison(llm);
     }
 

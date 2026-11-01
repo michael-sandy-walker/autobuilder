@@ -18,7 +18,8 @@ metadata:
 - **User, 2026-11-01:** the `T6-U` over-engineered judgement is outdated; do not cite it (recorded on `T1-GG`, the 2026-10-28 block below still says it).
 - **Structural refusal built at the user's word, committed `87130690`, suite 4205/0 (15 skipped), not seen live.** Detail on `T4-EC`. Behaviour lines stay on the model's reading.
 - **field128 (`87130690`):** objective-met 39/41, the refusal never fired; title limit stayed 120 after the decision. Live, the type question named nothing for clitarget: my replay omitted `reasoning-effort: none` (`none` NONE 4/4, `low` CsvParser 4/4). Nothing is live.
-- **NEXT, the user's call:** give this question its own reasoning effort, or keep one effort and reword it; re-replay all cases, and slice 5's questions, at run settings; then the decided title limit; then a run.
+- **Effort fixed, uncommitted, suite 4206/0 (15 skipped):** the naming question asks at `low`; the naming cases and slice 5's replays re-run at run settings, detail on `T4-EC`. `replay5/results2.json` overwritten by the re-run.
+- **NEXT:** why the decided title limit stayed 120 in field128; then a run, from committed code, where the refusal must fire.
 
 ## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); ALL EIGHT SLICES BUILT, DoD NOT MET
 

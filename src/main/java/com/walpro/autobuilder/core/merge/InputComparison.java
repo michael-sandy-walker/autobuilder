@@ -36,6 +36,9 @@ public class InputComparison {
 
     private static final String USE_SYSTEM = "You read what a person asks of a software project. Answer only in the format asked for.";
 
+    /** At the run's "none" this question names nothing for an intent that says "own reader" (field128), at "low" it does. */
+    private static final String USE_EFFORT = "low";
+
     private static final Pattern SAME = Pattern.compile("(?m)^\\s*SAME:\\s*(\\S+)");
     private static final Pattern DIFFERENCE = Pattern.compile("(?m)^\\s*DIFFERENCE:\\s*(.+?)\\s*\\|\\s*RECEIVING:\\s*(.+?)\\s*\\|\\s*OTHER:\\s*(.+?)\\s*$");
 
@@ -117,7 +120,7 @@ public class InputComparison {
      * count. Replayed on the intent, not its obligations: the generated lines lose "use", and never name a type.
      */
     public List<String> typesToUse(String label, String intent, List<String> types) {
-        String answer = ask(USE_SYSTEM, "A project is being brought into another one, with this intent:\n\n" + intent
+        String answer = ask(USE_SYSTEM, USE_EFFORT, "A project is being brought into another one, with this intent:\n\n" + intent
                 + "\n\nTHE TYPES THE BROUGHT PROJECT, " + label + ", CONTAINS:\n" + String.join("\n", types)
                 + "\n\nWhich of these types does the intent require the receiving project's code to call or use, rather"
                 + " than writing the same thing itself? Name a type only if the intent asks for what it does to come from"
@@ -128,8 +131,12 @@ public class InputComparison {
     }
 
     private String ask(String system, String user) {
+        return ask(system, null, user);
+    }
+
+    private String ask(String system, String effort, String user) {
         try (var purpose = com.walpro.autobuilder.client.LlmCallContext.scopeIfUnscoped("project-input")) {
-            ResponseEntity<ChatResponse> r = llmClient.ask(List.of(new Message("system", system), new Message("user", user)));
+            ResponseEntity<ChatResponse> r = llmClient.ask(List.of(new Message("system", system), new Message("user", user)), effort);
             return r == null || r.getBody() == null || r.getBody().getFirstContent() == null ? "" : r.getBody().getFirstContent();
         } catch (Exception e) {
             log.warn("T4-EC: a comparison call failed ({}) -- it answers nothing", e.getMessage());

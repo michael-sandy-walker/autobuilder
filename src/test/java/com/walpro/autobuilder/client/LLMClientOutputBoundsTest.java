@@ -99,6 +99,21 @@ class LLMClientOutputBoundsTest {
         verify(breaker, never()).recordNetworkFailure();
     }
 
+    /** field128: one question needs more reasoning than the run's budget; the rest of the run keeps it. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aCallsOwnEffortStandsForThatCallOnly_andAnEndpointSentNoneStaysSentNone() {
+        answers(answer("stop", OutputBoundsTest.clean(20), 400));
+        org.springframework.test.util.ReflectionTestUtils.setField(client, "reasoningEffort", "none");
+
+        client.ask(msg, "low");
+        client.ask(msg);
+        org.springframework.test.util.ReflectionTestUtils.setField(client, "reasoningEffort", "");
+        client.ask(msg, "low");
+
+        assertThat(sent).extracting(ChatRequest::getReasoningEffort).containsExactly("low", "none", null);
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void aRunawayThroughEveryVariantIsReturnedAsItIs_notThrown_andNotABreakerFailure() {

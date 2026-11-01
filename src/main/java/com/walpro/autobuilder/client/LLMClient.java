@@ -117,6 +117,14 @@ public class LLMClient {
     }
 
     public ResponseEntity<ChatResponse> ask(List<Message> conversation) {
+        return ask(conversation, null);
+    }
+
+    /**
+     * @param effort this call's reasoning budget in place of the configured one, for a question measured to need it;
+     *               null, or an endpoint configured to send none, keeps the configured budget
+     */
+    public ResponseEntity<ChatResponse> ask(List<Message> conversation, String effort) {
         // T1-FD: fail fast while the circuit is open. Run 4 (2026-07-02): after the breaker
         // opened, REST-path callers kept firing 2-minute-timeout requests for 2+ hours,
         // keeping the local model's queue saturated (the livelock's fuel). An open circuit
@@ -147,8 +155,8 @@ public class LLMClient {
             }
         }
 
-        ChatRequest request = new ChatRequest(model, conversation, 0.0,
-                reasoningEffort == null || reasoningEffort.isBlank() ? null : reasoningEffort.trim());
+        String budget = reasoningEffort == null || reasoningEffort.isBlank() ? null : reasoningEffort.trim();
+        ChatRequest request = new ChatRequest(model, conversation, 0.0, budget != null && effort != null ? effort : budget);
 
         log.debug("Sending request to LLM (core={}):", model);
         for (Message message : conversation) {

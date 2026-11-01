@@ -36,8 +36,12 @@ public class InputComparison {
 
     private static final String USE_SYSTEM = "You read what a person asks of a software project. Answer only in the format asked for.";
 
-    /** At the run's "none" this question names nothing for an intent that says "own reader" (field128), at "low" it does. */
-    private static final String USE_EFFORT = "low";
+    /**
+     * For a question whose answer is a complete list. At the run's "none" one named nothing for an intent saying "own
+     * reader", and the other stopped at the first line of four stating a rule: the three left stood, closure refused the
+     * decided 200 for them, and the loop put the 120 back (field128). At "low" both are exact.
+     */
+    private static final String LIST_EFFORT = "low";
 
     private static final Pattern SAME = Pattern.compile("(?m)^\\s*SAME:\\s*(\\S+)");
     private static final Pattern DIFFERENCE = Pattern.compile("(?m)^\\s*DIFFERENCE:\\s*(.+?)\\s*\\|\\s*RECEIVING:\\s*(.+?)\\s*\\|\\s*OTHER:\\s*(.+?)\\s*$");
@@ -102,7 +106,7 @@ public class InputComparison {
     public List<String> stating(List<String> lines, Difference d) {
         StringBuilder numbered = new StringBuilder();
         for (int i = 0; i < lines.size(); i++) numbered.append(i + 1).append(". ").append(lines.get(i)).append('\n');
-        String answer = ask(DECIDE_SYSTEM, "THE RECEIVING PROJECT'S REQUIREMENTS:\n" + numbered + "\nA DIFFERENCE: "
+        String answer = ask(DECIDE_SYSTEM, LIST_EFFORT, "THE RECEIVING PROJECT'S REQUIREMENTS:\n" + numbered + "\nA DIFFERENCE: "
                 + d.what() + ". RECEIVING: " + d.receiving() + ". OTHER: " + d.other()
                 + ".\n\nWhich requirements state the receiving rule of this difference? Give their numbers, or NONE."
                 + "\n\nLINES: <numbers separated by commas>");
@@ -120,7 +124,7 @@ public class InputComparison {
      * count. Replayed on the intent, not its obligations: the generated lines lose "use", and never name a type.
      */
     public List<String> typesToUse(String label, String intent, List<String> types) {
-        String answer = ask(USE_SYSTEM, USE_EFFORT, "A project is being brought into another one, with this intent:\n\n" + intent
+        String answer = ask(USE_SYSTEM, LIST_EFFORT, "A project is being brought into another one, with this intent:\n\n" + intent
                 + "\n\nTHE TYPES THE BROUGHT PROJECT, " + label + ", CONTAINS:\n" + String.join("\n", types)
                 + "\n\nWhich of these types does the intent require the receiving project's code to call or use, rather"
                 + " than writing the same thing itself? Name a type only if the intent asks for what it does to come from"

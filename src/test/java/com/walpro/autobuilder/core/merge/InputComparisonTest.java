@@ -9,7 +9,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** T4-EC slice 5: the answers read as the local model really gave them in the offline replay. */
@@ -31,6 +35,27 @@ class InputComparisonTest {
         assertThat(answering("SAME: Book\nSAME: Book").sameConcept("s", List.of(), "x")).containsExactly("Book");
         assertThat(answering("NONE").sameConcept("s", List.of(), "x")).isEmpty();
         assertThat(answering("SAME: NONE").sameConcept("s", List.of(), "x")).isEmpty();
+    }
+
+    /** field128: at the run's effort each of these came back short, and each answer was a whole list. */
+    @Test
+    void theListQuestionsAskAtTheirOwnEffort_andTheOthersAtTheRuns() {
+        LLMClient llm = mock(LLMClient.class);
+        InputComparison comparison = new InputComparison(llm);
+
+        comparison.typesToUse("kit", "i", List.of("Isbn"));
+        comparison.stating(List.of("a line"), D);
+        verify(llm, times(2)).ask(any(), eq("low"));
+
+        comparison.settledByIntent("i", D);
+        verify(llm).ask(any(), isNull());
+    }
+
+    /** field128's real answer: every line stating the rule, not only the obligation's. */
+    @Test
+    void statingTakesEveryLineNumbered() {
+        List<String> lines = List.of("title at most 120", "title required", "400 when title exceeds 120");
+        assertThat(answering("1, 3").stating(lines, D)).containsExactly(lines.get(0), lines.get(2));
     }
 
     /** The replay's real answers came bare, without the prefix. */

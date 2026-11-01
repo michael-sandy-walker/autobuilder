@@ -1669,6 +1669,56 @@ public class GoalPlannerServiceClosureTest {
                 "Every widget route is covered by a test");
     }
 
+    private GoalPlannerService inputSaysToUseKnot(String coil) throws IOException {
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+        String seed = "Answer the failure.\n\nOBJECTIVE: the failure is answered, and the whole suite passes.\n";
+        com.walpro.autobuilder.core.build.TestRunGate passing = mock(com.walpro.autobuilder.core.build.TestRunGate.class);
+        lenient().when(passing.isLive()).thenReturn(true);
+        GoalPlannerService service = derivedClosureService(seed, passing, mock(DerivedTests.class));
+        service.requirements();
+        String knot = "lib/src/main/java/org/knot/Knot.java";
+        String dir = "meta/inputs/" + service.addInput("Use knots.", "operator").id();
+        lenient().when(fileService.exists(dir + "/uses.txt")).thenReturn(true);
+        lenient().when(fileService.readFile(dir + "/uses.txt")).thenReturn(knot + "\n");
+        lenient().when(fileService.readFile(dir + "/placed.txt")).thenReturn(knot + "\n");
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder().previousOutput(Map.of(
+                knot, "package org.knot;\npublic class Knot { }\n", "src/main/java/org/warp/Coil.java", coil)).build());
+        return service;
+    }
+
+    /** field122 closed on a reading over a project that wrote its own version of what the intent said to use. */
+    @Test
+    void autoCompleteRoot_whatAnIntentSaysToUseUnusedRefusesClosureAndBecomesWork() throws IOException {
+        GoalPlannerService service = inputSaysToUseKnot("package org.warp;\nimport org.knot.Knot;\nclass Coil { }\n");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.unanswerableAtClosure()).as("the run can do this work: nothing halts").isEmpty();
+        GoalEntity item = service.getAllGoals().stream().filter(g -> g.getDescription().contains("Use what the input brought")).findFirst().orElseThrow();
+        assertThat(item.getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(item.getMetadata().get("acceptanceCriteria")).asList().singleElement().asString().contains("Knot");
+
+        item.setStatus(GoalStatus.COMPLETED);
+        item.getMetadata().put("criteriaPassStatus", Map.of("1", true));
+        item.getMetadata().put(GoalPlannerService.LET_GO_KEY, true);
+        service.autoCompleteRootIfSatisfied();
+        assertThat(service.unanswerableAtClosure()).as("no work can be added: the run halts saying why")
+                .hasValueSatisfying(r -> assertThat(r).contains("Knot"));
+    }
+
+    @Test
+    void autoCompleteRoot_whatAnIntentSaysToUseUsedDoesNotStandInTheWay() throws IOException {
+        GoalPlannerService service = inputSaysToUseKnot("package org.warp;\nimport org.knot.Knot;\nclass Coil { Knot k; }\n");
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
     /** T4-EC slice 5: with everything else done, an open conflict refuses closure and names itself; a decision lifts it. */
     @Test
     void autoCompleteRoot_anOpenConflictRefusesClosureUntilItIsDecided() throws IOException {

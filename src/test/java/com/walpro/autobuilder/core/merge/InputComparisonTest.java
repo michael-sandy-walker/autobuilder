@@ -33,6 +33,17 @@ class InputComparisonTest {
         assertThat(answering("SAME: NONE").sameConcept("s", List.of(), "x")).isEmpty();
     }
 
+    /** The replay's real answers came bare, without the prefix. */
+    @Test
+    void typesToUseTakesOnlyNamesOnTheList() {
+        List<String> types = List.of("Isbn", "CatalogueEntry", "LendingPolicy");
+        assertThat(answering("Isbn, LendingPolicy").typesToUse("kit", "i", types)).containsExactly("Isbn", "LendingPolicy");
+        assertThat(answering("TYPES: Isbn").typesToUse("kit", "i", types)).containsExactly("Isbn");
+        assertThat(answering("NONE").typesToUse("kit", "i", types)).isEmpty();
+        assertThat(answering("Invented").typesToUse("kit", "i", types)).isEmpty();
+        assertThat(answering("").typesToUse("kit", "i", types)).isEmpty();
+    }
+
     @Test
     void differencesAreReadLineByLine_andNoneIsNone() {
         var out = answering("""

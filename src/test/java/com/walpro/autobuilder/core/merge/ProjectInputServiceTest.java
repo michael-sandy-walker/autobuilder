@@ -120,6 +120,16 @@ class ProjectInputServiceTest {
         assertThat(files.readFile("meta/inputs/" + input.id() + "/placed.txt")).contains("org/knot/Knot.java");
     }
 
+    /** field122: closure read the intent's "use" as met; what it names is recorded for structure to answer at closure. */
+    @Test
+    void theTypesTheIntentSaysToUseAreRecordedByPath() throws IOException {
+        when(comparison.typesToUse(anyString(), anyString(), any())).thenReturn(List.of("Knot"));
+        bring();
+        InputEntry input = goals.purpose().ledger().entries().get(1);
+        assertThat(files.readFile("meta/inputs/" + input.id() + IntentUse.USES_FILE).strip())
+                .isEqualTo("src/main/java/org/knot/Knot.java");
+    }
+
     /** field119: a goal with no criteria could never close, and the run sat on it from 39/39 to its deadline. */
     @Test
     void theInputsGoalClosesOnWhatTheIntentAsks() throws IOException {

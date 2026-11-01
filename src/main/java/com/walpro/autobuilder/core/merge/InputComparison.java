@@ -34,6 +34,8 @@ public class InputComparison {
     private static final String CLAIM_SYSTEM = "You judge what happens to a requirement of one software project when that"
             + " project's code is brought into another project. Answer only in the format asked for.";
 
+    private static final String USE_SYSTEM = "You read what a person asks of a software project. Answer only in the format asked for.";
+
     private static final Pattern SAME = Pattern.compile("(?m)^\\s*SAME:\\s*(\\S+)");
     private static final Pattern DIFFERENCE = Pattern.compile("(?m)^\\s*DIFFERENCE:\\s*(.+?)\\s*\\|\\s*RECEIVING:\\s*(.+?)\\s*\\|\\s*OTHER:\\s*(.+?)\\s*$");
 
@@ -108,6 +110,21 @@ public class InputComparison {
             if (n >= 1 && n <= lines.size() && !out.contains(lines.get(n - 1))) out.add(lines.get(n - 1));
         }
         return out;
+    }
+
+    /**
+     * The types, of {@code types}, the intent requires to be used rather than written again; only names on the list
+     * count. Replayed on the intent, not its obligations: the generated lines lose "use", and never name a type.
+     */
+    public List<String> typesToUse(String label, String intent, List<String> types) {
+        String answer = ask(USE_SYSTEM, "A project is being brought into another one, with this intent:\n\n" + intent
+                + "\n\nTHE TYPES THE BROUGHT PROJECT, " + label + ", CONTAINS:\n" + String.join("\n", types)
+                + "\n\nWhich of these types does the intent require the receiving project's code to call or use, rather"
+                + " than writing the same thing itself? Name a type only if the intent asks for what it does to come from"
+                + " the brought project. A type whose work the intent does not ask to reuse is not named."
+                + "\n\nTYPES: <names separated by commas, or NONE>");
+        Set<String> said = new LinkedHashSet<>(List.of(answer.substring(answer.lastIndexOf("TYPES:") + 1).split("\\W+")));
+        return types.stream().filter(said::contains).toList();
     }
 
     private String ask(String system, String user) {

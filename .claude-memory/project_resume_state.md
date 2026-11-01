@@ -11,7 +11,15 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); ALL EIGHT SLICES BUILT, DoD NOT MET -- START HERE
+## 2026-11-01 (Opus 5.5, session 21) -- INTENT-LINE REPLAY: STRUCTURAL CHECK PASSES, BLANKET REFUSAL DOES NOT; NOTHING BUILT -- START HERE
+
+- **Nothing is live; no code changed.** Head `6f670fc1`; this memory update uncommitted. Replay and rule in `~/.autobuilder/replay-intent`, result and a correction to the field122 note on `T4-EC` (2026-11-01).
+- **Result:** a model names the types an intent says to use (3 of 3), structure says whether project code refers to them. Field122's import has its own reader, not `CsvParser`, the ticket was wrong. Field126 is really 30/33 (unused imports pass the yardstick's `uses`).
+- **User, 2026-11-01:** the `T6-U` over-engineered judgement is outdated; do not cite it (recorded on `T1-GG`, the 2026-10-28 block below still says it).
+- **Structural refusal built at the user's word, UNCOMMITTED in the working tree, suite 4205/0 (15 skipped), not seen live.** Detail on `T4-EC`. Behaviour lines stay on the model's reading.
+- **NEXT:** a short field run on `library-inputs` (new landing record, a refusal with work) per [[feedback-short-field-run-after-context-change]], then derived tests for behaviour lines.
+
+## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); ALL EIGHT SLICES BUILT, DoD NOT MET
 
 - **Nothing is live.** Head = this commit (code `9c84e9f4`), suite 4190/0 (this session's run). The stale field111 waiter (PID 1619913, self-matching `until pgrep`) was stopped at the user's word; nothing launched.
 - **This session:** filed `T1-GG` (T6-U's three open mechanisms); restated `T5-BI` (redesign all prose output); `T4-EC` redefined with the user -- a project keeps accepting input (seed = first), several snapshots merged or projects brought into a RUNNING project, fill/extend/correct, conflicts held, per-input undo -- then the map of what assumes one seed = one run, the representation (one input ledger, graph-first, the tree's starting shape by mode), eight slices, and the measuring case (`firestarter` running + `clitarget` frozen + a third-party catalogue; fallback `edit-hunks` + a patch library). The user's long-range picture saved as [[project-living-project-vision]] (offspring whose code AND graph become a knowledge part).

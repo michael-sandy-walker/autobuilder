@@ -111,6 +111,8 @@ public class ProjectInputService {
         List<String> intentLines = new ArrayList<>();
         int obligations = writeObligations(input, landing.obligations(), intentLines);
         holdFiles(input, landing, parent);
+        List<String> uses = typesToUse(r, landing.placed());
+        files.writeFile(dir + IntentUse.USES_FILE, String.join("\n", uses) + "\n");
         List<String> corrections = compare(input, before, parent);
 
         List<Verdict> verdicts = answer(landing, r.intent());
@@ -138,14 +140,22 @@ public class ProjectInputService {
         String sourceRoot = landing.tree() == null ? null : landing.tree().path("metadata").path("sourceGoalId").asText(null);
         goals.purpose().linkInput(input.id(), goalId, sourceRoot);
 
-        log.warn("T4-EC: {} brought in as {} -- {} file(s) placed, {} correction(s), {} conflict(s) held, {} criteria answered, {} unmet, {} obligation(s)",
+        log.warn("T4-EC: {} brought in as {} -- {} file(s) placed, {} correction(s), {} conflict(s) held, {} criteria answered, {} unmet, {} obligation(s), to use: {}",
                 r.label(), input.id(), landing.placed().size(), corrections.size(), goals.purpose().openConflicts().size(),
-                verdicts.size(), unmet.size(), obligations);
+                verdicts.size(), unmet.size(), obligations, uses);
         List<InputEvent> conflicts = goals.purpose().openConflicts().stream().filter(e -> e.inputId().equals(input.id())).toList();
         return new Report(input.id(), goalId, landing.placed(), corrections, conflicts, landing.notes(), verdicts.size(),
                 verdicts.stream().filter(v -> v.source().startsWith("structure")).count(),
                 verdicts.stream().filter(v -> v.source().equals("model")).count(),
                 verdicts.stream().filter(v -> v.met() == null).count(), unmet, obligations);
+    }
+
+    /** The input's types its intent says to use, by placed path: closure asks structure about them. */
+    private List<String> typesToUse(Request r, List<String> placed) {
+        List<String> types = placed.stream().filter(IntentUse::isMainType).toList();
+        if (types.isEmpty()) return List.of();
+        List<String> named = comparison.typesToUse(r.label(), r.intent(), types.stream().map(IntentUse::simpleName).toList());
+        return types.stream().filter(p -> named.contains(IntentUse.simpleName(p))).toList();
     }
 
     /** A file both projects have: the receiving one stays, the input's copy is kept with the conflict. */

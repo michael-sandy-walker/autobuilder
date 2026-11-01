@@ -4212,6 +4212,22 @@ public class GoalPlannerService {
             conflictAtClosure = true;
             return false;
         }
+        List<String> unused = inputTypesUnused();
+        if (!unused.isEmpty()) {
+            String reason = "the project's own code does not use what an input's intent says to use: " + String.join("; ", unused);
+            log.warn("T4-EC: root closure REFUSED -- {}", reason);
+            recordClosureRefusal("T4-EC", root.getId(), reason, unused);
+            CoverageReviewResult injected = injectCoverageGaps(root, List.of("[BUILD_FIX] Use what the input brought, in place"
+                    + " of the project's own version of it -- " + String.join("; ", unused)), true);
+            if (injected.injected().isEmpty()) unanswerableAtClosure = reason;
+            for (String id : injected.injectedIds()) {
+                // Marker first, criteria second: see the T4-BP-3 work item.
+                setGoalMetadataString(id, com.walpro.autobuilder.core.build.BlockerTypes.ORIGINATING_GATE_KEY,
+                        com.walpro.autobuilder.core.build.BlockerTypes.GATE_CRITERIA);
+                setAcceptanceCriteria(id, unused);
+            }
+            return false;
+        }
         Optional<List<String>> open = derivedRequirementsNoTestAnswers(root);
         if (open.isEmpty()) return true;
         String reason = "no test written from the requirement's wording could be kept for " + open.get().size()
@@ -4220,6 +4236,27 @@ public class GoalPlannerService {
         recordClosureRefusal("T6-U", root.getId(), reason, open.get());
         unanswerableAtClosure = reason;
         return false;
+    }
+
+    /** T4-EC: what the inputs in force say to use and the tree does not, each as a line for the work item that fixes it. */
+    private List<String> inputTypesUnused() {
+        Map<String, String> tree = outputNow();
+        if (tree == null) return List.of();
+        List<String> out = new ArrayList<>();
+        for (var input : purpose().ledger().active()) {
+            String dir = "meta/inputs/" + input.id();
+            try {
+                if (!fileService.exists(dir + com.walpro.autobuilder.core.merge.IntentUse.USES_FILE)) continue;
+                List<String> named = fileService.readFile(dir + com.walpro.autobuilder.core.merge.IntentUse.USES_FILE).lines().filter(l -> !l.isBlank()).toList();
+                Set<String> placed = fileService.readFile(dir + "/placed.txt").lines().collect(java.util.stream.Collectors.toSet());
+                for (String path : com.walpro.autobuilder.core.merge.IntentUse.unused(named, placed, tree)) {
+                    out.add("The project's own code calls " + com.walpro.autobuilder.core.merge.IntentUse.simpleName(path) + " (" + path + ")");
+                }
+            } catch (IOException e) {
+                log.warn("T4-EC: what {} says to use is unreadable ({}) -- not checked", input.id(), e.getMessage());
+            }
+        }
+        return out;
     }
 
     /** T4-EC slice 5: closure was refused for an open conflict, which a decision lifts: the halt is named for that. */

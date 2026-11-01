@@ -21,7 +21,7 @@ metadata:
 - **Effort fixed, uncommitted, suite 4206/0 (15 skipped):** the naming question asks at `low`; the naming cases and slice 5's replays re-run at run settings, detail on `T4-EC`. `replay5/results2.json` overwritten by the re-run.
 - **Title limit found and fixed, uncommitted (`stating` at `low`), detail on `T4-EC`.**
 - **Committed `492b60b4`. field129: both fixes confirmed live (uses.txt complete, title held at 200); operator-stop 30/41, import/export not built, the refusal still unseen.** Nothing is live.
-- **NEXT, the user's call:** prove the refusal; recommended, restore field122's final tree and goals with a `uses.txt` and let closure run, instead of another 60-minute run hoping to reach it.
+- **field130: the refusal fired live on field122's tree (CsvParser, Isbn), the loop acted: GOAL_FULFILLED 40/41, `Isbn` truly used; the reader only by its nested `CsvParser.Row`, own parser kept. False at check 33 and the reader.** Nothing is live.
 
 ## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); ALL EIGHT SLICES BUILT, DoD NOT MET
 

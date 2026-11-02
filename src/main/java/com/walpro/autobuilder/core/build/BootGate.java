@@ -148,6 +148,11 @@ public class BootGate {
         this.endpointSurfaceQuery = endpointSurfaceQuery;
     }
 
+    /** T1-GH: whether the completion edge starts the packaged artifact at all -- read by the capability manifest. */
+    public boolean isLive() {
+        return enabled && buildExecutor.isEnabled();
+    }
+
     /**
      * Launches the packaged artifact once and observes it. Returns a short failure summary when
      * the artifact cannot start or does not serve what the spec names (→ caller refuses

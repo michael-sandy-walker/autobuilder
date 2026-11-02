@@ -74,6 +74,11 @@ public class PackageGate {
         this.buildExecutor = buildExecutor;
     }
 
+    /** T1-GH: whether the completion edge packages the project at all -- read by the capability manifest. */
+    public boolean isLive() {
+        return enabled && buildExecutor.isEnabled();
+    }
+
     /** Marker-less constructor kept for existing tests; check disabled unless markers provided. */
     public PackageGate(boolean enabled, String packageCommand, BuildExecutor buildExecutor) {
         this(enabled, packageCommand, "", buildExecutor);

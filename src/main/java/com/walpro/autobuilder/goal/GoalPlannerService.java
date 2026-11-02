@@ -4229,14 +4229,30 @@ public class GoalPlannerService {
             return false;
         }
         Optional<List<String>> open = derivedRequirementsNoTestAnswers(root);
+        if (open.isPresent()) {
+            // T1-GG: the project's code is one more implementation of the wording; a dropped test passing on it is kept.
+            derivedTests.acceptOnProjectCode();
+            open = derivedRequirementsNoTestAnswers(root);
+        }
         if (open.isEmpty()) return true;
         String reason = "no test written from the requirement's wording could be kept for " + open.get().size()
                 + " requirement(s), and a reading of the code does not confirm one: " + String.join("; ", open.get());
         log.warn("T6-U: root closure REFUSED -- {}", reason);
         recordClosureRefusal("T6-U", root.getId(), reason, open.get());
+        // T1-GG: the code can still change to pass the dropped tests, so the refusal is work first; the run halts once
+        // that work has had its go -- completed or given up -- and the same requirements are still open.
+        String item = DERIVED_WORK_ITEM + String.join("; ", open.get());
+        GoalEntity twin = findExactSubgoalTwin(item);
+        if (twin == null || twin.getStatus() == GoalStatus.ACTIVE) {
+            if (!injectCoverageGaps(root, List.of(item)).injected().isEmpty()) return false;
+        }
         unanswerableAtClosure = reason;
         return false;
     }
+
+    /** T1-GG: the work a refusal for requirements no kept test answers raises, before the run halts on it. */
+    static final String DERIVED_WORK_ITEM = "[BUILD_FIX] Make the code do what these requirements say -- no test written"
+            + " from their wording passes on it yet: ";
 
     /** T4-EC: what the inputs in force say to use and the tree does not, each as a line for the work item that fixes it. */
     private List<String> inputTypesUnused() {

@@ -55,6 +55,8 @@ class DerivedTestsTest {
     /** Test texts that pass only on a repaired implementation, and ones that fail there. */
     private final List<String> passesOnRepairOnly = new ArrayList<>();
     private final List<String> failsOnRepair = new ArrayList<>();
+    /** Where the stub bench ran which tests: tree name -> test paths. */
+    private final Map<String, List<String>> ran = new LinkedHashMap<>();
 
     @BeforeEach
     void setUp() throws Exception {
@@ -117,6 +119,7 @@ class DerivedTestsTest {
 
             public Map<String, Boolean> run(Path tree, Map<String, String> tests) {
                 boolean repaired = tree.getFileName().toString().startsWith("repair-");
+                ran.computeIfAbsent(tree.getFileName().toString(), k -> new ArrayList<>()).addAll(tests.keySet());
                 Map<String, Boolean> out = new LinkedHashMap<>();
                 tests.forEach((p, t) -> out.put(p, repaired && failsOnRepair.stream().anyMatch(t::contains) ? false
                         : repaired && passesOnRepairOnly.stream().anyMatch(t::contains) ? true
@@ -477,5 +480,62 @@ class DerivedTestsTest {
 
         assertThat(DerivedTestsFile.read(files).get(0).reason()).isEqualTo("passed on 2 of 2 throwaway implementation(s)");
         assertThat(asked).anyMatch(a -> a.contains("YOUR ANSWER CHANGED NO SOURCE FILE"));
+    }
+
+    /**
+     * T1-GG: at a completion point, the dropped tests of a requirement no kept test answers run on the project's own
+     * code, which never saw them; one passing there is accepted and written into the tree, one failing stays dropped,
+     * and an answered requirement's dropped tests are not run.
+     */
+    @Test
+    void aDroppedTestOfAnOpenRequirementPassingOnTheProjectsOwnCodeIsAccepted() throws Exception {
+        String other = "A refused edit is left out of the result.";
+        obligations(REQUIREMENT, other);
+        String right = "package org.ink;\nclass DerivedClaim001Test { // RIGHT occurs 2 times\n}\n";
+        String wrong = "package org.ink;\nclass DerivedClaim002Test { // WRONG occurs 2 times\n}\n";
+        String kept = "package org.ink;\nclass DerivedClaim003Test { // RIGHT left out\n}\n";
+        String spare = "package org.ink;\nclass DerivedClaim004Test { // RIGHT spare\n}\n";
+        DerivedTestsFile.write(files, List.of(
+                new DerivedTestsFile.Entry(REQUIREMENT, "two matches say occurs 2 times", TEST_DIR + "/DerivedClaim001Test.java",
+                        right, DerivedTestsFile.Status.UNACCEPTED, "passed on 0 of 3 throwaway implementation(s)"),
+                new DerivedTestsFile.Entry(REQUIREMENT, "three matches say occurs 3 times", TEST_DIR + "/DerivedClaim002Test.java",
+                        wrong, DerivedTestsFile.Status.UNACCEPTED, "passed on 0 of 3 throwaway implementation(s)"),
+                new DerivedTestsFile.Entry(other, "left out", TEST_DIR + "/DerivedClaim003Test.java",
+                        kept, DerivedTestsFile.Status.ACCEPTED, "passed on 3 of 3 throwaway implementation(s)"),
+                new DerivedTestsFile.Entry(other, "spare", TEST_DIR + "/DerivedClaim004Test.java",
+                        spare, DerivedTestsFile.Status.UNACCEPTED, "passed on 0 of 3 throwaway implementation(s)")));
+        passesWhenContains.put("RIGHT", true);
+        DerivedTests derived = derived();
+        assertThat(derived.acceptedRequirements()).containsExactly(other);
+
+        assertThat(derived.acceptOnProjectCode()).containsExactly(TEST_DIR + "/DerivedClaim001Test.java");
+
+        assertThat(ran).as("run on the project's tree only, and only the open requirement's dropped tests")
+                .containsOnlyKeys("output");
+        assertThat(ran.get("output")).containsExactly(TEST_DIR + "/DerivedClaim001Test.java", TEST_DIR + "/DerivedClaim002Test.java");
+        assertThat(derived.acceptedRequirements()).containsExactlyInAnyOrder(REQUIREMENT, other);
+        assertThat(DerivedTestsFile.read(files)).filteredOn(e -> e.path().endsWith("DerivedClaim001Test.java")).singleElement()
+                .satisfies(e -> assertThat(e.reason()).isEqualTo(DerivedTests.ACCEPTED_ON_PROJECT));
+        assertThat(DerivedTestsFile.read(files)).filteredOn(e -> e.path().endsWith("DerivedClaim002Test.java")).singleElement()
+                .satisfies(e -> assertThat(e.accepted()).isFalse());
+        assertThat(Files.readString(base.resolve("output/" + TEST_DIR + "/DerivedClaim001Test.java"))).isEqualTo(right);
+        assertThat(Files.exists(base.resolve("output/" + TEST_DIR + "/DerivedClaim002Test.java"))).isFalse();
+
+        ran.clear();
+        assertThat(derived.acceptOnProjectCode()).as("nothing is open any more: nothing runs").isEmpty();
+        assertThat(ran).isEmpty();
+    }
+
+    /** T1-GG: a dropped test is never run over a file of the project's own under its name -- the bench deletes what it ran. */
+    @Test
+    void aDroppedTestWhosePathTheProjectAlreadyHoldsIsNotRun() throws Exception {
+        String test = "package org.ink;\nclass DerivedClaim001Test { // RIGHT occurs 2 times\n}\n";
+        DerivedTestsFile.write(files, List.of(new DerivedTestsFile.Entry(REQUIREMENT, "two matches say occurs 2 times",
+                TEST_DIR + "/DerivedClaim001Test.java", test, DerivedTestsFile.Status.UNACCEPTED, "passed on 0 of 3")));
+        files.writeFile("output/" + TEST_DIR + "/DerivedClaim001Test.java", "package org.ink;\nclass DerivedClaim001Test {}\n");
+        passesWhenContains.put("RIGHT", true);
+
+        assertThat(derived().acceptOnProjectCode()).isEmpty();
+        assertThat(ran).isEmpty();
     }
 }

@@ -72,7 +72,8 @@ import java.util.regex.Pattern;
  * blind spots (receiver-questions: all three missed the compiler's record-component form). A dropped test is written
  * once more from the runner's report ({@link #rewrite}), since most are broken tests of right claims; a requirement is
  * then the gate's when it has an accepted test and every text it quotes is used by one ({@link #answeredBy});
- * otherwise it stays a reading, as before.
+ * otherwise it stays a reading, as before. At a completion point, the dropped tests of a requirement still open are
+ * run on the project's own code, one more implementation that never saw them ({@link #acceptOnProjectCode}).
  *
  * <p><b>Which lines.</b> Only an obligation the operator marked {@code gate: derived-test} -- which gate answers
  * which line is the operator's declaration ({@link SeedRequirements#GATE_MARKER}), never inferred from wording.
@@ -287,6 +288,63 @@ public class DerivedTests implements DerivedTestAuthority {
             if (tests.stream().noneMatch(t -> quoted.matcher(comparable(t)).find())) return false;
         }
         return true;
+    }
+
+    /** Why a test every throwaway implementation failed was accepted on the project's own code. */
+    static final String ACCEPTED_ON_PROJECT = "failed on every throwaway implementation; passed on the project's own code,"
+            + " which was written without it";
+
+    /**
+     * T1-GG: the dropped tests of each marked requirement no kept test answers, run on the project's own code; one that
+     * passes there is accepted, as one passing on a throwaway implementation is. Returns the paths accepted.
+     *
+     * <p>Why: the throwaway implementations share the model's blind spots, so a right claim they all get wrong is
+     * dropped -- receiver-questions' record-component form, which then refused every run, a correct one among them
+     * (field112 run 2, 16/16). The project's code is one more implementation written from the same wording without
+     * ever seeing those tests (they are never in the tree), so it checks them as a spike does. Offline over that case
+     * (2026-11-02, seven trees): the correct 16/16 tree passes two of the six dropped tests, one of them the only test
+     * using the requirement's second quoted failure; every 14/16 tree passes none, and the three tests the reference
+     * implementation fails pass on no tree.
+     *
+     * <p>Called only at a completion point, where the suite is green, so a test accepted here sits beside every
+     * accepted one.
+     */
+    public Set<String> acceptOnProjectCode() {
+        if (bench == null || pending) return Set.of();
+        Set<String> answered = acceptedRequirements();
+        List<String> open = requirements().stream().filter(r -> !answered.contains(r)).toList();
+        if (open.isEmpty()) return Set.of();
+        List<Entry> entries = new ArrayList<>(DerivedTestsFile.read(files));
+        Map<String, String> dropped = new LinkedHashMap<>();
+        Path output;
+        try {
+            output = files.resolveSecurePath("output");
+            for (Entry e : entries) {
+                if (e.accepted() || e.path() == null || e.content() == null || !open.contains(e.requirement())) continue;
+                // the bench deletes what it ran: never a file of the project's own under the same name
+                if (Files.exists(output.resolve(e.path()))) continue;
+                dropped.putIfAbsent(e.path(), e.content());
+            }
+        } catch (Exception e) {
+            log.warn("T1-GG: could not read the dropped tests: {}", e.getMessage());
+            return Set.of();
+        }
+        if (dropped.isEmpty()) return Set.of();
+        Set<String> passed = new LinkedHashSet<>();
+        bench.run(output, dropped).forEach((p, ok) -> { if (ok) passed.add(p); });
+        log.warn("T1-GG: {} of {} dropped test(s) of {} unanswered requirement(s) pass on the project's own code{}",
+                passed.size(), dropped.size(), open.size(), passed.isEmpty() ? "" : " -- accepted: " + passed);
+        if (passed.isEmpty()) return Set.of();
+        entries.replaceAll(e -> !e.accepted() && passed.contains(e.path()) && dropped.get(e.path()).equals(e.content())
+                ? new Entry(e.requirement(), e.claim(), e.path(), e.content(), Status.ACCEPTED, ACCEPTED_ON_PROJECT) : e);
+        try {
+            DerivedTestsFile.write(files, entries);
+        } catch (Exception e) {
+            log.warn("T1-GG: could not record the tests accepted on the project's own code: {}", e.getMessage());
+            return Set.of();
+        }
+        restore();
+        return passed;
     }
 
     /** True when nothing is being written and every marked requirement is answered by the test gate. */

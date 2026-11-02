@@ -1774,7 +1774,8 @@ public class GoalPlannerServiceClosureTest {
         service.autoCompleteRootIfSatisfied();
 
         assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
-        assertThat(service.unanswerableAtClosure()).hasValueSatisfying(r -> assertThat(r).contains(marked));
+        assertThat(derivedWorkItem(service)).as("the refusal is work first").hasValueSatisfying(g ->
+                assertThat(g.getDescription()).contains(marked));
     }
 
     /**
@@ -1804,13 +1805,29 @@ public class GoalPlannerServiceClosureTest {
         assertThat(working.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
         assertThat(working.unanswerableAtClosure()).isEmpty();
 
-        // Every other gate lets it close: only the unanswered line is left, so closure is refused and the run halts.
+        // Every other gate lets it close: only the unanswered line is left, so closure is refused. T1-GG: the code can
+        // still change, so the first refusal raises work naming the line, and the run goes on.
         com.walpro.autobuilder.core.build.TestRunGate passing = mock(com.walpro.autobuilder.core.build.TestRunGate.class);
         when(passing.isLive()).thenReturn(true);
         GoalPlannerService done = derivedClosureService(seed, passing, derived);
         done.autoCompleteRootIfSatisfied();
         assertThat(done.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(done.unanswerableAtClosure()).as("the work has not had its go: nothing halts").isEmpty();
+        GoalEntity item = derivedWorkItem(done).orElseThrow();
+        assertThat(item.getDescription()).contains("record component active").doesNotContain(other);
+        org.mockito.Mockito.verify(derived).acceptOnProjectCode();
+
+        // Still queued: refused again, no second item, no halt.
+        done.autoCompleteRootIfSatisfied();
+        assertThat(done.unanswerableAtClosure()).isEmpty();
+        assertThat(subgoalsStartingWith(done, GoalPlannerService.DERIVED_WORK_ITEM)).hasSize(1);
+
+        // The work had its go and the line is still open: the run halts.
+        item.setStatus(GoalStatus.COMPLETED);
+        done.autoCompleteRootIfSatisfied();
+        assertThat(done.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
         assertThat(done.unanswerableAtClosure()).hasValueSatisfying(r -> assertThat(r).contains("record component active"));
+        assertThat(item.getStatus()).as("not reopened: its go is over").isEqualTo(GoalStatus.COMPLETED);
 
         GoalEntity root = done.getGoalById("G");
         java.util.Optional<List<String>> open = ReflectionTestUtils.invokeMethod(done, "derivedRequirementsNoTestAnswers", root);
@@ -1821,6 +1838,47 @@ public class GoalPlannerServiceClosureTest {
         when(passing.isLive()).thenReturn(false);
         open = ReflectionTestUtils.invokeMethod(done, "derivedRequirementsNoTestAnswers", root);
         assertThat(open).as("the test gate off answers nothing: the lines go to a reading as before").isEmpty();
+    }
+
+    /**
+     * T1-GG: a dropped test passing on the project's own code is accepted at the completion point, and the line it
+     * answers no longer refuses closure -- field112 run 2's correct 16/16 tree, refused to a halt, now closes.
+     */
+    @Test
+    void autoCompleteRoot_aLineAnsweredOnceTheDroppedTestsRunOnTheProjectsCodeDoesNotRefuse() throws IOException {
+        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
+        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
+        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
+        String seed = "Answer the failure.\n\nOBJECTIVE: the failure is answered, and the whole suite passes.\n";
+        String marked = "answer() answers \"cannot find symbol method indexOf(Window) in record component active\"";
+        lenient().when(fileService.readFile(SeedObligationsFile.PATH)).thenReturn(SeedObligationsFile.render(seed, List.of(
+                SeedRequirements.GATE_MARKER + " " + SeedRequirements.GATE_DERIVED + " " + marked)));
+        DerivedTests derived = mock(DerivedTests.class);
+        when(derived.acceptedRequirements()).thenReturn(java.util.Set.of());
+        when(derived.acceptOnProjectCode()).thenAnswer(inv -> {
+            when(derived.acceptedRequirements()).thenReturn(java.util.Set.of(marked));
+            return java.util.Set.of("src/test/java/org/ink/DerivedClaim035Test.java");
+        });
+        com.walpro.autobuilder.core.build.TestRunGate passing = mock(com.walpro.autobuilder.core.build.TestRunGate.class);
+        when(passing.isLive()).thenReturn(true);
+
+        GoalPlannerService service = derivedClosureService(seed, passing, derived);
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.unanswerableAtClosure()).isEmpty();
+        assertThat(derivedWorkItem(service)).as("nothing refused: no work raised").isEmpty();
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
+    }
+
+    private static java.util.Optional<GoalEntity> derivedWorkItem(GoalPlannerService service) {
+        return subgoalsStartingWith(service, GoalPlannerService.DERIVED_WORK_ITEM).stream().findFirst();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<GoalEntity> subgoalsStartingWith(GoalPlannerService service, String prefix) {
+        Map<String, GoalEntity> goals = (Map<String, GoalEntity>) ReflectionTestUtils.getField(service, "goalMap");
+        return goals.values().stream().filter(g -> g.getDescription() != null && g.getDescription().startsWith(prefix)).toList();
     }
 
     private GoalPlannerService derivedClosureService(String seed, com.walpro.autobuilder.core.build.TestRunGate gate,

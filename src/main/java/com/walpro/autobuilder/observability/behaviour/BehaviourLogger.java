@@ -401,6 +401,12 @@ public class BehaviourLogger {
                 authority, answered, answer, deliveredToSubGoal));
     }
 
+    public void logQuestionAsked(String cycleId, String role, String question, List<String> probes,
+                                 boolean answered, String answer, long durationMs) {
+        emit(new BehaviourEvent.LogQuestionAsked(Instant.now(), cycleId, role, question, probes, answered, answer,
+                durationMs));
+    }
+
     public void stuckRecurred(String cycleId, String source, String signature, int recurrencesAfterDelivery, int nextRung) {
         emit(new BehaviourEvent.StuckRecurred(Instant.now(), cycleId, source, signature, recurrencesAfterDelivery, nextRung));
     }

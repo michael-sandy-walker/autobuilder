@@ -15,7 +15,7 @@ import java.util.function.Predicate;
         note = "per-role count of consecutive discarded answers and the last reason, for the discard event and the streak warning")
 public class LLMAgentProtocolInvoker {
 
-    private static final int MAX_ATTEMPTS = 2;
+    static final int MAX_ATTEMPTS = 2;
 
     /** T5-BO: optional, so narrow unit tests need not wire it. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -51,25 +51,60 @@ public class LLMAgentProtocolInvoker {
             Function<String, T> parseResponse,
             Function<String, String> describeMismatch
     ) {
+        return callWithValidation(llmClient, systemPrompt, userPrompt, isValidResponse, parseResponse,
+                describeMismatch, null);
+    }
+
+    /**
+     * As above, with {@code consult}: T4-EE -- the model's first reply may be a QUESTION the system answers
+     * before the real answer. {@code consult} returns the reply to send back when the content is such a
+     * question, or null when it is not; the question and its answer stay in the conversation, and the
+     * exchange is not counted as a failed attempt. At most one question per call.
+     */
+    public <T> LLMResponseResult<T> callWithValidation(
+            LLMClient llmClient,
+            String systemPrompt,
+            String userPrompt,
+            Predicate<String> isValidResponse,
+            Function<String, T> parseResponse,
+            Function<String, String> describeMismatch,
+            Function<String, String> consult
+    ) {
         String role = com.walpro.autobuilder.client.LlmCallContext.currentRole();
         String content = null;
         String mismatch = null;
         String firstUserMessage = withDiscardStreak(role, userPrompt);
+        List<Message> opening = new java.util.ArrayList<>(List.of(
+                new Message("system", systemPrompt),
+                new Message("user", firstUserMessage)));
+        boolean consulted = consult == null;
 
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            List<Message> messages = attempt == 1
-                    ? List.of(
-                            new Message("system", systemPrompt),
-                            new Message("user", firstUserMessage))
-                    : List.of(
-                            new Message("system", systemPrompt),
-                            new Message("user", firstUserMessage),
-                            new Message("assistant", content),
-                            new Message("user", retryInstruction(mismatch)));
+            List<Message> messages = new java.util.ArrayList<>(opening);
+            if (attempt > 1) {
+                messages.add(new Message("assistant", content));
+                messages.add(new Message("user", retryInstruction(mismatch)));
+            }
 
             ChatResponse response = llmClient.ask(messages).getBody();
 
             content = response != null ? response.getFirstContent() : null;
+
+            if (!consulted && attempt == 1 && content != null) {
+                consulted = true;
+                String reply;
+                try {
+                    reply = consult.apply(content);
+                } catch (RuntimeException e) {
+                    reply = null; // a question nobody could answer must not cost the call
+                }
+                if (reply != null) {
+                    opening.add(new Message("assistant", content));
+                    opening.add(new Message("user", reply));
+                    attempt--;
+                    continue;
+                }
+            }
 
             if (content != null && isValidResponse.test(content)) {
                 consecutiveDiscards.remove(role);

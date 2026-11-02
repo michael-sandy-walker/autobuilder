@@ -108,6 +108,10 @@ public class EvolutionLLMAdapter {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.stuck.StuckLayer stuckLayer;
 
+    /** T4-EE: one question of the run's log, offered on a retry; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.investigate.LogConsultation logConsultation;
+
     /** T4-DY: the project's classpath, for the dependency-API block; optional in narrow tests. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.stuck.ProjectTypeAuthority projectTypeAuthority;
@@ -182,6 +186,13 @@ public class EvolutionLLMAdapter {
         String editsFirst = editsFirstBlock(refreshed);
         if (editsFirst != null) userPrompt = userPrompt + "\n\n" + editsFirst;
 
+        // T4-EE: retrying rejected work, the model may first ask one question of the run's log.
+        boolean retrying = refreshed.rejectionFeedback() != null && !refreshed.rejectionFeedback().isEmpty();
+        String logOffer = retrying && logConsultation != null ? logConsultation.offerBlock() : null;
+        if (logOffer != null) userPrompt = userPrompt + "\n\n" + logOffer;
+        java.util.function.Function<String, String> consult = logOffer == null ? null
+                : raw -> logConsultation.answer(raw, "evolution", refreshed.cycleName());
+
         LLMResponseResult<EvolutionOutcome> response = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,
                 systemPrompt,
@@ -200,7 +211,8 @@ public class EvolutionLLMAdapter {
                             currentTree(refreshed)).problems();
                     if (!problems.isEmpty()) return "an edit could not be applied: " + String.join("; ", problems);
                     return whatItChangesNot(raw, refreshed, true);
-                }
+                },
+                consult
         );
 
         EvolutionOutcome outcome;

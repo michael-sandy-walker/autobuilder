@@ -82,7 +82,7 @@ class EvolutionLLMAdapterTest {
                 anyString(),
                 any(),
                 any(), any()
-        )).thenReturn(LLMResponseResult.success(parsedOutcome, "#Evolution raw"));
+        , any())).thenReturn(LLMResponseResult.success(parsedOutcome, "#Evolution raw"));
 
         // when
         CycleContextData updated = agent.evolve(context);
@@ -111,7 +111,7 @@ class EvolutionLLMAdapterTest {
                 anyString(),
                 any(),
                 any(), any()
-        )).thenReturn(LLMResponseResult.failure("RAW_CONTENT", "protocol-violation"));
+        , any())).thenReturn(LLMResponseResult.failure("RAW_CONTENT", "protocol-violation"));
 
         // when
         CycleContextData updated = agent.evolve(context);
@@ -160,7 +160,7 @@ class EvolutionLLMAdapterTest {
                 any(),
                 any(),
                 any()
-        )).thenReturn(LLMResponseResult.success(outcome, "#divergent"));
+        , any())).thenReturn(LLMResponseResult.success(outcome, "#divergent"));
 
         agent.evolveDivergent(context);
 
@@ -189,7 +189,7 @@ class EvolutionLLMAdapterTest {
                 anyString(),
                 any(),
                 any(), any()
-        )).thenReturn(LLMResponseResult.success(outcome, "#evolution raw"));
+        , any())).thenReturn(LLMResponseResult.success(outcome, "#evolution raw"));
 
         agent.evolve(context);
 
@@ -237,7 +237,7 @@ class EvolutionLLMAdapterTest {
                 any(),
                 any(),
                 any()
-        )).thenReturn(LLMResponseResult.success(outcome, "#evolution raw"));
+        , any())).thenReturn(LLMResponseResult.success(outcome, "#evolution raw"));
 
         agent.evolve(context);
 
@@ -262,7 +262,7 @@ class EvolutionLLMAdapterTest {
                         "package com.example.demo;\nclass Loan {}")),
                 List.of(), "ok", "#raw");
 
-        when(protocolInvoker.callWithValidation(any(), anyString(), anyString(), any(), any(), any()))
+        when(protocolInvoker.callWithValidation(any(), anyString(), anyString(), any(), any(), any(), any()))
                 .thenReturn(LLMResponseResult.success(parsed, "#raw"));
         when(packageConsolidationService.consolidate(any(), any(), any())).thenReturn(consolidated);
 
@@ -312,5 +312,31 @@ class EvolutionLLMAdapterTest {
 
         assertThat(agent.whatItChangesNot(rewrite, ctx, false)).contains("rewrites " + path + " again", "edit blocks");
         assertThat(agent.whatItChangesNot(edit, ctx, false)).isNull();
+    }
+
+    /** T4-EE: on a retry the prompt offers one question of the run's log, and the invoker can answer it. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aRetryOffersOneLogQuestion_aFirstAttemptDoesNot() throws IOException {
+        var consultation = org.mockito.Mockito.mock(com.walpro.autobuilder.core.investigate.LogConsultation.class);
+        when(consultation.offerBlock()).thenReturn("--- THIS RUN'S LOG --- offer");
+        when(consultation.answer(eq("#LogQuestion q"), eq("evolution"), any())).thenReturn("the answer");
+        org.springframework.test.util.ReflectionTestUtils.setField(agent, "logConsultation", consultation);
+        when(protocolInvoker.callWithValidation(any(), anyString(), anyString(), any(), any(), any(), any()))
+                .thenReturn(LLMResponseResult.failure(null, "none"));
+
+        agent.evolve(CycleContextData.builder().rejectionFeedback(List.of("rejected: it did not compile")).build());
+        ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<java.util.function.Function<String, String>> consult =
+                ArgumentCaptor.forClass(java.util.function.Function.class);
+        verify(protocolInvoker).callWithValidation(any(), anyString(), prompt.capture(), any(), any(), any(), consult.capture());
+        assertThat(prompt.getValue()).contains("--- THIS RUN'S LOG --- offer");
+        assertThat(consult.getValue().apply("#LogQuestion q")).isEqualTo("the answer");
+
+        org.mockito.Mockito.clearInvocations(protocolInvoker);
+        agent.evolve(CycleContextData.builder().build());
+        verify(protocolInvoker).callWithValidation(any(), anyString(), prompt.capture(), any(), any(), any(), consult.capture());
+        assertThat(prompt.getValue()).doesNotContain("THIS RUN'S LOG");
+        assertThat(consult.getValue()).isNull();
     }
 }

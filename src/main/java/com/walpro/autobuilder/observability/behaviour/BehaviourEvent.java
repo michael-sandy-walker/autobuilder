@@ -680,6 +680,24 @@ public sealed interface BehaviourEvent {
         public String event() { return "stuck_question_asked"; }
     }
 
+    /**
+     * T4-EE: an agent asked a question of its run's log and a model probed the log to answer it.
+     * {@code probes} are the probes taken, in order; {@code answered} false means none came back.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record LogQuestionAsked(
+            Instant timestamp,
+            String cycleId,
+            String role,
+            String question,
+            List<String> probes,
+            boolean answered,
+            String answer,
+            long durationMs
+    ) implements BehaviourEvent {
+        public String event() { return "log_question_asked"; }
+    }
+
     /** T4-DY slice B: a signature came back after its answer was delivered; the next question is due. */
     record StuckRecurred(
             Instant timestamp,

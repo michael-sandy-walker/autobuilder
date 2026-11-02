@@ -6,6 +6,7 @@ import com.walpro.autobuilder.core.build.PackageGate;
 import com.walpro.autobuilder.core.build.TestRunGate;
 import com.walpro.autobuilder.core.checkpoint.StateBucket;
 import com.walpro.autobuilder.core.checkpoint.StateHolder;
+import com.walpro.autobuilder.core.investigate.LogConsultation;
 
 import org.springframework.stereotype.Component;
 
@@ -30,13 +31,15 @@ public class SystemCapabilityManifest {
     private final PackageGate packageGate;
     private final TestRunGate testRunGate;
     private final BootGate bootGate;
+    private final LogConsultation logConsultation;
 
     public SystemCapabilityManifest(BuildExecutor buildExecutor, PackageGate packageGate,
-                                    TestRunGate testRunGate, BootGate bootGate) {
+                                    TestRunGate testRunGate, BootGate bootGate, LogConsultation logConsultation) {
         this.buildExecutor = buildExecutor;
         this.packageGate = packageGate;
         this.testRunGate = testRunGate;
         this.bootGate = bootGate;
+        this.logConsultation = logConsultation;
     }
 
     /** The checks the system runs on written files, in the order they happen; empty when nothing is built. */
@@ -75,6 +78,10 @@ public class SystemCapabilityManifest {
             }
         }
         sb.append("  + records past decisions and their outcomes; agents are shown excerpts of them\n");
+        if (logConsultation != null && logConsultation.isLive()) {
+            sb.append("  + an agent retrying rejected work may first ask one question of this run's log;"
+                    + " a model searches the log and answers\n");
+        }
 
         sb.append("\nNOTHING IN THE SYSTEM:\n");
         sb.append("  - runs a command an agent asks for\n");

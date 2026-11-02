@@ -8,6 +8,7 @@ import com.walpro.autobuilder.core.build.BootGate;
 import com.walpro.autobuilder.core.build.BuildExecutor;
 import com.walpro.autobuilder.core.build.PackageGate;
 import com.walpro.autobuilder.core.build.TestRunGate;
+import com.walpro.autobuilder.core.investigate.LogConsultation;
 import org.junit.jupiter.api.Test;
 
 /** T1-GH: the manifest says what the configured checks do, and nothing they do not. */
@@ -17,13 +18,21 @@ class SystemCapabilityManifestTest {
     private final PackageGate packageGate = mock(PackageGate.class);
     private final TestRunGate testRunGate = mock(TestRunGate.class);
     private final BootGate bootGate = mock(BootGate.class);
+    private final LogConsultation logConsultation = mock(LogConsultation.class);
 
     private String render(boolean build, boolean pkg, boolean tests, boolean boot) {
         when(buildExecutor.isEnabled()).thenReturn(build);
         when(packageGate.isLive()).thenReturn(pkg);
         when(testRunGate.isLive()).thenReturn(tests);
         when(bootGate.isLive()).thenReturn(boot);
-        return new SystemCapabilityManifest(buildExecutor, packageGate, testRunGate, bootGate).render();
+        return new SystemCapabilityManifest(buildExecutor, packageGate, testRunGate, bootGate, logConsultation).render();
+    }
+
+    @Test
+    void logConsultation_isNamedOnlyWhenOn() {
+        assertThat(render(true, true, true, true)).doesNotContain("question of this run's log");
+        when(logConsultation.isLive()).thenReturn(true);
+        assertThat(render(true, true, true, true)).contains("may first ask one question of this run's log");
     }
 
     @Test

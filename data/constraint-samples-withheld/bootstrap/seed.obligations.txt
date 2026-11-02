@@ -1,0 +1,29 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# Written by hand for the withheld rung (T6-U, T1-GG): the requirements the withheld tests check, marked for the derived tests.
+# seed-sha256: 3476e4b1a232c12f40a3bc5ede04ad09825b11705ff551981e3ceaaf4218de6f
+# body-sha256: 6b5e37e3a82d581d1d395e58bc7128e2d0e15cc02ddea1f6dd90b96961e3df3f
+rule: FieldConstraintDiscovery reads the constraints the artifact's own code enforces before it throws; RegexSampleGenerator samples a narrow subset of patterns and abstains on the rest rather than approximate
+rule: Add the new classes FieldConstraintDiscovery and RegexSampleGenerator in package com.walpro.autobuilder.core.build
+rule: Do not modify the existing tests under src/test; add new tests beside them
+rule: Keep the project's packages, classes and naming
+gate: derived-test RegexSampleGenerator.sample returns a value matching the pattern for patterns of literal characters, \d, character ranges, the quantifiers ?, *, +, {n} and {n,m}, and the anchors ^ and $
+gate: derived-test RegexSampleGenerator.sample returns "0000000000000" for the pattern \d{13}
+gate: derived-test RegexSampleGenerator.sample returns empty for alternation, a negated character class, a back-reference, a \p{...} class and a malformed pattern
+gate: derived-test RegexSampleGenerator.sample returns empty for a null or empty pattern and for a pattern whose only sample is the empty string
+gate: derived-test FieldConstraintDiscovery.fromSource gives a name matched against a Pattern.compile constant that constant's regex, the Java string literal unescaped
+gate: derived-test FieldConstraintDiscovery.fromSource gives name.length() > N the maxLength N and name.length() >= N the maxLength N - 1
+gate: derived-test FieldConstraintDiscovery.fromSource gives a name checked with an inline matches call that call's regex
+gate: derived-test FieldConstraintDiscovery.fromSource gives no entry to a name matched against a pattern the source does not declare
+gate: derived-test FieldConstraintDiscovery.fromSource merges two bounds on one name, the tighter maxLength governing
+gate: derived-test FieldConstraintDiscovery.satisfyingValue returns the fallback for a null constraint, a value matching a regex it can sample, and the fallback cut to the maxLength when there is only a maxLength
+gate: derived-test FieldConstraintDiscovery.satisfyingValue returns empty for a regex it cannot sample and for a regex whose value is longer than the maxLength
+gate: derived-test FieldConstraintDiscovery.unescapeJavaLiteral turns the text of a Java string literal into the string it denotes
+gate: derived-test RequestBodySynthesizer.acceptableBody returns the body derived from the matching model source with each constrained field's value satisfying its constraint, the placeholders unchanged where no constraint is found
+gate: derived-test RequestBodySynthesizer.acceptableBody returns empty when one constrained field cannot be satisfied, when a constrained field is not a String, and when no model source matches the path
+rule: Tests for the change are added beside the existing tests in src/test/java
+gate: tests the whole suite passes

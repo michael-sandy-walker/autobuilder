@@ -1,0 +1,3 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# The withheld rung (T6-U): the existing tests are the operator's; the loop may ADD tests beside them.
+src/test/java/com/walpro/autobuilder/core/build/RequestBodySynthesizerTest.java

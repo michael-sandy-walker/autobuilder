@@ -52,6 +52,14 @@ class IntentUseTest {
         assertThat(unused("package org.warp;\nimport org.knot.Knot;\nclass Coil { void parseWithKnot() { } }\n")).containsExactly(KNOT);
     }
 
+    /** field130: rows of the reader's type, filled by the project's own parser. */
+    @Test
+    void aTypeNestedInItIsNotAUse_itsMembersAre() {
+        assertThat(unused("package org.warp;\nimport org.knot.Knot;\nclass Coil { Knot.Row r = new Knot.Row(); }\n")).containsExactly(KNOT);
+        assertThat(unused("package org.warp;\nimport org.knot.Knot;\nclass Coil { Object o = Knot.tie(); }\n")).isEmpty();
+        assertThat(unused("package org.warp;\nclass Coil { org.knot.Knot.Row r; }\n")).containsExactly(KNOT);
+    }
+
     @Test
     void commentsAndStringsAreNotUses() {
         assertThat(unused("package org.warp;\n// uses Knot\n/* Knot */\nclass Coil { String s = \"new Knot()\"; }\n")).containsExactly(KNOT);

@@ -13,7 +13,8 @@ import java.util.regex.Pattern;
  * T4-EC: whether the project's own code uses a type an input brought, the one kind of intent line structure can answer.
  * A reading could not: field122 closed on "not read with a second reader" over an import with its own parser, field119
  * imported the reader, never called it and named its own parser after it (the rule and the trees:
- * {@code ~/.autobuilder/replay-intent}). So an import is not a use (field126), and neither are comments or strings.
+ * {@code ~/.autobuilder/replay-intent}). So an import is not a use (field126), nor are comments, strings, or a type
+ * nested in it (field130).
  *
  * <p>Referred to is what this answers, not reached, and not every call site an intent means.
  */
@@ -27,6 +28,9 @@ public final class IntentUse {
             "\"\"\"[\\s\\S]*?\"\"\"|//[^\\n]*|/\\*[\\s\\S]*?\\*/|\"(?:\\\\.|[^\"\\\\\\n])*\"|'(?:\\\\.|[^'\\\\\\n])+'");
     private static final Pattern PACKAGE = Pattern.compile("(?m)^\\s*package\\s+([\\w.]+)\\s*;");
     private static final Pattern IMPORT = Pattern.compile("(?m)^\\s*import\\s+(static\\s+)?([\\w.*]+)\\s*;");
+
+    /** A type nested in it is not it: field130 declared {@code CsvParser.Row} and kept its own parser to fill them. */
+    private static final String NOT_NESTED = "(?!\\s*\\.\\s*[A-Z][a-z])";
 
     private IntentUse() {
     }
@@ -77,11 +81,11 @@ public final class IntentUse {
 
     private static boolean refersTo(String code, String type) {
         String body = IMPORT.matcher(PACKAGE.matcher(code).replaceAll("")).replaceAll("");
-        if (Pattern.compile("(?<![\\w.])" + Pattern.quote(type) + "\\b").matcher(body).find()) return true;
+        if (Pattern.compile("(?<![\\w.])" + Pattern.quote(type) + "\\b" + NOT_NESTED).matcher(body).find()) return true;
         int dot = type.lastIndexOf('.');
         String simple = type.substring(dot + 1);
         String pkg = dot < 0 ? "" : type.substring(0, dot);
-        boolean named = Pattern.compile("(?<![\\w.])" + simple + "\\b").matcher(body).find();
+        boolean named = Pattern.compile("(?<![\\w.])" + simple + "\\b" + NOT_NESTED).matcher(body).find();
         Matcher own = PACKAGE.matcher(code);
         if (named && (own.find() ? own.group(1) : "").equals(pkg)) return true;
         Matcher i = IMPORT.matcher(code);

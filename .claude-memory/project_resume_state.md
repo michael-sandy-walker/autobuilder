@@ -22,8 +22,7 @@ metadata:
 - **Title limit found and fixed, uncommitted (`stating` at `low`), detail on `T4-EC`.**
 - **Committed `492b60b4`. field129: both fixes confirmed live (uses.txt complete, title held at 200); operator-stop 30/41, import/export not built, the refusal still unseen.** Nothing is live.
 - **field130: the refusal fired live on field122's tree (CsvParser, Isbn), the loop acted: GOAL_FULFILLED 40/41, `Isbn` truly used; the reader only by its nested `CsvParser.Row`, own parser kept. False at check 33 and the reader.** Nothing is live.
-- **Derived tests in the end evaluation: built, UNCOMMITTED in the working tree (suite 4213/0, 15 skipped), five writing runs field131-135, none met `field131-first/RULE.txt` (detail on `T4-EC`). Do not run an input case on this tree: six unanswered lines would refuse closure. Nothing is live.**
-- **NEXT, the user's call:** keep or drop that work; the candidate is tests only through the interface the specification names.
+- **Derived tests in the end evaluation: six writing runs, field131-136, none met the rule (closest field136, detail on `T4-EC`); wiring dropped, patch at `~/.autobuilder/derived-tests-wiring.patch`. Behaviour lines stay on the model's reading. The nested-type rule of `IntentUse` kept.** Nothing is live.
 
 ## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); ALL EIGHT SLICES BUILT, DoD NOT MET
 

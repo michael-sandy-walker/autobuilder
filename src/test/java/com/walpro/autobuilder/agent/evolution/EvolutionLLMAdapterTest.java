@@ -320,7 +320,7 @@ class EvolutionLLMAdapterTest {
     void aRetryOffersOneLogQuestion_aFirstAttemptDoesNot() throws IOException {
         var consultation = org.mockito.Mockito.mock(com.walpro.autobuilder.core.investigate.LogConsultation.class);
         when(consultation.offerBlock()).thenReturn("--- THIS RUN'S LOG --- offer");
-        when(consultation.answer(eq("#LogQuestion q"), eq("evolution"), any())).thenReturn("the answer");
+        when(consultation.answer(eq("#LogQuestion q"), eq("evolution"), any(), any())).thenReturn("the answer");
         org.springframework.test.util.ReflectionTestUtils.setField(agent, "logConsultation", consultation);
         when(protocolInvoker.callWithValidation(any(), anyString(), anyString(), any(), any(), any(), any()))
                 .thenReturn(LLMResponseResult.failure(null, "none"));

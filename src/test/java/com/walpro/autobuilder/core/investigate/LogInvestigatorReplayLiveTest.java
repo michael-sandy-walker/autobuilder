@@ -60,10 +60,13 @@ class LogInvestigatorReplayLiveTest {
             List<String> lines = head(archive.resolve(q.get("run").asText()).resolve("autobuilder.log.gz"), q.get("cut").asInt());
             Map<String, List<String>> logs = new LinkedHashMap<>();
             logs.put("autobuilder.log", lines);
+            // slice D: a question about the project NOW carries the tree as it was at the decision (a cycle snapshot)
+            Path tree = q.hasNonNull("tree") ? Path.of(q.get("tree").asText().replaceFirst("^~", System.getProperty("user.home"))) : null;
             long t0 = System.currentTimeMillis();
-            LogInvestigator.Investigation inv = investigator.investigate(q.get("question").asText(), logs, probes, null);
+            LogInvestigator.Investigation inv = investigator.investigate(q.get("question").asText(), logs, tree, probes, null);
             boolean ok = inv.answered() && Pattern.compile(q.get("expect").asText(), Pattern.CASE_INSENSITIVE)
-                    .matcher(inv.answer()).find();
+                    .matcher(inv.answer()).find()
+                    && (!q.hasNonNull("forbid") || !Pattern.compile(q.get("forbid").asText()).matcher(inv.answer()).find());
             if (ok) right++;
             System.out.printf("T4-EE replay %-20s %s  probes=%d  %ds%n", q.get("id").asText(), ok ? "RIGHT" : "WRONG",
                     inv.steps().size(), (System.currentTimeMillis() - t0) / 1000);

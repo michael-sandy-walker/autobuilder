@@ -51,7 +51,7 @@ class LogInvestigatorTest {
                 "#Probe read app.log 1 3",
                 "#Answer\nWidget.java failed twice on frob (lines 2 and 4).");
 
-        var result = new LogInvestigator(llm).investigate("What failed?", Map.of("app.log", LOG), 5, null);
+        var result = new LogInvestigator(llm).investigate("What failed?", Map.of("app.log", LOG), null, 5, null);
 
         assertThat(result.answered()).isTrue();
         assertThat(result.answer()).isEqualTo("Widget.java failed twice on frob (lines 2 and 4).");
@@ -65,7 +65,7 @@ class LogInvestigatorTest {
     @SuppressWarnings("unchecked")
     void eachResultReachesTheModel_withTheProbesLeft() {
         replies("#Probe count app.log frob", "#Answer\ntwo");
-        new LogInvestigator(llm).investigate("How many?", Map.of("app.log", LOG), 4, null);
+        new LogInvestigator(llm).investigate("How many?", Map.of("app.log", LOG), null, 4, null);
 
         ArgumentCaptor<List<Message>> sent = ArgumentCaptor.forClass(List.class);
         verify(llm, times(2)).ask(sent.capture());
@@ -78,7 +78,7 @@ class LogInvestigatorTest {
     void probesRunOut_thenOneLastCallAsksForTheAnswer() {
         replies("#Probe count app.log alpha", "#Probe count app.log beta", "#Answer\nalpha and beta once each");
 
-        var result = new LogInvestigator(llm).investigate("q", Map.of("app.log", LOG), 2, null);
+        var result = new LogInvestigator(llm).investigate("q", Map.of("app.log", LOG), null, 2, null);
 
         assertThat(result.steps()).hasSize(2);
         assertThat(result.answered()).isTrue();
@@ -89,7 +89,7 @@ class LogInvestigatorTest {
     void noAnswerAfterTheBudget_isReportedUnanswered() {
         replies("#Probe count app.log alpha", "still thinking");
 
-        var result = new LogInvestigator(llm).investigate("q", Map.of("app.log", LOG), 1, null);
+        var result = new LogInvestigator(llm).investigate("q", Map.of("app.log", LOG), null, 1, null);
 
         assertThat(result.answered()).isFalse();
         assertThat(result.answer()).isNull();
@@ -98,12 +98,39 @@ class LogInvestigatorTest {
     @Test
     void malformedProbesAreAnsweredWithWhatWasWrong() {
         Map<String, List<String>> logs = Map.of("app.log", LOG);
-        assertThat(LogInvestigator.run("search", "other.log", "x", logs)).contains("no log named other.log", "app.log");
-        assertThat(LogInvestigator.run("search", "app.log", "(unclosed", logs)).contains("does not compile");
-        assertThat(LogInvestigator.run("read", "app.log", "two lines", logs)).contains("two line numbers");
-        assertThat(LogInvestigator.run("read", "app.log", "9 12", logs)).contains("only 5 lines");
-        assertThat(LogInvestigator.run("search", "app.log", "\"symbol frob\"", logs)).contains("2 matching lines");
-        assertThat(LogInvestigator.run("search", "app.log", "zzz", logs)).isEqualTo("No line matches.");
+        assertThat(LogInvestigator.run("search", "other.log x", logs, null)).contains("no log named other.log", "app.log");
+        assertThat(LogInvestigator.run("search", "app.log (unclosed", logs, null)).contains("does not compile");
+        assertThat(LogInvestigator.run("read", "app.log two lines", logs, null)).contains("two line numbers");
+        assertThat(LogInvestigator.run("read", "app.log 9 12", logs, null)).contains("only 5 lines");
+        assertThat(LogInvestigator.run("search", "app.log \"symbol frob\"", logs, null)).contains("2 matching lines");
+        assertThat(LogInvestigator.run("search", "app.log zzz", logs, null)).isEqualTo("No line matches.");
+    }
+
+    @Test
+    void treeProbesReadTheProjectAsItIsNow(@org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
+        java.nio.file.Files.createDirectories(root.resolve("src/main/java/a"));
+        java.nio.file.Files.writeString(root.resolve("src/main/java/a/Widget.java"), "class Widget {\n  int frob() { return 1; }\n}\n");
+        java.nio.file.Files.createDirectories(root.resolve("target/classes"));
+        java.nio.file.Files.writeString(root.resolve("target/classes/Stale.java"), "int frob() { return 0; }\n");
+        ProjectTree tree = new ProjectTree(root);
+        Map<String, List<String>> logs = Map.of("app.log", LOG);
+
+        assertThat(LogInvestigator.run("files", "Widget", logs, tree)).contains("1 matching paths", "src/main/java/a/Widget.java");
+        assertThat(LogInvestigator.run("find", "frob", logs, tree))
+                .contains("1 matching lines", "src/main/java/a/Widget.java:2: int frob() { return 1; }")
+                .doesNotContain("Stale");
+        assertThat(LogInvestigator.run("open", "src/main/java/a/Widget.java 2 3", logs, tree))
+                .isEqualTo("2:   int frob() { return 1; }\n3: }\n");
+        assertThat(LogInvestigator.run("open", "src/main/java/a/Widget.java", logs, tree)).startsWith("1: class Widget {");
+        assertThat(LogInvestigator.run("open", "../outside.txt 1 2", logs, tree)).contains("no readable project file");
+        assertThat(LogInvestigator.run("open", "Nope.java 1 2", logs, tree)).contains("#Probe files");
+        assertThat(LogInvestigator.run("find", "frob", logs, null)).contains("only the logs");
+    }
+
+    @Test
+    void theInstructionsNameTheProjectOnlyWhenThereIsOne() {
+        assertThat(LogInvestigator.system(true)).contains("AS THEY ARE NOW", "#Probe open", "as it was when it was logged");
+        assertThat(LogInvestigator.system(false)).doesNotContain("#Probe open", "#Probe find").contains("#Probe search");
     }
 
     @Test
@@ -111,10 +138,10 @@ class LogInvestigatorTest {
         List<String> big = IntStream.rangeClosed(1, 500).mapToObj(i -> "hit " + i + " " + "x".repeat(400)).toList();
         Map<String, List<String>> logs = Map.of("big.log", big);
 
-        String search = LogInvestigator.run("search", "big.log", "hit", logs);
+        String search = LogInvestigator.run("search", "big.log hit", logs, null);
         assertThat(search).startsWith("500 matching lines, the first");
         assertThat(search.length()).isLessThan(LogInvestigator.MAX_RESULT_CHARS + 2 * LogInvestigator.MAX_LINE_CHARS);
-        String read = LogInvestigator.run("read", "big.log", "1 500", logs);
+        String read = LogInvestigator.run("read", "big.log 1 500", logs, null);
         assertThat(Arrays.stream(read.split("\n")).count()).isLessThanOrEqualTo(LogInvestigator.MAX_READ_LINES);
         assertThat(read).contains(" ...");
     }

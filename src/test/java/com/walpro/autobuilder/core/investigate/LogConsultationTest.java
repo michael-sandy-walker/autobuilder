@@ -57,7 +57,7 @@ class LogConsultationTest {
         LogConsultation c = consultation(true);
         BehaviourLogger behaviour = mock(BehaviourLogger.class);
         ReflectionTestUtils.setField(c, "behaviourLogger", behaviour);
-        when(investigator.investigate(eq("what failed in Foo.java?"), any(Map.class), anyInt(), eq("cycle-7")))
+        when(investigator.investigate(eq("what failed in Foo.java?"), any(Map.class), any(), anyInt(), eq("cycle-7")))
                 .thenAnswer(inv -> {
                     Map<String, List<String>> logs = inv.getArgument(1);
                     assertThat(logs).containsOnlyKeys("autobuilder.log");
@@ -67,7 +67,7 @@ class LogConsultationTest {
                             "Foo.java failed once (line 2).", true);
                 });
 
-        String reply = c.answer("#LogQuestion what failed in Foo.java?", "evolution", "cycle-7");
+        String reply = c.answer("#LogQuestion what failed in Foo.java?", "evolution", "cycle-7", null);
 
         assertThat(reply).contains("Question: what failed in Foo.java?", "Foo.java failed once (line 2).",
                 "Now reply with your change");
@@ -79,17 +79,17 @@ class LogConsultationTest {
     @SuppressWarnings("unchecked")
     void noAnswer_isSaidPlainly_andTheAgentGoesOnToWrite() throws Exception {
         LogConsultation c = consultation(true);
-        when(investigator.investigate(anyString(), any(Map.class), anyInt(), any()))
+        when(investigator.investigate(anyString(), any(Map.class), any(), anyInt(), any()))
                 .thenReturn(new LogInvestigator.Investigation("q", List.of(), null, false));
 
-        assertThat(c.answer("#LogQuestion q", "evolution", null))
+        assertThat(c.answer("#LogQuestion q", "evolution", null, null))
                 .contains("did not find an answer", "Now reply with your change");
     }
 
     @Test
     void aReplyThatIsNotAQuestion_orTheCapabilityOff_isLeftAlone() throws Exception {
-        assertThat(consultation(true).answer("#Evolution\n[src/A.java]\n...", "evolution", null)).isNull();
-        assertThat(consultation(false).answer("#LogQuestion q", "evolution", null)).isNull();
+        assertThat(consultation(true).answer("#Evolution\n[src/A.java]\n...", "evolution", null, null)).isNull();
+        assertThat(consultation(false).answer("#LogQuestion q", "evolution", null, null)).isNull();
         verifyNoInteractions(investigator);
     }
 
@@ -97,8 +97,8 @@ class LogConsultationTest {
     @SuppressWarnings("unchecked")
     void anInvestigationThatThrows_isAnsweredAsNoAnswer() throws Exception {
         LogConsultation c = consultation(true);
-        when(investigator.investigate(anyString(), any(Map.class), anyInt(), any())).thenThrow(new IllegalStateException("x"));
+        when(investigator.investigate(anyString(), any(Map.class), any(), anyInt(), any())).thenThrow(new IllegalStateException("x"));
 
-        assertThat(c.answer("#LogQuestion q", "evolution", null)).contains("did not find an answer");
+        assertThat(c.answer("#LogQuestion q", "evolution", null, null)).contains("did not find an answer");
     }
 }

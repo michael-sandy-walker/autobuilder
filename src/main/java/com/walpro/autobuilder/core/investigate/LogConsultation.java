@@ -56,9 +56,10 @@ public class LogConsultation {
         return """
                 --- THIS RUN'S LOG ---
                 Your previous attempt was rejected. Every build, test run and rejection of this run so far is in \
-                its log. Before you write, you may ask ONE question about it -- for example, which errors the \
-                files you are about to change have already had in this run, and how they ended. A model will \
-                search the log and answer.
+                its log. Before you write, you may ask ONE question -- about what happened in this run (for \
+                example, which errors the files you are about to change have already had, and how they ended) \
+                or about what the project's files contain now. A model will search the log and the project's \
+                files and answer.
                 To ask, reply with ONLY:
                 %s <your question>
                 Otherwise reply with your change as usual.
@@ -79,13 +80,13 @@ public class LogConsultation {
      * The reply to send back when {@code reply} asks a question, or null when it does not. Never throws:
      * a question that could not be answered is answered as such, and the agent goes on to write.
      */
-    public String answer(String reply, String role, String cycleId) {
+    public String answer(String reply, String role, String cycleId, Path project) {
         String question = questionIn(reply);
         if (!enabled || question == null) return null;
         long t0 = System.currentTimeMillis();
         LogInvestigator.Investigation inv;
         try {
-            inv = investigator.investigate(question, logs(), LogInvestigator.DEFAULT_PROBES, cycleId);
+            inv = investigator.investigate(question, logs(), project, LogInvestigator.DEFAULT_PROBES, cycleId);
         } catch (RuntimeException e) {
             log.info("T4-EE: the log question could not be investigated -- {}", e.getMessage());
             inv = new LogInvestigator.Investigation(question, List.of(), null, false);
@@ -103,7 +104,7 @@ public class LogConsultation {
                 : "The log search did not find an answer to this question.";
         return "--- ANSWER FROM THIS RUN'S LOG ---\n"
                 + "Question: " + question + "\n"
-                + "Answer (found by searching the log; line numbers are the log's):\n" + body + "\n"
+                + "Answer (found by searching the log and the project's files; line numbers are theirs):\n" + body + "\n"
                 + "--- END ANSWER ---\n\n"
                 + "Now reply with your change, in the required format.";
     }

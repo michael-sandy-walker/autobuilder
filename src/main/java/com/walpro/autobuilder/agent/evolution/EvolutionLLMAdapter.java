@@ -191,7 +191,8 @@ public class EvolutionLLMAdapter {
         String logOffer = retrying && logConsultation != null ? logConsultation.offerBlock() : null;
         if (logOffer != null) userPrompt = userPrompt + "\n\n" + logOffer;
         java.util.function.Function<String, String> consult = logOffer == null ? null
-                : raw -> logConsultation.answer(raw, "evolution", refreshed.cycleName());
+                : raw -> logConsultation.answer(raw, "evolution", refreshed.cycleName(),
+                        refreshed.outputPath() == null ? null : java.nio.file.Path.of(refreshed.outputPath()));
 
         LLMResponseResult<EvolutionOutcome> response = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,

@@ -23,6 +23,7 @@ metadata:
 - **Committed `492b60b4`. field129: both fixes confirmed live (uses.txt complete, title held at 200); operator-stop 30/41, import/export not built, the refusal still unseen.** Nothing is live.
 - **field130: the refusal fired live on field122's tree (CsvParser, Isbn), the loop acted: GOAL_FULFILLED 40/41, `Isbn` truly used; the reader only by its nested `CsvParser.Row`, own parser kept. False at check 33 and the reader.** Nothing is live.
 - **Derived tests in the end evaluation: six writing runs, field131-136, none met the rule (closest field136, detail on `T4-EC`); wiring dropped, patch at `~/.autobuilder/derived-tests-wiring.patch`. Behaviour lines stay on the model's reading. The nested-type rule of `IntentUse` kept.** Nothing is live.
+- **`T4-EC` DEFERRED 2026-11-02 at the user's word; re-entry when behaviour lines can be answered by something other than a reading (`T1-GG`).** No next item chosen.
 
 ## 2026-10-30 (Opus 5.5, session 20) -- T4-EC REDEFINED (A PROJECT KEEPS TAKING INPUT); ALL EIGHT SLICES BUILT, DoD NOT MET
 

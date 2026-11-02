@@ -11,7 +11,15 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-02 (Opus 5.5, session 22) -- T1-GG PICKED UP; MECHANISM 3 CLOSED ON field137 -- START HERE
+## 2026-11-02 (Opus 5.5, session 23) -- T1-GH FILED AND CLOSED: THE CAPABILITY MANIFEST SAID THE LOOP CANNOT BUILD -- START HERE
+
+- **Nothing is live.** T1-GH and the case fix below committed (user: "commit as seen fit").
+- From the user's idea (a log-analysis capability agents are told about): the existing `SystemCapabilityManifest` (T3-K, March) told planner and analysis every call that the system cannot compile, test or start anything. Filed and closed `T1-GH` at the user's word; detail and replay on the ticket. Replay: wording moved in 17 of 17 plans, no directional change -- not claimed as improvement.
+- **Fixed:** `ObjectiveCoverageTest` failed since `59853017` -- `constraint-samples-withheld` obligations carried no line for the objective's first two clauses. One `rule:` line added (closure asks nothing new), body hash kept, case bumped to v2. Its derived-tests writing cache will miss on the next run (obligations changed).
+- **The log-analysis half, redirected by the user:** I began a format-specific archive scan; the user stopped it -- "seeing which format the log has is exactly the wrong approach; we want the LLM to analyse the log dynamically, probe iteratively." Its counts are NOT usable (matcher unreliable on 2 of 5 hand checks). One hand-verified fact: the evolution prompt carries only the LAST attempt's compile errors, so an error fixed and reintroduced later is in the log and not in the prompt (run `2026-11-01_12-31-23`, failure at log line 40620, first seen 31981). User agreed the design: filed `T4-EE` -- pull-based (evolution asks first), a multi-step text probe protocol over the run's own logs, validated by offline replay at archived decision points.
+- **T4-EE slice A built and committed:** `LogInvestigator` + replay; **4 of 5 right** (deterministic, ~17 s each), the miss a confident incomplete answer. Corpus `~/.autobuilder/t4ee/corpus.json`. **Next: slice B** -- evolution asks on a retry only, behind a switch, answer into the prompt, manifest line, probes recorded; then slice C field run. Nothing is live.
+
+## 2026-11-02 (Opus 5.5, session 22) -- T1-GG PICKED UP; MECHANISM 3 CLOSED ON field137
 
 - **field137** (receiver-questions-withheld v2, head `d462f9fb`, cached writing `1e16908e`): 2 refusals, then `honest-halt:requirement-no-test-answers` 11 min in, JVM stopped; 14/16 (the record-component case and the whole suite). Detail on `T1-GG` (2026-11-02). Nothing is live.
 - **Mechanism 2 built (`f6c1636e`, suite 4214/0): dropped tests run on the project's own code at completion; an unanswered line is one work item before the halt. field138: GOAL_FULFILLED 16/16, 0 refusals** -- detail on `T1-GG`. Nothing is live.

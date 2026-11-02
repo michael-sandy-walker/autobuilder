@@ -142,10 +142,12 @@ autobuilder:
     graduation-min-fail-streak: 3
   parser:
     source-root: src/main/java
-  # T4-EE: an agent retrying rejected work may first ask one question of this run's log; a model
-  # probes the log (search / read / count) and answers. Off until a field run shows it used.
+  # T4-EE: an agent retrying rejected work may first ask one question of this run's log and the
+  # project's files as they are now; a model probes them (search / read / count; files / find / open)
+  # and answers. On since field141/142 (ladder-grind: 16 and 12 questions, ~3-5% of the run's time);
+  # runs before that build are a baseline without it.
   log-consultation:
-    enabled: false
+    enabled: true
   # Offline neural TTS via Piper (rhasspy). Binary + voice model auto-download to
   # cache-dir on first start; subsequent runs use the cached copies. Frontend applies
   # reverb/delay on top via Web Audio API.

@@ -14,7 +14,9 @@ metadata:
 ## 2026-11-02 (Opus 5.5, session 22) -- T1-GG PICKED UP; MECHANISM 3 CLOSED ON field137 -- START HERE
 
 - **field137** (receiver-questions-withheld v2, head `d462f9fb`, cached writing `1e16908e`): 2 refusals, then `honest-halt:requirement-no-test-answers` 11 min in, JVM stopped; 14/16 (the record-component case and the whole suite). Detail on `T1-GG` (2026-11-02). Nothing is live.
-- **Next on `T1-GG`:** design options for mechanisms 1 (a requirement tested in a weaker form, edit-hunks) and 2 (the spikes never write the record-component form) -- options before building, and a fix shown on a third case.
+- **Mechanism 2 built (`f6c1636e`, suite 4214/0): dropped tests run on the project's own code at completion; an unanswered line is one work item before the halt. field138: GOAL_FULFILLED 16/16, 0 refusals** -- detail on `T1-GG`. Nothing is live.
+- **Mechanism 1:** the call-graph rule I recommended FAILS on the real spikes (one-arg `parse` forwards to the two-arg one, and an accepted `java` test through it asserts no edit); not built. Next: measure model-written "anti-spikes" (implementations breaking exactly one requirement) offline on the three edit-hunks writings -- build only if they break the parser path; otherwise back to the user.
+- **Owed for both:** a third case (a withheld-tests cut of another ladder case) before calling either general.
 
 ## 2026-11-01 (Opus 5.5, session 21) -- INTENT-LINE REPLAY: STRUCTURAL CHECK PASSES, BLANKET REFUSAL DOES NOT; NOTHING BUILT
 

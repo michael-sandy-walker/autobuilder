@@ -11,7 +11,12 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-01 (Opus 5.5, session 21) -- INTENT-LINE REPLAY: STRUCTURAL CHECK PASSES, BLANKET REFUSAL DOES NOT; NOTHING BUILT -- START HERE
+## 2026-11-02 (Opus 5.5, session 22) -- T1-GG PICKED UP; MECHANISM 3 CLOSED ON field137 -- START HERE
+
+- **field137** (receiver-questions-withheld v2, head `d462f9fb`, cached writing `1e16908e`): 2 refusals, then `honest-halt:requirement-no-test-answers` 11 min in, JVM stopped; 14/16 (the record-component case and the whole suite). Detail on `T1-GG` (2026-11-02). Nothing is live.
+- **Next on `T1-GG`:** design options for mechanisms 1 (a requirement tested in a weaker form, edit-hunks) and 2 (the spikes never write the record-component form) -- options before building, and a fix shown on a third case.
+
+## 2026-11-01 (Opus 5.5, session 21) -- INTENT-LINE REPLAY: STRUCTURAL CHECK PASSES, BLANKET REFUSAL DOES NOT; NOTHING BUILT
 
 - Replay and rule in `~/.autobuilder/replay-intent`, result and a correction to the field122 note on `T4-EC` (2026-11-01).
 - **Result:** a model names the types an intent says to use (3 of 3), structure says whether project code refers to them. Field122's import has its own reader, not `CsvParser`, the ticket was wrong. Field126 is really 30/33 (unused imports pass the yardstick's `uses`).

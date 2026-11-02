@@ -156,7 +156,7 @@ class DerivedTestsTest {
         assertThat(entries).as("the OPEN claim gets no test").hasSize(2);
         assertThat(entries.get(0).accepted()).isTrue();
         assertThat(entries.get(0).claim()).isEqualTo("two matches are refused");
-        assertThat(entries.get(0).reason()).isEqualTo("passed on 3 of 3 throwaway implementation(s)");
+        assertThat(entries.get(0).reason()).isEqualTo("passed on 1 of 1 throwaway implementation(s)");
         assertThat(entries.get(1).accepted()).as("fails on every throwaway implementation").isFalse();
         assertThat(Files.readString(base.resolve("output/" + TEST_DIR + "/DerivedClaim001Test.java"))).contains("RIGHT");
         assertThat(Files.exists(base.resolve("output/" + TEST_DIR + "/DerivedClaim002Test.java"))).isFalse();
@@ -445,7 +445,7 @@ class DerivedTestsTest {
         DerivedTestsFile.Entry e = DerivedTestsFile.read(files).get(0);
         assertThat(e.accepted()).isTrue();
         assertThat(e.content()).contains("RIGHT").doesNotContain("BROKEN");
-        assertThat(e.reason()).contains("rewritten once from the runner's report, then passed on 3 of 3");
+        assertThat(e.reason()).contains("rewritten once from the runner's report, then passed on 1 of 1");
         assertThat(derived.acceptedRequirements()).containsExactly(REQUIREMENT);
         assertThat(asked).as("the rewrite sees its earlier test and what the run reported")
                 .anyMatch(a -> a.contains("YOUR EARLIER TEST") && a.contains("BROKEN") && a.contains("no closing fence"));
@@ -471,15 +471,28 @@ class DerivedTestsTest {
     void aThrowawayImplementationThatChangesNoSourceIsAskedAgainThenDropped() throws Exception {
         answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"refused\"}]");
         answer("write", test(1, "  // RIGHT occurs 2 times"));
-        answer("spike", "I'll start by exploring the project structure.", SPIKE,   // spike 1: no file, then a change
-                "Let me look first.", "Still looking.",                            // spike 2: no file twice -- dropped
-                SPIKE);                                                            // spike 3
+        answer("spike", "I'll start by exploring the project structure.", SPIKE);   // no file, then a change
         passesWhenContains.put("RIGHT", true);
 
         derived().ensureNow(SEED);
 
-        assertThat(DerivedTestsFile.read(files).get(0).reason()).isEqualTo("passed on 2 of 2 throwaway implementation(s)");
+        assertThat(DerivedTestsFile.read(files).get(0).reason()).isEqualTo("passed on 1 of 1 throwaway implementation(s)");
         assertThat(asked).anyMatch(a -> a.contains("YOUR ANSWER CHANGED NO SOURCE FILE"));
+    }
+
+    @Test
+    void aThrowawayImplementationThatChangesNoSourceTwiceIsDropped() throws Exception {
+        answer("claims", "[{\"claim\": \"refused\", \"source\": \"STATED\", \"words\": \"refused\"}]");
+        answer("write", test(1, "  // RIGHT occurs 2 times"));
+        answer("spike", "Let me look first.", "Still looking.");
+        passesWhenContains.put("RIGHT", true);
+
+        derived().ensureNow(SEED);
+
+        assertThat(DerivedTestsFile.read(files)).singleElement().satisfies(e -> {
+            assertThat(e.accepted()).isFalse();
+            assertThat(e.reason()).contains("no throwaway implementation compiled");
+        });
     }
 
     /**

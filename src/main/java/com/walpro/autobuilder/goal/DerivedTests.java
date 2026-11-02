@@ -60,16 +60,16 @@ import java.util.regex.Pattern;
  *       outcome each, with the source of that outcome: stated by the wording, a fact of the runtime (computed in the
  *       test from the runtime, never written as a literal), or open (no test). One test per claim. The one-pass
  *       writing of a whole requirement's test was right 6 times in 27; claims were right 120 times in 125.</li>
- *   <li><b>Throwaway implementations as the check.</b> {@value #SPIKES} implementations of the change, written from
- *       the wording without ever seeing the tests; a claim's test is kept only when it passes on at least one. The
- *       replay: no wrong test passed any, every requirement kept tests. A reading reviewer accepted 26 of 27 one-pass
+ *   <li><b>A throwaway implementation as the check.</b> {@value #SPIKES} implementation of the change, written from
+ *       the wording without ever seeing the tests; a claim's test is kept only when it passes there. The replay (three
+ *       implementations): no wrong test passed any, every requirement kept tests. A reading reviewer accepted 26 of 27 one-pass
  *       tests, wrong ones included, and a judge deciding "test or implementation" kept two contradicting tests
  *       unanimously -- so no model reading decides here.</li>
  *   <li><b>Not built, measured useless:</b> a vote over several writings of a claim (agreement was total on wrong
  *       claims too).</li>
  * </ol>
  * The price: a right claim every throwaway implementation gets wrong is dropped -- the spikes share the model's
- * blind spots (receiver-questions: all three missed the compiler's record-component form). A dropped test is written
+ * blind spots (receiver-questions: every one missed the compiler's record-component form). A dropped test is written
  * once more from the runner's report ({@link #rewrite}), since most are broken tests of right claims; a requirement is
  * then the gate's when it has an accepted test and every text it quotes is used by one ({@link #answeredBy});
  * otherwise it stays a reading, as before. At a completion point, the dropped tests of a requirement still open are
@@ -90,8 +90,14 @@ import java.util.regex.Pattern;
 @ConditionalOnProperty(name = "autobuilder.obligations.derived-tests", havingValue = "true", matchIfMissing = true)
 public class DerivedTests implements DerivedTestAuthority {
 
-    /** Throwaway implementations a claim's test is checked on: as many as the replay measured. */
-    static final int SPIKES = 3;
+    /**
+     * Throwaway implementations a claim's test is checked on. One, not the replay's three (T1-GG, 2026-11-02): the replay
+     * sent no reasoning effort and its answers varied; the run sends temperature 0 and reasoning effort none, so the
+     * same prompt gives the same implementation -- in 9 of 10 kept writings the three were byte-identical, three
+     * spikes' writing time for one spike's check. Varied at "low", nine spikes still all missed the one form the
+     * spikes are blind to; the project's own code is the independent second check ({@link #acceptOnProjectCode}).
+     */
+    static final int SPIKES = 1;
 
     static final String TEST_ROOT = "src/test/";
     static final String MAIN_ROOT = "src/main/";

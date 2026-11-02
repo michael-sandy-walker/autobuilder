@@ -811,6 +811,12 @@ public class DerivedTests implements DerivedTestAuthority {
         if (close <= open.end()) return Optional.empty();
         String content = answer.substring(open.end(), close);
         if (!content.contains(name)) return Optional.empty();
+        // The header's path on a line of its own under the fence (14 of 1268 kept tests, none of them compiling): the
+        // path is that line's, and the line is not the test's.
+        Matcher own = Pattern.compile("\\A[ \\t]*\\[([^\\]\\n]+)\\][ \\t]*\\n").matcher(content);
+        if (own.find() && fileName(own.group(1).strip()).startsWith(name + ".")) {
+            return Optional.of(new FileMutation(own.group(1).strip(), content.substring(own.end())));
+        }
         Matcher bracket = Pattern.compile("\\[([^\\]]+)\\]").matcher(open.group(1));
         if (bracket.find() && fileName(bracket.group(1).strip()).startsWith(name + ".")) {
             return Optional.of(new FileMutation(bracket.group(1).strip(), content));

@@ -315,6 +315,14 @@ class DerivedTestsTest {
         assertThat(DerivedTests.located("```java [src/test/java/org/ink/DerivedClaim001Test.java]\n" + body + "```\n",
                 "DerivedClaim001Test", tests)).get().satisfies(f -> assertThat(f.content()).isEqualTo(body));
         assertThat(DerivedTests.located("```java\nclass Other {}\n```", "DerivedClaim001Test", tests)).isEmpty();
+        // T1-GG: the header's path on a line of its own under the fence is the path, not the test's first line.
+        assertThat(DerivedTests.located("```java\n[src/test/java/org/ink/DerivedClaim001Test.java]\n" + body + "```\n",
+                "DerivedClaim001Test", tests)).get().satisfies(f -> {
+                    assertThat(f.path()).isEqualTo("src/test/java/org/ink/DerivedClaim001Test.java");
+                    assertThat(f.content()).isEqualTo(body);
+                });
+        assertThat(DerivedTests.located("```java\n[some note]\n" + body + "```\n", "DerivedClaim001Test", tests)).get()
+                .satisfies(f -> assertThat(f.content()).as("a bracketed line naming no test is the content's").startsWith("[some note]"));
         assertThat(DerivedTests.header("DerivedClaim001Test", List.copyOf(tests.keySet())))
                 .isEqualTo("```java [src/test/java/org/ink/DerivedClaim001Test.java]");
     }

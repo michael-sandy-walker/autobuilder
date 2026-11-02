@@ -48,6 +48,7 @@ Packages, by responsibility:
 | `core.build.inject` | deterministic compile fixes (section 6) |
 | `core.mutation` | rejected-proposal memory and the deferred-mutation ledger |
 | `core.stuck` | the stuck layer: one home for "the loop is not getting anywhere" |
+| `core.investigate` | questions an agent asks of its own run: the run's logs and the project's files as they are now |
 | `core.checkpoint`, `core.merge`, `core.persistence`, `core.retention` | snapshots, rollback, rewind, branches, lineage merges, end-of-run state, pruning |
 | `core.init`, `core.coldread` | start modes, run identity, resume, the target catalogue, reading an unknown project |
 | `analysis.*` | heuristics, diff, structure queries, scope, coverage and problem analysis |
@@ -109,7 +110,17 @@ cleared.
 
 Each agent lives in `agent.<role>`, has a prompt contract in `protocol.<role>` and an answer parser beside it, and
 calls the model through `LLMAgentProtocolInvoker` (which re-asks once with the reason when an answer does not have
-the required shape).
+the required shape). The invoker can also take a question before the answer: when a caller passes a `consult`
+function and the model's first reply is a question, the reply to it is added to the same conversation and the model
+answers again; that exchange is not a failed attempt, and only one is allowed per call (section 4, the log
+question).
+
+The planner and analysis system prompts end with the **capability manifest** (`SystemCapabilityManifest`): what
+happens to the files an agent writes -- compiled before acceptance, a missing library declared, and before the goal
+is declared complete packaged, tested and started -- each line read from the switch of the check that does it
+(`BuildExecutor`, `PackageGate`, `TestRunGate`, `BootGate`, `LogConsultation`), so it cannot describe a check that
+is off. It tells the planner that "the tests pass" is a criterion the system checks, while a goal whose only step
+is to run or inspect something has no file to change.
 
 | Role | Class | What it decides |
 |---|---|---|
@@ -133,7 +144,13 @@ Smaller model roles, each a single question with a structured answer:
   of "duplicate" every consumer uses;
 - **build-error classification** (`BuildErrorClassifierAgent`) -- a build failure's category and the missing
   artifact or symbol, with the pattern matcher `BuildErrorClassifier` as its fallback;
-- **the terminal agent** (`TerminalAgent`) -- read-only commands in a copy of the tree (section 11).
+- **the terminal agent** (`TerminalAgent`) -- read-only commands in a copy of the tree (section 11);
+- **the log investigator** (`LogInvestigator`, through `LogConsultation`) -- answers a question an agent asked
+  about its own run. It never sees a source whole: it probes one step at a time and sees each result before the
+  next -- `search`, `read` and `count` over the run's logs, and `files`, `find` and `open` over the project's files
+  as they are now (`ProjectTree`, read-only) -- up to eight probes, then answers citing the lines it rests on.
+  Nothing in it knows a log's format. It is told that a file copied into a log is that file as it was when logged,
+  so "what does this file contain" is read from the project and "what happened" from the logs.
 
 ---
 
@@ -174,6 +191,11 @@ block that does not fit is left out whole and counted, never cut.
 - **Values the code was observed to return** (`ObservedBehaviour`, `ValueObservationProbe`), kept for the run.
 - **The stuck layer's answers** to failures that kept repeating (section 11); a standing answer about the tree
   stays in the prompt.
+- **One question of its own** (`LogConsultation`), on a retry only -- when the last attempt was rejected. The
+  prompt offers it: a reply of `#LogQuestion <question>` is answered by the log investigator (section 3) inside
+  the same conversation, and the model then writes its change. The prompt otherwise carries the last attempt's
+  errors only; the question reaches everything the run has done, and what the files contain now. Switch:
+  `autobuilder.log-consultation.enabled`.
 
 **Context**
 
@@ -540,7 +562,8 @@ the answer may decide anything alone); a contract test fails the build for an un
 the graph for known failure patterns; `GraphQueryService` answers the explorer's queries.
 
 `BehaviourLogger` writes every behaviour event (`BehaviourEvent`, one record type per event) to
-`logs/behaviour.ndjson` and streams it on `GET /events/behaviour`. Readouts summarise a run's shape as it goes:
+`logs/behaviour.ndjson` and streams it on `GET /events/behaviour`. A question an agent asked of its run is a
+`log_question_asked` event: the question, every probe in order, the answer and how long it took. Readouts summarise a run's shape as it goes:
 `CriteriaExecutabilityReadout` (how much of the run is verifiable at all), `SignalLifetimeTracker`.
 `scripts/run_profile.py` compares a finished run's shape with healthy runs from a curated baseline.
 

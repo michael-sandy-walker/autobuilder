@@ -36,7 +36,7 @@ public class LogConsultation {
     private BehaviourLogger behaviourLogger;
 
     public LogConsultation(LogInvestigator investigator,
-                           // Whether an agent retrying failed work is offered one question about the run's log (T4-EE).
+                           // Whether an agent retrying rejected work is offered one question about the run's log and the project's files as they are now (T4-EE).
                            @Value("${autobuilder.log-consultation.enabled:true}") boolean enabled,
                            @Value("${file.base-path:}") String basePath) {
         this.investigator = investigator;

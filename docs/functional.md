@@ -172,7 +172,8 @@ budget, and archives and scores the run when it ends (`PREFLIGHT_TARGET=<name> s
 - **The event log:** `logs/behaviour.ndjson` in the target directory, one structured event per decision (also
   streamed live on `GET /events/behaviour`): which agent ran, what was proposed, what was rejected and why, what
   was merged, each comparison of a change with the project's own tests (`test_delta`), what the stuck layer asked
-  and answered, and why the run stopped.
+  and answered, each question the evolution agent asked about the run and what answered it
+  (`log_question_asked`), and why the run stopped.
 - **Steering by hand:**
   - `POST /autobuilder/pause` and `/resume`;
   - `POST /autobuilder/rewind` to return to an earlier checkpoint (`GET /autobuilder/checkpoints` lists them);
@@ -192,6 +193,10 @@ What it does on its own when work does not go smoothly -- each of these shows up
   that will not resolve, missing test-framework dependencies. Versions and coordinates come from your project's
   own build and local repository first. The model is then shown the exact compiler errors, and what the types
   involved really declare.
+- **A change is rejected and tried again.** Before the retry, the model may ask one question about the run itself
+  -- which errors these files have already had, how an earlier attempt ended, what a file or test contains now. A
+  second model finds the answer by searching the run's logs and your project's files step by step, and the answer
+  is added to the retry. Turn it off with `autobuilder.log-consultation.enabled=false`.
 - **A change needs something that does not exist yet.** A change rejected only because it uses a member or class
   that a later change could supply is kept, and re-tried automatically once a merge supplies it.
 - **A change must touch several classes before anything compiles.** Each step that leaves fewer of your test files

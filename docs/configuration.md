@@ -7,7 +7,7 @@ default in the code, and the value `application.yml` sets when it sets one (prof
 What a key does is the first sentence of the comment on the field that reads it, so it is written once, in
 the code.
 
-112 keys.
+117 keys.
 
 ## `autobuilder.bootstrap`
 
@@ -58,7 +58,7 @@ the code.
 | `autobuilder.build.symbol-import.cache-path` | Where the cache of symbol-to-import resolutions is kept, relative to the target directory. | `cache/symbol-imports.json` |  | `SymbolImportCache` |
 | `autobuilder.build.symbol-import.pom-path` | The build file whose dependencies symbol-to-import resolution reads, relative to the target directory. | `output/pom.xml` |  | `SymbolImportCache` |
 | `autobuilder.build.test-directories` | `toolName -> test directory markers` (path-segment prefix match). | `new LinkedHashMap<>()` |  | `BuildToolProbeProperties` |
-| `autobuilder.build.test-gate.command` | The command that runs the target project's tests. | `mvn test` | `mvn test` | `TestRunGate` |
+| `autobuilder.build.test-gate.command` | The command that runs the target project's tests. | `mvn test` | `mvn test` | `DerivedTests`, `TestRunGate` |
 | `autobuilder.build.test-gate.enabled` | Whether the project's own tests are run (after a merge and at the completion edge). | `true` | `true` | `TestRunGate` |
 | `autobuilder.build.test-scope-command` | Build command used when the staged mutation ITSELF touches test sources. | `mvn test-compile` | `mvn test-compile` | `CompileProbeService` |
 | `autobuilder.build.timeout-ms` | The longest one build command may run before it is stopped. | `120000` | `120000` | `BuildExecutor` |
@@ -99,7 +99,8 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `autobuilder.evaluation.fileContentBudgetChars` | A per-file CHARACTER budget for the evaluation prompt, replacing a 150-line cap that was in practice a 4000-character one. | `40000` | `40000` | `EvaluationLLMAdapter` |
+| `autobuilder.evaluation.fileContentBudgetChars` | A per-file CHARACTER budget for the evaluation prompt, replacing a 150-line cap that was in practice a 4000-character one. | `40000` | `40000` | `DerivedTests`, `EvaluationLLMAdapter` |
+| `autobuilder.evaluation.relay-evaluator-diagnosis` | Off: the relay carries the negotiated message only, as before option C. | `true` |  | `EvaluationAgent` |
 
 ## `autobuilder.evolution`
 
@@ -120,6 +121,7 @@ the code.
 | `autobuilder.goal.max-consecutive-subgoal-exhaustions` | How many subgoals in a row may be exhausted without a merge before the run ends GOAL_EXHAUSTED. | `5` | `5` | `AutobuilderService` |
 | `autobuilder.goal.migrate-to-graph` | Whether the goal state in meta/GoalStack.json is pushed into the graph on startup. | `false` | `false` | `GoalPlannerConfigProperties` |
 | `autobuilder.goal.min-exhausted-children-floor` | Minimum GIVEN_UP children required before per-parent exhaustion fires (floor for the majority rule). | `5` | `5` | `AutobuilderService` |
+| `autobuilder.goal.reopen-when-suite-moved` | Off: a given-up blocker is never reopened because the suite moved past it (as before option B'). | `true` |  | `GoalPlannerService` |
 | `autobuilder.goal.sync-from-graph` | Whether the goal state is loaded from the graph on startup. | `false` | `true` | `GoalPlannerConfigProperties` |
 
 ## `autobuilder.heuristic`
@@ -127,6 +129,12 @@ the code.
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
 | `autobuilder.heuristic.score-strategy` | Name of the score strategy bean, e.g. | `weightedAverageScoreAdjustmentStrategy` | `weightedAverageScoreAdjustmentStrategy` | `HeuristicConfigProperties` |
+
+## `autobuilder.log-consultation`
+
+| Key | What it does | Default in code | application.yml | Read by |
+|---|---|---|---|---|
+| `autobuilder.log-consultation.enabled` | Whether an agent retrying rejected work is offered one question about the run's log and the project's files as they are now (T4-EE). | `true` | `true` | `LogConsultation` |
 
 ## `autobuilder.memory`
 
@@ -216,7 +224,14 @@ the code.
 |---|---|---|---|---|
 | `autobuilder.stuck.execution-trace.budget-ms` | The time one trace may take: the build compiles first, then the one test runs under the debugger. | `240000` |  | `StuckLayer` |
 | `autobuilder.stuck.execution-trace.enabled` | The user's decision 2026-10-01: a test that keeps failing is re-run under the debugger (ExecutionTrace). | `true` |  | `StuckLayer` |
+| `autobuilder.stuck.step-trace.enabled` | After the trace, the methods whose empty, false or null answer the failure turned on are walked line by line (`StepTrace`) -- a second run of the test under the debugger, about as long as the first. | `true` |  | `StuckLayer` |
 | `autobuilder.stuck.terminal-agent.enabled` | Whether the read-only terminal agent may answer a stuck question by running commands in a copy of the tree. | `true` |  | `TerminalAgent` |
+
+## `autobuilder.suite-measure`
+
+| Key | What it does | Default in code | application.yml | Read by |
+|---|---|---|---|---|
+| `autobuilder.suite-measure.enabled` | Off: the suite measures nothing -- no checkpoint, snapshot, rewind, adoption, preserve or reopen decision reads it, and a rewind leaves the gate's baseline alone, exactly as before option A. | `true` |  | `OperatorSuiteMeasure` |
 
 ## `autobuilder.tts`
 
@@ -237,7 +252,7 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `file.base-path` | The target directory: its bootstrap/, output/, meta/ and logs/ (see the functional documentation). | (empty) | `${FILE_BASE_PATH:data/firestarter}` | `AutobuilderController`, `BootGate`, `BrokenTestQuarantine`, `CompileProbeService`, `DeferredMutationRestager`, `FileService`, `FileWatcherService`, `MergeAgent`, `PackageGate`, `RetentionPolicy`, `TargetCatalog`, `TestRunGate`, `ValueObservationProbe` |
+| `file.base-path` | The target directory: its bootstrap/, output/, meta/ and logs/ (see the functional documentation). | (empty) | `${FILE_BASE_PATH:data/firestarter}` | `AutobuilderController`, `BootGate`, `BrokenTestQuarantine`, `CompileProbeService`, `DeferredMutationRestager`, `FileService`, `FileWatcherService`, `LogConsultation`, `MergeAgent`, `PackageGate`, `RetentionPolicy`, `TargetCatalog`, `TestRunGate`, `ValueObservationProbe` |
 
 ## `llm.api`
 

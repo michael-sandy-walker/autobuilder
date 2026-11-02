@@ -6,11 +6,12 @@
 # takes the test run's verdict instead of asking a model to read the source.
 # Written by hand for the withheld rung (T6-U, T1-GG): the requirements the withheld tests check, marked for the derived tests.
 # seed-sha256: 3476e4b1a232c12f40a3bc5ede04ad09825b11705ff551981e3ceaaf4218de6f
-# body-sha256: 6b5e37e3a82d581d1d395e58bc7128e2d0e15cc02ddea1f6dd90b96961e3df3f
+# body-sha256: 48276ad3ef852af8b5c17a486d345b7884b13c22a3a60af85c080b08ca3c9586
 rule: FieldConstraintDiscovery reads the constraints the artifact's own code enforces before it throws; RegexSampleGenerator samples a narrow subset of patterns and abstains on the rest rather than approximate
 rule: Add the new classes FieldConstraintDiscovery and RegexSampleGenerator in package com.walpro.autobuilder.core.build
 rule: Do not modify the existing tests under src/test; add new tests beside them
 rule: Keep the project's packages, classes and naming
+rule: The constraints are discovered, sampled and applied as above; the derived-test lines below are what that means
 gate: derived-test RegexSampleGenerator.sample returns a value matching the pattern for patterns of literal characters, \d, character ranges, the quantifiers ?, *, +, {n} and {n,m}, and the anchors ^ and $
 gate: derived-test RegexSampleGenerator.sample returns "0000000000000" for the pattern \d{13}
 gate: derived-test RegexSampleGenerator.sample returns empty for alternation, a negated character class, a back-reference, a \p{...} class and a malformed pattern

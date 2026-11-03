@@ -240,11 +240,15 @@ public class ProjectInputService {
     /** A file both projects have: the receiving one stays, the input's copy is kept with the conflict. */
     private void holdFiles(InputEntry input, ProjectInput.Landing landing, ProjectMerge.Parent parent) throws IOException {
         Path source = Files.isDirectory(parent.dir().resolve("output")) ? parent.dir().resolve("output") : parent.dir();
+        // A conflicted file is named by its place here; in a project of modules that is under the input's module, while
+        // the input keeps it at its own root (T4-ED field: "app/pom.xml" was looked for inside the input and the import failed).
+        String module = landing.module() == null ? null : landing.module() + "/";
         for (String path : landing.conflictedFiles()) {
             String held = "meta/inputs/" + input.id() + "/held/" + path;
             Path to = files.getRootDir().resolve(held);
             Files.createDirectories(to.getParent());
-            Files.copy(source.resolve(path), to, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            String own = module != null && path.startsWith(module) ? path.substring(module.length()) : path;
+            Files.copy(source.resolve(own), to, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             goals.purpose().raiseConflict(input.id(), path, "the receiving project's file", "the input's file", null, held);
         }
     }

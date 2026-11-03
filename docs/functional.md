@@ -193,8 +193,12 @@ port 8081), and:
 - Open conflicts, with both sides. For each: **Keep this project's**, **Take what came in**, or **Decide
   differently...** (**Merge them...** for a file both projects have) -- your own resolution in your words, which
   becomes a requirement of the project and work for the loop. **Ask for options** has the model lay out two to four
-  ways to resolve it, each with what it changes; **Use this** copies one into your resolution to send or edit. The
-  model only advises; you decide. While a conflict is open the project cannot be finished, so open conflicts are
+  ways to resolve it, each with what it changes, one of them marked **recommended** with the reason; **Use this**
+  copies one into your resolution to send or edit. The model only advises; you decide.
+- With two or more conflicts, a bar above them acts on the selected ones (all are selected at first; the
+  checkboxes and "all" / "none" change that): **Keep this project's**, **Take what came in**, **Suggest** -- the
+  model's recommended resolution put into each one's box, marked as suggested, for you to review and edit -- and
+  **Decide all as shown**, which decides each selected conflict as its box says. A line says how far a batch is. While a conflict is open the project cannot be finished, so open conflicts are
   shown whenever the project's run is up.
 - When every conflict is decided: **Keep the imports and start <project>** (a new project), **Keep the import and
   continue <project>** (one that was at rest), or **Keep the import** (one whose loop was running) -- or **Cancel

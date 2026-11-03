@@ -122,4 +122,19 @@ class InputComparisonTest {
         assertThat(options.get(2)).isEqualTo(new InputComparison.Option("200 for imports, 120 for new books", "two limits to keep apart"));
         assertThat(answering("I cannot tell.").options("s", "i", "a rule", "x", "y", "z")).isEmpty();
     }
+
+    @Test
+    void oneOptionIsRecommended_withItsReason_andASecondMarkDoesNotCount() {
+        String answer = "OPTION: Keep 120 | EFFECT: longer imports refused\n"
+                + "OPTION: 200 for imports, 120 for new books | EFFECT: two limits | RECOMMENDED\n"
+                + "OPTION: Take 200 | EFFECT: longer titles | RECOMMENDED\n"
+                + "WHY: the import is what the project was extended for.\n";
+
+        List<InputComparison.Option> options = answering(answer).options("s", "i", "a rule", "x", "y", "z");
+
+        assertThat(options).extracting(InputComparison.Option::recommended).containsExactly(false, true, false);
+        assertThat(options.get(1).why()).isEqualTo("the import is what the project was extended for.");
+        assertThat(options.get(0).why()).isNull();
+        assertThat(answering("OPTION: a | EFFECT: b\n").options("s", "i", "k", "x", "y", "z").get(0).recommended()).isFalse();
+    }
 }

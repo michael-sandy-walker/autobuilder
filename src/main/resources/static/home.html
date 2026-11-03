@@ -76,6 +76,11 @@
   ol.steps li.done { color: var(--muted); } ol.steps li.done::before { background: var(--good); border-color: var(--good); }
   ol.steps li.now { color: var(--ink); } ol.steps li.now::before { background: var(--accent); border-color: var(--accent); }
   .own { margin-top: 8px; }
+  .batch { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0 2px; padding: 8px 10px;
+    border: 1px solid var(--rule); border-radius: 6px; background: var(--panel-2); }
+  .conflict .pickc { width: auto; margin: 0 8px 0 0; vertical-align: -1px; }
+  .suggested { color: var(--violet); font-size: 12px; margin: 4px 0 0; }
+  .badge.rec { color: var(--violet); border-color: var(--violet-rule); background: var(--violet-bg); }
   .option { border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; margin-top: 6px; display: flex; gap: 10px;
     align-items: flex-start; }
   .option div { flex: 1; } .option .effect { color: var(--muted); font-size: 12px; }
@@ -606,12 +611,34 @@ function criteriaCell(i) {
   return i.met + ' met, ' + i.unmet + ' not yet' + (i.unanswered ? ', ' + i.unanswered + ' unanswered' : '');
 }
 
+// Which conflicts a batch applies to: every conflict is selected when it first appears.
+const selected = new Set();
+const seenConflicts = new Set();
+let batch = { busy: false, text: '' };
+
+function batchHtml() {
+  conflicts.forEach(c => { if (!seenConflicts.has(c.id)) { seenConflicts.add(c.id); selected.add(c.id); } });
+  const ids = conflicts.map(c => c.id).filter(id => selected.has(id));
+  const shown = ids.filter(id => { const d = draftOf(id); return d.open && d.text.trim(); }).length;
+  const off = batch.busy || !ids.length ? ' disabled' : '';
+  return '<div class="batch"><span class="note" style="margin:0">' + ids.length + ' of ' + conflicts.length + ' selected</span>'
+    + '<button data-batch="all" class="quiet"' + (batch.busy ? ' disabled' : '') + '>all</button>'
+    + '<button data-batch="none" class="quiet"' + (batch.busy ? ' disabled' : '') + '>none</button>'
+    + '<button data-batch="receiving"' + off + '>Keep this project\'s</button>'
+    + '<button data-batch="input"' + off + '>Take what came in</button>'
+    + '<button data-batch="suggest"' + off + ' title="The model recommends a resolution for each; you review them before deciding">Suggest</button>'
+    + '<button data-batch="shown" class="primary"' + (batch.busy || !shown ? ' disabled' : '') + ' title="Decide each selected conflict whose box holds a resolution, as written there">'
+    + 'Decide all as shown' + (shown ? ' (' + shown + ')' : '') + '</button>'
+    + (batch.text ? '<span class="note" style="margin:0">' + esc(batch.text) + '</span>' : '') + '</div>';
+}
+
 function conflictsHtml() {
   if (!conflicts.length) return '<p class="note">No conflict is open.</p>';
-  return conflicts.map(c => {
+  return (conflicts.length > 1 ? batchHtml() : '') + conflicts.map(c => {
     const d = draftOf(c.id);
     const file = !!c.heldPath, claim = !!c.heldLine;
-    return '<div class="conflict"><b>' + esc(c.subject) + '</b>'
+    return '<div class="conflict">' + (conflicts.length > 1 ? '<input type="checkbox" class="pickc" data-sel="' + esc(c.id) + '"'
+        + (selected.has(c.id) ? ' checked' : '') + (batch.busy ? ' disabled' : '') + '>' : '') + '<b>' + esc(c.subject) + '</b>'
       + '<div class="side">' + esc(file ? 'A file both projects have.' : claim ? 'A requirement the incoming project met, which may not hold here.'
           : 'Both projects have a rule here, with different results.') + '</div>'
       + (c.receiving && !file ? '<div class="side">This project: ' + esc(c.receiving) + '</div>' : '')
@@ -621,10 +648,13 @@ function conflictsHtml() {
       + '<button data-own="' + esc(c.id) + '"' + (d.open ? ' class="primary"' : '') + '>' + (file ? 'Merge them...' : 'Decide differently...') + '</button>'
       + '<button data-ask="' + esc(c.id) + '"' + (d.asking ? ' disabled' : '') + '>' + (d.asking ? 'Asking...' : 'Ask for options') + '</button></div>'
       + (d.options ? (d.options.length ? d.options.map((o, i) => '<div class="option"><div>' + esc(o.resolution)
-          + '<div class="effect">' + esc(o.effect) + '</div></div><button data-use="' + esc(c.id) + '" data-i="' + i + '">Use this</button></div>').join('')
+          + (o.recommended ? ' <span class="badge rec">recommended</span>' : '')
+          + '<div class="effect">' + esc(o.effect) + '</div>' + (o.recommended && o.why ? '<div class="effect">Why: ' + esc(o.why) + '</div>' : '')
+          + '</div><button data-use="' + esc(c.id) + '" data-i="' + i + '">Use this</button></div>').join('')
           : '<p class="note">The model offered no options; decide in your own words.</p>') : '')
       + (d.open ? '<div class="own"><label style="margin-top:4px">' + esc(file ? 'How to merge the two files' : 'What should hold instead')
-          + '</label><textarea id="own-' + esc(c.id) + '" data-text="' + esc(c.id) + '"></textarea><div class="row">'
+          + '</label>' + (d.suggested ? '<div class="suggested">Suggested by the model' + (d.why ? ': ' + esc(d.why) : '') + ' -- review before deciding.</div>' : '')
+          + '<textarea id="own-' + esc(c.id) + '" data-text="' + esc(c.id) + '"></textarea><div class="row">'
           + '<button data-decide="' + esc(c.id) + '" data-way="own" class="primary">Decide</button>'
           + '<span class="note">It becomes a requirement of this project, and work for the loop.</span></div></div>' : '')
       + '</div>';
@@ -665,13 +695,62 @@ function wireConflicts() {
   document.querySelectorAll('[data-own]').forEach(b => b.onclick = () => { const d = draftOf(b.dataset.own); d.open = !d.open; rerender(); });
   document.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => askOptions(b.dataset.ask));
   document.querySelectorAll('[data-use]').forEach(b => b.onclick = () => {
-    const d = draftOf(b.dataset.use);
-    d.text = d.options[Number(b.dataset.i)].resolution; d.open = true; rerender();
+    const d = draftOf(b.dataset.use), o = d.options[Number(b.dataset.i)];
+    d.text = o.resolution; d.open = true; d.suggested = !!o.recommended; d.why = o.recommended ? o.why : null; rerender();
   });
   document.querySelectorAll('[data-text]').forEach(t => {
     t.value = draftOf(t.dataset.text).text;
-    t.oninput = () => draftOf(t.dataset.text).text = t.value;
+    t.oninput = () => { const d = draftOf(t.dataset.text); d.text = t.value; d.suggested = false; };
   });
+  document.querySelectorAll('[data-sel]').forEach(c => c.onchange = () => {
+    if (c.checked) selected.add(c.dataset.sel); else selected.delete(c.dataset.sel);
+    rerender();
+  });
+  document.querySelectorAll('[data-batch]').forEach(b => b.onclick = () => runBatch(b.dataset.batch));
+}
+
+// A batch goes through the selected conflicts one at a time, saying how far it is.
+async function runBatch(what) {
+  if (what === 'all' || what === 'none') {
+    conflicts.forEach(c => what === 'all' ? selected.add(c.id) : selected.delete(c.id));
+    rerender(); return;
+  }
+  let ids = conflicts.map(c => c.id).filter(id => selected.has(id));
+  if (what === 'shown') ids = ids.filter(id => { const d = draftOf(id); return d.open && d.text.trim(); });
+  if (!ids.length) return;
+  const ask = { receiving: 'Keep this project\'s side in ' + ids.length + ' conflict(s)?',
+                input: 'Take what came in for ' + ids.length + ' conflict(s)? For a file both projects have, the incoming copy replaces this project\'s.',
+                shown: 'Decide ' + ids.length + ' conflict(s) as their boxes say? Each resolution becomes a requirement of this project, and work for the loop.' }[what];
+  if (ask && !confirm(ask)) return;
+  batch.busy = true;
+  let done = 0, failed = 0, none = 0;
+  for (const id of ids) {
+    batch.text = (what === 'suggest' ? 'Suggesting ' : 'Deciding ') + (done + failed + none + 1) + ' of ' + ids.length + '...';
+    rerender();
+    if (what === 'suggest') {
+      const d = draftOf(id);
+      const res = await fetch('/home/run/conflicts/' + encodeURIComponent(id) + '/options').catch(() => null);
+      const list = res && res.ok ? await res.json().catch(() => null) : null;
+      if (!Array.isArray(list)) { failed++; continue; }
+      d.options = list;
+      const rec = list.find(o => o.recommended);
+      if (!rec) { none++; continue; }
+      d.open = true; d.text = rec.resolution; d.suggested = true; d.why = rec.why;
+      done++;
+    } else {
+      const body = { decision: what === 'shown' ? 'own' : what };
+      if (what === 'shown') body.resolution = draftOf(id).text.trim();
+      const r = await post('/home/run/conflicts/' + encodeURIComponent(id), body);
+      if (r.status >= 300) failed++; else { done++; delete drafts[id]; selected.delete(id); }
+    }
+  }
+  batch = { busy: false, text: '' };
+  toast(!failed, what === 'suggest'
+    ? 'Suggested ' + done + ' of ' + ids.length + (none ? '; ' + none + ' without a recommendation' : '') + (failed ? '; ' + failed + ' could not be asked' : '')
+      + '. Review them, then Decide all as shown.'
+    : 'Decided ' + done + ' of ' + ids.length + (failed ? '; ' + failed + ' refused' : '') + '.');
+  refresh();
+  rerender();
 }
 function rerender() { lastNowHtml = ''; renderNow(); }
 

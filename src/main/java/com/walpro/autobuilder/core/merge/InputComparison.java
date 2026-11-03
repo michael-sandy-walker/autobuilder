@@ -55,11 +55,19 @@ public class InputComparison {
     public record Difference(String what, String receiving, String other) {
     }
 
-    /** T4-ED: one way a conflict can be resolved, as it would be written down, and what it changes. */
-    public record Option(String resolution, String effect) {
+    /**
+     * T4-ED: one way a conflict can be resolved, as it would be written down, and what it changes; at most one of a
+     * conflict's options is {@code recommended}, with {@code why} in one sentence.
+     */
+    public record Option(String resolution, String effect, boolean recommended, String why) {
+        public Option(String resolution, String effect) {
+            this(resolution, effect, false, null);
+        }
     }
 
-    private static final Pattern OPTION = Pattern.compile("(?m)^\\s*OPTION:\\s*(.+?)\\s*\\|\\s*EFFECT:\\s*(.+?)\\s*$");
+    private static final Pattern OPTION = Pattern.compile(
+            "(?m)^\\s*OPTION:\\s*(.+?)\\s*\\|\\s*EFFECT:\\s*(.+?)\\s*(\\|\\s*RECOMMENDED\\s*)?$");
+    private static final Pattern WHY = Pattern.compile("(?m)^\\s*WHY:\\s*(.+?)\\s*$");
 
     /**
      * T4-ED: the ways a held conflict can be resolved -- either side as it is, and what a combination would be -- each
@@ -77,10 +85,20 @@ public class InputComparison {
                 + "\n\nList two to four ways to resolve it: keeping the receiving project's side, taking the brought"
                 + " project's, and any combination of the two that makes sense here. Write each resolution as the rule or"
                 + " instruction the merged project should follow, in one sentence, then what choosing it changes for the"
-                + " merged project. One line each, in this form:\n\nOPTION: <the resolution> | EFFECT: <what it changes>");
+                + " merged project. One line each, in this form:\n\nOPTION: <the resolution> | EFFECT: <what it changes>"
+                + "\n\nMark exactly one option as the one you recommend for this project and the reason it was brought"
+                + " in, by ending its line with | RECOMMENDED. After the options, write one line:\n\nWHY: <one sentence>");
+        Matcher why = WHY.matcher(answer);
+        String reason = why.find() ? why.group(1) : null;
         List<Option> out = new ArrayList<>();
+        boolean marked = false;
         Matcher m = OPTION.matcher(answer);
-        while (m.find() && out.size() < 4) out.add(new Option(m.group(1), m.group(2)));
+        while (m.find() && out.size() < 4) {
+            // Only the first mark counts: "exactly one" asked, more than one answered is one recommendation.
+            boolean recommended = m.group(3) != null && !marked;
+            marked |= recommended;
+            out.add(new Option(m.group(1), m.group(2), recommended, recommended ? reason : null));
+        }
         return out;
     }
 

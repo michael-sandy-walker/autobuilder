@@ -491,4 +491,26 @@ class ProjectInputServiceTest {
 
         assertThat(service.imports()).extracting(ProjectInputService.Import::inputId).containsExactly(waiting.inputId());
     }
+
+    /**
+     * T4-ED field: in a project of modules, two inputs with the same artifact id land in one module; the second's file
+     * both have is named by its place here ("knots/..."), while the input holds it at its own root. The held copy was
+     * looked for under the module name and the import failed.
+     */
+    @Test
+    void inAProjectOfModules_aFileBothHaveIsHeldFromTheInputsOwnPath() throws IOException {
+        Files.delete(base.resolve("output/src/main/java/org/warp/Coil.java"));
+        write(base.resolve("output/pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>o</groupId><artifactId>all</artifactId>"
+                + "<version>1</version><packaging>pom</packaging><modules></modules></project>");
+        bring();
+        assertThat(base.resolve("output/knots/src/main/java/org/knot/Knot.java")).exists();
+        write(brought.resolve("output/src/main/java/org/knot/Knot.java"), "package org.knot;\npublic class Knot { int turns; }\n");
+
+        ProjectInputService.Report second = service.bring(new ProjectInputService.Request("knots", "run-k2", brought, INTENT, "operator", false));
+
+        assertThat(second.conflicts()).anySatisfy(c -> assertThat(c.subject()).isEqualTo("knots/src/main/java/org/knot/Knot.java"));
+        String id = second.conflicts().stream().filter(c -> c.heldPath() != null).findFirst().orElseThrow().id();
+        service.decide(id, "input", "operator");
+        assertThat(Files.readString(base.resolve("output/knots/src/main/java/org/knot/Knot.java"))).contains("int turns");
+    }
 }

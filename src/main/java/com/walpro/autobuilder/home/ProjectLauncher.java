@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * T4-ED: starts the run context on a chosen project -- the one path from "no project" to a running loop.
@@ -55,6 +56,8 @@ public class ProjectLauncher {
     private Runnable homeLogging = () -> {};
     /** Why the run's loop has stopped, or empty while it runs. Replaced in tests. */
     Function<ConfigurableApplicationContext, Optional<String>> haltProbe = ProjectLauncher::loopHalt;
+    /** Whether the run is an adopted project waiting for its goal. Replaced in tests. */
+    Predicate<ConfigurableApplicationContext> goalWaitProbe = ProjectLauncher::awaitingGoal;
 
     public ProjectLauncher(String[] startupArgs) {
         this(startupArgs, ProjectLauncher::bootRunContext);
@@ -157,6 +160,12 @@ public class ProjectLauncher {
         state = State.IDLE;
     }
 
+    private static boolean awaitingGoal(ConfigurableApplicationContext ctx) {
+        if (!ctx.isActive()) return false;
+        AutobuilderService service = ctx.getBeanProvider(AutobuilderService.class).getIfAvailable();
+        return service != null && service.awaitingGoal();
+    }
+
     private static Optional<String> loopHalt(ConfigurableApplicationContext ctx) {
         if (!ctx.isActive()) return Optional.empty();
         AutobuilderService service = ctx.getBeanProvider(AutobuilderService.class).getIfAvailable();
@@ -186,6 +195,7 @@ public class ProjectLauncher {
         State now = state();
         body.put("state", now.name());
         if (now == State.ENDED) body.put("endReason", haltProbe.apply(runContext).orElse(""));
+        if (now == State.RUNNING && goalWaitProbe.test(runContext)) body.put("waitingForGoal", true);
         if (current != null) {
             body.put("project", current.project());
             body.put("projectExists", Files.isDirectory(Path.of(current.project())));

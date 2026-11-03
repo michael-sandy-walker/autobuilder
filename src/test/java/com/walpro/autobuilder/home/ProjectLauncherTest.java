@@ -125,6 +125,15 @@ class ProjectLauncherTest {
     }
 
     @Test
+    void anAdoptedRunWaitingForItsGoalSaysSo() throws Exception {
+        ProjectLauncher launcher = new ProjectLauncher(new String[0], (c, args) -> mock(ConfigurableApplicationContext.class));
+        launcher.goalWaitProbe = ctx -> true;
+        launcher.start(new ProjectChoice("data/a", "ADOPT_PROJECT", null)).get(5, TimeUnit.SECONDS);
+
+        assertThat(launcher.describe()).containsEntry("state", "RUNNING").containsEntry("waitingForGoal", true);
+    }
+
+    @Test
     void goingHomeAfterAFailedStartClosesNothing() {
         ProjectLauncher launcher = new ProjectLauncher(new String[0], (c, args) -> {
             throw new IllegalStateException("port in use");

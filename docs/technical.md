@@ -602,7 +602,10 @@ a goal's activity. `BehaviourEventController` and `EventController` (`/events/..
 
 `HomeController` (home context only): `GET /` (redirects to `home.html`), `GET /home/state`, `GET /home/projects`,
 `POST /home/projects` (a new project from a specification, or with `from` a copy of another project's
-`bootstrap/`), `POST /home/start`, `POST /home/return` (closes a run whose loop has ended; the launcher reports
+`bootstrap/`), `POST /home/import` (a codebase on this machine copied into a new project's `output/` by `home.ProjectImport`,
+for an `ADOPT_PROJECT` start), `GET /home/run/cold-read` and `POST /home/run/goal` (relayed to the run context's
+own `/autobuilder/cold-read` and `/autobuilder/goal`, so their rules stay in one place; the launcher reports an
+adopted run that has no goal yet as `waitingForGoal`), `POST /home/start`, `POST /home/return` (closes a run whose loop has ended; the launcher reports
 such a run as `ENDED`, from `AutobuilderService.haltReason`, and never closes it on its own).
 
 Pages under `src/main/resources/static`: `home.html` (the home screen, served by the home context), `start.html` (choosing a start mode and a target), `goals.html` (the goal

@@ -10,6 +10,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,6 +37,7 @@ public class HomeController {
     private final ProjectLauncher launcher;
     private final HomeApplication.ProjectsDirectory projects;
     private final TargetCatalog catalog = new TargetCatalog();
+    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
     public HomeController(ProjectLauncher launcher, HomeApplication.ProjectsDirectory projects) {
         this.launcher = launcher;
@@ -113,6 +118,82 @@ public class HomeController {
         body.put("project", catalog.targetsUnder(projects.path()).stream()
                 .filter(t -> t.name().equals(request.name())).findFirst().orElse(null));
         return ResponseEntity.status(201).body(body);
+    }
+
+    /** The body of "Import one": a name for the project, the directory to copy in, and what may not be touched. */
+    public record ImportRequest(String name, String source, String protectedPaths) {}
+
+    /**
+     * Imports a codebase on this machine as a new project: its tree copied into {@code output/} (build output,
+     * version control and IDE state left out), {@code protectedPaths} into {@code bootstrap/protected-paths.txt}.
+     * The page then starts it in ADOPT_PROJECT. The original directory is only read.
+     */
+    @PostMapping("/home/import")
+    public ResponseEntity<Map<String, Object>> importProject(@RequestBody ImportRequest request) {
+        if (request.name() == null || !PROJECT_NAME.matcher(request.name()).matches()) {
+            return refuse(400, "a project name is lower case letters, digits, '.', '-' or '_', at most 64, "
+                    + "starting with a letter or digit");
+        }
+        if (request.source() == null || request.source().isBlank() || !Path.of(request.source().strip()).isAbsolute()) {
+            return refuse(400, "the source must be the absolute path of a directory on this machine");
+        }
+        Path dir = projects.path().resolve(request.name());
+        if (Files.exists(dir)) return refuse(409, "a project named " + request.name() + " already exists");
+        Path source = Path.of(request.source().strip()).normalize();
+        if (dir.toAbsolutePath().normalize().startsWith(source)) {
+            return refuse(400, "the source contains the projects directory; choose the codebase itself");
+        }
+        ProjectImport.Copied copied;
+        try {
+            copied = ProjectImport.into(source, dir, request.protectedPaths());
+        } catch (IllegalArgumentException e) {
+            return refuse(400, e.getMessage());
+        } catch (IOException e) {
+            return refuse(500, "the import failed part-way (" + e.getMessage() + "); " + dir + " may hold a partial copy");
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("ok", true);
+        body.put("files", copied.files());
+        body.put("bytes", copied.bytes());
+        body.put("leftOut", copied.leftOut());
+        body.put("project", catalog.targetsUnder(projects.path()).stream()
+                .filter(t -> t.name().equals(request.name())).findFirst().orElse(null));
+        return ResponseEntity.status(201).body(body);
+    }
+
+    /** The run's own cold read of an adopted project: what its code is, from its own evidence. */
+    @GetMapping(value = "/home/run/cold-read", produces = "text/plain")
+    public ResponseEntity<String> coldRead() {
+        return relay(HttpRequest.newBuilder().GET(), "/autobuilder/cold-read");
+    }
+
+    /**
+     * Gives the running adopted project its goal, through the run's own endpoint -- which writes it byte for byte
+     * to {@code bootstrap/seed.txt} and refuses when the run already has one.
+     */
+    @PostMapping(value = "/home/run/goal", consumes = "text/plain", produces = "application/json")
+    public ResponseEntity<String> goal(@RequestBody String goal) {
+        return relay(HttpRequest.newBuilder().header("Content-Type", "text/plain; charset=utf-8")
+                .POST(HttpRequest.BodyPublishers.ofString(goal, StandardCharsets.UTF_8)), "/autobuilder/goal");
+    }
+
+    /**
+     * Sends a request to the run's own endpoint and returns its answer as it came. Relayed rather than handled
+     * here, so what a goal is and when one is refused stay where the run keeps them.
+     */
+    private ResponseEntity<String> relay(HttpRequest.Builder request, String path) {
+        Object port = launcher.describe().get("runPort");
+        if (port == null) return ResponseEntity.status(409).body("{\"ok\":false,\"message\":\"no run is serving\"}");
+        try {
+            HttpResponse<String> res = http.send(request.uri(URI.create("http://localhost:" + port + path))
+                    .timeout(Duration.ofMinutes(2)).build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            return ResponseEntity.status(res.statusCode()).body(res.body());
+        } catch (IOException e) {
+            return ResponseEntity.status(502).body("{\"ok\":false,\"message\":\"the run did not answer\"}");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return ResponseEntity.status(502).body("{\"ok\":false,\"message\":\"interrupted\"}");
+        }
     }
 
     /** The body of "Start": a project NAME in the projects directory, and optionally a mode and profiles. */

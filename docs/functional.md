@@ -141,7 +141,15 @@ Start Autobuilder without naming a project and open `http://localhost:8080` in a
 - **Continue** -- projects with unfinished work, each with how its last run ended; "Continue" starts one in
   `CONTINUE_LINEAGE` mode. Projects whose goal is fulfilled are listed as finished: continuing them has nothing
   left to do, so they offer Restart and Duplicate instead.
-- **Import one** and **Import several** are not built yet.
+- **Import one** -- adopt an existing codebase. Give the project a name, the absolute path of the code on this
+  machine, and optionally what may not be touched (globs relative to the code, written to
+  `bootstrap/protected-paths.txt`). "Import and adopt" copies the code into the project's `output/` -- leaving out
+  `.git`, `target`, `build`, `node_modules`, `.idea`, `.gradle` and links; the original is only read; at most
+  20,000 files and 500 MB -- and starts it in `ADOPT_PROJECT`. Projects already here that hold code Autobuilder
+  did not write can be adopted in place. An adopted project **waits for a goal**: the home screen shows what
+  Autobuilder read in the code (its cold read) and a goal box; "Set goal" gives the run its goal, written byte for
+  byte to `bootstrap/seed.txt`.
+- **Import several** is not built yet.
 
 "How the run proceeds" picks the profile for the run: autonomous (`dev-auto`), autonomous with the waiting trimmed
 (`dev-auto,fast`, what scripted runs use), or manual (`dev-local`). The projects are the directories in
@@ -166,6 +174,12 @@ curl -X POST -H 'Content-Type: application/json' \
 curl -X POST -H 'Content-Type: application/json' \
      -d '{"project": "my-service", "mode": "NEW_PROJECT", "profiles": "dev-auto"}' \
      http://localhost:8080/home/start                    # start a run (202), or 409 while one is going
+curl -X POST -H 'Content-Type: application/json' \
+     -d '{"name": "their-service", "source": "/home/me/code/their-service", "protectedPaths": "src/main/**"}' \
+     http://localhost:8080/home/import                   # copy a codebase in, then start it with mode ADOPT_PROJECT
+curl http://localhost:8080/home/run/cold-read            # what the adopted run read in the code
+curl -X POST -H 'Content-Type: text/plain' --data-binary @goal.txt \
+     http://localhost:8080/home/run/goal                 # its goal, byte for byte
 curl -X POST http://localhost:8080/home/return           # back home once the run has ended (409 while it runs)
 ```
 

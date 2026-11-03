@@ -18,6 +18,9 @@ class HomeControllerTest {
     @TempDir
     Path projects;
 
+    @TempDir
+    Path elsewhere;
+
     private HomeController controller(ProjectLauncher launcher) {
         return new HomeController(launcher, new HomeApplication.ProjectsDirectory(projects));
     }
@@ -159,5 +162,32 @@ class HomeControllerTest {
         assertThat(c.create(new HomeController.NewProject("copy", null, "bare")).getStatusCode().value()).isEqualTo(404);
         assertThat(c.create(new HomeController.NewProject("copy", null, "../bare")).getStatusCode().value()).isEqualTo(404);
         assertThat(projects.resolve("copy")).doesNotExist();
+    }
+
+    @Test
+    void anImportTakesAnAbsoluteDirectoryAndAFreeName() throws Exception {
+        Path code = Files.createDirectories(elsewhere.resolve("code"));
+        Files.writeString(code.resolve("A.java"), "class A {}");
+        Files.createDirectories(projects.resolve("taken"));
+        HomeController c = controller(idle());
+
+        assertThat(c.importProject(new HomeController.ImportRequest("x", "relative/path", null)).getStatusCode().value()).isEqualTo(400);
+        assertThat(c.importProject(new HomeController.ImportRequest("taken", code.toString(), null)).getStatusCode().value()).isEqualTo(409);
+        assertThat(c.importProject(new HomeController.ImportRequest("x", projects.getParent().toString(), null)).getStatusCode().value())
+                .as("a source holding the projects directory").isEqualTo(400);
+        var ok = c.importProject(new HomeController.ImportRequest("imported", code.toString(), null));
+
+        assertThat(ok.getStatusCode().value()).isEqualTo(201);
+        assertThat(ok.getBody()).containsEntry("files", 1);
+        assertThat(ok.getBody().get("project")).asString().contains("FOREIGN").contains("ADOPT_PROJECT");
+        assertThat(projects.resolve("imported/output/A.java")).hasContent("class A {}");
+    }
+
+    @Test
+    void theRunsEndpointsAreRelayedOnlyWhileARunServes() {
+        HomeController c = controller(idle());
+
+        assertThat(c.coldRead().getStatusCode().value()).isEqualTo(409);
+        assertThat(c.goal("a goal").getStatusCode().value()).isEqualTo(409);
     }
 }

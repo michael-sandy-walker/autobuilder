@@ -95,7 +95,7 @@ Evidence discipline:
 - `feedback_dont_group_defects_by_vocabulary.md`: a shared description is not a shared cause. (reviewed 2026-08-29)
 - `feedback_compare_against_the_last_good_build.md`: compare to the last GOOD build; name it in the batch header. (reviewed 2026-10-11)
 - `feedback_dont_evaluate_a_build_with_older_runs.md`: a window is a rate only if build AND target are constant. (reviewed 2026-09-21)
-- `feedback_read_test_results_from_the_run.md`: quote test counts only from THIS run's output. (reviewed 2026-10-27)
+- `feedback_read_test_results_from_the_run.md`: quote test counts only from THIS run's output. (reviewed 2026-11-03)
 - `feedback_verify_diff_is_substantive.md`: prove which input now yields different output. (reviewed 2026-09-08)
 - `feedback_verify_at_decision_timestamp.md`: diagnose against state AT decision time. (reviewed 2026-07-09)
 - `feedback_activity_not_progress.md`: a mechanism firing is not helping; check the outcome. (reviewed 2026-07-09)

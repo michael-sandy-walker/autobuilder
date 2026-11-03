@@ -14,3 +14,10 @@ proves only that some earlier run passed.
 
 **How to apply:** grep the run's own output for `Tests run:` / `BUILD SUCCESS|FAILURE` / `ERROR]`, or check the
 report's mtime against the run's start, before quoting a count. Related: [[feedback-verify-diff-is-substantive]].
+
+**2026-11-03 (T4-ED), the result was read and the commit went in anyway.** I chained `mvn test` -> print the tally ->
+`git commit` in one command; the tally said 5 errors and the commit ran regardless (`d319e34c`, a run context that
+could not start -- a second unmarked constructor, the same mistake made earlier that day in `HomeController`). Rule:
+a commit after a suite is GATED on the parsed numbers in the same command (`[ failures = 0 ] && [ errors = 0 ] &&
+git commit ... || echo NOT COMMITTED`), never just printed beside it. And a Spring bean given a second constructor
+for tests gets `@Autowired` on the one Spring should use, in the same edit.

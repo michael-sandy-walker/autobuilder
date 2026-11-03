@@ -2,6 +2,7 @@ package com.walpro.autobuilder.home;
 
 import com.walpro.autobuilder.core.init.TargetCatalog;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,6 +42,7 @@ public class HomeController {
     private volatile IntegrationJob job;
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
+    @Autowired // two constructors: without this Spring has no way to choose and the home context does not start
     public HomeController(ProjectLauncher launcher, HomeApplication.ProjectsDirectory projects) {
         this(launcher, projects, new RunClient(launcher));
     }

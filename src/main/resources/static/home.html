@@ -276,9 +276,15 @@ const profiles = () => $('profiles').value;
 const idle = () => run.state === 'IDLE';
 const jobBusy = () => job && !['FAILED', 'RELEASED', 'CANCELLED'].includes(job.phase);
 
+// The home context this page was loaded from. When it has been restarted (a new build, perhaps), this page's own
+// code may be older than what it now talks to -- field: a tab left open across a restart never loaded older events.
+let homeSince = null;
+
 async function refresh() {
   try {
     run = await fetch('/home/state').then(r => r.json());
+    if (run.homeSince && homeSince && run.homeSince !== homeSince) { location.reload(); return; }
+    homeSince = homeSince || run.homeSince;
     const jr = await fetch('/home/integrate');
     job = jr.status === 200 ? await jr.json() : null;
     progress = null;

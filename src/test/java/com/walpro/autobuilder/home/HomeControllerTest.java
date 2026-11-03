@@ -242,4 +242,13 @@ class HomeControllerTest {
         assertThat(c.continueHeld().getStatusCode().value()).isEqualTo(200);
         assertThat(started).containsExactly("/autobuilder/start?mode=ADOPT_PROJECT");
     }
+
+    /** A page loaded from an earlier home context reloads itself; the state says when this one started. */
+    @Test
+    void theStateSaysWhenThisHomeContextStarted() {
+        var state = controller(idle()).state();
+
+        assertThat(state).containsEntry("state", "IDLE");
+        assertThat(java.time.Instant.parse((String) state.get("homeSince"))).isBeforeOrEqualTo(java.time.Instant.now());
+    }
 }

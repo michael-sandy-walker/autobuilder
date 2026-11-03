@@ -60,10 +60,15 @@ public class HomeController {
         return ResponseEntity.status(302).location(URI.create("/home.html")).build();
     }
 
-    /** Whether a run is idle, starting, running or failed to start, and on what. */
+    /** When this home context started: a page loaded from an earlier one reloads itself, or it runs old code. */
+    private final String started = java.time.Instant.now().toString();
+
+    /** Whether a run is idle, starting, running or failed to start, and on what; and when this home context started. */
     @GetMapping("/home/state")
     public Map<String, Object> state() {
-        return launcher.describe();
+        Map<String, Object> body = new LinkedHashMap<>(launcher.describe());
+        body.put("homeSince", started);
+        return body;
     }
 
     /** The projects in the projects directory, with what each carries and the modes it can start in. */

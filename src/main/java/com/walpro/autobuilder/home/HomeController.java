@@ -42,9 +42,14 @@ public class HomeController {
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public HomeController(ProjectLauncher launcher, HomeApplication.ProjectsDirectory projects) {
+        this(launcher, projects, new RunClient(launcher));
+    }
+
+    /** Visible for testing: {@code run} stands in for the run's endpoints. */
+    HomeController(ProjectLauncher launcher, HomeApplication.ProjectsDirectory projects, RunClient run) {
         this.launcher = launcher;
         this.projects = projects;
-        this.run = new RunClient(launcher);
+        this.run = run;
     }
 
     /** The home screen is the root of the home context. */
@@ -346,8 +351,9 @@ public class HomeController {
             RunClient.Reply pending = run.get("/autobuilder/inputs/pending");
             RunClient.Reply open = run.get("/autobuilder/inputs/conflicts");
             if (!pending.ok() || !open.ok()) return refuse(502, "the run's imports could not be read");
-            if (!pending.body().strip().equals("[]")) return refuse(409, "an import still waits to be kept or cancelled");
-            if (!open.body().strip().equals("[]")) return refuse(409, "a conflict still waits for a decision");
+            // Read as lists: the run writes an empty one as "[ ]", so comparing text refused with nothing waiting.
+            if (!emptyList(pending.body())) return refuse(409, "an import still waits to be kept or cancelled");
+            if (!emptyList(open.body())) return refuse(409, "a conflict still waits for a decision");
             RunClient.Reply started = run.postJson("/autobuilder/start?mode=ADOPT_PROJECT", "", Duration.ofMinutes(2));
             if (!started.ok()) return refuse(started.status(), "the run was not started: " + started.body());
             return ResponseEntity.ok(launcher.describe());
@@ -368,6 +374,15 @@ public class HomeController {
             return refuse(502, "the run's conflicts could not be read: " + e.getMessage());
         }
         return ResponseEntity.ok(j.describe());
+    }
+
+    private static boolean emptyList(String json) {
+        try {
+            com.fasterxml.jackson.databind.JsonNode n = JSON.readTree(json);
+            return n.isArray() && n.isEmpty();
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private static ResponseEntity<String> relayed(RunClient.Reply reply) {

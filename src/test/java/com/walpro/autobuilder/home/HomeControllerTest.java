@@ -213,4 +213,33 @@ class HomeControllerTest {
         assertThat(c.importProject(new HomeController.ImportRequest("x", null, null, "absent")).getStatusCode().value()).isEqualTo(404);
         assertThat(c.importProject(new HomeController.ImportRequest("x", null, null, "../here")).getStatusCode().value()).isEqualTo(404);
     }
+
+    /** Field: the run writes an empty list as "[ ]", and Continue refused with nothing waiting. */
+    @Test
+    void aHeldProjectContinuesWhenNothingWaits_howeverTheRunWritesAnEmptyList() throws Exception {
+        ProjectLauncher launcher = idle();
+        launcher.notBegunProbe = ctx -> true;
+        launcher.start(new ProjectChoice(projects.resolve("p").toString(), "ASK", null)).get(5, TimeUnit.SECONDS);
+        java.util.List<String> started = new java.util.ArrayList<>();
+        java.util.concurrent.atomic.AtomicReference<String> pendingAnswer = new java.util.concurrent.atomic.AtomicReference<>("[ ]");
+        RunClient run = new RunClient(launcher) {
+            @Override
+            Reply get(String path) {
+                return new Reply(200, path.endsWith("/pending") ? pendingAnswer.get() : "[ ]");
+            }
+
+            @Override
+            Reply postJson(String path, String json, java.time.Duration timeout) {
+                started.add(path);
+                return new Reply(200, "{}");
+            }
+        };
+        HomeController c = new HomeController(launcher, new HomeApplication.ProjectsDirectory(projects), run);
+
+        pendingAnswer.set("[ {\"inputId\":\"in-1\"} ]");
+        assertThat(c.continueHeld().getStatusCode().value()).isEqualTo(409);
+        pendingAnswer.set("[ ]");
+        assertThat(c.continueHeld().getStatusCode().value()).isEqualTo(200);
+        assertThat(started).containsExactly("/autobuilder/start?mode=ADOPT_PROJECT");
+    }
 }

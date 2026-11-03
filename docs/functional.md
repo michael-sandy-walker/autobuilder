@@ -128,47 +128,62 @@ declaration it had as it was -- new declarations are added beside them -- except
 ### 4.1 From the home screen
 
 Start Autobuilder without naming a project and open `http://localhost:8080` in a browser (the port is
-`autobuilder.home.port`). The home screen shows whether a run is going and lets you choose a direction:
+`autobuilder.home.port`). The home screen has three parts: **Now** (the run, if one is up), the **projects** (the
+directories in `autobuilder.home.projects-dir`, default `data`), and **+ New project**. "Runs", top right, chooses how
+a run you start proceeds: autonomously (`dev-auto`), autonomously with the waiting trimmed (`dev-auto,fast`, what
+scripted runs use), or by hand (`dev-local`, cycles only when asked).
 
-- **New project** -- give it a name (it becomes the directory) and write the specification. "Create and start"
-  writes `<projects>/<name>/bootstrap/seed.txt`, nothing else, and starts it in `NEW_PROJECT` mode. A name that is
-  already taken is refused; nothing is overwritten. Below the form, every project that carries a specification
-  offers:
-  - **Restart** (**Start** if it has never run) -- clears its `output/` and starts a new lineage from its
-    specification (`NEW_PROJECT`); the earlier run is not read. The page asks first.
-  - **Duplicate** -- a new project under a new name with a byte-for-byte copy of its `bootstrap/` (specification,
-    obligations, protected paths, yardstick): no code and no run history. The original is left as it is.
-- **Continue** -- projects with unfinished work, each with how its last run ended; "Continue" starts one in
-  `CONTINUE_LINEAGE` mode. Projects whose goal is fulfilled are listed as finished: continuing them has nothing
-  left to do, so they offer Restart and Duplicate instead.
-- **Import one** -- adopt an existing codebase. Give the project a name, the absolute path of the code on this
-  machine, and optionally what may not be touched (globs relative to the code, written to
-  `bootstrap/protected-paths.txt`). "Import and adopt" copies the code into the project's `output/` -- leaving out
-  `.git`, `target`, `build`, `node_modules`, `.idea`, `.gradle` and links; the original is only read; at most
-  20,000 files and 500 MB -- and starts it in `ADOPT_PROJECT`. Every project already here that holds code can be
-  **adopted in place**, or **imported as a copy**: its code alone (no goal, no history) copied into a new project,
-  which is adopted while the original stays as it is. An adopted project **waits for a goal**: the home screen shows what
-  Autobuilder read in the code (its cold read) and a goal box; "Set goal" gives the run its goal, written byte for
-  byte to `bootstrap/seed.txt`.
-- **Import several** -- bring two or more projects together in a new one. Give the new project a name and a
-  goal, tick the projects to bring in (any that hold code), and for each say what to take from it (its *intent*);
-  mark at most one whose module is the one that runs. "Bring together" starts the new, empty project held, sets
-  its goal, then brings each project in -- code, goals and criteria, each landing as a module of its own; each can
-  take minutes, because what it brings is compared with what is already there. The page shows each project's
-  outcome (files placed, corrections, conflicts, criteria not yet met). A difference no intent settles is a
-  **conflict**: the page shows both sides and you decide -- keep the new project's, or take the input's. When no
-  conflict is open the run starts by itself (or with "Start the run" once you have decided). The chosen projects
-  are only read. How an input lands is described in the technical documentation, section 10 ("Bringing a project in").
+**Projects.** Each project shows its state and one button for what that state calls for; the "..." menu holds the
+rest.
 
-"How the run proceeds" picks the profile for the run: autonomous (`dev-auto`), autonomous with the waiting trimmed
-(`dev-auto,fast`, what scripted runs use), or manual (`dev-local`). The projects are the directories in
-`autobuilder.home.projects-dir` (default `data`, relative to the directory Autobuilder is started in).
+| State | Button | In "..." |
+|---|---|---|
+| not started -- a specification, no code | **Start** | Duplicate |
+| in progress -- worked on, goal not reached | **Continue** | Extend, Restart, Duplicate |
+| finished -- its goal was reached | **Extend...** | Restart, Duplicate |
+| existing code -- code Autobuilder did not write | **Work on it** | Extend, Duplicate |
 
-One run at a time: while a run is starting or running, the start buttons are disabled and a second start is
-refused. A running run's own pages (goals, graph, start state) are linked from the banner; the run listens on
-port 8081. A run that has ended stays as it is, so its results can still be read later; the banner then
-says how it ended and offers **Back to home**, which closes it so another can be started. A run whose loop has
-not begun -- held, or adopted and still waiting for a goal -- can be left the same way.
+- **Start** builds it from its specification (`NEW_PROJECT`); **Continue** resumes its lineage (`CONTINUE_LINEAGE`);
+  **Work on it** adopts the code as it is (`ADOPT_PROJECT`) -- nothing is cleared, and it waits for a goal (below).
+- **Extend...** brings something into the project: another project here, or code in a directory on this machine,
+  with what to take from it (its *intent*). Its code, goals and criteria join; a finished project reopens with the
+  new work. What it brings is compared with what is there, and a difference no intent settles is a **conflict**,
+  which waits for your decision in Now. A project at rest is started held, takes the input, and is then released;
+  the project whose loop is running takes it between two cycles. How an input lands is described in the technical
+  documentation, section 10 ("Bringing a project in").
+- **Restart** clears its `output/` and begins a new lineage from its specification; the earlier run is not read.
+  The page asks first.
+- **Duplicate** makes a new project with a byte-for-byte copy of its `bootstrap/` (specification, obligations,
+  protected paths, yardstick) -- no code, no history; the original is left as it is.
+
+Each row also says how the project's last run ended, and when. The filter above the list narrows it to one state.
+
+**+ New project** offers three ways in, each under a new name (it becomes the directory; a name already taken is
+refused, nothing is overwritten):
+
+- **From a specification** -- write what to build. Writes `bootstrap/seed.txt`, nothing else, and starts it.
+- **From existing code** -- a directory on this machine, or a copy of a project here (its code alone). The code is
+  copied into `output/` -- leaving out `.git`, `target`, `build`, `node_modules`, `.idea`, `.gradle` and links; the
+  original is only read; at most 20,000 files and 500 MB -- with optional globs of what may not be touched
+  (`bootstrap/protected-paths.txt`). It is then adopted and waits for a goal.
+- **From several projects** -- a goal, and two or more projects with what to take from each (at most one marked as
+  the module that runs). The new, empty project is started held, given the goal, and each project is brought in --
+  code, goals and criteria, each as a module of its own; each can take minutes. Conflicts wait for your decision.
+
+**Now** shows the run: what it is doing and since when, its own pages (goals, graph, start state; the run listens on
+port 8081), and:
+
+- **Stop** while its loop runs -- it halts after its current cycle (which can take a few minutes) and its results
+  stay as they are.
+- **Close** once it has ended, or before its loop has begun -- this frees the home screen for the next run. A run
+  that has ended stays open, with how it ended, until you close it.
+- For adopted code without a goal: what Autobuilder read in the code (its cold read) and a goal box; **Set goal**
+  writes it byte for byte to `bootstrap/seed.txt`.
+- While projects are being brought in: each one's outcome (files placed, corrections, conflicts, criteria not yet
+  met), the open conflicts with both sides -- **Keep this project's** or **Take what came in** -- and **Done -- let
+  the loop work** once none is open. Without conflicts the loop starts by itself.
+
+One run at a time: while a run is up, the buttons that would start another are disabled.
 
 Everything the page does is a REST call on the home port, so it can also be done with curl:
 
@@ -197,8 +212,12 @@ curl -X POST -H 'Content-Type: application/json' -d '{"name": "combined", "goal"
 curl http://localhost:8080/home/run/conflicts            # what waits for a decision
 curl -X POST -H 'Content-Type: application/json' -d '{"decision": "input"}' \
      http://localhost:8080/home/run/conflicts/<id>       # or "receiving"
-curl -X POST http://localhost:8080/home/integrate/release  # start the run once nothing is open
-curl -X POST http://localhost:8080/home/return           # back home once the run has ended (409 while it runs)
+curl -X POST -H 'Content-Type: application/json' -d '{"project": "base", "profiles": "dev-auto",
+     "input": {"project": "lib", "intent": "..."}}' \
+     http://localhost:8080/home/extend                   # bring lib into base ("path": "/abs/dir" for code elsewhere)
+curl -X POST http://localhost:8080/home/integrate/release  # let the loop work once nothing is open
+curl -X POST http://localhost:8080/home/stop             # stop the running loop after its current cycle
+curl -X POST http://localhost:8080/home/return           # close a run that has ended or not begun (409 while it runs)
 ```
 
 ### 4.2 From the command line

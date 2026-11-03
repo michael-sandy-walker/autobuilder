@@ -94,7 +94,7 @@ class IntegrationJobTest {
         project("three");
         ProjectLauncher launcher = launcher();
         FakeRun run = new FakeRun(launcher);
-        IntegrationJob job = new IntegrationJob("together", projects, "Combine them.", "dev-auto",
+        IntegrationJob job = new IntegrationJob("together", projects, true, "Combine them.", "dev-auto",
                 List.of(new IntegrationJob.Input("one", "take one", true), new IntegrationJob.Input("three", "take three", false)),
                 launcher, run);
 
@@ -121,7 +121,7 @@ class IntegrationJobTest {
         ProjectLauncher launcher = launcher();
         FakeRun run = new FakeRun(launcher);
         run.openConflicts.set("[{\"id\":\"c1\",\"subject\":\"the title limit\"}]");
-        IntegrationJob job = new IntegrationJob("together", projects, "Combine them.", null,
+        IntegrationJob job = new IntegrationJob("together", projects, true, "Combine them.", null,
                 List.of(new IntegrationJob.Input("one", "x", false), new IntegrationJob.Input("two", "y", false)),
                 launcher, run);
 
@@ -138,5 +138,66 @@ class IntegrationJobTest {
 
         assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.RELEASED);
         assertThat(run.calls).last().isEqualTo("POST /autobuilder/start?mode=ADOPT_PROJECT");
+    }
+
+    @Test
+    void extendingAProjectAtRestStartsItHeldBringsTheInputInAndReleasesIt() throws Exception {
+        project("base");
+        project("lib");
+        ProjectLauncher launcher = launcher();
+        FakeRun run = new FakeRun(launcher);
+        IntegrationJob job = new IntegrationJob("base", projects, false, null, "dev-auto",
+                List.of(new IntegrationJob.Input("lib", "use lib", false)), launcher, run);
+
+        job.begin();
+        await(job, IntegrationJob.Phase.RELEASED, IntegrationJob.Phase.FAILED);
+
+        assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.RELEASED);
+        assertThat(launcher.describe()).containsEntry("mode", "ASK");
+        assertThat(run.calls).noneMatch(c -> c.contains("/autobuilder/goal"));
+        assertThat(run.calls.get(0)).startsWith("POST /autobuilder/inputs").contains("\"label\":\"lib\"");
+        assertThat(run.calls).last().isEqualTo("POST /autobuilder/start?mode=ADOPT_PROJECT");
+        assertThat(job.describe()).containsEntry("kind", "extend");
+    }
+
+    @Test
+    void extendingTheProjectWhoseLoopRunsBringsTheInputInWithoutStartingOrReleasing() throws Exception {
+        project("base");
+        Path lib = Files.createDirectories(projects.resolve("../lib-" + System.nanoTime()).normalize());
+        Files.writeString(lib.resolve("L.java"), "class L {}");
+        try {
+            ProjectLauncher launcher = launcher();
+            launcher.notBegunProbe = c -> false;
+            launcher.start(new ProjectChoice(projects.resolve("base").toString(), "CONTINUE_LINEAGE", null))
+                    .get(5, java.util.concurrent.TimeUnit.SECONDS);
+            FakeRun run = new FakeRun(launcher);
+            IntegrationJob job = new IntegrationJob("base", projects, false, null, null,
+                    List.of(new IntegrationJob.Input(null, lib.toString(), "use it", false)), launcher, run);
+
+            job.begin();
+            await(job, IntegrationJob.Phase.RELEASED, IntegrationJob.Phase.FAILED);
+
+            assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.RELEASED);
+            assertThat(launcher.describe()).containsEntry("mode", "CONTINUE_LINEAGE");
+            assertThat(run.calls).noneMatch(c -> c.contains("/start"));
+            assertThat(run.calls.get(0)).contains("\"label\":\"" + lib.getFileName() + "\"").contains("\"dir\":\"" + lib + "\"");
+        } finally {
+            try (var all = Files.walk(lib)) {
+                all.sorted(java.util.Comparator.reverseOrder()).forEach(f -> f.toFile().delete());
+            }
+        }
+    }
+
+    @Test
+    void anExtendNeedsAnExistingProjectAndAnInputThatIsNotItself() throws Exception {
+        project("base");
+        project("lib");
+
+        assertThat(IntegrationJob.extendProblem(projects, "absent", new IntegrationJob.Input("lib", "x", false))).contains("no project");
+        assertThat(IntegrationJob.extendProblem(projects, "base", new IntegrationJob.Input("base", "x", false))).contains("into itself");
+        assertThat(IntegrationJob.extendProblem(projects, "base", new IntegrationJob.Input(null, "relative/dir", "x", false))).contains("absolute");
+        assertThat(IntegrationJob.extendProblem(projects, "base", new IntegrationJob.Input("lib", "lib", "x", false))).contains("one of the two");
+        assertThat(IntegrationJob.extendProblem(projects, "base", new IntegrationJob.Input("lib", "  ", false))).contains("what to take");
+        assertThat(IntegrationJob.extendProblem(projects, "base", new IntegrationJob.Input("lib", "use it", false))).isNull();
     }
 }

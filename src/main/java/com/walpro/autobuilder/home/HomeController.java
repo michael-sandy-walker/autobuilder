@@ -214,8 +214,39 @@ public class HomeController {
         if (launcher.state() != ProjectLauncher.State.IDLE) return refuse(409, "a run is up; one run at a time");
         String problem = IntegrationJob.problem(projects.path(), request.name(), request.goal(), request.inputs());
         if (problem != null) return refuse(400, problem);
-        job = new IntegrationJob(request.name(), projects.path(), request.goal(), request.profiles(), request.inputs(),
+        job = new IntegrationJob(request.name(), projects.path(), true, request.goal(), request.profiles(), request.inputs(),
                 launcher, run);
+        job.begin();
+        return ResponseEntity.accepted().body(job.describe());
+    }
+
+    /** The body of "Extend": the project that receives, how it runs, and the one input -- a project here or a path. */
+    public record ExtendRequest(String project, String profiles, IntegrationJob.Input input) {}
+
+    /**
+     * Brings one project into an existing one (T4-EC's input), as a job the page follows on {@code GET /home/integrate}.
+     * The receiving project may be the one whose loop is running (it takes the input between cycles), one whose
+     * finished run is still open (closed first: the operator asked for this), or one at rest (started held,
+     * released after). Refused while another project's run is up, or a run is starting.
+     */
+    @PostMapping("/home/extend")
+    public synchronized ResponseEntity<Map<String, Object>> extend(@RequestBody ExtendRequest request) {
+        if (request.project() == null || !PROJECT_NAME.matcher(request.project()).matches()) {
+            return refuse(400, "the project to extend is a name in " + projects.path());
+        }
+        if (job != null && job.phase() != IntegrationJob.Phase.FAILED && job.phase() != IntegrationJob.Phase.RELEASED) {
+            return refuse(409, "projects are already being brought into " + job.describe().get("name"));
+        }
+        Path receiving = projects.path().resolve(request.project());
+        ProjectLauncher.State now = launcher.state();
+        if (now == ProjectLauncher.State.STARTING) return refuse(409, "a run is starting; wait for it");
+        if (now != ProjectLauncher.State.IDLE && !launcher.isOn(receiving)) {
+            return refuse(409, "another project's run is up; close it first (one run at a time)");
+        }
+        String problem = IntegrationJob.extendProblem(projects.path(), request.project(), request.input());
+        if (problem != null) return refuse(400, problem);
+        job = new IntegrationJob(request.project(), projects.path(), false, null, request.profiles(),
+                List.of(request.input()), launcher, run);
         job.begin();
         return ResponseEntity.accepted().body(job.describe());
     }

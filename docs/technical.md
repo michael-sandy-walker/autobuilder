@@ -605,11 +605,13 @@ a goal's activity. `BehaviourEventController` and `EventController` (`/events/..
 `bootstrap/`), `POST /home/import` (a codebase on this machine -- or, with `from`, a project here's `output/` -- copied into a new project's `output/` by `home.ProjectImport`,
 for an `ADOPT_PROJECT` start), `GET /home/run/cold-read` and `POST /home/run/goal` (relayed to the run context's
 own `/autobuilder/cold-read` and `/autobuilder/goal`, so their rules stay in one place; the launcher reports an
-adopted run that has no goal yet as `waitingForGoal`), `POST /home/integrate` and `GET /home/integrate` (`home.IntegrationJob`: two or more projects brought into a new
-one -- the empty project started held in `ASK`, its goal set, each project posted to `/autobuilder/inputs` with its
-intent, then released in `ADOPT_PROJECT` once no conflict is open; the steps `scripts/bring_inputs.py` takes from the
-shell, run as a job because each input can take minutes), `GET /home/run/conflicts`, `POST /home/run/conflicts/{id}`,
-`POST /home/integrate/release`, `POST /home/start`, `POST /home/return` (closes a run whose loop has ended; the launcher reports
+adopted run that has no goal yet as `waitingForGoal`), `POST /home/integrate` and `POST /home/extend`, followed on `GET /home/integrate` (`home.IntegrationJob`: projects
+brought into a new project toward a goal, or one input -- a project here or a directory -- into an existing one; unless
+the receiving project's loop is already going it is started held in `ASK`; the goal is set for a new one; each input is
+posted to `/autobuilder/inputs` with its intent; a held run is released in `ADOPT_PROJECT` once no conflict is open,
+a running one takes its inputs between cycles; the steps `scripts/bring_inputs.py` takes from the shell, run as a job
+because each input can take minutes), `GET /home/run/conflicts`, `POST /home/run/conflicts/{id}`,
+`POST /home/integrate/release`, `POST /home/stop` (the run's own `user-pause`, sent in the background), `POST /home/start`, `POST /home/return` (closes a run whose loop has ended; the launcher reports
 such a run as `ENDED`, from `AutobuilderService.haltReason`, and never closes it on its own).
 
 Pages under `src/main/resources/static`: `home.html` (the home screen, served by the home context), `start.html` (choosing a start mode and a target), `goals.html` (the goal

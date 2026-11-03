@@ -240,6 +240,17 @@ public class ProjectLauncher {
         return body;
     }
 
+    /** Whether the run is on {@code dir} -- starting, running, ended or failed, not yet closed. */
+    public synchronized boolean isOn(Path dir) {
+        return current != null && state != State.IDLE
+                && Path.of(current.project()).toAbsolutePath().normalize().equals(dir.toAbsolutePath().normalize());
+    }
+
+    /** Whether a loop is going: running, and neither ended nor waiting to begin. */
+    public synchronized boolean loopGoing() {
+        return state() == State.RUNNING && !notBegunProbe.test(runContext);
+    }
+
     public synchronized State state() {
         if (state == State.RUNNING && runContext != null && haltProbe.apply(runContext).isPresent()) return State.ENDED;
         return state;

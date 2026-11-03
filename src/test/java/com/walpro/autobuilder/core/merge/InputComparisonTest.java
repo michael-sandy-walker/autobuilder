@@ -137,4 +137,36 @@ class InputComparisonTest {
         assertThat(options.get(0).why()).isNull();
         assertThat(answering("OPTION: a | EFFECT: b\n").options("s", "i", "k", "x", "y", "z").get(0).recommended()).isFalse();
     }
+
+    /** Field: the mark at a line's end came back as "| RECOMMENDED." or on the WHY line; the number line does not. */
+    @Test
+    void theRecommendationIsReadFromItsNumber_orAnInlineMarkWithPunctuation() {
+        String numbered = "OPTION: Keep 120 | EFFECT: a\nOPTION: Take 200 | EFFECT: b\nOPTION: Both | EFFECT: c\n"
+                + "RECOMMENDED: 3\nWHY: imports need the longer limit.\n";
+        assertThat(answering(numbered).options("s", "i", "k", "x", "y", "z"))
+                .extracting(InputComparison.Option::recommended).containsExactly(false, false, true);
+
+        String punctuated = "OPTION: Keep 120 | EFFECT: a | RECOMMENDED.\nOPTION: Take 200 | EFFECT: b\nWHY: it is the seed's rule.\n";
+        List<InputComparison.Option> options = answering(punctuated).options("s", "i", "k", "x", "y", "z");
+        assertThat(options.get(0).recommended()).isTrue();
+        assertThat(options.get(0).effect()).isEqualTo("a");
+        assertThat(options.get(0).why()).isEqualTo("it is the seed's rule.");
+    }
+
+    @Test
+    void optionsWithoutAUsableMark_askOnceWhichOneIsRecommended() {
+        LLMClient llm = mock(LLMClient.class);
+        ChatResponse first = mock(ChatResponse.class);
+        when(first.getFirstContent()).thenReturn("OPTION: Keep 120 | EFFECT: a\nOPTION: Take 200 | EFFECT: b\n"
+                + "WHY: imports need it. | RECOMMENDED\n");
+        ChatResponse second = mock(ChatResponse.class);
+        when(second.getFirstContent()).thenReturn("RECOMMENDED: 2\nWHY: imports need the longer limit.");
+        when(llm.ask(any(), any())).thenReturn(ResponseEntity.ok(first), ResponseEntity.ok(second));
+
+        List<InputComparison.Option> options = new InputComparison(llm).options("s", "i", "k", "x", "y", "z");
+
+        assertThat(options).extracting(InputComparison.Option::recommended).containsExactly(false, true);
+        assertThat(options.get(1).why()).isEqualTo("imports need the longer limit.");
+        verify(llm, times(2)).ask(any(), any());
+    }
 }

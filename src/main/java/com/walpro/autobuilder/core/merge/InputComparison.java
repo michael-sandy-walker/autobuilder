@@ -66,7 +66,9 @@ public class InputComparison {
     }
 
     private static final Pattern OPTION = Pattern.compile(
-            "(?m)^\\s*OPTION:\\s*(.+?)\\s*\\|\\s*EFFECT:\\s*(.+?)\\s*(\\|\\s*RECOMMENDED\\s*)?$");
+            "(?m)^\\s*OPTION:\\s*(.+?)\\s*\\|\\s*EFFECT:\\s*(.+?)\\s*(\\|\\s*RECOMMENDED\\W*)?$", Pattern.CASE_INSENSITIVE);
+    /** The recommendation as a number of its own: a mark at a line's end landed on the WHY line as often as not (field). */
+    private static final Pattern RECOMMENDED = Pattern.compile("(?mi)^\\s*RECOMMENDED:\\s*(?:OPTION\\s*)?(\\d+)");
     private static final Pattern WHY = Pattern.compile("(?m)^\\s*WHY:\\s*(.+?)\\s*$");
 
     /**
@@ -86,18 +88,34 @@ public class InputComparison {
                 + " project's, and any combination of the two that makes sense here. Write each resolution as the rule or"
                 + " instruction the merged project should follow, in one sentence, then what choosing it changes for the"
                 + " merged project. One line each, in this form:\n\nOPTION: <the resolution> | EFFECT: <what it changes>"
-                + "\n\nMark exactly one option as the one you recommend for this project and the reason it was brought"
-                + " in, by ending its line with | RECOMMENDED. After the options, write one line:\n\nWHY: <one sentence>");
-        Matcher why = WHY.matcher(answer);
-        String reason = why.find() ? why.group(1) : null;
-        List<Option> out = new ArrayList<>();
-        boolean marked = false;
+                + "\n\nThen say which one option you recommend for this project and the reason it was brought in -- by its number,"
+                + " counting from 1 -- and why, on two lines:\n\nRECOMMENDED: <number>\nWHY: <one sentence>");
+        List<Option> found = new ArrayList<>();
+        int inline = -1;
         Matcher m = OPTION.matcher(answer);
-        while (m.find() && out.size() < 4) {
-            // Only the first mark counts: "exactly one" asked, more than one answered is one recommendation.
-            boolean recommended = m.group(3) != null && !marked;
-            marked |= recommended;
-            out.add(new Option(m.group(1), m.group(2), recommended, recommended ? reason : null));
+        while (m.find() && found.size() < 4) {
+            if (m.group(3) != null && inline < 0) inline = found.size();
+            found.add(new Option(m.group(1), m.group(2)));
+        }
+        if (found.isEmpty()) return List.of();
+        Matcher why = WHY.matcher(answer);
+        String reason = why.find() ? why.group(1).replaceFirst("\\s*\\|\\s*RECOMMENDED\\W*$", "") : null;
+        Matcher number = RECOMMENDED.matcher(answer);
+        int pick = number.find() ? Integer.parseInt(number.group(1)) - 1 : inline;
+        if (pick < 0 || pick >= found.size()) {
+            // Options without a usable recommendation: one short question about the list it already wrote.
+            String again = ask(OPTIONS_SYSTEM, "These are the options for resolving a conflict:\n\n" + answer
+                    + "\n\nWhich one do you recommend? Answer with its number, counting from 1, and why, on two lines:"
+                    + "\n\nRECOMMENDED: <number>\nWHY: <one sentence>");
+            Matcher n2 = RECOMMENDED.matcher(again);
+            pick = n2.find() ? Integer.parseInt(n2.group(1)) - 1 : -1;
+            Matcher w2 = WHY.matcher(again);
+            if (w2.find()) reason = w2.group(1);
+        }
+        List<Option> out = new ArrayList<>();
+        for (int i = 0; i < found.size(); i++) {
+            boolean recommended = i == pick;
+            out.add(new Option(found.get(i).resolution(), found.get(i).effect(), recommended, recommended ? reason : null));
         }
         return out;
     }

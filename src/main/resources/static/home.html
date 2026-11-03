@@ -452,7 +452,7 @@ function renderNow() {
     + (why ? '<div class="why">' + esc(why) + '</div>' : '') + links
     + (actions ? '<div class="row">' + actions + '</div>' : '')
     + (waiting ? goalBox() : '') + (job ? jobBox() : '')
-    + (run.runPort && !(job && job.phase === 'DECIDING') && !(job && job.phase === 'BRINGING_IN') ? importsHtml() : '')
+    + (run.runPort && !(job && job.phase === 'DECIDING') && !(job && job.phase === 'BRINGING_IN') && showImports() ? importsHtml() : '')
     + (conflicts.length && !(job && job.phase === 'DECIDING') ? '<div class="sub"><div class="title"><b>Waiting for your decision</b>'
        + '</div><div class="why">Conflicts from an import. While one is open, this project cannot be finished.</div>'
        + conflictsHtml() + '</div>' : '');
@@ -473,6 +473,13 @@ function renderNow() {
 let lastNowHtml = '';
 
 // What was brought into this project and is still in: pending ones wait to be kept, any can be taken back out.
+// Shown when the project has imports, or when its record on disk said it had some the run does not: then the empty
+// list answers why "Manage imports" shows nothing. A project that never took an import shows nothing at all.
+function showImports() {
+  if (imports.length) return true;
+  const t = projects.find(x => x.name === baseName(run.project));
+  return !!(t && t.imports);
+}
 function importsHtml() {
   if (!imports.length) return '<div class="sub"><div class="title"><b>Imports in this project</b></div>'
     + '<div class="why">Nothing brought in is still in this project.</div></div>';

@@ -367,6 +367,22 @@ public class AutobuilderController {
         return ResponseEntity.ok(behaviourLoggerForLive.live());
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.observability.behaviour.BehaviourHistory behaviourHistory;
+
+    /** T4-ED: notable events before {@code before} (newest first), read back from the run's behaviour log. */
+    @GetMapping("/live/events")
+    public ResponseEntity<?> liveEvents(@RequestParam String before, @RequestParam(defaultValue = "50") int limit) {
+        if (behaviourHistory == null) return ResponseEntity.status(503).body(Map.of("error", "not available in this context"));
+        java.time.Instant at;
+        try {
+            at = java.time.Instant.parse(before);
+        } catch (java.time.format.DateTimeParseException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "before is an instant, e.g. 2026-11-03T20:00:00Z"));
+        }
+        return ResponseEntity.ok(behaviourHistory.before(at, Math.max(1, Math.min(limit, 200))));
+    }
+
     /** T4-ED: every project brought in and not taken back out, kept or pending. */
     @GetMapping("/inputs/imports")
     public ResponseEntity<?> imports() {

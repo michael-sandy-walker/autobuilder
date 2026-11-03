@@ -78,8 +78,8 @@ public class BehaviourLogger {
     public void emit(BehaviourEvent event) {
         if (event == null) return;
         try {
-            recordSessionStats(event);
             Map<String, Object> envelope = wrap(event);
+            recordSessionStats(event, envelope);
             String line = mapper.writeValueAsString(envelope);
             BEHAVIOUR.info(line);
             if (publisher != null) {
@@ -91,7 +91,8 @@ public class BehaviourLogger {
         }
     }
 
-    private void recordSessionStats(BehaviourEvent event) {
+    @SuppressWarnings("unchecked")
+    private void recordSessionStats(BehaviourEvent event, Map<String, Object> envelope) {
         if (sessionStart == null) {
             sessionStart = event.timestamp() != null ? event.timestamp() : Instant.now();
         }
@@ -107,12 +108,9 @@ public class BehaviourLogger {
                 && start.subGoalDescription() != null && !start.subGoalDescription().isBlank()) {
             lastSubGoalDescription = start.subGoalDescription();
         }
-        String said = notable(event);
-        if (said != null) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("at", event.timestamp() == null ? Instant.now().toString() : event.timestamp().toString());
-            row.put("event", event.event());
-            row.put("text", said.length() > 300 ? said.substring(0, 299) + "..." : said);
+        Map<String, Object> row = row(event.timestamp() == null ? Instant.now() : event.timestamp(), event.event(),
+                (Map<String, Object>) envelope.get("payload"));
+        if (row != null) {
             synchronized (recent) {
                 recent.addLast(row);
                 while (recent.size() > RECENT) recent.removeFirst();
@@ -124,20 +122,39 @@ public class BehaviourLogger {
         }
     }
 
-    /** What a person watching the run would want to know of an event, or null for one they would not. */
-    private static String notable(BehaviourEvent event) {
-        if (event instanceof BehaviourEvent.CycleStart e) return e.subGoalDescription() != null ? e.subGoalDescription() : e.goalDescription();
-        if (event instanceof BehaviourEvent.MutationMerged e) {
-            int n = e.files() == null ? 0 : e.files().size();
-            return n + " file" + (n == 1 ? "" : "s") + (e.files() == null || e.files().isEmpty() ? "" : ": "
-                    + String.join(", ", e.files().stream().map(f -> f.substring(f.lastIndexOf('/') + 1)).limit(4).toList())
-                    + (n > 4 ? ", ..." : ""));
+    /**
+     * T4-ED: an event as the home screen lists it -- when, what, and in a line what happened -- or null for one a person
+     * watching the run would not want listed. One home for the wording, whether the event comes live or from the log.
+     */
+    public static Map<String, Object> row(Instant at, String event, Map<String, Object> payload) {
+        String said = describe(event, payload == null ? Map.of() : payload);
+        if (said == null) return null;
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("at", at.toString());
+        row.put("event", event);
+        row.put("text", said.length() > 300 ? said.substring(0, 299) + "..." : said);
+        return row;
+    }
+
+    private static String describe(String event, Map<String, Object> p) {
+        java.util.function.Function<String, String> s = k -> p.get(k) == null ? null : String.valueOf(p.get(k));
+        switch (event) {
+            case "cycle_start":
+                return s.apply("subGoalDescription") != null ? s.apply("subGoalDescription") : String.valueOf(s.apply("goalDescription"));
+            case "mutation_merged": {
+                List<?> files = p.get("files") instanceof List<?> l ? l : List.of();
+                int n = files.size();
+                return n + " file" + (n == 1 ? "" : "s") + (n == 0 ? "" : ": " + String.join(", ", files.stream()
+                        .map(f -> String.valueOf(f).substring(String.valueOf(f).lastIndexOf('/') + 1)).limit(4).toList())
+                        + (n > 4 ? ", ..." : ""));
+            }
+            case "mutation_rejected", "closure_refused", "system_paused":
+                return String.valueOf(s.apply("reason"));
+            case "goal_status_changed":
+                return s.apply("from") + " -> " + s.apply("to") + (s.apply("reason") == null ? "" : ": " + s.apply("reason"));
+            default:
+                return null;
         }
-        if (event instanceof BehaviourEvent.MutationRejected e) return e.reason();
-        if (event instanceof BehaviourEvent.ClosureRefused e) return e.reason();
-        if (event instanceof BehaviourEvent.GoalStatusChanged e) return e.from() + " -> " + e.to() + (e.reason() == null ? "" : ": " + e.reason());
-        if (event instanceof BehaviourEvent.SystemPaused e) return e.reason();
-        return null;
     }
 
     /**

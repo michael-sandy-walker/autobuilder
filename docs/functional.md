@@ -181,7 +181,8 @@ refused, nothing is overwritten):
 port 8081), and -- while its loop runs and after it has ended -- the loop at a glance: cycles, merged and rejected
 changes, refused closures, about how long a cycle takes, what it works on, its latest events (cycles, merges,
 rejections, refused closures, goal changes, pauses), and, when the same closure refusal keeps coming back, that
-refusal with how often it came back -- what a stuck run looks like. And:
+refusal with how often it came back -- what a stuck run looks like. The events scroll in a box; scrolling to its end
+brings older ones from the run's log, back to the run's start. And:
 
 - **Stop** while its loop runs -- it halts after its current cycle (which can take a few minutes) and its results
   stay as they are.

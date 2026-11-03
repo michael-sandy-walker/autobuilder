@@ -600,7 +600,7 @@ a goal's activity. `BehaviourEventController` and `EventController` (`/events/..
 `FileController` (`/files/...`): reading, listing, writing and uploading files of the target.
 `TtsController` (`/tts/synthesize`, through `TtsService`): narration, spoken in-process.
 
-`GET /autobuilder/live` (`BehaviourLogger.live()`): the session's counts (cycles, merges, rejections, refused closures), the current subgoal, the latest 15 notable events newest first, and the closure refusal that recurred most -- relayed as `/home/run/live`.
+`GET /autobuilder/live` (`BehaviourLogger.live()`): the session's counts (cycles, merges, rejections, refused closures), the current subgoal, the latest 50 notable events newest first, and the closure refusal that recurred most -- relayed as `/home/run/live`; `GET /autobuilder/live/events?before=<instant>` (`BehaviourHistory`) reads older ones back from the run's `logs/behaviour.ndjson`, worded by the same `BehaviourLogger.row`, relayed as `/home/run/live/events`.
 `HomeController` (home context only): `GET /` (redirects to `home.html`), `GET /home/state`, `GET /home/projects`,
 `POST /home/projects` (a new project from a specification, or with `from` a copy of another project's
 `bootstrap/`), `POST /home/import` (a codebase on this machine -- or, with `from`, a project here's `output/` -- copied into a new project's `output/` by `home.ProjectImport`,

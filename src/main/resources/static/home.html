@@ -253,6 +253,8 @@ let progress = null;
 let conflicts = [];
 let pending = [];
 let live = null;
+// Events older than the live list, fetched from the run's log as the list is scrolled to its end.
+let older = { since: null, rows: [], loading: false, done: false };
 let imports = [];
 let projects = [];
 
@@ -483,7 +485,13 @@ function renderNow() {
   const scrolled = $('events') ? $('events').scrollTop : 0;
   el.className = 'now ' + run.state;
   el.innerHTML = html;
-  if ($('events')) $('events').scrollTop = scrolled;
+  if ($('events')) {
+    $('events').scrollTop = scrolled;
+    $('events').onscroll = e => {
+      const box = e.target;
+      if (box.scrollTop + box.clientHeight >= box.scrollHeight - 24) loadOlder();
+    };
+  }
   el.querySelectorAll('[data-do]').forEach(b => b.onclick = () => ({ close: closeRun, stop: stopRun, continue: continueHeld })[b.dataset.do]());
   el.querySelectorAll('[data-keep]').forEach(b => b.onclick = () => keepImport(b.dataset.keep));
   el.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => cancelImport(b.dataset.cancel, b.dataset.label));
@@ -516,12 +524,32 @@ function liveHtml() {
     + (top && top.times > 1 ? '<div class="recurring"><b>The same closure refusal came back ' + top.times + ' times</b>'
        + (live.cycles ? ' in ' + live.cycles + ' cycles' : '') + ', last at ' + esc(new Date(top.last).toLocaleTimeString()) + ':'
        + '<div class="side">' + esc(top.reason) + '</div></div>' : '')
-    + (live.recent && live.recent.length ? '<ul class="events" id="events">' + live.recent.map(e => {
+    + (eventRows().length ? '<ul class="events" id="events">' + eventRows().map(e => {
         const [label, cls] = EVENT_LABEL[e.event] || [e.event, ''];
         return '<li><span class="t">' + esc(new Date(e.at).toLocaleTimeString()) + '</span><span class="k ' + cls + '">' + esc(label)
           + '</span><span class="x" title="' + esc(e.text) + '">' + esc(e.text) + '</span></li>';
-      }).join('') + '</ul>' : '')
+      }).join('') + '<li class="note" style="display:block;border:0">'
+      + (older.loading ? 'Loading older events...' : older.done ? 'The start of the run.' : 'Scroll on for older events.') + '</li></ul>' : '')
     + '</div>';
+}
+
+// The live list, then what scrolling fetched -- each older than the last one shown.
+function eventRows() {
+  if (older.since !== live.since) older = { since: live.since, rows: [], loading: false, done: false };
+  const recent = live.recent || [];
+  const oldest = recent.length ? Date.parse(recent[recent.length - 1].at) : Infinity;
+  return recent.concat(older.rows.filter(e => Date.parse(e.at) < oldest));
+}
+async function loadOlder() {
+  const rows = eventRows();
+  if (older.loading || older.done || !rows.length) return;
+  older.loading = true; rerender();
+  const before = new Date(Date.parse(rows[rows.length - 1].at)).toISOString();
+  const list = await fetch('/home/run/live/events?before=' + encodeURIComponent(before)).then(r => r.json()).catch(() => null);
+  older.loading = false;
+  if (!Array.isArray(list) || !list.length) older.done = true;
+  else older.rows = older.rows.concat(list);
+  rerender();
 }
 
 function importsHtml() {

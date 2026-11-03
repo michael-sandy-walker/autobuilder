@@ -328,6 +328,13 @@ public class HomeController {
         return relayed(run.get("/autobuilder/live"));
     }
 
+    /** Older notable events of the running loop, before an instant, newest first. */
+    @GetMapping(value = "/home/run/live/events", produces = "application/json")
+    public ResponseEntity<String> liveEvents(@org.springframework.web.bind.annotation.RequestParam String before) {
+        if (!before.matches("[0-9T:.Z+-]+")) return ResponseEntity.badRequest().body("{\"ok\":false,\"message\":\"before is an instant\"}");
+        return relayed(run.get("/autobuilder/live/events?before=" + before + "&limit=50"));
+    }
+
     /** Every import of the running project not taken back out, kept or pending. */
     @GetMapping(value = "/home/run/imports", produces = "application/json")
     public ResponseEntity<String> imports() {

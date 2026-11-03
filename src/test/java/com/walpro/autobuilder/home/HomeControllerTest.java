@@ -190,4 +190,26 @@ class HomeControllerTest {
         assertThat(c.coldRead().getStatusCode().value()).isEqualTo(409);
         assertThat(c.goal("a goal").getStatusCode().value()).isEqualTo(409);
     }
+
+    @Test
+    void aProjectHereCanBeImportedAsACopyOfItsCode() throws Exception {
+        Files.createDirectories(projects.resolve("here/output/src"));
+        Files.createDirectories(projects.resolve("here/bootstrap"));
+        Files.createDirectories(projects.resolve("here/meta"));
+        Files.writeString(projects.resolve("here/output/src/A.java"), "class A {}");
+        Files.writeString(projects.resolve("here/bootstrap/seed.txt"), "its own goal\n");
+        Files.writeString(projects.resolve("here/meta/run-end-report.json"), "{}");
+        HomeController c = controller(idle());
+
+        var res = c.importProject(new HomeController.ImportRequest("here-adopted", null, null, "here"));
+
+        assertThat(res.getStatusCode().value()).isEqualTo(201);
+        try (var all = Files.walk(projects.resolve("here-adopted"))) {
+            assertThat(all.filter(Files::isRegularFile).map(p -> projects.resolve("here-adopted").relativize(p).toString()))
+                    .as("the code only: no goal, no history").containsExactly("output/src/A.java");
+        }
+        assertThat(projects.resolve("here/output/src/A.java")).hasContent("class A {}");
+        assertThat(c.importProject(new HomeController.ImportRequest("x", null, null, "absent")).getStatusCode().value()).isEqualTo(404);
+        assertThat(c.importProject(new HomeController.ImportRequest("x", null, null, "../here")).getStatusCode().value()).isEqualTo(404);
+    }
 }

@@ -121,8 +121,15 @@ public class HomeController {
         return ResponseEntity.status(201).body(body);
     }
 
-    /** The body of "Import one": a name for the project, the directory to copy in, and what may not be touched. */
-    public record ImportRequest(String name, String source, String protectedPaths) {}
+    /**
+     * The body of "Import one": a name for the project, the directory to copy in -- or {@code from}, a project here
+     * whose code is copied -- and what may not be touched.
+     */
+    public record ImportRequest(String name, String source, String protectedPaths, String from) {
+        public ImportRequest(String name, String source, String protectedPaths) {
+            this(name, source, protectedPaths, null);
+        }
+    }
 
     /**
      * Imports a codebase on this machine as a new project: its tree copied into {@code output/} (build output,
@@ -135,12 +142,21 @@ public class HomeController {
             return refuse(400, "a project name is lower case letters, digits, '.', '-' or '_', at most 64, "
                     + "starting with a letter or digit");
         }
-        if (request.source() == null || request.source().isBlank() || !Path.of(request.source().strip()).isAbsolute()) {
+        Path source;
+        if (request.from() != null) {
+            if (!PROJECT_NAME.matcher(request.from()).matches()
+                    || !Files.isDirectory(projects.path().resolve(request.from()).resolve("output"))) {
+                return refuse(404, "no project named " + request.from() + " with code to import");
+            }
+            source = projects.path().resolve(request.from()).resolve("output").toAbsolutePath().normalize();
+        } else if (request.source() == null || request.source().isBlank()
+                || !Path.of(request.source().strip()).isAbsolute()) {
             return refuse(400, "the source must be the absolute path of a directory on this machine");
+        } else {
+            source = Path.of(request.source().strip()).normalize();
         }
         Path dir = projects.path().resolve(request.name());
         if (Files.exists(dir)) return refuse(409, "a project named " + request.name() + " already exists");
-        Path source = Path.of(request.source().strip()).normalize();
         if (dir.toAbsolutePath().normalize().startsWith(source)) {
             return refuse(400, "the source contains the projects directory; choose the codebase itself");
         }

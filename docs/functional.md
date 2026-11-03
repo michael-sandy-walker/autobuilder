@@ -145,8 +145,9 @@ Start Autobuilder without naming a project and open `http://localhost:8080` in a
   machine, and optionally what may not be touched (globs relative to the code, written to
   `bootstrap/protected-paths.txt`). "Import and adopt" copies the code into the project's `output/` -- leaving out
   `.git`, `target`, `build`, `node_modules`, `.idea`, `.gradle` and links; the original is only read; at most
-  20,000 files and 500 MB -- and starts it in `ADOPT_PROJECT`. Projects already here that hold code Autobuilder
-  did not write can be adopted in place. An adopted project **waits for a goal**: the home screen shows what
+  20,000 files and 500 MB -- and starts it in `ADOPT_PROJECT`. Every project already here that holds code can be
+  **adopted in place**, or **imported as a copy**: its code alone (no goal, no history) copied into a new project,
+  which is adopted while the original stays as it is. An adopted project **waits for a goal**: the home screen shows what
   Autobuilder read in the code (its cold read) and a goal box; "Set goal" gives the run its goal, written byte for
   byte to `bootstrap/seed.txt`.
 - **Import several** -- bring two or more projects together in a new one. Give the new project a name and a
@@ -186,6 +187,7 @@ curl -X POST -H 'Content-Type: application/json' \
 curl -X POST -H 'Content-Type: application/json' \
      -d '{"name": "their-service", "source": "/home/me/code/their-service", "protectedPaths": "src/main/**"}' \
      http://localhost:8080/home/import                   # copy a codebase in, then start it with mode ADOPT_PROJECT
+                                                         # ({"name": ..., "from": "<project here>"} copies that one's code)
 curl http://localhost:8080/home/run/cold-read            # what the adopted run read in the code
 curl -X POST -H 'Content-Type: text/plain' --data-binary @goal.txt \
      http://localhost:8080/home/run/goal                 # its goal, byte for byte

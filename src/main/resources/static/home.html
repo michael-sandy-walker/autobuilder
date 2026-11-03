@@ -184,8 +184,10 @@
       </div>
     </div>
 
-    <h2>Or adopt one already here</h2>
-    <p class="note">Projects holding code Autobuilder did not write.</p>
+    <h2>Or import one already here</h2>
+    <p class="note">Adopt in place works on a project's code where it is. Import a copy makes a new project from a copy
+      of its code -- no goal, no history -- and adopts that; the original is left as it is. Either way the run waits for
+      a goal.</p>
     <div id="adoptable"></div>
   </section>
 
@@ -222,6 +224,8 @@
 <script>
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Everything that starts a run, disabled while one is up (one run at a time).
+const STARTERS = 'button[data-start], button[data-import-copy], #create, #import-go, #sev-go';
 const busy = s => s === 'STARTING' || s === 'RUNNING' || s === 'ENDED';
 const REASON = { 'goal-fulfilled': 'goal fulfilled', 'user-pause': 'paused by a person' };
 const reasonText = r => REASON[r] || String(r || 'stopped').replace(/[-_]/g, ' ');
@@ -241,7 +245,7 @@ async function loadState() {
     return;
   }
   renderBanner();
-  document.querySelectorAll('button[data-start], #create').forEach(b => b.disabled = busy(run.state));
+  document.querySelectorAll(STARTERS).forEach(b => b.disabled = busy(run.state));
   const back = document.getElementById('back');
   if (back) back.onclick = returnHome;
   const waiting = run.state === 'RUNNING' && run.waitingForGoal;
@@ -331,8 +335,12 @@ async function returnHome() {
 // of its bootstrap/).
 function card(t, withContinue) {
   const actions = [];
-  if (withContinue === 'adopt') actions.push('<button data-start="' + esc(t.name) + '" data-mode="ADOPT_PROJECT">Adopt</button>');
-  else if (withContinue) actions.push('<button data-start="' + esc(t.name) + '" data-mode="CONTINUE_LINEAGE">Continue</button>');
+  if (withContinue === 'adopt') {
+    actions.push('<button data-start="' + esc(t.name) + '" data-mode="ADOPT_PROJECT">Adopt in place</button>');
+    actions.push('<button data-import-copy="' + esc(t.name) + '">Import a copy</button>');
+    return cardFrame(t, actions);
+  }
+  if (withContinue) actions.push('<button data-start="' + esc(t.name) + '" data-mode="CONTINUE_LINEAGE">Continue</button>');
   if (t.supportedModes.includes('NEW_PROJECT')) {
     const fresh = t.situation === 'EMPTY';
     actions.push('<button data-start="' + esc(t.name) + '" data-mode="NEW_PROJECT"'
@@ -342,6 +350,10 @@ function card(t, withContinue) {
   }
   if (t.hasSeed) actions.push('<button data-duplicate="' + esc(t.name) + '" title="A new project with a copy of its '
     + 'specification, obligations and settings; no code, no history">Duplicate</button>');
+  return cardFrame(t, actions);
+}
+
+function cardFrame(t, actions) {
   return '<div class="card"><div class="head"><span class="name">' + esc(t.name) + '</span>'
     + '<span class="tag ' + esc(t.situation) + '">' + esc(t.situation.toLowerCase().replace('_', ' ')) + '</span></div>'
     + (t.seedSummary ? '<p class="seed">' + esc(t.seedSummary) + '</p>' : '')
@@ -364,10 +376,14 @@ function renderLists() {
     : '<p class="note">No project has unfinished work to continue.</p>';
   document.getElementById('finished').innerHTML = done.map(t => card(t, false)).join('');
   renderPicks();
-  const foreign = projects.filter(t => t.situation === 'FOREIGN');
-  document.getElementById('adoptable').innerHTML = foreign.length
-    ? foreign.map(t => card(t, 'adopt')).join('')
-    : '<p class="note">None here.</p>';
+  const withCode = projects.filter(t => t.supportedModes.includes('ADOPT_PROJECT'));
+  document.getElementById('adoptable').innerHTML = withCode.length
+    ? withCode.map(t => card(t, 'adopt')).join('')
+    : '<p class="note">No project here holds code.</p>';
+  document.querySelectorAll('button[data-import-copy]').forEach(b => {
+    b.disabled = busy(run.state);
+    b.onclick = () => importCopy(b.dataset.importCopy);
+  });
   document.getElementById('finished-head').hidden = !done.length;
   document.querySelectorAll('button[data-start]').forEach(b => {
     b.disabled = busy(run.state);
@@ -512,18 +528,30 @@ document.getElementById('release').onclick = async () => {
   loadJob();
 };
 
-document.getElementById('import-go').onclick = async () => {
-  const projectName = document.getElementById('imp-name').value.trim();
-  const r = await post('/home/import', { name: projectName, source: document.getElementById('imp-source').value.trim(),
-                                         protectedPaths: document.getElementById('imp-protected').value });
+async function importCopy(from) {
+  const taken = new Set(projects.map(t => t.name));
+  let suggestion = from + '-adopted';
+  for (let i = 2; taken.has(suggestion); i++) suggestion = from + '-adopted-' + i;
+  const projectName = (prompt('Import a copy of "' + from + '"\'s code as a new project named:', suggestion) || '').trim();
+  if (!projectName) return;
+  await importAndAdopt({ name: projectName, from, protectedPaths: '' });
+}
+
+async function importAndAdopt(body) {
+  const r = await post('/home/import', body);
   if (r.status !== 201) { result(false, 'Not imported: ' + (r.body.message || r.status)); return; }
   const imported = 'Imported ' + r.body.files + ' files' + (r.body.leftOut ? ', left out ' + r.body.leftOut
          + ' (build output, version control, IDE folders, links)' : '') + '. ';
   await loadProjects();
-  await start(projectName, 'ADOPT_PROJECT');
+  await start(body.name, 'ADOPT_PROJECT');
   const out = document.getElementById('result');
   out.textContent = imported + out.textContent;
-};
+}
+
+document.getElementById('import-go').onclick = () => importAndAdopt({
+  name: document.getElementById('imp-name').value.trim(),
+  source: document.getElementById('imp-source').value.trim(),
+  protectedPaths: document.getElementById('imp-protected').value });
 
 function choose(dir) {
   document.querySelectorAll('.direction[data-dir]').forEach(b => b.classList.toggle('on', b.dataset.dir === dir));

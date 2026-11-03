@@ -49,7 +49,7 @@ class IntegrationJobTest {
                 return new Reply(200, "{\"inputId\":\"in-" + label + "\",\"placed\":[\"a\",\"b\"],\"corrections\":[],\"conflicts\":"
                         + (label.equals("two") ? "[{\"subject\":\"the title limit\",\"heldPath\":null,\"heldLine\":null},"
                                 + "{\"subject\":\"src/A.java\",\"heldPath\":\"meta/held/A.java\",\"heldLine\":null}]" : "[]")
-                        + ",\"unmet\":[\"x\"]}");
+                        + ",\"unmet\":[\"x\"],\"criteria\":4,\"met\":3,\"unanswered\":0}");
             }
             return new Reply(200, "{\"ok\":true}");
         }
@@ -139,7 +139,8 @@ class IntegrationJobTest {
         await(job, IntegrationJob.Phase.DECIDING, IntegrationJob.Phase.FAILED);
 
         assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.DECIDING);
-        assertThat(job.describe().get("inputs")).asString().contains("rulesThatDiffer=1").contains("filesBothHave=1");
+        assertThat(job.describe().get("inputs")).asString().contains("rulesThatDiffer=1").contains("filesBothHave=1")
+                .contains("conflicts=2").contains("criteria=4").contains("met=3");
         assertThatThrownBy(job::release).isInstanceOf(IllegalStateException.class).hasMessageContaining("1 conflict");
         assertThat(run.calls).noneMatch(c -> c.contains("/start"));
 

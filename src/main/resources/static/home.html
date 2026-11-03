@@ -489,9 +489,10 @@ function importsHtml() {
 }
 function countsText(newFiles, both, rules, claims) {
   const part = (n, one, many) => n + ' ' + (n === 1 ? one : many);
-  return [part(newFiles, 'new file', 'new files'), part(both, 'file both projects have', 'files both projects have'),
-          part(rules, 'rule that differs', 'rules that differ')].concat(claims ? [part(claims, 'requirement that may not hold', 'requirements that may not hold')] : [])
-    .join(', ') + '.';
+  const split = [[both, 'file', 'files'], [rules, 'rule', 'rules'], [claims, 'requirement', 'requirements']]
+    .filter(([n]) => n).map(([n, one, many]) => part(n, one, many));
+  return part(newFiles, 'new file', 'new files') + ', ' + part(both + rules + claims, 'open conflict', 'open conflicts')
+    + (split.length ? ' (' + split.join(', ') + ')' : '') + '.';
 }
 async function keepImport(id) {
   const r = await post('/home/run/imports/' + encodeURIComponent(id) + '/keep');
@@ -562,13 +563,14 @@ function jobBox() {
     + (job.failure ? '<div class="why">' + esc(job.failure) + '</div>' : '')
     + (job.phase === 'BRINGING_IN' || job.phase === 'STARTING' || job.phase === 'SETTING_GOAL' ? progressHtml(landed) : '')
     + '<table class="inputs" style="margin-top:8px"><thead><tr><th>Brought in</th><th>Status</th>'
-    + '<th title="Files this project did not have">New files</th><th title="Held as conflicts: this project\'s file stays until decided">Files both have</th>'
-    + '<th title="Held as conflicts">Rules that differ</th><th title="Differences your intent settled">Corrections</th>'
-    + '<th title="Criteria it carried that the combined code does not meet yet">Unmet criteria</th></tr></thead><tbody>'
+    + '<th title="Files this project did not have; placed as they are">New files</th>'
+    + '<th title="Differences nothing settled, held for your decision: files both projects have, rules they handle differently, '
+    + 'and requirements it met that may not hold here">Conflicts</th>'
+    + '<th title="Rules your intent settled for what came in: they replace this project\'s rule, without a decision">Corrections</th>'
+    + '<th title="The criteria it carried, checked against the combined code">Criteria</th></tr></thead><tbody>'
     + job.inputs.map(i => '<tr><td>' + esc(i.project) + '</td><td>' + esc(i.status) + (i.message ? ': ' + esc(i.message) : '')
-      + '</td><td>' + (i.newFiles ?? '') + '</td><td>' + (i.filesBothHave ?? '') + '</td><td>'
-      + (i.rulesThatDiffer == null ? '' : i.rulesThatDiffer + (i.claims ? ' (+' + i.claims + ' requirements)' : ''))
-      + '</td><td>' + (i.corrections ?? '') + '</td><td>' + (i.unmet ?? '') + '</td></tr>').join('') + '</tbody></table>'
+      + '</td><td>' + (i.newFiles ?? '') + '</td><td>' + conflictCell(i) + '</td><td>' + (i.corrections ?? '') + '</td><td>'
+      + criteriaCell(i) + '</td></tr>').join('') + '</tbody></table>'
     + (job.phase === 'DECIDING' ? conflictsHtml() + releaseHtml() : '')
     + '</div>';
 }
@@ -590,6 +592,18 @@ function progressHtml(landed) {
     + (secs >= 5 ? ', ' + secs + ' s so far' : '') + '</div>'
     + '<ol class="steps">' + (progress.all || []).map((label, i) => '<li class="' + (i + 1 < progress.step ? 'done' : i + 1 === progress.step ? 'now' : '')
       + '">' + esc(label) + '</li>').join('') + '</ol>';
+}
+
+function conflictCell(i) {
+  if (i.conflicts == null) return '';
+  const parts = [[i.filesBothHave, 'file', 'files'], [i.rulesThatDiffer, 'rule', 'rules'], [i.claims, 'requirement', 'requirements']]
+    .filter(([n]) => n).map(([n, one, many]) => n + ' ' + (n === 1 ? one : many));
+  return i.conflicts + (parts.length ? ' <span class="note">-- ' + parts.join(', ') + '</span>' : '');
+}
+function criteriaCell(i) {
+  if (i.criteria == null) return '';
+  if (!i.criteria) return 'none carried';
+  return i.met + ' met, ' + i.unmet + ' not yet' + (i.unanswered ? ', ' + i.unanswered + ' unanswered' : '');
 }
 
 function conflictsHtml() {

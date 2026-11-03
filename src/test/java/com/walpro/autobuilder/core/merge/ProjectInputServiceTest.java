@@ -325,6 +325,7 @@ class ProjectInputServiceTest {
 
         assertThat(r.conflicts()).singleElement().satisfies(c -> assertThat(c.heldLine()).isEqualTo("Knot is final"));
         assertThat(r.unmet()).as("not work to do").isEmpty();
+        assertThat(r.met()).as("every criterion but the claim").isEqualTo(r.criteria() - 1);
         assertThat(goals.requirements().obligationsOrClauses()).doesNotContain("Knot is final").contains("A knot holds.");
 
         service.decide(r.conflicts().get(0).id(), "input", "operator");

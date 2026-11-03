@@ -220,8 +220,12 @@ class IntegrationJob {
             row.put("filesBothHave", files);
             row.put("rulesThatDiffer", rules);
             row.put("claims", claims);
+            row.put("conflicts", files + rules + claims);
             row.put("corrections", r.path("corrections").size());
+            row.put("criteria", r.path("criteria").asInt());
+            row.put("met", r.path("met").asLong());
             row.put("unmet", r.path("unmet").size());
+            row.put("unanswered", r.path("unanswered").asLong());
         }
         log.info("T4-ED: brought {} into {}: {} placed, {} corrections, {} conflicts", i.label(), name,
                 r.path("placed").size(), r.path("corrections").size(), r.path("conflicts").size());

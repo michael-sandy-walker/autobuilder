@@ -66,9 +66,10 @@ public class ProjectInputService {
     public record Verdict(String criterion, Boolean met, String source, List<ProjectMerge.Origin> origins) {
     }
 
+    /** {@code met} (T4-ED): the carried criteria the merged code meets; {@code unmet} those it does not yet. */
     public record Report(String inputId, String goalId, List<String> placed, List<String> corrections, List<InputEvent> conflicts,
                          List<String> notes, int criteria, long byStructure, long byModel, long unanswered,
-                         List<String> unmet, int obligations) {
+                         List<String> unmet, int obligations, long met) {
     }
 
     /**
@@ -224,7 +225,8 @@ public class ProjectInputService {
         return new Report(input.id(), goalId, landing.placed(), corrections, conflicts, landing.notes(), verdicts.size(),
                 verdicts.stream().filter(v -> v.source().startsWith("structure")).count(),
                 verdicts.stream().filter(v -> v.source().equals("model")).count(),
-                verdicts.stream().filter(v -> v.met() == null).count(), unmet, obligations);
+                verdicts.stream().filter(v -> v.met() == null).count(), unmet, obligations,
+                verdicts.stream().filter(v -> Boolean.TRUE.equals(v.met())).count());
     }
 
     /** The input's types its intent says to use, by placed path: closure asks structure about them. */

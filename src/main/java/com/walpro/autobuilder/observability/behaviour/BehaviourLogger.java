@@ -58,7 +58,7 @@ public class BehaviourLogger {
 
     // T4-ED: what the home screen shows of a running loop -- the latest notable events, newest last, and how often each
     // closure refusal came back (the same refusal returning cycle after cycle is what a stuck run looks like).
-    static final int RECENT = 15;
+    static final int RECENT = 50;
     private final java.util.ArrayDeque<Map<String, Object>> recent = new java.util.ArrayDeque<>();
     private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.LongAdder>
             refusals = new java.util.concurrent.ConcurrentHashMap<>();

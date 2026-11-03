@@ -85,7 +85,8 @@
   .recurring { border: 1px solid var(--warn-rule); background: var(--warn-bg); border-radius: 6px; padding: 8px 10px; margin-top: 10px;
     font-size: 12.5px; }
   .recurring b { color: var(--warn); }
-  ul.events { list-style: none; padding: 0; margin: 8px 0 0; font-size: 12px; }
+  ul.events { list-style: none; padding: 0 6px 0 0; margin: 8px 0 0; font-size: 12px; max-height: 240px; overflow-y: auto;
+    border-top: 1px solid var(--rule); }
   ul.events li { display: grid; grid-template-columns: 86px 112px 1fr; gap: 8px; padding: 3px 0; white-space: nowrap; border-bottom: 1px solid var(--rule); }
   ul.events .t { color: var(--dim); } ul.events .k { color: var(--muted); }
   ul.events .merged { color: var(--good); } ul.events .rejected, ul.events .refused { color: var(--warn); }
@@ -478,8 +479,11 @@ function renderNow() {
   if (html === lastNowHtml) return;
   lastNowHtml = html;
   const focused = document.activeElement && document.activeElement.id;
+  // A rebuild would put a scrolled list back at its top every few seconds; it keeps where it was.
+  const scrolled = $('events') ? $('events').scrollTop : 0;
   el.className = 'now ' + run.state;
   el.innerHTML = html;
+  if ($('events')) $('events').scrollTop = scrolled;
   el.querySelectorAll('[data-do]').forEach(b => b.onclick = () => ({ close: closeRun, stop: stopRun, continue: continueHeld })[b.dataset.do]());
   el.querySelectorAll('[data-keep]').forEach(b => b.onclick = () => keepImport(b.dataset.keep));
   el.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => cancelImport(b.dataset.cancel, b.dataset.label));
@@ -512,7 +516,7 @@ function liveHtml() {
     + (top && top.times > 1 ? '<div class="recurring"><b>The same closure refusal came back ' + top.times + ' times</b>'
        + (live.cycles ? ' in ' + live.cycles + ' cycles' : '') + ', last at ' + esc(new Date(top.last).toLocaleTimeString()) + ':'
        + '<div class="side">' + esc(top.reason) + '</div></div>' : '')
-    + (live.recent && live.recent.length ? '<ul class="events">' + live.recent.slice(0, 10).map(e => {
+    + (live.recent && live.recent.length ? '<ul class="events" id="events">' + live.recent.map(e => {
         const [label, cls] = EVENT_LABEL[e.event] || [e.event, ''];
         return '<li><span class="t">' + esc(new Date(e.at).toLocaleTimeString()) + '</span><span class="k ' + cls + '">' + esc(label)
           + '</span><span class="x" title="' + esc(e.text) + '">' + esc(e.text) + '</span></li>';

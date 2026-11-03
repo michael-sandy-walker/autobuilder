@@ -236,6 +236,7 @@ let job = null;
 let progress = null;
 let conflicts = [];
 let pending = [];
+let imports = [];
 let projects = [];
 
 // ---------- talking to the home context ----------
@@ -270,9 +271,10 @@ async function refresh() {
     if (run.runPort && !(job && job.phase === 'BRINGING_IN')) {
       const list = await fetch('/home/run/conflicts').then(r => r.json()).catch(() => []);
       conflicts = Array.isArray(list) ? list : [];
-      const waiting = await fetch('/home/run/pending').then(r => r.json()).catch(() => []);
-      pending = Array.isArray(waiting) ? waiting : [];
-    } else { conflicts = []; pending = []; }
+      const all = await fetch('/home/run/imports').then(r => r.json()).catch(() => []);
+      imports = Array.isArray(all) ? all : [];
+      pending = imports.filter(i => i.pending);
+    } else { conflicts = []; pending = []; imports = []; }
   } catch (e) {
     $('now').className = 'now FAILED';
     $('now').innerHTML = '<div class="title"><span class="dot"></span><b>Cannot reach Autobuilder</b></div>';
@@ -307,11 +309,14 @@ function actionsOf(t) {
         + 'run is not read. Anything not kept elsewhere is gone. (Duplicate keeps it and starts a copy instead.)' }) : null;
   const duplicate = t.hasSeed ? { label: 'Duplicate', hint: 'a new project from its specification, without code', run: () => duplicateOf(t) } : null;
   // An import waiting for confirmation comes first: the project is held to review it, nothing runs.
+  const manage = t.imports ? start('Manage imports...', 'ASK', { hint: 'open it held, to keep or take back out what was brought in' }) : null;
+  const cont = start('Continue', 'CONTINUE_LINEAGE', { hint: 'its goal is reached; the run opens and ends' });
   const main = (t.pendingImports || []).length ? start('Review import', 'ASK')
     : { new: start('Start', 'NEW_PROJECT'), progress: start('Continue', 'CONTINUE_LINEAGE'),
         finished: extend, existing: start('Work on it', 'ADOPT_PROJECT'), blank: null }[s];
-  const more = { new: [duplicate], progress: [extend, restart, duplicate], finished: [restart, duplicate],
-                 existing: [extend, duplicate], blank: [] }[s].filter(Boolean);
+  const more = { new: [duplicate], progress: [extend, manage, restart, duplicate], finished: [cont, manage, restart, duplicate],
+                 existing: [extend, manage, duplicate], blank: [] }[s].filter(Boolean)
+    .filter(a => !(main && a.label === main.label));
   return { main, more };
 }
 
@@ -339,7 +344,9 @@ function renderProjects() {
       + (isCurrent(t) ? '<span class="badge now">' + (run.state === 'ENDED' ? 'open' : 'now') + '</span>'
                       : '<span class="badge ' + s + '">' + STATE_LABEL[s] + '</span>')
       + ((t.pendingImports || []).length ? ' <span class="badge waiting" title="' + esc(t.pendingImports.join(', '))
-          + '">import waiting</span>' : '') + '</div>'
+          + '">import waiting</span>'
+          : t.imports ? ' <span class="badge" title="Projects brought into this one">' + t.imports + ' import' + (t.imports === 1 ? '' : 's') + '</span>' : '')
+      + '</div>'
       + '<div class="acts"></div>'
       + '<div class="what">' + esc(t.seedSummary || (s === 'existing' ? 'no goal yet' : '')) + '</div>'
       + '<div class="meta">' + t.sourceFiles + ' source file' + (t.sourceFiles === 1 ? '' : 's')
@@ -438,7 +445,7 @@ function renderNow() {
     + (why ? '<div class="why">' + esc(why) + '</div>' : '') + links
     + (actions ? '<div class="row">' + actions + '</div>' : '')
     + (waiting ? goalBox() : '') + (job ? jobBox() : '')
-    + (pending.length && !(job && job.phase === 'DECIDING') ? pendingHtml() : '')
+    + (imports.length && !(job && job.phase === 'DECIDING') ? importsHtml() : '')
     + (conflicts.length && !(job && job.phase === 'DECIDING') ? '<div class="sub"><div class="title"><b>Waiting for your decision</b>'
        + '</div><div class="why">Conflicts from an import. While one is open, this project cannot be finished.</div>'
        + conflictsHtml() + '</div>' : '');
@@ -458,16 +465,23 @@ function renderNow() {
 }
 let lastNowHtml = '';
 
-// Imports that wait for confirmation, from this session or an earlier one.
-function pendingHtml() {
-  return '<div class="sub"><div class="title"><b>Waiting for your confirmation</b></div>'
-    + '<div class="why">What was brought in is in the project, but not yet kept. Keep it, or cancel it to take it back out.</div>'
-    + pending.map(i => '<div class="pending"><b>Import of ' + esc(i.label) + '</b> <span class="note">' + esc(when(i.at)) + '</span>'
-      + '<div class="side">' + esc(i.intent) + '</div>'
-      + '<div class="side">' + countsText(i.newFiles, i.filesBothHave, i.rulesThatDiffer, i.claims) + '</div>'
-      + '<div class="row"><button data-keep="' + esc(i.inputId) + '" class="primary">Keep it</button>'
-      + '<button data-cancel="' + esc(i.inputId) + '" data-label="' + esc(i.label) + '" class="destructive">Cancel the import</button></div></div>').join('')
-    + '</div>';
+// What was brought into this project and is still in: pending ones wait to be kept, any can be taken back out.
+function importsHtml() {
+  return '<div class="sub"><div class="title"><b>' + (pending.length ? 'Imports -- ' + pending.length + ' waiting for your confirmation'
+      : 'Imports in this project') + '</b></div>'
+    + '<div class="why">' + (pending.length ? 'What was brought in is in the project, but not yet kept. Keep it, or cancel it to take it back out. '
+      : '') + 'Taking an import back out removes its files, goals and requirements and drops its open conflicts; the record of it stays.</div>'
+    + imports.map(i => {
+      const name = i.label || (i.intent || '').slice(0, 80);
+      return '<div class="pending"' + (i.pending ? '' : ' style="border-color:var(--rule)"') + '><b' + (i.pending ? '' : ' style="color:var(--ink)"') + '>'
+        + esc(i.label ? 'Import of ' + i.label : 'Import') + '</b> <span class="badge' + (i.pending ? ' waiting">waiting' : '">kept')
+        + '</span> <span class="note">' + esc(when(i.at)) + '</span>'
+        + '<div class="side">' + esc(i.intent) + '</div>'
+        + '<div class="side">' + countsText(i.newFiles, i.filesBothHave, i.rulesThatDiffer, i.claims) + '</div>'
+        + '<div class="row">' + (i.pending ? '<button data-keep="' + esc(i.inputId) + '" class="primary">Keep it</button>' : '')
+        + '<button data-cancel="' + esc(i.inputId) + '" data-label="' + esc(name) + '" class="destructive">'
+        + (i.pending ? 'Cancel the import' : 'Take it back out') + '</button></div></div>';
+    }).join('') + '</div>';
 }
 function countsText(newFiles, both, rules, claims) {
   const part = (n, one, many) => n + ' ' + (n === 1 ? one : many);
@@ -481,8 +495,8 @@ async function keepImport(id) {
   refresh(); loadProjects();
 }
 async function cancelImport(id, label) {
-  if (!confirm('Cancel the import of "' + label + '"?\n\nIts files leave the project, its goals and requirements stop counting, '
-      + 'and its open conflicts are dropped. The record of it stays.')) return;
+  if (!confirm('Take the import of "' + label + '" back out?\n\nIts files leave the project, its goals and requirements stop '
+      + 'counting, and its open conflicts are dropped. The record of it stays.')) return;
   const r = await post('/home/run/imports/' + encodeURIComponent(id) + '/cancel');
   if (r.status !== 200) toast(false, 'Not cancelled: ' + message(r)); else toast(true, 'The import of ' + label + ' was taken back out.');
   refresh(); loadProjects();

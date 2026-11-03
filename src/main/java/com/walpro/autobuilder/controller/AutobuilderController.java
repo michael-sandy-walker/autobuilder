@@ -357,6 +357,13 @@ public class AutobuilderController {
     public record ConflictDecision(String decision, String by, String resolution) {
     }
 
+    /** T4-ED: every project brought in and not taken back out, kept or pending. */
+    @GetMapping("/inputs/imports")
+    public ResponseEntity<?> imports() {
+        if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        return ResponseEntity.ok(projectInputService.imports());
+    }
+
     /** T4-ED: the imports that wait for the operator to keep them or take them back out. */
     @GetMapping("/inputs/pending")
     public ResponseEntity<?> pendingImports() {

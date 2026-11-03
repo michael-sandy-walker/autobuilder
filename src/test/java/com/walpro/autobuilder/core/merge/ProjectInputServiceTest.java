@@ -471,4 +471,23 @@ class ProjectInputServiceTest {
         service.withdraw(first.inputId(), "operator");
         assertThat(bring().inputId()).isNotEqualTo(first.inputId());
     }
+
+    /** T4-ED: every import still in, kept or pending, each one takeable back out -- the home screen's list. */
+    @Test
+    void theImportsListShowsWhatIsStillIn_keptOrPending() throws IOException {
+        ProjectInputService.Report kept = bring();
+        write(brought.resolve("output/src/main/java/org/knot/Extra.java"), "package org.knot;\npublic class Extra { }\n");
+        ProjectInputService.Report waiting = service.bring(new ProjectInputService.Request("knots-2", "run-k2", brought, INTENT,
+                "operator", false, true));
+
+        assertThat(service.imports()).extracting(ProjectInputService.Import::inputId, ProjectInputService.Import::pending,
+                        ProjectInputService.Import::label)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(kept.inputId(), false, null),
+                        org.assertj.core.groups.Tuple.tuple(waiting.inputId(), true, "knots-2"));
+        assertThat(service.imports().get(0).newFiles()).isEqualTo(kept.placed().size());
+
+        service.withdraw(kept.inputId(), "operator");
+
+        assertThat(service.imports()).extracting(ProjectInputService.Import::inputId).containsExactly(waiting.inputId());
+    }
 }

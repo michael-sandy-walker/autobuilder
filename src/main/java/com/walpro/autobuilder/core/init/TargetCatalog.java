@@ -43,11 +43,12 @@ public class TargetCatalog {
      * @param supportedModes the modes this target can actually be started in
      * @param lastEnd        how the last run that wrote an end report ended, or null when none did
      * @param pendingImports T4-ED: what was brought in and waits for the operator to keep it or take it back out
+     * @param imports        T4-ED: how many projects were brought in and not taken back out, kept or pending
      */
     public record Target(String name, boolean hasSeed, String seedSummary, boolean hasYardstick,
                          StartModeService.Situation situation, int sourceFiles,
                          List<String> priorRunState, List<StartMode> supportedModes, LastEnd lastEnd,
-                         List<String> pendingImports) {}
+                         List<String> pendingImports, int imports) {}
 
     /**
      * T4-ED: the last end report's reason and time, from {@code meta/run-end-report.json}. A run stopped from
@@ -111,7 +112,7 @@ public class TargetCatalog {
         if (situation != StartModeService.Situation.EMPTY) modes.add(StartMode.ADOPT_PROJECT);
 
         return new Target(dir.getFileName().toString(), hasSeed, firstMeaningfulLine(dir), hasYardstick,
-                situation, sources, priorState, modes, lastEnd(dir), pendingImports(dir));
+                situation, sources, priorState, modes, lastEnd(dir), pendingImports(dir), imports(dir));
     }
 
     /**
@@ -140,6 +141,29 @@ public class TargetCatalog {
             return out;
         } catch (IOException e) {
             return List.of();
+        }
+    }
+
+    /** Projects brought in (inputs of kind project) and not withdrawn, from {@code meta/inputs.json}. */
+    private int imports(Path dir) {
+        Path ledger = dir.resolve(com.walpro.autobuilder.goal.purpose.PurposeService.PATH);
+        if (!Files.isRegularFile(ledger)) return 0;
+        try {
+            JsonNode doc = MAPPER.readTree(ledger.toFile());
+            java.util.Set<String> withdrawn = new java.util.HashSet<>();
+            for (JsonNode e : doc.path("events")) {
+                if (com.walpro.autobuilder.goal.purpose.InputEvent.WITHDRAWAL.equals(e.path("kind").asText())) {
+                    withdrawn.add(e.path("inputId").asText());
+                }
+            }
+            int n = 0;
+            for (JsonNode i : doc.path("inputs")) {
+                if (com.walpro.autobuilder.goal.purpose.InputEntry.KIND_PROJECT.equals(i.path("kind").asText())
+                        && !withdrawn.contains(i.path("id").asText())) n++;
+            }
+            return n;
+        } catch (IOException e) {
+            return 0;
         }
     }
 

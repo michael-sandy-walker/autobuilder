@@ -53,9 +53,13 @@ public class ProjectInputService {
         }
     }
 
-    /** T4-ED: a pending import as the home screen shows it -- what came in, and what of it still waits. */
-    public record Pending(String inputId, String label, String intent, Instant at, int newFiles, long filesBothHave,
-                          long rulesThatDiffer, long claims) {
+    /**
+     * T4-ED: an import as the home screen shows it -- what came in, what of it is still open, and whether it waits for
+     * the operator to keep it. {@code label} is what was brought in, by name, when that was recorded (older imports
+     * carry only their intent).
+     */
+    public record Import(String inputId, String label, String intent, Instant at, String addedBy, boolean pending,
+                         int newFiles, long filesBothHave, long rulesThatDiffer, long claims) {
     }
 
     /** One carried criterion's verdict in the merged tree: met (null when unanswered) and who answered. */
@@ -382,12 +386,21 @@ public class ProjectInputService {
     }
 
     /** T4-ED: the imports waiting for the operator, each with what came in and what of it is still open. */
-    public List<Pending> pending() {
+    public List<Import> pending() {
+        return imports().stream().filter(Import::pending).toList();
+    }
+
+    /** T4-ED: every project brought in and not taken back out -- kept or still pending -- oldest first. */
+    public List<Import> imports() {
         List<InputEvent> open = goals.purpose().openConflicts();
-        List<Pending> out = new ArrayList<>();
-        for (InputEvent p : goals.purpose().pendingImports()) {
-            InputEntry input = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(p.inputId())).findFirst().orElse(null);
-            if (input == null) continue;
+        java.util.Map<String, InputEvent> pending = new java.util.HashMap<>();
+        goals.purpose().pendingImports().forEach(e -> pending.put(e.inputId(), e));
+        java.util.Map<String, String> labels = new java.util.HashMap<>();
+        goals.purpose().ledger().events().stream().filter(e -> InputEvent.IMPORT.equals(e.kind()))
+                .forEach(e -> labels.put(e.inputId(), e.subject()));
+        List<Import> out = new ArrayList<>();
+        for (InputEntry input : goals.purpose().ledger().active()) {
+            if (!InputEntry.KIND_PROJECT.equals(input.kind())) continue;
             String placed = "meta/inputs/" + input.id() + "/placed.txt";
             int newFiles;
             try {
@@ -396,7 +409,8 @@ public class ProjectInputService {
                 newFiles = 0;
             }
             List<InputEvent> mine = open.stream().filter(e -> e.inputId().equals(input.id())).toList();
-            out.add(new Pending(input.id(), p.subject(), input.content(), input.addedAt(), newFiles,
+            out.add(new Import(input.id(), labels.get(input.id()), input.content(), input.addedAt(), input.addedBy(),
+                    pending.containsKey(input.id()), newFiles,
                     mine.stream().filter(e -> e.heldPath() != null).count(),
                     mine.stream().filter(e -> e.heldPath() == null && e.heldLine() == null).count(),
                     mine.stream().filter(e -> e.heldLine() != null).count()));

@@ -140,7 +140,7 @@ rest.
 |---|---|---|
 | not started -- a specification, no code | **Start** | Duplicate |
 | in progress -- worked on, goal not reached | **Continue** | Extend, Restart, Duplicate |
-| finished -- its goal was reached | **Extend...** | Restart, Duplicate |
+| finished -- its goal was reached | **Extend...** | Continue, Restart, Duplicate |
 | existing code -- code Autobuilder did not write | **Work on it** | Extend, Duplicate |
 
 - **Start** builds it from its specification (`NEW_PROJECT`); **Continue** resumes its lineage (`CONTINUE_LINEAGE`);
@@ -161,7 +161,9 @@ rest.
   protected paths, yardstick) -- no code, no history; the original is left as it is.
 
 Each row also says how the project's last run ended, and when. A project with an import that is not yet kept shows
-**import waiting**, and its button is **Review import**: it is opened held, so you can keep or cancel the import. The filter above the list narrows it to one state.
+**import waiting**, and its button is **Review import**: it is opened held, so you can keep or cancel the import. A
+project with imports shows how many ("2 imports"), and its "..." menu offers **Manage imports...**, which opens it
+held -- nothing runs -- to take an import back out. The filter above the list narrows it to one state.
 
 **+ New project** offers three ways in, each under a new name (it becomes the directory; a name already taken is
 refused, nothing is overwritten):
@@ -196,9 +198,9 @@ port 8081), and:
   shown whenever the project's run is up.
 - When every conflict is decided: **Keep the imports and start <project>** (a new project), **Keep the import and
   continue <project>** (one that was at rest), or **Keep the import** (one whose loop was running) -- or **Cancel
-  the import** at any point before. Imports from an earlier session that are not yet kept are listed under
-  **Waiting for your confirmation**, each with **Keep it** and **Cancel the import**; once nothing waits,
-  **Continue <project>** starts it.
+  the import** at any point before. Whenever the project's run is up, Now lists its **imports** -- kept, or still
+  waiting from an earlier session -- with what each brought; a waiting one has **Keep it** and **Cancel the import**,
+  a kept one **Take it back out**. Once nothing waits, **Continue <project>** starts a held project.
 
 One run at a time: while a run is up, the buttons that would start another are disabled.
 
@@ -229,6 +231,7 @@ curl -X POST -H 'Content-Type: application/json' -d '{"name": "combined", "goal"
 curl http://localhost:8080/home/run/conflicts            # what waits for a decision
 curl http://localhost:8080/home/run/input-progress      # the step the input under way is at (204 when none)
 curl http://localhost:8080/home/run/conflicts/<id>/options  # the model's suggested resolutions, each with its effect
+curl http://localhost:8080/home/run/imports              # every import still in, kept or pending
 curl http://localhost:8080/home/run/pending              # imports not yet kept
 curl -X POST http://localhost:8080/home/run/imports/<input-id>/keep      # keep one ...
 curl -X POST http://localhost:8080/home/run/imports/<input-id>/cancel    # ... or take it back out

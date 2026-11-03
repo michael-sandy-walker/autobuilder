@@ -276,6 +276,8 @@ class IntegrationJob {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", name);
         body.put("kind", create ? "together" : "extend");
+        // Whether the release starts the loop: a project this job started held, not one whose loop was going.
+        body.put("held", startedHeld);
         body.put("phase", phase.name());
         body.put("began", began.toString());
         List<Map<String, Object>> rows = new ArrayList<>();

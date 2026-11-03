@@ -264,15 +264,32 @@ public class HomeController {
         return relayed(run.get("/autobuilder/inputs/conflicts"));
     }
 
-    /** One conflict decided: {@code input} or {@code receiving} wins. */
-    public record Decision(String decision) {}
+    /** One conflict decided: {@code input} or {@code receiving} wins, or {@code own} with the operator's resolution. */
+    public record Decision(String decision, String resolution) {}
+
+    /** Where the input under way stands: its step out of all, and how far through the slow ones. 204 when none is. */
+    @GetMapping(value = "/home/run/input-progress", produces = "application/json")
+    public ResponseEntity<String> inputProgress() {
+        return relayed(run.get("/autobuilder/inputs/progress"));
+    }
+
+    /** The ways a conflict can be resolved, each with what it changes: the model's advice, nothing decided. */
+    @GetMapping(value = "/home/run/conflicts/{id}/options", produces = "application/json")
+    public ResponseEntity<String> conflictOptions(@PathVariable String id) {
+        if (!id.matches("[A-Za-z0-9._-]+")) return ResponseEntity.badRequest().body("{\"ok\":false,\"message\":\"no such conflict\"}");
+        return relayed(run.get("/autobuilder/inputs/conflicts/" + id + "/options"));
+    }
 
     @PostMapping(value = "/home/run/conflicts/{id}", produces = "application/json")
     public ResponseEntity<String> decide(@PathVariable String id, @RequestBody Decision d) {
         if (!id.matches("[A-Za-z0-9._-]+")) return ResponseEntity.badRequest().body("{\"ok\":false,\"message\":\"no such conflict\"}");
         String body;
         try {
-            body = JSON.writeValueAsString(Map.of("decision", String.valueOf(d.decision()), "by", "operator (home screen)"));
+            Map<String, String> fields = new LinkedHashMap<>();
+            fields.put("decision", String.valueOf(d.decision()));
+            fields.put("by", "operator (home screen)");
+            if (d.resolution() != null) fields.put("resolution", d.resolution());
+            body = JSON.writeValueAsString(fields);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             return ResponseEntity.badRequest().body("{\"ok\":false,\"message\":\"unreadable decision\"}");
         }

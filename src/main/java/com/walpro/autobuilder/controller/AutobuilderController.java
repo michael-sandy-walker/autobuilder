@@ -347,8 +347,29 @@ public class AutobuilderController {
         }
     }
 
-    /** T4-EC slice 5: how a held conflict is decided: for {@code input} or for {@code receiving}, and by whom. */
-    public record ConflictDecision(String decision, String by) {
+    /**
+     * T4-EC slice 5: how a held conflict is decided: for {@code input}, for {@code receiving}, or (T4-ED) {@code own}
+     * with the operator's {@code resolution} -- and by whom.
+     */
+    public record ConflictDecision(String decision, String by, String resolution) {
+    }
+
+    /** T4-ED: where the input under way stands -- its step, and how far through the slow ones; 204 when none is. */
+    @GetMapping("/inputs/progress")
+    public ResponseEntity<?> inputProgress() {
+        if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        return projectInputService.progress().<ResponseEntity<?>>map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    /** T4-ED: the ways an open conflict can be resolved, each with what it changes -- the model's advice, nothing decided. */
+    @GetMapping("/inputs/conflicts/{id}/options")
+    public ResponseEntity<?> conflictOptions(@PathVariable String id) {
+        if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(projectInputService.options(id));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     /** T4-EC slice 8: an input taken back out. The ledger keeps it, and the work done since stays. */
@@ -375,7 +396,8 @@ public class AutobuilderController {
     public ResponseEntity<?> decideConflict(@PathVariable String id, @RequestBody ConflictDecision d) {
         if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
         try {
-            return ResponseEntity.ok(autobuilderService.decideConflict(projectInputService, id, d.decision(), d.by() == null ? "operator" : d.by()));
+            return ResponseEntity.ok(autobuilderService.decideConflict(projectInputService, id, d.decision(),
+                    d.by() == null ? "operator" : d.by(), d.resolution()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (java.io.IOException e) {

@@ -2083,9 +2083,16 @@ public class AutobuilderService implements CheckpointableState {
     /** T4-EC slice 5: a conflict decided between cycles, under the lock a cycle holds. */
     public com.walpro.autobuilder.goal.purpose.InputEvent decideConflict(
             com.walpro.autobuilder.core.merge.ProjectInputService inputs, String id, String decision, String by) throws IOException {
+        return decideConflict(inputs, id, decision, by, null);
+    }
+
+    /** T4-ED: as above, with the operator's own resolution for an {@code own} decision. */
+    public com.walpro.autobuilder.goal.purpose.InputEvent decideConflict(
+            com.walpro.autobuilder.core.merge.ProjectInputService inputs, String id, String decision, String by,
+            String resolution) throws IOException {
         lock.lock();
         try {
-            var event = inputs.decide(id, decision, by);
+            var event = inputs.decide(id, decision, by, resolution);
             if (context != null) {
                 context = context.withPausedReason(null).withGoalExhaustedReason(null)
                         .withCycleResultState(CycleResultState.CONTINUE);

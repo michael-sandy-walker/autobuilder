@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.TreeMap;
 
@@ -54,6 +55,38 @@ public class ProjectInputService {
                          List<String> unmet, int obligations) {
     }
 
+    /**
+     * T4-ED: where an input under way stands, for the home screen -- the step out of {@link #STEPS}, and within the
+     * slow ones how far through it is ({@code done} of {@code of}; 0 of 0 when a step has no count). {@code all} names
+     * every step, so a reader shows them without keeping its own list.
+     */
+    public record Progress(String input, int step, int steps, String doing, int done, int of, Instant since, List<String> all) {
+    }
+
+    /** What bringing an input in does, in order. */
+    public static final List<String> STEPS = List.of(
+            "placing its code",
+            "writing its obligations",
+            "holding files both projects have",
+            "finding the types its intent uses",
+            "comparing its types with this project's",
+            "answering its criteria on the merged code",
+            "checking what cannot hold here",
+            "placing its goals");
+
+    private volatile Progress progress;
+
+    /** The input under way, or empty when none is. */
+    public Optional<Progress> progress() {
+        return Optional.ofNullable(progress);
+    }
+
+    private void step(String input, int step, int done, int of) {
+        Progress was = progress;
+        progress = new Progress(input, step + 1, STEPS.size(), STEPS.get(step), done, of,
+                was != null && was.step() == step + 1 ? was.since() : Instant.now(), STEPS);
+    }
+
     private final GoalPlannerService goals;
     private final FileService files;
     private final AdoptionManifest manifest;
@@ -77,6 +110,15 @@ public class ProjectInputService {
     public synchronized Report bring(Request r) throws IOException {
         if (r.intent() == null || r.intent().isBlank()) throw new IllegalArgumentException("an input needs an intent");
         if (goals.getRootGoal() == null) throw new IllegalStateException("there is no project to bring this into yet");
+        try {
+            return land(r);
+        } finally {
+            progress = null;
+        }
+    }
+
+    private Report land(Request r) throws IOException {
+        step(r.label(), 0, 0, 0);
         Path root = files.getRootDir();
         Path output = root.resolve("output");
         ProjectMerge.Parent parent = new ProjectMerge.Parent(r.label(), r.runId(), r.dir());
@@ -109,21 +151,29 @@ public class ProjectInputService {
         files.writeFile(dir + "/placed.txt", String.join("\n", landing.placed()) + "\n");
         files.writeFile(dir + ProtectedPaths.INPUT_FILE, String.join("\n", landing.protectedLines()) + "\n");
         List<String> intentLines = new ArrayList<>();
+        step(r.label(), 1, 0, 0);
         int obligations = writeObligations(input, landing.obligations(), intentLines);
+        step(r.label(), 2, 0, 0);
         holdFiles(input, landing, parent);
+        step(r.label(), 3, 0, 0);
         List<String> uses = typesToUse(r, landing.placed());
         files.writeFile(dir + IntentUse.USES_FILE, String.join("\n", uses) + "\n");
         List<String> corrections = compare(input, before, parent);
 
+        step(r.label(), 5, 0, landing.criteria().size());
         List<Verdict> verdicts = answer(landing, r.intent());
         // A carried claim that failed here is unfinished work, unless it cannot be true of this project at all.
         String specification = goals.specification();
+        long failed = verdicts.stream().filter(v -> Boolean.FALSE.equals(v.met())).count();
+        int checked = 0;
         for (Verdict v : verdicts) {
+            if (Boolean.FALSE.equals(v.met())) step(r.label(), 6, checked++, (int) failed);
             if (Boolean.FALSE.equals(v.met()) && comparison.contradicts(specification, r.intent(), v.criterion())) {
                 goals.purpose().raiseConflict(input.id(), v.criterion(), specification.strip().lines().findFirst().orElse(""),
                         v.criterion(), v.criterion(), null);
             }
         }
+        step(r.label(), 7, 0, 0);
         java.util.Set<String> out = goals.purpose().linesOut();
         GoalEntity tree = null;
         if (landing.tree() != null) {
@@ -191,7 +241,9 @@ public class ProjectInputService {
         List<String> names = ours.keySet().stream().map(ProjectInputService::simpleName).sorted().toList();
         List<String> corrections = new ArrayList<>();
         java.util.Set<String> asked = new java.util.HashSet<>();
+        int compared = 0;
         for (Map.Entry<String, String> type : theirs.entrySet()) {
+            step(parent.label(), 4, compared++, theirs.size());
             List<String> same = comparison.sameConcept(specification, names, type.getValue());
             if (same.isEmpty()) continue;
             String ourCode = named(ours, same);
@@ -248,12 +300,27 @@ public class ProjectInputService {
      * claim stays out for good, and nothing else changes.
      */
     public synchronized InputEvent decide(String id, String decision, String by) throws IOException {
-        if (!InputEvent.FOR_INPUT.equals(decision) && !InputEvent.FOR_RECEIVING.equals(decision)) {
-            throw new IllegalArgumentException("a decision is input or receiving");
+        return decide(id, decision, by, null);
+    }
+
+    /**
+     * T4-ED: a held conflict decided, possibly by neither side as it is: with {@code own}, the operator's
+     * {@code resolution} is what holds. A difference: it replaces the receiving rule, as the input's would, and becomes
+     * work. A file both have: merging the input's held copy into the receiving file becomes work. A claim: it stays
+     * out, and the resolution is the requirement in its place.
+     */
+    public synchronized InputEvent decide(String id, String decision, String by, String resolution) throws IOException {
+        if (!InputEvent.FOR_INPUT.equals(decision) && !InputEvent.FOR_RECEIVING.equals(decision)
+                && !InputEvent.FOR_OWN.equals(decision)) {
+            throw new IllegalArgumentException("a decision is input, receiving or own");
+        }
+        if (InputEvent.FOR_OWN.equals(decision) && (resolution == null || resolution.isBlank())) {
+            throw new IllegalArgumentException("an own decision says what holds instead");
         }
         InputEvent open = goals.purpose().event(id);
         if (open == null || !open.open()) throw new IllegalArgumentException("no open conflict: " + id);
         boolean difference = open.heldLine() == null && open.heldPath() == null;
+        if (InputEvent.FOR_OWN.equals(decision)) return decideOwn(open, difference, by, resolution.strip());
         InputComparison.Difference d = new InputComparison.Difference(open.subject(), open.receiving(), open.other());
         List<String> replaces = InputEvent.FOR_INPUT.equals(decision) && difference
                 ? comparison.stating(goals.statedRules(), d) : List.of();
@@ -272,6 +339,35 @@ public class ProjectInputService {
         }
         log.warn("T4-EC: conflict '{}' decided for {} by {}", open.subject(), decision, by);
         return decided;
+    }
+
+    private InputEvent decideOwn(InputEvent open, boolean difference, String by, String resolution) throws IOException {
+        List<String> replaces = difference
+                ? comparison.stating(goals.statedRules(), new InputComparison.Difference(open.subject(), open.receiving(), resolution))
+                : List.of();
+        InputEvent decided = goals.purpose().decide(open, InputEvent.FOR_OWN, by, replaces, resolution);
+        goals.conflictDecided();
+        String line = difference ? open.subject() + ": " + resolution
+                : open.heldPath() != null ? "Merge " + open.subject() + " with the copy brought in (kept at " + open.heldPath()
+                        + "): " + resolution
+                : resolution;
+        InputEntry input = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(open.inputId())).findFirst().orElseThrow();
+        addRequirement(input, line);
+        goals.addDecidedWork(line, open.inputId());
+        log.warn("T4-EC: conflict '{}' decided by {} with their own resolution: {}", open.subject(), by, resolution);
+        return decided;
+    }
+
+    /** T4-ED: the ways an open conflict can be resolved, each with what it changes -- advice for the operator. */
+    public List<InputComparison.Option> options(String id) {
+        InputEvent open = goals.purpose().event(id);
+        if (open == null || !open.open()) throw new IllegalArgumentException("no open conflict: " + id);
+        String intent = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(open.inputId()))
+                .map(InputEntry::content).findFirst().orElse("");
+        String kind = open.heldPath() != null ? "a file both projects have"
+                : open.heldLine() != null ? "a requirement the brought project carried, which may not hold here"
+                : "a rule both projects have, with different results";
+        return comparison.options(goals.specification(), intent, kind, open.subject(), open.receiving(), open.other());
     }
 
     /**

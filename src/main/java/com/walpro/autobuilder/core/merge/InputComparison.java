@@ -34,6 +34,10 @@ public class InputComparison {
     private static final String CLAIM_SYSTEM = "You judge what happens to a requirement of one software project when that"
             + " project's code is brought into another project. Answer only in the format asked for.";
 
+    private static final String OPTIONS_SYSTEM = "You help a person decide a conflict that arose when one software project"
+            + " was brought into another. You lay out the ways it can be resolved and what each changes; the person decides."
+            + " Answer only in the format asked for.";
+
     private static final String USE_SYSTEM = "You read what a person asks of a software project. Answer only in the format asked for.";
 
     /**
@@ -49,6 +53,35 @@ public class InputComparison {
     private final LLMClient llmClient;
 
     public record Difference(String what, String receiving, String other) {
+    }
+
+    /** T4-ED: one way a conflict can be resolved, as it would be written down, and what it changes. */
+    public record Option(String resolution, String effect) {
+    }
+
+    private static final Pattern OPTION = Pattern.compile("(?m)^\\s*OPTION:\\s*(.+?)\\s*\\|\\s*EFFECT:\\s*(.+?)\\s*$");
+
+    /**
+     * T4-ED: the ways a held conflict can be resolved -- either side as it is, and what a combination would be -- each
+     * with what it changes, for the operator to choose from or rewrite. Advice only: nothing is decided here.
+     *
+     * @param kind what the conflict is about: a rule both projects have, a file both have, or a requirement the
+     *             brought project carried that may not hold here
+     */
+    public List<Option> options(String specification, String intent, String kind, String subject, String receiving,
+                                String other) {
+        String answer = ask(OPTIONS_SYSTEM, "THE RECEIVING PROJECT IS FOR:\n" + specification
+                + "\n\nANOTHER PROJECT WAS BROUGHT INTO IT, FOR THIS:\n" + intent
+                + "\n\nTHE CONFLICT (" + kind + "): " + subject + "\nTHE RECEIVING PROJECT: " + receiving
+                + "\nTHE BROUGHT PROJECT: " + other
+                + "\n\nList two to four ways to resolve it: keeping the receiving project's side, taking the brought"
+                + " project's, and any combination of the two that makes sense here. Write each resolution as the rule or"
+                + " instruction the merged project should follow, in one sentence, then what choosing it changes for the"
+                + " merged project. One line each, in this form:\n\nOPTION: <the resolution> | EFFECT: <what it changes>");
+        List<Option> out = new ArrayList<>();
+        Matcher m = OPTION.matcher(answer);
+        while (m.find() && out.size() < 4) out.add(new Option(m.group(1), m.group(2)));
+        return out;
     }
 
     /** The receiving types that deal with the same concept or rule as {@code source}. */

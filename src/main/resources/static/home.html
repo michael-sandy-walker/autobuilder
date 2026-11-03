@@ -67,6 +67,18 @@
   .conflict { border: 1px solid var(--warn-rule); border-radius: 6px; padding: 10px 12px; margin-top: 8px; }
   .conflict b { color: var(--warn); }
   .side { color: var(--muted); font-size: 12px; margin: 4px 0; white-space: pre-wrap; }
+  .bar { height: 6px; border-radius: 3px; background: var(--panel-2); border: 1px solid var(--rule); overflow: hidden; margin: 8px 0 4px; }
+  .bar > div { height: 100%; background: var(--accent); transition: width 0.6s ease; }
+  ol.steps { list-style: none; padding: 0; margin: 6px 0 0; font-size: 12px; color: var(--dim); columns: 2; }
+  ol.steps li { padding: 1px 0; }
+  ol.steps li::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px;
+    border: 1px solid var(--dim); vertical-align: 1px; }
+  ol.steps li.done { color: var(--muted); } ol.steps li.done::before { background: var(--good); border-color: var(--good); }
+  ol.steps li.now { color: var(--ink); } ol.steps li.now::before { background: var(--accent); border-color: var(--accent); }
+  .own { margin-top: 8px; }
+  .option { border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; margin-top: 6px; display: flex; gap: 10px;
+    align-items: flex-start; }
+  .option div { flex: 1; } .option .effect { color: var(--muted); font-size: 12px; }
 
   /* Projects */
   .project { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; align-items: center;
@@ -218,6 +230,8 @@ function recall(k) { try { return localStorage.getItem(k); } catch (e) { return 
 
 let run = { state: 'IDLE' };
 let job = null;
+let progress = null;
+let conflicts = [];
 let projects = [];
 
 // ---------- talking to the home context ----------
@@ -243,6 +257,16 @@ async function refresh() {
     run = await fetch('/home/state').then(r => r.json());
     const jr = await fetch('/home/integrate');
     job = jr.status === 200 ? await jr.json() : null;
+    progress = null;
+    if (job && job.phase === 'BRINGING_IN') {
+      const pr = await fetch('/home/run/input-progress');
+      progress = pr.status === 200 ? await pr.json() : null;
+    }
+    // Open conflicts belong to the project, not to the job that raised them: shown whenever its run serves.
+    if (run.runPort && !(job && job.phase === 'BRINGING_IN')) {
+      const list = await fetch('/home/run/conflicts').then(r => r.json()).catch(() => []);
+      conflicts = Array.isArray(list) ? list : [];
+    } else conflicts = [];
   } catch (e) {
     $('now').className = 'now FAILED';
     $('now').innerHTML = '<div class="title"><span class="dot"></span><b>Cannot reach Autobuilder</b></div>';
@@ -396,15 +420,26 @@ function renderNow() {
     why = 'Since ' + when(run.since) + (run.mode && run.mode !== 'ASK' ? ', started as ' + run.mode.toLowerCase().replace(/_/g, ' ') : '') + '.';
     actions = '<button data-do="stop" class="destructive">Stop</button>';
   }
-  el.className = 'now ' + run.state;
-  el.innerHTML = '<div class="title"><span class="dot"></span><b>' + esc(title) + '</b></div>'
+  const html = '<div class="title"><span class="dot"></span><b>' + esc(title) + '</b></div>'
     + (why ? '<div class="why">' + esc(why) + '</div>' : '') + links
     + (actions ? '<div class="row">' + actions + '</div>' : '')
-    + (waiting ? goalBox() : '') + (job ? jobBox() : '');
+    + (waiting ? goalBox() : '') + (job ? jobBox() : '')
+    + (conflicts.length && !(job && job.phase === 'DECIDING') ? '<div class="sub"><div class="title"><b>Waiting for your decision</b>'
+       + '</div><div class="why">Conflicts from an earlier import. While one is open, this project cannot be finished.</div>'
+       + conflictsHtml() + '</div>' : '');
+  // Rebuilt only when what it shows changed: a rebuild would take the caret out of a box being typed in.
+  if (html === lastNowHtml) return;
+  lastNowHtml = html;
+  const focused = document.activeElement && document.activeElement.id;
+  el.className = 'now ' + run.state;
+  el.innerHTML = html;
   el.querySelectorAll('[data-do]').forEach(b => b.onclick = () => ({ close: closeRun, stop: stopRun })[b.dataset.do]());
   if (waiting) wireGoalBox();
   if (job) wireJobBox();
+  if (conflicts.length) wireConflicts();
+  if (focused && $(focused)) $(focused).focus();
 }
+let lastNowHtml = '';
 
 async function closeRun() {
   const r = await post('/home/return');
@@ -424,14 +459,15 @@ let coldRead = null, goalDraft = '';
 function goalBox() {
   return '<div class="sub"><label style="margin-top:0">What it read in the code</label><pre class="coldread" id="coldread">'
     + esc(coldRead || 'Reading...') + '</pre><label for="goal">Goal -- what to achieve, in prose</label>'
-    + '<textarea id="goal" placeholder="What should change or be added, and how you would tell it is done.">'
-    + esc(goalDraft) + '</textarea><div class="row"><button id="setgoal" class="primary">Set goal</button></div></div>';
+    + '<textarea id="goal" placeholder="What should change or be added, and how you would tell it is done."></textarea>'
+    + '<div class="row"><button id="setgoal" class="primary">Set goal</button></div></div>';
 }
 function wireGoalBox() {
   if (coldRead == null) {
     coldRead = '';
-    fetch('/home/run/cold-read').then(r => r.text()).then(t => { coldRead = t; const c = $('coldread'); if (c) c.textContent = t; });
+    fetch('/home/run/cold-read').then(r => r.text()).then(t => { coldRead = t; lastNowHtml = ''; renderNow(); });
   }
+  $('goal').value = goalDraft;
   $('goal').oninput = e => goalDraft = e.target.value;
   $('setgoal').onclick = async () => {
     if (!goalDraft.trim()) { toast(false, 'The goal is empty.'); return; }
@@ -445,49 +481,127 @@ function wireGoalBox() {
 // Projects being brought in: each input's outcome, the conflicts, and letting the loop work.
 const PHASE = { STARTING: 'starting', SETTING_GOAL: 'setting the goal', BRINGING_IN: 'bringing in',
   DECIDING: 'waiting for your decisions', RELEASED: 'done -- the loop works on it', FAILED: 'stopped' };
-let conflicts = [];
+// What each conflict's own resolution says so far, and the options asked for: kept here, outside the rebuilt HTML.
+const drafts = {};
+const draftOf = id => drafts[id] || (drafts[id] = { open: false, text: '', options: null, asking: false });
+
 function jobBox() {
+  const landed = job.inputs.filter(i => i.status === 'landed').length;
   return '<div class="sub"><div class="title"><b>' + esc(job.kind === 'extend' ? 'Extending ' + job.name : 'Bringing projects into ' + job.name)
     + '</b><span class="badge">' + esc(PHASE[job.phase] || job.phase) + '</span></div>'
     + (job.failure ? '<div class="why">' + esc(job.failure) + '</div>' : '')
+    + (job.phase === 'BRINGING_IN' || job.phase === 'STARTING' || job.phase === 'SETTING_GOAL' ? progressHtml(landed) : '')
     + '<table class="inputs" style="margin-top:8px"><thead><tr><th>Brought in</th><th>Status</th><th>Files</th><th>Corrections</th>'
     + '<th>Conflicts</th><th>Unmet criteria</th></tr></thead><tbody>'
     + job.inputs.map(i => '<tr><td>' + esc(i.project) + '</td><td>' + esc(i.status) + (i.message ? ': ' + esc(i.message) : '')
       + '</td><td>' + (i.placed ?? '') + '</td><td>' + (i.corrections ?? '') + '</td><td>' + esc((i.conflicts || []).join('; '))
       + '</td><td>' + (i.unmet ?? '') + '</td></tr>').join('') + '</tbody></table>'
-    + (job.phase === 'DECIDING' ? '<div id="conflicts">' + conflictsHtml() + '</div><div class="row">'
-      + '<button id="release" class="primary">Done -- let the loop work</button><span class="note">Once every conflict is decided.</span></div>' : '')
+    + (job.phase === 'DECIDING' ? conflictsHtml() + releaseHtml() : '')
     + '</div>';
 }
-function conflictsHtml() {
-  return conflicts.length ? conflicts.map(c => '<div class="conflict"><b>' + esc(c.subject) + '</b>'
-    + (c.receiving ? '<div class="side">This project: ' + esc(c.receiving) + '</div>' : '')
-    + (c.other ? '<div class="side">What came in: ' + esc(c.other) + '</div>' : '')
-    + '<div class="row"><button data-decide="' + esc(c.id) + '" data-way="receiving">Keep this project\'s</button>'
-    + '<button data-decide="' + esc(c.id) + '" data-way="input">Take what came in</button></div></div>').join('')
-    : '<p class="note">No conflict is open.</p>';
+
+// The current input's step, and a bar over all inputs: each input is one share, its steps divide the share.
+function progressHtml(landed) {
+  const n = job.inputs.length;
+  if (!progress) {
+    const what = job.phase === 'STARTING' ? 'Starting ' + job.name + ' held' : job.phase === 'SETTING_GOAL' ? 'Setting its goal' : 'Preparing';
+    return '<div class="bar"><div style="width:' + Math.round(100 * landed / n) + '%"></div></div><div class="note">' + esc(what) + '...</div>';
+  }
+  const within = progress.of > 0 ? progress.done / progress.of : 0;
+  const share = ((progress.step - 1) + within) / progress.steps;
+  const pct = Math.min(100, Math.round(100 * (landed + share) / n));
+  const secs = Math.max(0, Math.round((Date.now() - Date.parse(progress.since)) / 1000));
+  return '<div class="bar"><div style="width:' + pct + '%"></div></div>'
+    + '<div class="note">' + esc(progress.input) + ' (' + (landed + 1) + ' of ' + n + '), step ' + progress.step + ' of '
+    + progress.steps + ': ' + esc(progress.doing) + (progress.of > 0 ? ' -- ' + progress.done + ' of ' + progress.of : '')
+    + (secs >= 5 ? ', ' + secs + ' s so far' : '') + '</div>'
+    + '<ol class="steps">' + (progress.all || []).map((label, i) => '<li class="' + (i + 1 < progress.step ? 'done' : i + 1 === progress.step ? 'now' : '')
+      + '">' + esc(label) + '</li>').join('') + '</ol>';
 }
+
+function conflictsHtml() {
+  if (!conflicts.length) return '<p class="note">No conflict is open.</p>';
+  return conflicts.map(c => {
+    const d = draftOf(c.id);
+    const file = !!c.heldPath, claim = !!c.heldLine;
+    return '<div class="conflict"><b>' + esc(c.subject) + '</b>'
+      + '<div class="side">' + esc(file ? 'A file both projects have.' : claim ? 'A requirement the incoming project met, which may not hold here.'
+          : 'Both projects have a rule here, with different results.') + '</div>'
+      + (c.receiving && !file ? '<div class="side">This project: ' + esc(c.receiving) + '</div>' : '')
+      + (c.other && !file && !claim ? '<div class="side">What came in: ' + esc(c.other) + '</div>' : '')
+      + '<div class="row"><button data-decide="' + esc(c.id) + '" data-way="receiving">' + (claim ? 'Leave it out' : 'Keep this project\'s') + '</button>'
+      + '<button data-decide="' + esc(c.id) + '" data-way="input">' + (claim ? 'Keep it as a requirement' : 'Take what came in') + '</button>'
+      + '<button data-own="' + esc(c.id) + '"' + (d.open ? ' class="primary"' : '') + '>' + (file ? 'Merge them...' : 'Decide differently...') + '</button>'
+      + '<button data-ask="' + esc(c.id) + '"' + (d.asking ? ' disabled' : '') + '>' + (d.asking ? 'Asking...' : 'Ask for options') + '</button></div>'
+      + (d.options ? (d.options.length ? d.options.map((o, i) => '<div class="option"><div>' + esc(o.resolution)
+          + '<div class="effect">' + esc(o.effect) + '</div></div><button data-use="' + esc(c.id) + '" data-i="' + i + '">Use this</button></div>').join('')
+          : '<p class="note">The model offered no options; decide in your own words.</p>') : '')
+      + (d.open ? '<div class="own"><label style="margin-top:4px">' + esc(file ? 'How to merge the two files' : 'What should hold instead')
+          + '</label><textarea id="own-' + esc(c.id) + '" data-text="' + esc(c.id) + '"></textarea><div class="row">'
+          + '<button data-decide="' + esc(c.id) + '" data-way="own" class="primary">Decide</button>'
+          + '<span class="note">It becomes a requirement of this project, and work for the loop.</span></div></div>' : '')
+      + '</div>';
+  }).join('');
+}
+
+// What ends the step: a project this job started held is started (or continued) on the combined code; a project
+// whose loop was going carries on by itself.
+function releaseHtml() {
+  if (!job.held) return '';
+  const label = (job.kind === 'extend' ? 'Continue ' : 'Start ') + job.name;
+  return '<div class="row"><button id="release" class="primary"' + (conflicts.length ? ' disabled' : '') + '>' + esc(label) + '</button>'
+    + '<span class="note">The import is complete' + (conflicts.length ? ' once every conflict is decided' : '')
+    + '; this starts Autobuilder on the combined project.</span></div>';
+}
+
 function wireJobBox() {
   if (job.phase !== 'DECIDING') return;
-  fetch('/home/run/conflicts').then(r => r.json()).then(list => {
-    list = Array.isArray(list) ? list : [];
-    if (JSON.stringify(list) === JSON.stringify(conflicts)) return;
-    conflicts = list;
-    const c = $('conflicts'); if (c) { c.innerHTML = conflictsHtml(); wireDecisions(); }
-  }).catch(() => {});
-  wireDecisions();
-  $('release').onclick = async () => {
+  // A project whose loop was going: nothing to start once the last conflict is decided.
+  if (!job.held && !conflicts.length) { post('/home/integrate/release').then(refresh); return; }
+  const rel = $('release');
+  if (rel) rel.onclick = async () => {
     const r = await post('/home/integrate/release');
-    if (r.status !== 200) toast(false, 'Not yet: ' + message(r)); else toast(true, 'The loop works on what came in.');
+    if (r.status !== 200) toast(false, 'Not yet: ' + message(r)); else toast(true, 'Autobuilder works on the combined project.');
     refresh();
   };
 }
-function wireDecisions() {
-  document.querySelectorAll('[data-decide]').forEach(b => b.onclick = async () => {
-    const r = await post('/home/run/conflicts/' + encodeURIComponent(b.dataset.decide), { decision: b.dataset.way });
-    if (r.status >= 300) toast(false, 'Not decided: ' + message(r));
-    conflicts = []; refresh();
+
+function wireConflicts() {
+  document.querySelectorAll('[data-decide]').forEach(b => b.onclick = () => decide(b.dataset.decide, b.dataset.way));
+  document.querySelectorAll('[data-own]').forEach(b => b.onclick = () => { const d = draftOf(b.dataset.own); d.open = !d.open; rerender(); });
+  document.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => askOptions(b.dataset.ask));
+  document.querySelectorAll('[data-use]').forEach(b => b.onclick = () => {
+    const d = draftOf(b.dataset.use);
+    d.text = d.options[Number(b.dataset.i)].resolution; d.open = true; rerender();
   });
+  document.querySelectorAll('[data-text]').forEach(t => {
+    t.value = draftOf(t.dataset.text).text;
+    t.oninput = () => draftOf(t.dataset.text).text = t.value;
+  });
+}
+function rerender() { lastNowHtml = ''; renderNow(); }
+
+async function decide(id, way) {
+  const body = { decision: way };
+  if (way === 'own') {
+    body.resolution = draftOf(id).text.trim();
+    if (!body.resolution) { toast(false, 'Say what should hold instead.'); return; }
+  }
+  const r = await post('/home/run/conflicts/' + encodeURIComponent(id), body);
+  if (r.status >= 300) { toast(false, 'Not decided: ' + message(r)); return; }
+  delete drafts[id];
+  refresh();
+}
+
+async function askOptions(id) {
+  const d = draftOf(id);
+  d.asking = true; rerender();
+  const res = await fetch('/home/run/conflicts/' + encodeURIComponent(id) + '/options').catch(() => null);
+  const list = res && res.ok ? await res.json().catch(() => []) : null;
+  d.asking = false;
+  if (list == null) toast(false, 'The model could not be asked.');
+  else d.options = Array.isArray(list) ? list : [];
+  rerender();
 }
 
 // ---------- + New project ----------

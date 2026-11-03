@@ -177,8 +177,14 @@ public class PurposeService {
 
     /** A conflict decided; the event stays in the ledger with who decided and how. */
     public synchronized InputEvent decide(InputEvent open, String decision, String by, List<String> replaces) {
+        return decide(open, decision, by, replaces, null);
+    }
+
+    /** A conflict decided, with the operator's own resolution when they chose neither side as it is. */
+    public synchronized InputEvent decide(InputEvent open, String decision, String by, List<String> replaces,
+                                          String resolution) {
         return store(new InputEvent(open.id(), open.kind(), open.inputId(), open.subject(), open.receiving(), open.other(),
-                open.heldLine(), open.heldPath(), replaces, InputEvent.DECIDED, decision, by, Instant.now()));
+                open.heldLine(), open.heldPath(), replaces, InputEvent.DECIDED, decision, by, Instant.now(), resolution));
     }
 
     private InputEvent store(InputEvent event) {

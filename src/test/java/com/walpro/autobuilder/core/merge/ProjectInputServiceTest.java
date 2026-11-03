@@ -354,4 +354,71 @@ class ProjectInputServiceTest {
 
         assertThat(other.getValue()).contains("class Rope").contains("class Knot");
     }
+
+    /** T4-ED: neither side as it is -- the operator's own rule replaces the receiving one and becomes work. */
+    @Test
+    void aDifferenceDecidedInTheOperatorsOwnWords_replacesTheRuleAndBecomesWork() throws IOException {
+        seedLine();
+        differs(TURNS, false);
+        String id = bring().conflicts().get(0).id();
+
+        assertThatThrownBy(() -> service.decide(id, "own", "operator", " ")).isInstanceOf(IllegalArgumentException.class);
+        var decided = service.decide(id, "own", "operator", "at most 5 turns");
+
+        assertThat(decided.decision()).isEqualTo("own");
+        assertThat(decided.resolution()).isEqualTo("at most 5 turns");
+        assertThat(goals.purpose().openConflicts()).isEmpty();
+        assertThat(goals.requirements().obligationsOrClauses()).doesNotContain("A coil has at most 3 turns.")
+                .contains("the turn limit: at most 5 turns").doesNotContain("the turn limit: at most 9 turns");
+        assertThat(goals.getAllGoals()).anyMatch(g -> g.getDescription().startsWith("the turn limit: at most 5")
+                && g.getStatus() == GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void mergingAFileBothHave_keepsTheReceivingFileAndMakesTheMergeWork() throws IOException {
+        write(base.resolve("output/src/main/java/org/knot/Knot.java"), "package org.knot;\nclass Ours { }\n");
+        ProjectInputService.Report r = bring();
+
+        service.decide(r.conflicts().get(0).id(), "own", "operator", "keep both constructors");
+
+        assertThat(Files.readString(base.resolve("output/src/main/java/org/knot/Knot.java"))).contains("Ours");
+        assertThat(goals.getAllGoals()).anyMatch(g -> g.getDescription().startsWith("Merge src/main/java/org/knot/Knot.java")
+                && g.getDescription().contains("keep both constructors") && g.getStatus() == GoalStatus.ACTIVE);
+    }
+
+    @Test
+    void aClaimDecidedInTheOperatorsOwnWords_staysOutAndTheirRequirementTakesItsPlace() throws IOException {
+        when(comparison.contradicts(anyString(), anyString(), org.mockito.ArgumentMatchers.eq("Knot is final"))).thenReturn(true);
+        when(verifier.verifyWithTestRun(anyString(), any(), any())).thenAnswer(i -> {
+            List<String> asked = i.getArgument(1);
+            java.util.Map<Integer, Boolean> out = new java.util.HashMap<>();
+            for (int n = 0; n < asked.size(); n++) out.put(n + 1, !asked.get(n).equals("Knot is final"));
+            return out;
+        });
+        write(brought.resolve("bootstrap/seed.obligations.txt"), com.walpro.autobuilder.goal.SeedObligationsFile.render("Tie knots.",
+                List.of("A knot holds.", "Knot is final")));
+        ProjectInputService.Report r = bring();
+
+        service.decide(r.conflicts().get(0).id(), "own", "operator", "Knot may be extended by Rope only");
+
+        assertThat(goals.requirements().obligationsOrClauses()).doesNotContain("Knot is final")
+                .contains("Knot may be extended by Rope only");
+    }
+
+    @Test
+    void nothingIsUnderWayOnceAnInputHasLanded_andTheOptionsAskAboutTheOpenConflict() throws IOException {
+        seedLine();
+        differs(TURNS, false);
+        String id = bring().conflicts().get(0).id();
+
+        assertThat(service.progress()).isEmpty();
+        when(comparison.options(anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(List.of(new InputComparison.Option("at most 5 turns", "a middle ground")));
+        assertThat(service.options(id)).extracting(InputComparison.Option::resolution).containsExactly("at most 5 turns");
+        org.mockito.Mockito.verify(comparison).options(anyString(), org.mockito.ArgumentMatchers.eq(INTENT),
+                org.mockito.ArgumentMatchers.contains("rule"), org.mockito.ArgumentMatchers.eq("the turn limit"),
+                org.mockito.ArgumentMatchers.eq("at most 3 turns"), org.mockito.ArgumentMatchers.eq("at most 9 turns"));
+        service.decide(id, "receiving", "operator");
+        assertThatThrownBy(() -> service.options(id)).isInstanceOf(IllegalArgumentException.class);
+    }
 }

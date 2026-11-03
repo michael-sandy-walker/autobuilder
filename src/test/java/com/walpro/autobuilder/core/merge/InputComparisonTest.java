@@ -107,4 +107,19 @@ class InputComparisonTest {
         assertThat(answering("LINES: 1, 3").stating(lines, D)).containsExactly("one", "three");
         assertThat(answering("NONE").stating(lines, D)).isEmpty();
     }
+
+    /** T4-ED: the options read one per line, each a resolution and what it changes; at most four; none is none. */
+    @Test
+    void theOptionsAreReadAsResolutionAndEffect() {
+        String answer = "Here are the options:\nOPTION: Keep 120 characters | EFFECT: imported titles over 120 are refused\n"
+                + "OPTION: Take 200 characters | EFFECT: longer titles everywhere\nnoise\n"
+                + "OPTION: 200 for imports, 120 for new books | EFFECT: two limits to keep apart\n"
+                + "OPTION: a | EFFECT: b\nOPTION: c | EFFECT: d\n";
+
+        List<InputComparison.Option> options = answering(answer).options("s", "i", "a rule", "the title limit", "120", "200");
+
+        assertThat(options).hasSize(4);
+        assertThat(options.get(2)).isEqualTo(new InputComparison.Option("200 for imports, 120 for new books", "two limits to keep apart"));
+        assertThat(answering("I cannot tell.").options("s", "i", "a rule", "x", "y", "z")).isEmpty();
+    }
 }

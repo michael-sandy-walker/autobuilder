@@ -4,15 +4,13 @@ import com.walpro.autobuilder.core.init.TargetCatalog;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -37,11 +35,14 @@ public class HomeController {
     private final ProjectLauncher launcher;
     private final HomeApplication.ProjectsDirectory projects;
     private final TargetCatalog catalog = new TargetCatalog();
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    private final RunClient run;
+    private volatile IntegrationJob job;
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public HomeController(ProjectLauncher launcher, HomeApplication.ProjectsDirectory projects) {
         this.launcher = launcher;
         this.projects = projects;
+        this.run = new RunClient(launcher);
     }
 
     /** The home screen is the root of the home context. */
@@ -164,7 +165,7 @@ public class HomeController {
     /** The run's own cold read of an adopted project: what its code is, from its own evidence. */
     @GetMapping(value = "/home/run/cold-read", produces = "text/plain")
     public ResponseEntity<String> coldRead() {
-        return relay(HttpRequest.newBuilder().GET(), "/autobuilder/cold-read");
+        return relayed(run.get("/autobuilder/cold-read"));
     }
 
     /**
@@ -173,27 +174,79 @@ public class HomeController {
      */
     @PostMapping(value = "/home/run/goal", consumes = "text/plain", produces = "application/json")
     public ResponseEntity<String> goal(@RequestBody String goal) {
-        return relay(HttpRequest.newBuilder().header("Content-Type", "text/plain; charset=utf-8")
-                .POST(HttpRequest.BodyPublishers.ofString(goal, StandardCharsets.UTF_8)), "/autobuilder/goal");
+        return relayed(run.postText("/autobuilder/goal", goal));
     }
 
+    /** The body of "Import several": the new project's name and goal, how it runs, and what each project brings. */
+    public record IntegrateRequest(String name, String goal, String profiles, List<IntegrationJob.Input> inputs) {}
+
     /**
-     * Sends a request to the run's own endpoint and returns its answer as it came. Relayed rather than handled
-     * here, so what a goal is and when one is refused stay where the run keeps them.
+     * Brings two or more projects into a new one toward a goal (T4-EC's inputs), as a job the page follows on
+     * {@code GET /home/integrate}. Refused while a run is up or another job is under way.
      */
-    private ResponseEntity<String> relay(HttpRequest.Builder request, String path) {
-        Object port = launcher.describe().get("runPort");
-        if (port == null) return ResponseEntity.status(409).body("{\"ok\":false,\"message\":\"no run is serving\"}");
-        try {
-            HttpResponse<String> res = http.send(request.uri(URI.create("http://localhost:" + port + path))
-                    .timeout(Duration.ofMinutes(2)).build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            return ResponseEntity.status(res.statusCode()).body(res.body());
-        } catch (IOException e) {
-            return ResponseEntity.status(502).body("{\"ok\":false,\"message\":\"the run did not answer\"}");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return ResponseEntity.status(502).body("{\"ok\":false,\"message\":\"interrupted\"}");
+    @PostMapping("/home/integrate")
+    public synchronized ResponseEntity<Map<String, Object>> integrate(@RequestBody IntegrateRequest request) {
+        if (request.name() == null || !PROJECT_NAME.matcher(request.name()).matches()) {
+            return refuse(400, "a project name is lower case letters, digits, '.', '-' or '_', at most 64, "
+                    + "starting with a letter or digit");
         }
+        if (job != null && job.phase() != IntegrationJob.Phase.FAILED && job.phase() != IntegrationJob.Phase.RELEASED) {
+            return refuse(409, "projects are already being brought into " + job.describe().get("name"));
+        }
+        if (launcher.state() != ProjectLauncher.State.IDLE) return refuse(409, "a run is up; one run at a time");
+        String problem = IntegrationJob.problem(projects.path(), request.name(), request.goal(), request.inputs());
+        if (problem != null) return refuse(400, problem);
+        job = new IntegrationJob(request.name(), projects.path(), request.goal(), request.profiles(), request.inputs(),
+                launcher, run);
+        job.begin();
+        return ResponseEntity.accepted().body(job.describe());
+    }
+
+    /** The integration job, if there is one: its phase and each input's outcome. */
+    @GetMapping("/home/integrate")
+    public ResponseEntity<Map<String, Object>> integration() {
+        IntegrationJob j = job;
+        return j == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(j.describe());
+    }
+
+    /** The conflicts no intent settled, as the run holds them. */
+    @GetMapping(value = "/home/run/conflicts", produces = "application/json")
+    public ResponseEntity<String> conflicts() {
+        return relayed(run.get("/autobuilder/inputs/conflicts"));
+    }
+
+    /** One conflict decided: {@code input} or {@code receiving} wins. */
+    public record Decision(String decision) {}
+
+    @PostMapping(value = "/home/run/conflicts/{id}", produces = "application/json")
+    public ResponseEntity<String> decide(@PathVariable String id, @RequestBody Decision d) {
+        if (!id.matches("[A-Za-z0-9._-]+")) return ResponseEntity.badRequest().body("{\"ok\":false,\"message\":\"no such conflict\"}");
+        String body;
+        try {
+            body = JSON.writeValueAsString(Map.of("decision", String.valueOf(d.decision()), "by", "operator (home screen)"));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return ResponseEntity.badRequest().body("{\"ok\":false,\"message\":\"unreadable decision\"}");
+        }
+        return relayed(run.postJson("/autobuilder/inputs/conflicts/" + id, body, Duration.ofMinutes(5)));
+    }
+
+    /** Starts the loop on the brought-together project once no conflict is open. */
+    @PostMapping("/home/integrate/release")
+    public ResponseEntity<Map<String, Object>> release() {
+        IntegrationJob j = job;
+        if (j == null) return refuse(409, "no projects are being brought together");
+        try {
+            j.release();
+        } catch (IllegalStateException e) {
+            return refuse(409, e.getMessage());
+        } catch (IOException e) {
+            return refuse(502, "the run's conflicts could not be read: " + e.getMessage());
+        }
+        return ResponseEntity.ok(j.describe());
+    }
+
+    private static ResponseEntity<String> relayed(RunClient.Reply reply) {
+        return ResponseEntity.status(reply.status()).body(reply.body());
     }
 
     /** The body of "Start": a project NAME in the projects directory, and optionally a mode and profiles. */
@@ -221,11 +274,17 @@ public class HomeController {
     /** Back to the home screen: closes a run that has ended (or clears a failed start). 409 while one runs. */
     @PostMapping("/home/return")
     public ResponseEntity<Map<String, Object>> returnHome() {
+        IntegrationJob j = job;
+        if (j != null && j.phase() != IntegrationJob.Phase.FAILED && j.phase() != IntegrationJob.Phase.RELEASED
+                && j.phase() != IntegrationJob.Phase.DECIDING) {
+            return refuse(409, "projects are being brought into " + j.describe().get("name") + "; wait for it");
+        }
         try {
             launcher.returnHome();
         } catch (IllegalStateException e) {
             return refuse(409, e.getMessage());
         }
+        job = null;
         return ResponseEntity.ok(launcher.describe());
     }
 

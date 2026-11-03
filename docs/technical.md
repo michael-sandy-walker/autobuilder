@@ -605,7 +605,11 @@ a goal's activity. `BehaviourEventController` and `EventController` (`/events/..
 `bootstrap/`), `POST /home/import` (a codebase on this machine copied into a new project's `output/` by `home.ProjectImport`,
 for an `ADOPT_PROJECT` start), `GET /home/run/cold-read` and `POST /home/run/goal` (relayed to the run context's
 own `/autobuilder/cold-read` and `/autobuilder/goal`, so their rules stay in one place; the launcher reports an
-adopted run that has no goal yet as `waitingForGoal`), `POST /home/start`, `POST /home/return` (closes a run whose loop has ended; the launcher reports
+adopted run that has no goal yet as `waitingForGoal`), `POST /home/integrate` and `GET /home/integrate` (`home.IntegrationJob`: two or more projects brought into a new
+one -- the empty project started held in `ASK`, its goal set, each project posted to `/autobuilder/inputs` with its
+intent, then released in `ADOPT_PROJECT` once no conflict is open; the steps `scripts/bring_inputs.py` takes from the
+shell, run as a job because each input can take minutes), `GET /home/run/conflicts`, `POST /home/run/conflicts/{id}`,
+`POST /home/integrate/release`, `POST /home/start`, `POST /home/return` (closes a run whose loop has ended; the launcher reports
 such a run as `ENDED`, from `AutobuilderService.haltReason`, and never closes it on its own).
 
 Pages under `src/main/resources/static`: `home.html` (the home screen, served by the home context), `start.html` (choosing a start mode and a target), `goals.html` (the goal

@@ -58,6 +58,8 @@ public class ProjectLauncher {
     Function<ConfigurableApplicationContext, Optional<String>> haltProbe = ProjectLauncher::loopHalt;
     /** Whether the run is an adopted project waiting for its goal. Replaced in tests. */
     Predicate<ConfigurableApplicationContext> goalWaitProbe = ProjectLauncher::awaitingGoal;
+    /** Whether the run's loop has not begun: held for a start mode, or adopted and waiting for a goal. Replaced in tests. */
+    Predicate<ConfigurableApplicationContext> notBegunProbe = ProjectLauncher::notBegun;
 
     public ProjectLauncher(String[] startupArgs) {
         this(startupArgs, ProjectLauncher::bootRunContext);
@@ -136,14 +138,16 @@ public class ProjectLauncher {
     }
 
     /**
-     * Back to the home screen: closes a run that has ENDED, or clears a start that FAILED, so the next project
-     * can be started. Never automatic (user, 2026-11-03): a finished run stays readable until someone chooses
-     * this. A run whose loop is still going is not closed from here.
+     * Back to the home screen: closes a run that has ENDED or whose loop has not begun (held, or adopted and
+     * waiting for a goal), or clears a start that FAILED, so the next project can be started. Never automatic
+     * (user, 2026-11-03): a finished run stays readable until someone chooses this. A run whose loop is going is
+     * not closed from here.
      *
-     * @throws IllegalStateException while a run is starting or its loop is still running
+     * @throws IllegalStateException while a run is starting or its loop is running
      */
     public synchronized void returnHome() {
         State now = state();
+        if (now == State.RUNNING && notBegunProbe.test(runContext)) now = State.ENDED;
         if (now == State.STARTING || now == State.RUNNING) {
             throw new IllegalStateException("the run on " + current.project() + " is still "
                     + now.name().toLowerCase(Locale.ROOT) + "; it can be left once it has ended");
@@ -158,6 +162,12 @@ public class ProjectLauncher {
         failure = null;
         since = null;
         state = State.IDLE;
+    }
+
+    private static boolean notBegun(ConfigurableApplicationContext ctx) {
+        if (!ctx.isActive()) return false;
+        AutobuilderService service = ctx.getBeanProvider(AutobuilderService.class).getIfAvailable();
+        return service != null && (service.held() || service.awaitingGoal());
     }
 
     private static boolean awaitingGoal(ConfigurableApplicationContext ctx) {
@@ -196,6 +206,7 @@ public class ProjectLauncher {
         body.put("state", now.name());
         if (now == State.ENDED) body.put("endReason", haltProbe.apply(runContext).orElse(""));
         if (now == State.RUNNING && goalWaitProbe.test(runContext)) body.put("waitingForGoal", true);
+        if (now == State.RUNNING && notBegunProbe.test(runContext)) body.put("notBegun", true);
         if (current != null) {
             body.put("project", current.project());
             body.put("projectExists", Files.isDirectory(Path.of(current.project())));

@@ -134,6 +134,20 @@ class ProjectLauncherTest {
     }
 
     @Test
+    void aRunWhoseLoopHasNotBegunCanBeLeft() throws Exception {
+        ConfigurableApplicationContext ctx = mock(ConfigurableApplicationContext.class);
+        ProjectLauncher launcher = new ProjectLauncher(new String[0], (c, args) -> ctx);
+        launcher.notBegunProbe = c -> true;
+        launcher.start(new ProjectChoice("data/a", "ASK", null)).get(5, TimeUnit.SECONDS);
+
+        assertThat(launcher.describe()).containsEntry("state", "RUNNING").containsEntry("notBegun", true);
+        launcher.returnHome();
+
+        org.mockito.Mockito.verify(ctx).close();
+        assertThat(launcher.state()).isEqualTo(ProjectLauncher.State.IDLE);
+    }
+
+    @Test
     void goingHomeAfterAFailedStartClosesNothing() {
         ProjectLauncher launcher = new ProjectLauncher(new String[0], (c, args) -> {
             throw new IllegalStateException("port in use");

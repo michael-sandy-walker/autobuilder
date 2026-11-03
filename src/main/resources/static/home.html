@@ -83,6 +83,15 @@
   pre.coldread { background: var(--panel-2); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
     max-height: 360px; overflow: auto; white-space: pre-wrap; font-size: 12px; color: var(--muted); margin: 0; }
   textarea.short { min-height: 80px; }
+  .pick { display: flex; gap: 10px; align-items: baseline; margin: 10px 0 4px; }
+  .pick input[type=checkbox], .pick input[type=radio] { width: auto; }
+  .pick .runs { color: var(--dim); font-size: 12px; margin-left: auto; display: flex; gap: 6px; align-items: baseline; }
+  table.inputs { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+  table.inputs td, table.inputs th { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--rule); }
+  table.inputs th { color: var(--dim); font-weight: 500; }
+  .conflict { border: 1px solid var(--warn-rule); border-radius: 6px; padding: 10px 12px; margin-top: 8px; }
+  .conflict b { color: var(--warn); }
+  .side { color: var(--muted); font-size: 12px; margin: 4px 0; white-space: pre-wrap; }
   a { color: #93c5fd; }
   [hidden] { display: none !important; }
   @media (max-width: 700px) { .directions { grid-template-columns: 1fr 1fr; } }
@@ -94,6 +103,19 @@
 
   <div id="banner" class="banner"><span class="dot"></span><div><b>Reading&hellip;</b></div></div>
   <div id="result"></div>
+
+  <section id="job" hidden>
+    <h2>Bringing projects together</h2>
+    <div class="card">
+      <div class="head"><span class="name" id="job-name"></span><span class="tag" id="job-phase"></span></div>
+      <p class="note" id="job-what" style="margin-top:0"></p>
+      <table class="inputs"><thead><tr><th>Project</th><th>Status</th><th>Placed</th><th>Corrections</th>
+        <th>Conflicts</th><th>Unmet criteria</th></tr></thead><tbody id="job-rows"></tbody></table>
+      <div id="conflicts"></div>
+      <div class="row" id="release-row" hidden><button id="release" class="primary">Start the run</button>
+        <span class="note">Once every conflict is decided, the loop starts on what the projects brought.</span></div>
+    </div>
+  </section>
 
   <section id="adopt" hidden>
     <h2>The adopted project waits for a goal</h2>
@@ -115,7 +137,7 @@
     <button class="direction" data-dir="new"><b>New project</b><span class="what">from a specification</span></button>
     <button class="direction" data-dir="continue"><b>Continue</b><span class="what">a project worked on before</span></button>
     <button class="direction" data-dir="import"><b>Import one</b><span class="what">adopt an existing codebase</span></button>
-    <button class="direction" disabled title="Not built yet"><b>Import several</b><span class="what">merge or integrate -- coming</span></button>
+    <button class="direction" data-dir="several"><b>Import several</b><span class="what">bring projects together</span></button>
   </div>
 
   <label for="profiles">How the run proceeds</label>
@@ -165,6 +187,24 @@
     <h2>Or adopt one already here</h2>
     <p class="note">Projects holding code Autobuilder did not write.</p>
     <div id="adoptable"></div>
+  </section>
+
+  <section id="several" hidden>
+    <h2>Bring projects together</h2>
+    <div class="card">
+      <label for="sev-name">Name of the new project -- becomes its directory</label>
+      <input id="sev-name" placeholder="combined-service" autocomplete="off" spellcheck="false">
+      <label for="sev-goal">Goal -- what the new project should achieve, in prose</label>
+      <textarea id="sev-goal" class="short" placeholder="What the combined project is for, and how you would tell it works."></textarea>
+      <label>Projects to bring in -- two or more; for each, what to take from it</label>
+      <div id="sev-picks"></div>
+      <div class="row">
+        <button id="sev-go" class="primary">Bring together</button>
+        <span class="note">Starts an empty project, gives it the goal, then brings each project in -- code, goals and
+          criteria; each can take minutes. Differences no intent settles wait for you to decide. The chosen projects
+          are only read.</span>
+      </div>
+    </div>
   </section>
 
   <section id="continue" hidden>
@@ -259,18 +299,22 @@ function renderBanner() {
     const base = location.protocol + '//' + location.hostname + ':' + run.runPort;
     const ended = run.state === 'ENDED';
     const waiting = !ended && run.waitingForGoal;
+    const held = !ended && !waiting && run.notBegun;
+    const canLeave = ended || run.notBegun;
     const links = [['goals.html', 'Goals'], ['graph.html', 'Graph'], ['graph-explorer.html', 'Graph explorer'],
                    ['start.html', 'Start state']]
       .map(([page, label]) => '<a href="' + base + '/' + page + '" target="_blank" rel="noopener">' + label + '</a>').join('');
     banner(run.state, (ended ? 'Ended: ' + p + ' -- ' + reasonText(run.endReason)
-        : waiting ? 'Adopted ' + p + ' -- waiting for a goal' : 'Running ' + p)
+        : waiting ? 'Adopted ' + p + ' -- waiting for a goal'
+        : held ? 'Held: ' + p + ' -- its loop has not begun' : 'Running ' + p)
         + (run.mode ? ' (' + run.mode + ')' : ''),
       ended ? 'Its results stay readable here until you go back to the home screen. One run at a time: '
               + 'starting another means going back first.'
             : 'On port ' + run.runPort + ' since ' + new Date(run.since).toLocaleTimeString()
               + '. One run at a time: another can be started once this one has ended.',
       '<div class="links">' + links + '</div>'
-      + (ended ? '<div class="row"><button id="back" class="primary">Back to home</button></div>' : ''));
+      + (canLeave ? '<div class="row"><button id="back"' + (ended ? ' class="primary"' : '') + '>Back to home</button>'
+          + (ended ? '' : '<span class="note">Leaves it as it is on disk; nothing has run on it.</span>') + '</div>' : ''));
   }
 }
 
@@ -319,6 +363,7 @@ function renderLists() {
     ? cont.map(t => card(t, true)).join('')
     : '<p class="note">No project has unfinished work to continue.</p>';
   document.getElementById('finished').innerHTML = done.map(t => card(t, false)).join('');
+  renderPicks();
   const foreign = projects.filter(t => t.situation === 'FOREIGN');
   document.getElementById('adoptable').innerHTML = foreign.length
     ? foreign.map(t => card(t, 'adopt')).join('')
@@ -380,6 +425,93 @@ document.getElementById('create').onclick = async () => {
   start(projectName, 'NEW_PROJECT');
 };
 
+// ---- Import several ----
+const picked = {};   // project -> { intent, runs }
+
+function renderPicks() {
+  const withCode = projects.filter(t => t.sourceFiles > 0);
+  document.getElementById('sev-picks').innerHTML = withCode.length ? withCode.map(t => {
+    const p = picked[t.name];
+    return '<div class="pick"><input type="checkbox" data-pick="' + esc(t.name) + '"' + (p ? ' checked' : '') + '>'
+      + '<b>' + esc(t.name) + '</b><span class="note">' + esc(t.seedSummary || '') + '</span>'
+      + (p ? '<span class="runs"><input type="radio" name="runs" data-runs="' + esc(t.name) + '"' + (p.runs ? ' checked' : '')
+        + '> its module runs</span>' : '') + '</div>'
+      + (p ? '<textarea class="short" data-intent="' + esc(t.name) + '" placeholder="What to take from ' + esc(t.name)
+        + ', and how it is used in the new project.">' + esc(p.intent) + '</textarea>' : '');
+  }).join('') : '<p class="note">No project holds code yet.</p>';
+  document.querySelectorAll('[data-pick]').forEach(c => c.onchange = () => {
+    const n = c.dataset.pick;
+    if (c.checked) {
+      const t = projects.find(x => x.name === n);
+      picked[n] = { intent: 'Use ' + n + ' as it is' + (t && t.seedSummary ? ': ' + t.seedSummary : '.'), runs: false };
+    } else delete picked[n];
+    renderPicks();
+  });
+  document.querySelectorAll('[data-intent]').forEach(a => a.oninput = () => { picked[a.dataset.intent].intent = a.value; });
+  document.querySelectorAll('[data-runs]').forEach(r => r.onchange = () => {
+    Object.keys(picked).forEach(k => picked[k].runs = k === r.dataset.runs);
+  });
+}
+
+document.getElementById('sev-go').onclick = async () => {
+  const inputs = Object.entries(picked).map(([project, p]) => ({ project, intent: p.intent, runs: p.runs }));
+  const r = await post('/home/integrate', { name: document.getElementById('sev-name').value.trim(),
+    goal: document.getElementById('sev-goal').value, profiles: document.getElementById('profiles').value, inputs });
+  if (r.status !== 202) { result(false, 'Not started: ' + (r.body.message || r.status)); return; }
+  result(true, 'Bringing ' + inputs.length + ' projects into ' + r.body.name + '.');
+  loadJob();
+};
+
+const PHASE = { STARTING: 'starting the new project', SETTING_GOAL: 'setting its goal',
+  BRINGING_IN: 'bringing projects in', DECIDING: 'waiting for your decisions',
+  RELEASED: 'released -- the loop is working', FAILED: 'failed' };
+let job = null;
+let conflictsShown = '';
+
+async function loadJob() {
+  const res = await fetch('/home/integrate').catch(() => null);
+  job = res && res.status === 200 ? await res.json() : null;
+  const panel = document.getElementById('job');
+  panel.hidden = !job || job.phase === 'RELEASED' && run.state !== 'RUNNING';
+  if (!job) return;
+  document.getElementById('job-name').textContent = job.name;
+  document.getElementById('job-phase').textContent = PHASE[job.phase] || job.phase;
+  document.getElementById('job-what').textContent = job.failure ? 'Stopped: ' + job.failure : '';
+  document.getElementById('job-rows').innerHTML = job.inputs.map(i => '<tr><td>' + esc(i.project) + '</td><td>'
+    + esc(i.status) + (i.message ? ': ' + esc(i.message) : '') + '</td><td>' + (i.placed ?? '') + '</td><td>'
+    + (i.corrections ?? '') + '</td><td>' + esc((i.conflicts || []).join('; ')) + '</td><td>' + (i.unmet ?? '') + '</td></tr>').join('');
+  const deciding = job.phase === 'DECIDING';
+  document.getElementById('release-row').hidden = !deciding;
+  if (deciding) loadConflicts(); else { document.getElementById('conflicts').innerHTML = ''; conflictsShown = ''; }
+}
+
+async function loadConflicts() {
+  const list = await fetch('/home/run/conflicts').then(r => r.json()).catch(() => []);
+  const key = JSON.stringify(list.map(c => c.id));
+  if (key === conflictsShown) return;
+  conflictsShown = key;
+  document.getElementById('conflicts').innerHTML = list.length ? list.map(c => '<div class="conflict"><b>'
+    + esc(c.subject) + '</b>'
+    + (c.receiving ? '<div class="side">The new project: ' + esc(c.receiving) + '</div>' : '')
+    + (c.other ? '<div class="side">The input: ' + esc(c.other) + '</div>' : '')
+    + '<div class="row"><button data-decide="' + esc(c.id) + '" data-way="receiving">Keep the new project\'s</button>'
+    + '<button data-decide="' + esc(c.id) + '" data-way="input">Take the input\'s</button></div></div>').join('')
+    : '<p class="note">No conflict is open.</p>';
+  document.querySelectorAll('[data-decide]').forEach(b => b.onclick = async () => {
+    const r = await post('/home/run/conflicts/' + encodeURIComponent(b.dataset.decide), { decision: b.dataset.way });
+    if (r.status >= 300) result(false, 'Not decided: ' + (r.body.message || r.body.error || r.status));
+    conflictsShown = '';
+    loadConflicts();
+  });
+}
+
+document.getElementById('release').onclick = async () => {
+  const r = await post('/home/integrate/release', {});
+  if (r.status !== 200) { result(false, 'Not started: ' + (r.body.message || r.status)); return; }
+  result(true, 'Released: the loop works on what the projects brought.');
+  loadJob();
+};
+
 document.getElementById('import-go').onclick = async () => {
   const projectName = document.getElementById('imp-name').value.trim();
   const r = await post('/home/import', { name: projectName, source: document.getElementById('imp-source').value.trim(),
@@ -398,6 +530,7 @@ function choose(dir) {
   document.getElementById('new').hidden = dir !== 'new';
   document.getElementById('continue').hidden = dir !== 'continue';
   document.getElementById('import').hidden = dir !== 'import';
+  document.getElementById('several').hidden = dir !== 'several';
   remember('home.direction', dir);
 }
 document.querySelectorAll('.direction[data-dir]').forEach(b => b.onclick = () => choose(b.dataset.dir));
@@ -408,5 +541,6 @@ profiles.onchange = () => remember('home.profiles', profiles.value);
 
 choose(recall('home.direction') || 'new');
 loadState().then(loadProjects);
-setInterval(loadState, 4000);
+setInterval(() => { loadState(); loadJob(); }, 4000);
+loadJob();
 </script>

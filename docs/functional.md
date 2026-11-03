@@ -149,7 +149,15 @@ Start Autobuilder without naming a project and open `http://localhost:8080` in a
   did not write can be adopted in place. An adopted project **waits for a goal**: the home screen shows what
   Autobuilder read in the code (its cold read) and a goal box; "Set goal" gives the run its goal, written byte for
   byte to `bootstrap/seed.txt`.
-- **Import several** is not built yet.
+- **Import several** -- bring two or more projects together in a new one. Give the new project a name and a
+  goal, tick the projects to bring in (any that hold code), and for each say what to take from it (its *intent*);
+  mark at most one whose module is the one that runs. "Bring together" starts the new, empty project held, sets
+  its goal, then brings each project in -- code, goals and criteria, each landing as a module of its own; each can
+  take minutes, because what it brings is compared with what is already there. The page shows each project's
+  outcome (files placed, corrections, conflicts, criteria not yet met). A difference no intent settles is a
+  **conflict**: the page shows both sides and you decide -- keep the new project's, or take the input's. When no
+  conflict is open the run starts by itself (or with "Start the run" once you have decided). The chosen projects
+  are only read. How an input lands is described in the technical documentation, section 10 ("Bringing a project in").
 
 "How the run proceeds" picks the profile for the run: autonomous (`dev-auto`), autonomous with the waiting trimmed
 (`dev-auto,fast`, what scripted runs use), or manual (`dev-local`). The projects are the directories in
@@ -158,7 +166,8 @@ Start Autobuilder without naming a project and open `http://localhost:8080` in a
 One run at a time: while a run is starting or running, the start buttons are disabled and a second start is
 refused. A running run's own pages (goals, graph, start state) are linked from the banner; the run listens on
 port 8081. A run that has ended stays as it is, so its results can still be read later; the banner then
-says how it ended and offers **Back to home**, which closes it so another can be started.
+says how it ended and offers **Back to home**, which closes it so another can be started. A run whose loop has
+not begun -- held, or adopted and still waiting for a goal -- can be left the same way.
 
 Everything the page does is a REST call on the home port, so it can also be done with curl:
 
@@ -180,6 +189,13 @@ curl -X POST -H 'Content-Type: application/json' \
 curl http://localhost:8080/home/run/cold-read            # what the adopted run read in the code
 curl -X POST -H 'Content-Type: text/plain' --data-binary @goal.txt \
      http://localhost:8080/home/run/goal                 # its goal, byte for byte
+curl -X POST -H 'Content-Type: application/json' -d '{"name": "combined", "goal": "...", "profiles": "dev-auto",
+     "inputs": [{"project": "a", "intent": "...", "runs": true}, {"project": "b", "intent": "..."}]}' \
+     http://localhost:8080/home/integrate                # bring projects together (follow with GET /home/integrate)
+curl http://localhost:8080/home/run/conflicts            # what waits for a decision
+curl -X POST -H 'Content-Type: application/json' -d '{"decision": "input"}' \
+     http://localhost:8080/home/run/conflicts/<id>       # or "receiving"
+curl -X POST http://localhost:8080/home/integrate/release  # start the run once nothing is open
 curl -X POST http://localhost:8080/home/return           # back home once the run has ended (409 while it runs)
 ```
 

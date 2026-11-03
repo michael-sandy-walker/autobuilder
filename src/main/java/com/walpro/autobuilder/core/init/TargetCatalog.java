@@ -42,10 +42,12 @@ public class TargetCatalog {
      * @param priorRunState  leftovers from earlier runs, named — mutations, snapshots, checkpoints
      * @param supportedModes the modes this target can actually be started in
      * @param lastEnd        how the last run that wrote an end report ended, or null when none did
+     * @param pendingImports T4-ED: what was brought in and waits for the operator to keep it or take it back out
      */
     public record Target(String name, boolean hasSeed, String seedSummary, boolean hasYardstick,
                          StartModeService.Situation situation, int sourceFiles,
-                         List<String> priorRunState, List<StartMode> supportedModes, LastEnd lastEnd) {}
+                         List<String> priorRunState, List<StartMode> supportedModes, LastEnd lastEnd,
+                         List<String> pendingImports) {}
 
     /**
      * T4-ED: the last end report's reason and time, from {@code meta/run-end-report.json}. A run stopped from
@@ -109,7 +111,36 @@ public class TargetCatalog {
         if (situation != StartModeService.Situation.EMPTY) modes.add(StartMode.ADOPT_PROJECT);
 
         return new Target(dir.getFileName().toString(), hasSeed, firstMeaningfulLine(dir), hasYardstick,
-                situation, sources, priorState, modes, lastEnd(dir));
+                situation, sources, priorState, modes, lastEnd(dir), pendingImports(dir));
+    }
+
+    /**
+     * The imports in {@code meta/inputs.json} still open (neither kept nor withdrawn), by what was brought in. Read from
+     * the file the ledger writes beside the graph, so it is known before any run is up.
+     */
+    private List<String> pendingImports(Path dir) {
+        Path ledger = dir.resolve(com.walpro.autobuilder.goal.purpose.PurposeService.PATH);
+        if (!Files.isRegularFile(ledger)) return List.of();
+        try {
+            JsonNode events = MAPPER.readTree(ledger.toFile()).path("events");
+            java.util.Set<String> withdrawn = new java.util.HashSet<>();
+            for (JsonNode e : events) {
+                if (com.walpro.autobuilder.goal.purpose.InputEvent.WITHDRAWAL.equals(e.path("kind").asText())) {
+                    withdrawn.add(e.path("inputId").asText());
+                }
+            }
+            List<String> out = new ArrayList<>();
+            for (JsonNode e : events) {
+                if (com.walpro.autobuilder.goal.purpose.InputEvent.IMPORT.equals(e.path("kind").asText())
+                        && com.walpro.autobuilder.goal.purpose.InputEvent.OPEN.equals(e.path("status").asText())
+                        && !withdrawn.contains(e.path("inputId").asText())) {
+                    out.add(e.path("subject").asText());
+                }
+            }
+            return out;
+        } catch (IOException e) {
+            return List.of();
+        }
     }
 
     private LastEnd lastEnd(Path dir) {

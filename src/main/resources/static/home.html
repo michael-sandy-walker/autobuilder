@@ -94,6 +94,9 @@
   .badge.finished { color: var(--good); border-color: var(--good-rule); background: var(--good-bg); }
   .badge.existing { color: var(--violet); border-color: var(--violet-rule); background: var(--violet-bg); }
   .badge.now { color: #bfdbfe; border-color: var(--accent); background: #0c1e3a; }
+  .badge.waiting { color: var(--warn); border-color: var(--warn-rule); background: var(--warn-bg); }
+  .pending { border: 1px solid var(--warn-rule); border-radius: 6px; padding: 10px 12px; margin-top: 8px; }
+  .pending b { color: var(--warn); }
   .menu { position: absolute; right: 0; top: 100%; z-index: 5; margin-top: 4px; background: var(--panel-2);
     border: 1px solid var(--rule); border-radius: 8px; padding: 4px; min-width: 230px; box-shadow: 0 8px 24px #0008; }
   .menu button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 7px 10px;
@@ -232,6 +235,7 @@ let run = { state: 'IDLE' };
 let job = null;
 let progress = null;
 let conflicts = [];
+let pending = [];
 let projects = [];
 
 // ---------- talking to the home context ----------
@@ -250,7 +254,7 @@ function toast(ok, text) {
 const message = r => r.body.message || r.body.error || ('HTTP ' + r.status);
 const profiles = () => $('profiles').value;
 const idle = () => run.state === 'IDLE';
-const jobBusy = () => job && !['FAILED', 'RELEASED'].includes(job.phase);
+const jobBusy = () => job && !['FAILED', 'RELEASED', 'CANCELLED'].includes(job.phase);
 
 async function refresh() {
   try {
@@ -266,7 +270,9 @@ async function refresh() {
     if (run.runPort && !(job && job.phase === 'BRINGING_IN')) {
       const list = await fetch('/home/run/conflicts').then(r => r.json()).catch(() => []);
       conflicts = Array.isArray(list) ? list : [];
-    } else conflicts = [];
+      const waiting = await fetch('/home/run/pending').then(r => r.json()).catch(() => []);
+      pending = Array.isArray(waiting) ? waiting : [];
+    } else { conflicts = []; pending = []; }
   } catch (e) {
     $('now').className = 'now FAILED';
     $('now').innerHTML = '<div class="title"><span class="dot"></span><b>Cannot reach Autobuilder</b></div>';
@@ -300,8 +306,10 @@ function actionsOf(t) {
         'Restart "' + t.name + '" from its specification?\n\nThis CLEARS its code and begins a new lineage; the earlier '
         + 'run is not read. Anything not kept elsewhere is gone. (Duplicate keeps it and starts a copy instead.)' }) : null;
   const duplicate = t.hasSeed ? { label: 'Duplicate', hint: 'a new project from its specification, without code', run: () => duplicateOf(t) } : null;
-  const main = { new: start('Start', 'NEW_PROJECT'), progress: start('Continue', 'CONTINUE_LINEAGE'),
-                 finished: extend, existing: start('Work on it', 'ADOPT_PROJECT'), blank: null }[s];
+  // An import waiting for confirmation comes first: the project is held to review it, nothing runs.
+  const main = (t.pendingImports || []).length ? start('Review import', 'ASK')
+    : { new: start('Start', 'NEW_PROJECT'), progress: start('Continue', 'CONTINUE_LINEAGE'),
+        finished: extend, existing: start('Work on it', 'ADOPT_PROJECT'), blank: null }[s];
   const more = { new: [duplicate], progress: [extend, restart, duplicate], finished: [restart, duplicate],
                  existing: [extend, duplicate], blank: [] }[s].filter(Boolean);
   return { main, more };
@@ -329,7 +337,9 @@ function renderProjects() {
     el.innerHTML = '<div><span class="name">' + esc(t.name) + '</span>'
       // The current project's state is what Now says; its last run's outcome would be stale beside it.
       + (isCurrent(t) ? '<span class="badge now">' + (run.state === 'ENDED' ? 'open' : 'now') + '</span>'
-                      : '<span class="badge ' + s + '">' + STATE_LABEL[s] + '</span>') + '</div>'
+                      : '<span class="badge ' + s + '">' + STATE_LABEL[s] + '</span>')
+      + ((t.pendingImports || []).length ? ' <span class="badge waiting" title="' + esc(t.pendingImports.join(', '))
+          + '">import waiting</span>' : '') + '</div>'
       + '<div class="acts"></div>'
       + '<div class="what">' + esc(t.seedSummary || (s === 'existing' ? 'no goal yet' : '')) + '</div>'
       + '<div class="meta">' + t.sourceFiles + ' source file' + (t.sourceFiles === 1 ? '' : 's')
@@ -411,8 +421,12 @@ function renderNow() {
     actions = '<button data-do="close">Close</button>';
   } else if (held) {
     title = p + ' -- held';
-    why = jobBusy() ? 'Projects are being brought in; its loop starts when that is done.' : 'Its loop has not begun.';
-    actions = jobBusy() && job.phase !== 'DECIDING' ? '' : '<button data-do="close">Close</button>';
+    why = jobBusy() ? 'Projects are being brought in; nothing runs until you keep or cancel what came in.'
+        : pending.length ? 'An import waits for you: keep it or cancel it below.'
+        : conflicts.length ? 'Decide the conflicts below, then continue it.' : 'Its loop has not begun.';
+    actions = jobBusy() && job.phase !== 'DECIDING' ? ''
+        : (!jobBusy() && !pending.length && !conflicts.length ? '<button data-do="continue" class="primary">Continue ' + esc(p) + '</button>' : '')
+          + '<button data-do="close">Close</button>';
   } else if (run.stopping) {
     title = 'Stopping ' + p; why = 'It halts after its current cycle, which can take a few minutes.';
   } else {
@@ -424,8 +438,9 @@ function renderNow() {
     + (why ? '<div class="why">' + esc(why) + '</div>' : '') + links
     + (actions ? '<div class="row">' + actions + '</div>' : '')
     + (waiting ? goalBox() : '') + (job ? jobBox() : '')
+    + (pending.length && !(job && job.phase === 'DECIDING') ? pendingHtml() : '')
     + (conflicts.length && !(job && job.phase === 'DECIDING') ? '<div class="sub"><div class="title"><b>Waiting for your decision</b>'
-       + '</div><div class="why">Conflicts from an earlier import. While one is open, this project cannot be finished.</div>'
+       + '</div><div class="why">Conflicts from an import. While one is open, this project cannot be finished.</div>'
        + conflictsHtml() + '</div>' : '');
   // Rebuilt only when what it shows changed: a rebuild would take the caret out of a box being typed in.
   if (html === lastNowHtml) return;
@@ -433,13 +448,50 @@ function renderNow() {
   const focused = document.activeElement && document.activeElement.id;
   el.className = 'now ' + run.state;
   el.innerHTML = html;
-  el.querySelectorAll('[data-do]').forEach(b => b.onclick = () => ({ close: closeRun, stop: stopRun })[b.dataset.do]());
+  el.querySelectorAll('[data-do]').forEach(b => b.onclick = () => ({ close: closeRun, stop: stopRun, continue: continueHeld })[b.dataset.do]());
+  el.querySelectorAll('[data-keep]').forEach(b => b.onclick = () => keepImport(b.dataset.keep));
+  el.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => cancelImport(b.dataset.cancel, b.dataset.label));
   if (waiting) wireGoalBox();
   if (job) wireJobBox();
   if (conflicts.length) wireConflicts();
   if (focused && $(focused)) $(focused).focus();
 }
 let lastNowHtml = '';
+
+// Imports that wait for confirmation, from this session or an earlier one.
+function pendingHtml() {
+  return '<div class="sub"><div class="title"><b>Waiting for your confirmation</b></div>'
+    + '<div class="why">What was brought in is in the project, but not yet kept. Keep it, or cancel it to take it back out.</div>'
+    + pending.map(i => '<div class="pending"><b>Import of ' + esc(i.label) + '</b> <span class="note">' + esc(when(i.at)) + '</span>'
+      + '<div class="side">' + esc(i.intent) + '</div>'
+      + '<div class="side">' + countsText(i.newFiles, i.filesBothHave, i.rulesThatDiffer, i.claims) + '</div>'
+      + '<div class="row"><button data-keep="' + esc(i.inputId) + '" class="primary">Keep it</button>'
+      + '<button data-cancel="' + esc(i.inputId) + '" data-label="' + esc(i.label) + '" class="destructive">Cancel the import</button></div></div>').join('')
+    + '</div>';
+}
+function countsText(newFiles, both, rules, claims) {
+  const part = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+  return [part(newFiles, 'new file', 'new files'), part(both, 'file both projects have', 'files both projects have'),
+          part(rules, 'rule that differs', 'rules that differ')].concat(claims ? [part(claims, 'requirement that may not hold', 'requirements that may not hold')] : [])
+    .join(', ') + '.';
+}
+async function keepImport(id) {
+  const r = await post('/home/run/imports/' + encodeURIComponent(id) + '/keep');
+  if (r.status !== 200) toast(false, 'Not kept: ' + message(r)); else toast(true, 'Kept.');
+  refresh(); loadProjects();
+}
+async function cancelImport(id, label) {
+  if (!confirm('Cancel the import of "' + label + '"?\n\nIts files leave the project, its goals and requirements stop counting, '
+      + 'and its open conflicts are dropped. The record of it stays.')) return;
+  const r = await post('/home/run/imports/' + encodeURIComponent(id) + '/cancel');
+  if (r.status !== 200) toast(false, 'Not cancelled: ' + message(r)); else toast(true, 'The import of ' + label + ' was taken back out.');
+  refresh(); loadProjects();
+}
+async function continueHeld() {
+  const r = await post('/home/run/continue');
+  if (r.status !== 200) toast(false, 'Not continued: ' + message(r)); else toast(true, 'Autobuilder works on ' + baseName(run.project) + '.');
+  refresh();
+}
 
 async function closeRun() {
   const r = await post('/home/return');
@@ -480,7 +532,7 @@ function wireGoalBox() {
 
 // Projects being brought in: each input's outcome, the conflicts, and letting the loop work.
 const PHASE = { STARTING: 'starting', SETTING_GOAL: 'setting the goal', BRINGING_IN: 'bringing in',
-  DECIDING: 'waiting for your decisions', RELEASED: 'done -- the loop works on it', FAILED: 'stopped' };
+  DECIDING: 'waiting for you', RELEASED: 'kept', CANCELLED: 'cancelled -- taken back out', FAILED: 'stopped' };
 // What each conflict's own resolution says so far, and the options asked for: kept here, outside the rebuilt HTML.
 const drafts = {};
 const draftOf = id => drafts[id] || (drafts[id] = { open: false, text: '', options: null, asking: false });
@@ -491,11 +543,14 @@ function jobBox() {
     + '</b><span class="badge">' + esc(PHASE[job.phase] || job.phase) + '</span></div>'
     + (job.failure ? '<div class="why">' + esc(job.failure) + '</div>' : '')
     + (job.phase === 'BRINGING_IN' || job.phase === 'STARTING' || job.phase === 'SETTING_GOAL' ? progressHtml(landed) : '')
-    + '<table class="inputs" style="margin-top:8px"><thead><tr><th>Brought in</th><th>Status</th><th>Files</th><th>Corrections</th>'
-    + '<th>Conflicts</th><th>Unmet criteria</th></tr></thead><tbody>'
+    + '<table class="inputs" style="margin-top:8px"><thead><tr><th>Brought in</th><th>Status</th>'
+    + '<th title="Files this project did not have">New files</th><th title="Held as conflicts: this project\'s file stays until decided">Files both have</th>'
+    + '<th title="Held as conflicts">Rules that differ</th><th title="Differences your intent settled">Corrections</th>'
+    + '<th title="Criteria it carried that the combined code does not meet yet">Unmet criteria</th></tr></thead><tbody>'
     + job.inputs.map(i => '<tr><td>' + esc(i.project) + '</td><td>' + esc(i.status) + (i.message ? ': ' + esc(i.message) : '')
-      + '</td><td>' + (i.placed ?? '') + '</td><td>' + (i.corrections ?? '') + '</td><td>' + (i.conflicts ? i.conflicts.length : '')
-      + '</td><td>' + (i.unmet ?? '') + '</td></tr>').join('') + '</tbody></table>'
+      + '</td><td>' + (i.newFiles ?? '') + '</td><td>' + (i.filesBothHave ?? '') + '</td><td>'
+      + (i.rulesThatDiffer == null ? '' : i.rulesThatDiffer + (i.claims ? ' (+' + i.claims + ' requirements)' : ''))
+      + '</td><td>' + (i.corrections ?? '') + '</td><td>' + (i.unmet ?? '') + '</td></tr>').join('') + '</tbody></table>'
     + (job.phase === 'DECIDING' ? conflictsHtml() + releaseHtml() : '')
     + '</div>';
 }
@@ -544,25 +599,32 @@ function conflictsHtml() {
   }).join('');
 }
 
-// What ends the step: a project this job started held is started (or continued) on the combined code; a project
-// whose loop was going carries on by itself.
+// What ends the step: keep what came in (and start or continue the project, if this job held it), or cancel it.
 function releaseHtml() {
-  if (!job.held) return '';
-  const label = (job.kind === 'extend' ? 'Continue ' : 'Start ') + job.name;
+  const label = !job.held ? 'Keep the import' : job.kind === 'extend' ? 'Keep the import and continue ' + job.name
+    : 'Keep the imports and start ' + job.name;
   return '<div class="row"><button id="release" class="primary"' + (conflicts.length ? ' disabled' : '') + '>' + esc(label) + '</button>'
-    + '<span class="note">The import is complete' + (conflicts.length ? ' once every conflict is decided' : '')
-    + '; this starts Autobuilder on the combined project.</span></div>';
+    + '<button id="cancel-job" class="destructive">Cancel the import</button>'
+    + '<span class="note">' + (conflicts.length ? 'Decide every conflict first. ' : '')
+    + 'Until you keep it, you can take it all back out.</span></div>';
 }
 
 function wireJobBox() {
   if (job.phase !== 'DECIDING') return;
-  // A project whose loop was going: nothing to start once the last conflict is decided.
-  if (!job.held && !conflicts.length) { post('/home/integrate/release').then(refresh); return; }
   const rel = $('release');
   if (rel) rel.onclick = async () => {
     const r = await post('/home/integrate/release');
-    if (r.status !== 200) toast(false, 'Not yet: ' + message(r)); else toast(true, 'Autobuilder works on the combined project.');
-    refresh();
+    if (r.status !== 200) toast(false, 'Not yet: ' + message(r));
+    else toast(true, job.held ? 'Kept; Autobuilder works on the combined project.' : 'Kept.');
+    refresh(); loadProjects();
+  };
+  const cancel = $('cancel-job');
+  if (cancel) cancel.onclick = async () => {
+    if (!confirm('Cancel the import into "' + job.name + '"?\n\nEverything it brought in leaves the project again: files, goals, '
+        + 'requirements and open conflicts. The record of it stays.')) return;
+    const r = await post('/home/integrate/cancel');
+    if (r.status !== 200) toast(false, 'Not cancelled: ' + message(r)); else toast(true, 'Taken back out.');
+    refresh(); loadProjects();
   };
 }
 

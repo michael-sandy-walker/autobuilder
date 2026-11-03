@@ -169,6 +169,23 @@ public class PurposeService {
                 heldLine, heldPath, List.of(), InputEvent.OPEN, null, null, Instant.now()));
     }
 
+    /** T4-ED: an import landed but not yet confirmed by the operator; {@code label} is what was brought in. */
+    public synchronized InputEvent recordPendingImport(String inputId, String label, String by) {
+        return store(new InputEvent("event-" + UUID.randomUUID(), InputEvent.IMPORT, inputId, label, null, null,
+                null, null, List.of(), InputEvent.OPEN, null, by, Instant.now()));
+    }
+
+    /** T4-ED: the imports that wait for confirmation: neither kept nor taken back out. */
+    public List<InputEvent> pendingImports() {
+        return ledger.events().stream().filter(e -> InputEvent.IMPORT.equals(e.kind()) && e.open())
+                .filter(e -> !ledger.withdrawn(e.inputId())).toList();
+    }
+
+    /** T4-ED: a pending import confirmed: it stays, and nothing more waits for it. */
+    public synchronized InputEvent keepImport(InputEvent pending, String by) {
+        return decide(pending, InputEvent.KEPT, by, List.of());
+    }
+
     /** An input taken back out: it stays in the record and asks nothing; {@code carried} are its goals' criteria. */
     public synchronized InputEvent recordWithdrawal(String inputId, String by, List<String> carried) {
         return store(new InputEvent("event-" + UUID.randomUUID(), InputEvent.WITHDRAWAL, inputId, "withdrawn", null, null,

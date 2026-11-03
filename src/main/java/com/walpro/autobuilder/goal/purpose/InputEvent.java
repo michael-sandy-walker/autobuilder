@@ -27,6 +27,12 @@ public record InputEvent(String id, String kind, String inputId, String subject,
     public static final String CORRECTION = "correction";
     public static final String CONFLICT = "conflict";
     public static final String WITHDRAWAL = "withdrawal";
+    /**
+     * T4-ED: an import that waits for the operator's confirmation -- open until kept ({@link #KEPT}); cancelling it is a
+     * withdrawal. Its subject is what was brought in, by name.
+     */
+    public static final String IMPORT = "import";
+    public static final String KEPT = "kept";
     public static final String OPEN = "open";
     public static final String DECIDED = "decided";
     public static final String FOR_INPUT = "input";

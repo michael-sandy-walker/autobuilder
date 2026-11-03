@@ -148,15 +148,20 @@ rest.
 - **Extend...** brings something into the project: another project here, or code in a directory on this machine,
   with what to take from it (its *intent*). Its code, goals and criteria join; a finished project reopens with the
   new work. What it brings is compared with what is there, and a difference no intent settles is a **conflict**,
-  which waits for your decision in Now. A project at rest is started held, takes the input, and is then released;
-  the project whose loop is running takes it between two cycles. How an input lands is described in the technical
+  which waits for your decision in Now. An import is **not final until you keep it**: it lands, you see what came in
+  (new files, files both projects have, rules that differ), decide its conflicts, and then **keep** it -- or
+  **cancel** it, which takes all of it back out again (files, goals, requirements, open conflicts; the record of it
+  stays). The same project, unchanged, cannot be brought in a second time while an earlier import of it is still
+  in. A project at rest is held throughout, so nothing runs on it before you keep the import; the project whose
+  loop is running takes the input between two cycles. How an input lands is described in the technical
   documentation, section 10 ("Bringing a project in").
 - **Restart** clears its `output/` and begins a new lineage from its specification; the earlier run is not read.
   The page asks first.
 - **Duplicate** makes a new project with a byte-for-byte copy of its `bootstrap/` (specification, obligations,
   protected paths, yardstick) -- no code, no history; the original is left as it is.
 
-Each row also says how the project's last run ended, and when. The filter above the list narrows it to one state.
+Each row also says how the project's last run ended, and when. A project with an import that is not yet kept shows
+**import waiting**, and its button is **Review import**: it is opened held, so you can keep or cancel the import. The filter above the list narrows it to one state.
 
 **+ New project** offers three ways in, each under a new name (it becomes the directory; a name already taken is
 refused, nothing is overwritten):
@@ -189,9 +194,11 @@ port 8081), and:
   ways to resolve it, each with what it changes; **Use this** copies one into your resolution to send or edit. The
   model only advises; you decide. While a conflict is open the project cannot be finished, so open conflicts are
   shown whenever the project's run is up.
-- When the import is complete and nothing is open: **Start <project>** (a new one) or **Continue <project>** (one
-  that was at rest) starts Autobuilder on the combined project. A project whose loop was already running needs no
-  button: it carries on once the last conflict is decided.
+- When every conflict is decided: **Keep the imports and start <project>** (a new project), **Keep the import and
+  continue <project>** (one that was at rest), or **Keep the import** (one whose loop was running) -- or **Cancel
+  the import** at any point before. Imports from an earlier session that are not yet kept are listed under
+  **Waiting for your confirmation**, each with **Keep it** and **Cancel the import**; once nothing waits,
+  **Continue <project>** starts it.
 
 One run at a time: while a run is up, the buttons that would start another are disabled.
 
@@ -222,6 +229,9 @@ curl -X POST -H 'Content-Type: application/json' -d '{"name": "combined", "goal"
 curl http://localhost:8080/home/run/conflicts            # what waits for a decision
 curl http://localhost:8080/home/run/input-progress      # the step the input under way is at (204 when none)
 curl http://localhost:8080/home/run/conflicts/<id>/options  # the model's suggested resolutions, each with its effect
+curl http://localhost:8080/home/run/pending              # imports not yet kept
+curl -X POST http://localhost:8080/home/run/imports/<input-id>/keep      # keep one ...
+curl -X POST http://localhost:8080/home/run/imports/<input-id>/cancel    # ... or take it back out
 curl -X POST -H 'Content-Type: application/json' -d '{"decision": "input"}' \
      http://localhost:8080/home/run/conflicts/<id>       # or "receiving", or {"decision": "own", "resolution": "..."}
 curl -X POST -H 'Content-Type: application/json' -d '{"project": "base", "profiles": "dev-auto",

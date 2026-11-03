@@ -33,8 +33,17 @@ import java.util.stream.Stream;
 @Slf4j
 class IntegrationJob {
 
-    /** Where the job stands. RELEASED: the inputs are in and the loop works on them. */
-    enum Phase { STARTING, SETTING_GOAL, BRINGING_IN, DECIDING, RELEASED, FAILED }
+    /**
+     * Where the job stands. DECIDING: the inputs have landed and wait for the operator -- conflicts to decide, the
+     * import to keep or cancel. RELEASED: kept, and the loop works on them. CANCELLED: taken back out.
+     */
+    enum Phase { STARTING, SETTING_GOAL, BRINGING_IN, DECIDING, RELEASED, CANCELLED, FAILED }
+
+    /** Whether the job still holds the project: a finished, cancelled or failed one does not. */
+    boolean busy() {
+        Phase p = phase();
+        return p != Phase.RELEASED && p != Phase.CANCELLED && p != Phase.FAILED;
+    }
 
     /**
      * One input: a project in the projects directory, or a directory on this machine (exactly one of the two),
@@ -168,9 +177,8 @@ class IntegrationJob {
             }
             phase(Phase.BRINGING_IN);
             for (Input i : inputs) bringIn(i);
-            JsonNode open = MAPPER.readTree(expect(run.get("/autobuilder/inputs/conflicts"), "the conflicts could not be read"));
-            if (open.isArray() && !open.isEmpty()) phase(Phase.DECIDING);
-            else release();
+            // Landed, not yet kept: the operator looks at what came in, decides its conflicts, then keeps or cancels it.
+            phase(Phase.DECIDING);
         } catch (Exception e) {
             fail(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
         }
@@ -189,6 +197,7 @@ class IntegrationJob {
         body.put("intent", i.intent());
         body.put("addedBy", "operator (home screen)");
         body.put("runs", i.runs());
+        body.put("pending", true);
         RunClient.Reply reply = run.postJson("/autobuilder/inputs", MAPPER.writeValueAsString(body), INPUT_TIMEOUT);
         if (!reply.ok()) {
             synchronized (this) {
@@ -200,11 +209,18 @@ class IntegrationJob {
         JsonNode r = MAPPER.readTree(reply.body());
         synchronized (this) {
             row.put("status", "landed");
-            row.put("placed", r.path("placed").size());
+            row.put("inputId", r.path("inputId").asText());
+            row.put("newFiles", r.path("placed").size());
+            int files = 0, rules = 0, claims = 0;
+            for (JsonNode c : r.path("conflicts")) {
+                if (!c.path("heldPath").isNull() && !c.path("heldPath").isMissingNode()) files++;
+                else if (!c.path("heldLine").isNull() && !c.path("heldLine").isMissingNode()) claims++;
+                else rules++;
+            }
+            row.put("filesBothHave", files);
+            row.put("rulesThatDiffer", rules);
+            row.put("claims", claims);
             row.put("corrections", r.path("corrections").size());
-            List<String> conflicts = new ArrayList<>();
-            r.path("conflicts").forEach(c -> conflicts.add(c.path("subject").asText()));
-            row.put("conflicts", conflicts);
             row.put("unmet", r.path("unmet").size());
         }
         log.info("T4-ED: brought {} into {}: {} placed, {} corrections, {} conflicts", i.label(), name,
@@ -221,25 +237,52 @@ class IntegrationJob {
     }
 
     /**
-     * Lets the loop work on what came in, once no conflict is open: a run this job started held is released in
-     * ADOPT_PROJECT; a loop that was already going simply carries on. Called by the job when nothing waits for a
-     * decision, and by the operator after deciding.
+     * Keeps what came in and lets the loop work on it, once no conflict is open: each import is kept, then a run this
+     * job started held is released in ADOPT_PROJECT; a loop that was already going simply carries on.
      *
      * @throws IllegalStateException while the job is not waiting for this, or a conflict is still open
      */
     synchronized void release() throws IOException {
-        if (phase != Phase.BRINGING_IN && phase != Phase.DECIDING) {
+        if (phase != Phase.DECIDING) {
             throw new IllegalStateException("nothing to release: the job is " + phase.name().toLowerCase());
         }
         JsonNode open = MAPPER.readTree(expect(run.get("/autobuilder/inputs/conflicts"), "the conflicts could not be read"));
         if (open.isArray() && !open.isEmpty()) {
             throw new IllegalStateException(open.size() + " conflict(s) still wait for a decision");
         }
+        for (String id : landedIds()) {
+            RunClient.Reply kept = run.postJson("/autobuilder/inputs/" + id + "/keep?by=operator%20(home%20screen)", "", Duration.ofMinutes(2));
+            // Kept already, from the pending list: that is the same decision.
+            if (!kept.ok() && !messageOf(kept.body()).startsWith("no import waits")) expect(kept, "the import was not kept");
+        }
         if (startedHeld) {
             expect(run.postJson("/autobuilder/start?mode=ADOPT_PROJECT", "", Duration.ofMinutes(2)), "the run was not released");
         }
         phase = Phase.RELEASED;
         log.info("T4-ED: {} -- the loop works on what came in", name);
+    }
+
+    /**
+     * Takes everything this job brought in back out (the run's withdraw: files, goals, requirements, conflicts), the
+     * record kept. A project the job started held stays held, to be closed.
+     *
+     * @throws IllegalStateException while the job is under way or already done
+     */
+    synchronized void cancel() {
+        if (phase != Phase.DECIDING && phase != Phase.FAILED) {
+            throw new IllegalStateException("nothing to cancel: the job is " + phase.name().toLowerCase());
+        }
+        for (String id : landedIds()) {
+            expect(run.postJson("/autobuilder/inputs/" + id + "/withdraw?by=operator%20(home%20screen)", "", Duration.ofMinutes(5)),
+                    "the import was not taken back out");
+        }
+        phase = Phase.CANCELLED;
+        log.info("T4-ED: what was brought into {} was taken back out", name);
+    }
+
+    private List<String> landedIds() {
+        return landed.values().stream().filter(r -> "landed".equals(r.get("status")) && r.get("inputId") != null)
+                .map(r -> (String) r.get("inputId")).toList();
     }
 
     private String expect(RunClient.Reply reply, String what) {

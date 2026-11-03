@@ -45,8 +45,11 @@ class IntegrationJobTest {
         Reply postJson(String path, String json, Duration timeout) {
             calls.add("POST " + path + (json.isEmpty() ? "" : " " + json));
             if (path.equals("/autobuilder/inputs")) {
-                return new Reply(200, "{\"placed\":[\"a\",\"b\"],\"corrections\":[],\"conflicts\":"
-                        + (json.contains("\"label\":\"two\"") ? "[{\"subject\":\"the title limit\"}]" : "[]") + ",\"unmet\":[\"x\"]}");
+                String label = json.replaceAll(".*\"label\":\"([^\"]+)\".*", "$1");
+                return new Reply(200, "{\"inputId\":\"in-" + label + "\",\"placed\":[\"a\",\"b\"],\"corrections\":[],\"conflicts\":"
+                        + (label.equals("two") ? "[{\"subject\":\"the title limit\",\"heldPath\":null,\"heldLine\":null},"
+                                + "{\"subject\":\"src/A.java\",\"heldPath\":\"meta/held/A.java\",\"heldLine\":null}]" : "[]")
+                        + ",\"unmet\":[\"x\"]}");
             }
             return new Reply(200, "{\"ok\":true}");
         }
@@ -99,19 +102,26 @@ class IntegrationJobTest {
                 launcher, run);
 
         job.begin();
-        await(job, IntegrationJob.Phase.RELEASED, IntegrationJob.Phase.FAILED);
+        await(job, IntegrationJob.Phase.DECIDING, IntegrationJob.Phase.FAILED);
 
-        assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.RELEASED);
+        assertThat(job.phase()).as("landed, not kept: nothing starts by itself").isEqualTo(IntegrationJob.Phase.DECIDING);
         assertThat(projects.resolve("together")).isDirectory();
         assertThat(launcher.describe()).containsEntry("mode", "ASK");
-        assertThat(run.calls).hasSize(6);
+        assertThat(run.calls).hasSize(3);
         assertThat(run.calls.get(0)).isEqualTo("POST /autobuilder/goal Combine them.");
         assertThat(run.calls.get(1)).startsWith("POST /autobuilder/inputs").contains("\"label\":\"one\"")
-                .contains("\"intent\":\"take one\"").contains("\"runs\":true").contains("\"runId\":\"unrecorded\"");
+                .contains("\"intent\":\"take one\"").contains("\"runs\":true").contains("\"runId\":\"unrecorded\"")
+                .contains("\"pending\":true");
         assertThat(run.calls.get(2)).contains("\"label\":\"three\"").contains("\"runs\":false");
-        assertThat(run.calls.get(3)).isEqualTo("GET /autobuilder/inputs/conflicts");
-        assertThat(run.calls.get(5)).as("the release re-reads the conflicts first").isEqualTo("POST /autobuilder/start?mode=ADOPT_PROJECT");
-        assertThat(job.describe().get("inputs")).asString().contains("landed").contains("placed=2").contains("unmet=1");
+        assertThat(job.describe().get("inputs")).asString().contains("landed").contains("newFiles=2").contains("unmet=1");
+
+        job.release();
+
+        assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.RELEASED);
+        assertThat(run.calls.subList(3, run.calls.size())).containsExactly("GET /autobuilder/inputs/conflicts",
+                "POST /autobuilder/inputs/in-one/keep?by=operator%20(home%20screen)",
+                "POST /autobuilder/inputs/in-three/keep?by=operator%20(home%20screen)",
+                "POST /autobuilder/start?mode=ADOPT_PROJECT");
     }
 
     @Test
@@ -129,7 +139,7 @@ class IntegrationJobTest {
         await(job, IntegrationJob.Phase.DECIDING, IntegrationJob.Phase.FAILED);
 
         assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.DECIDING);
-        assertThat(job.describe().get("inputs")).asString().contains("the title limit");
+        assertThat(job.describe().get("inputs")).asString().contains("rulesThatDiffer=1").contains("filesBothHave=1");
         assertThatThrownBy(job::release).isInstanceOf(IllegalStateException.class).hasMessageContaining("1 conflict");
         assertThat(run.calls).noneMatch(c -> c.contains("/start"));
 
@@ -138,6 +148,28 @@ class IntegrationJobTest {
 
         assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.RELEASED);
         assertThat(run.calls).last().isEqualTo("POST /autobuilder/start?mode=ADOPT_PROJECT");
+    }
+
+    @Test
+    void cancellingTakesEverythingTheJobBroughtInBackOut_andStartsNothing() throws Exception {
+        project("one");
+        project("two");
+        ProjectLauncher launcher = launcher();
+        FakeRun run = new FakeRun(launcher);
+        IntegrationJob job = new IntegrationJob("together", projects, true, "Combine them.", null,
+                List.of(new IntegrationJob.Input("one", "x", false), new IntegrationJob.Input("two", "y", false)),
+                launcher, run);
+        job.begin();
+        await(job, IntegrationJob.Phase.DECIDING, IntegrationJob.Phase.FAILED);
+
+        job.cancel();
+
+        assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.CANCELLED);
+        assertThat(job.busy()).isFalse();
+        assertThat(run.calls).contains("POST /autobuilder/inputs/in-one/withdraw?by=operator%20(home%20screen)",
+                "POST /autobuilder/inputs/in-two/withdraw?by=operator%20(home%20screen)");
+        assertThat(run.calls).noneMatch(c -> c.contains("/start") || c.contains("/keep"));
+        assertThatThrownBy(job::release).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -150,7 +182,8 @@ class IntegrationJobTest {
                 List.of(new IntegrationJob.Input("lib", "use lib", false)), launcher, run);
 
         job.begin();
-        await(job, IntegrationJob.Phase.RELEASED, IntegrationJob.Phase.FAILED);
+        await(job, IntegrationJob.Phase.DECIDING, IntegrationJob.Phase.FAILED);
+        job.release();
 
         assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.RELEASED);
         assertThat(launcher.describe()).containsEntry("mode", "ASK");
@@ -175,11 +208,12 @@ class IntegrationJobTest {
                     List.of(new IntegrationJob.Input(null, lib.toString(), "use it", false)), launcher, run);
 
             job.begin();
-            await(job, IntegrationJob.Phase.RELEASED, IntegrationJob.Phase.FAILED);
+            await(job, IntegrationJob.Phase.DECIDING, IntegrationJob.Phase.FAILED);
+            job.release();
 
             assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.RELEASED);
             assertThat(launcher.describe()).containsEntry("mode", "CONTINUE_LINEAGE");
-            assertThat(run.calls).noneMatch(c -> c.contains("/start"));
+            assertThat(run.calls).noneMatch(c -> c.contains("/start")).anyMatch(c -> c.contains("/keep"));
             assertThat(run.calls.get(0)).contains("\"label\":\"" + lib.getFileName() + "\"").contains("\"dir\":\"" + lib + "\"");
         } finally {
             try (var all = Files.walk(lib)) {

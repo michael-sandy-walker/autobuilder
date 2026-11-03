@@ -326,7 +326,9 @@ public class AutobuilderController {
     private com.walpro.autobuilder.core.merge.ProjectInputService projectInputService;
 
     /** A project to bring in: its label, the run that grew it (or none, for a third party's), its directory, what it is for. */
-    public record InputRequest(String label, String runId, String dir, String intent, String addedBy, boolean runs) {
+    /** {@code pending} (T4-ED): the import waits for the operator to keep it; absent, it is kept as it lands. */
+    public record InputRequest(String label, String runId, String dir, String intent, String addedBy, boolean runs,
+                               boolean pending) {
     }
 
     /**
@@ -339,7 +341,8 @@ public class AutobuilderController {
         if (r.label() == null || r.dir() == null) return ResponseEntity.badRequest().body(Map.of("error", "an input needs a label and a dir"));
         try {
             return ResponseEntity.ok(autobuilderService.bringInput(projectInputService, new com.walpro.autobuilder.core.merge.ProjectInputService.Request(
-                    r.label(), r.runId(), java.nio.file.Path.of(r.dir()), r.intent(), r.addedBy() == null ? "operator" : r.addedBy(), r.runs())));
+                    r.label(), r.runId(), java.nio.file.Path.of(r.dir()), r.intent(), r.addedBy() == null ? "operator" : r.addedBy(), r.runs(),
+                    r.pending())));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (java.io.IOException e) {
@@ -352,6 +355,24 @@ public class AutobuilderController {
      * with the operator's {@code resolution} -- and by whom.
      */
     public record ConflictDecision(String decision, String by, String resolution) {
+    }
+
+    /** T4-ED: the imports that wait for the operator to keep them or take them back out. */
+    @GetMapping("/inputs/pending")
+    public ResponseEntity<?> pendingImports() {
+        if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        return ResponseEntity.ok(projectInputService.pending());
+    }
+
+    /** T4-ED: a pending import kept (cancelling one is {@code POST /inputs/{id}/withdraw}). */
+    @PostMapping("/inputs/{id}/keep")
+    public ResponseEntity<?> keepImport(@PathVariable String id, @RequestParam(defaultValue = "operator") String by) {
+        if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(projectInputService.keep(id, by));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     /** T4-ED: where the input under way stands -- its step, and how far through the slow ones; 204 when none is. */

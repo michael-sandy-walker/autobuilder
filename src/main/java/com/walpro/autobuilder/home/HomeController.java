@@ -208,7 +208,7 @@ public class HomeController {
             return refuse(400, "a project name is lower case letters, digits, '.', '-' or '_', at most 64, "
                     + "starting with a letter or digit");
         }
-        if (job != null && job.phase() != IntegrationJob.Phase.FAILED && job.phase() != IntegrationJob.Phase.RELEASED) {
+        if (job != null && job.busy()) {
             return refuse(409, "projects are already being brought into " + job.describe().get("name"));
         }
         if (launcher.state() != ProjectLauncher.State.IDLE) return refuse(409, "a run is up; one run at a time");
@@ -234,7 +234,7 @@ public class HomeController {
         if (request.project() == null || !PROJECT_NAME.matcher(request.project()).matches()) {
             return refuse(400, "the project to extend is a name in " + projects.path());
         }
-        if (job != null && job.phase() != IntegrationJob.Phase.FAILED && job.phase() != IntegrationJob.Phase.RELEASED) {
+        if (job != null && job.busy()) {
             return refuse(409, "projects are already being brought into " + job.describe().get("name"));
         }
         Path receiving = projects.path().resolve(request.project());
@@ -294,6 +294,59 @@ public class HomeController {
             return ResponseEntity.badRequest().body("{\"ok\":false,\"message\":\"unreadable decision\"}");
         }
         return relayed(run.postJson("/autobuilder/inputs/conflicts/" + id, body, Duration.ofMinutes(5)));
+    }
+
+    /** Takes what the job brought in back out; the project, if it was started held for this, stays held. */
+    @PostMapping("/home/integrate/cancel")
+    public ResponseEntity<Map<String, Object>> cancelIntegration() {
+        IntegrationJob j = job;
+        if (j == null) return refuse(409, "nothing is being brought in");
+        try {
+            j.cancel();
+        } catch (IllegalStateException e) {
+            return refuse(409, e.getMessage());
+        }
+        return ResponseEntity.ok(j.describe());
+    }
+
+    /** The imports of the running project that wait for confirmation -- from this session or an earlier one. */
+    @GetMapping(value = "/home/run/pending", produces = "application/json")
+    public ResponseEntity<String> pendingImports() {
+        return relayed(run.get("/autobuilder/inputs/pending"));
+    }
+
+    /** One pending import kept. */
+    @PostMapping(value = "/home/run/imports/{id}/keep", produces = "application/json")
+    public ResponseEntity<String> keepImport(@PathVariable String id) {
+        if (!id.matches("[A-Za-z0-9._-]+")) return ResponseEntity.badRequest().body("{\"ok\":false,\"message\":\"no such import\"}");
+        return relayed(run.postJson("/autobuilder/inputs/" + id + "/keep?by=operator%20(home%20screen)", "", Duration.ofMinutes(2)));
+    }
+
+    /** One pending import cancelled: taken back out, the record kept. */
+    @PostMapping(value = "/home/run/imports/{id}/cancel", produces = "application/json")
+    public ResponseEntity<String> cancelImport(@PathVariable String id) {
+        if (!id.matches("[A-Za-z0-9._-]+")) return ResponseEntity.badRequest().body("{\"ok\":false,\"message\":\"no such import\"}");
+        return relayed(run.postJson("/autobuilder/inputs/" + id + "/withdraw?by=operator%20(home%20screen)", "", Duration.ofMinutes(5)));
+    }
+
+    /**
+     * Starts the loop on a held project whose imports have all been kept or cancelled and whose conflicts are decided --
+     * the way on after reviewing an import from an earlier session (within a session, the job's release does this).
+     */
+    @PostMapping("/home/run/continue")
+    public ResponseEntity<Map<String, Object>> continueHeld() {
+        if (job != null && job.busy()) return refuse(409, "finish the import under way first");
+        if (!launcher.loopGoing() && launcher.state() == ProjectLauncher.State.RUNNING) {
+            RunClient.Reply pending = run.get("/autobuilder/inputs/pending");
+            RunClient.Reply open = run.get("/autobuilder/inputs/conflicts");
+            if (!pending.ok() || !open.ok()) return refuse(502, "the run's imports could not be read");
+            if (!pending.body().strip().equals("[]")) return refuse(409, "an import still waits to be kept or cancelled");
+            if (!open.body().strip().equals("[]")) return refuse(409, "a conflict still waits for a decision");
+            RunClient.Reply started = run.postJson("/autobuilder/start?mode=ADOPT_PROJECT", "", Duration.ofMinutes(2));
+            if (!started.ok()) return refuse(started.status(), "the run was not started: " + started.body());
+            return ResponseEntity.ok(launcher.describe());
+        }
+        return refuse(409, "no held project to continue");
     }
 
     /** Starts the loop on the brought-together project once no conflict is open. */
@@ -362,8 +415,7 @@ public class HomeController {
     @PostMapping("/home/return")
     public ResponseEntity<Map<String, Object>> returnHome() {
         IntegrationJob j = job;
-        if (j != null && j.phase() != IntegrationJob.Phase.FAILED && j.phase() != IntegrationJob.Phase.RELEASED
-                && j.phase() != IntegrationJob.Phase.DECIDING) {
+        if (j != null && j.busy() && j.phase() != IntegrationJob.Phase.DECIDING) {
             return refuse(409, "projects are being brought into " + j.describe().get("name") + "; wait for it");
         }
         try {

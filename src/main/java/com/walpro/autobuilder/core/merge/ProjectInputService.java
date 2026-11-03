@@ -42,8 +42,20 @@ public class ProjectInputService {
 
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
-    /** @param runs this input's module is what the project runs, in a project of modules */
-    public record Request(String label, String runId, Path dir, String intent, String addedBy, boolean runs) {
+    /**
+     * @param runs    this input's module is what the project runs, in a project of modules
+     * @param pending T4-ED: the import waits for the operator to keep it (or take it back out); a scripted input is
+     *                kept as it lands
+     */
+    public record Request(String label, String runId, Path dir, String intent, String addedBy, boolean runs, boolean pending) {
+        public Request(String label, String runId, Path dir, String intent, String addedBy, boolean runs) {
+            this(label, runId, dir, intent, addedBy, runs, false);
+        }
+    }
+
+    /** T4-ED: a pending import as the home screen shows it -- what came in, and what of it still waits. */
+    public record Pending(String inputId, String label, String intent, Instant at, int newFiles, long filesBothHave,
+                          long rulesThatDiffer, long claims) {
     }
 
     /** One carried criterion's verdict in the merged tree: met (null when unanswered) and who answered. */
@@ -125,6 +137,16 @@ public class ProjectInputService {
         Map<String, String> before = ProjectMerge.files(output);
         ProjectInput.Landing landing = ProjectInput.land(before,
                 ProjectMerge.files(root.resolve(ProtectedPaths.BASELINE_DIR)), parent);
+        // T4-ED: the same tree a second time adds nothing but its conflicts again (field: one project brought in three
+        // times, 59 open conflicts, most of them repeats). A changed version of it is a new input.
+        if (landing.treeDigest() != null) {
+            goals.purpose().ledger().active().stream()
+                    .filter(e -> InputEntry.KIND_PROJECT.equals(e.kind()) && landing.treeDigest().equals(e.sourceDigest()))
+                    .findFirst().ifPresent(e -> {
+                        throw new IllegalArgumentException(r.label() + " was already brought in, unchanged, at " + e.addedAt()
+                                + "; take that import back out first to bring it in again");
+                    });
+        }
 
         Files.createDirectories(output);
         manifest.recordIfAbsent();   // the project as it stood, before the input's files are in it
@@ -146,6 +168,7 @@ public class ProjectInputService {
 
         InputEntry input = goals.purpose().addProjectInput(r.intent(), r.addedBy(), r.runId(), landing.sourceLineage(),
                 landing.treeDigest());
+        if (r.pending()) goals.purpose().recordPendingImport(input.id(), r.label(), r.addedBy());
         String dir = "meta/inputs/" + input.id();
         files.ensureFolderExists(dir);
         files.writeFile(dir + "/placed.txt", String.join("\n", landing.placed()) + "\n");
@@ -356,6 +379,37 @@ public class ProjectInputService {
         goals.addDecidedWork(line, open.inputId());
         log.warn("T4-EC: conflict '{}' decided by {} with their own resolution: {}", open.subject(), by, resolution);
         return decided;
+    }
+
+    /** T4-ED: the imports waiting for the operator, each with what came in and what of it is still open. */
+    public List<Pending> pending() {
+        List<InputEvent> open = goals.purpose().openConflicts();
+        List<Pending> out = new ArrayList<>();
+        for (InputEvent p : goals.purpose().pendingImports()) {
+            InputEntry input = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(p.inputId())).findFirst().orElse(null);
+            if (input == null) continue;
+            String placed = "meta/inputs/" + input.id() + "/placed.txt";
+            int newFiles;
+            try {
+                newFiles = files.exists(placed) ? (int) files.readFile(placed).lines().filter(l -> !l.isBlank()).count() : 0;
+            } catch (IOException e) {
+                newFiles = 0;
+            }
+            List<InputEvent> mine = open.stream().filter(e -> e.inputId().equals(input.id())).toList();
+            out.add(new Pending(input.id(), p.subject(), input.content(), input.addedAt(), newFiles,
+                    mine.stream().filter(e -> e.heldPath() != null).count(),
+                    mine.stream().filter(e -> e.heldPath() == null && e.heldLine() == null).count(),
+                    mine.stream().filter(e -> e.heldLine() != null).count()));
+        }
+        return out;
+    }
+
+    /** T4-ED: a pending import kept. Its conflicts stay as they are, to be decided. */
+    public synchronized InputEvent keep(String inputId, String by) {
+        InputEvent pending = goals.purpose().pendingImports().stream().filter(e -> e.inputId().equals(inputId)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("no import waits for confirmation: " + inputId));
+        log.warn("T4-ED: import {} ({}) kept by {}", inputId, pending.subject(), by);
+        return goals.purpose().keepImport(pending, by);
     }
 
     /** T4-ED: the ways an open conflict can be resolved, each with what it changes -- advice for the operator. */

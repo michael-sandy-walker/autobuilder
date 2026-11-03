@@ -421,4 +421,54 @@ class ProjectInputServiceTest {
         service.decide(id, "receiving", "operator");
         assertThatThrownBy(() -> service.options(id)).isInstanceOf(IllegalArgumentException.class);
     }
+
+    /** T4-ED: an import from the home screen waits to be kept; a scripted one is kept as it lands. */
+    @Test
+    void anImportCanWaitForConfirmation_untilItIsKeptOrTakenBackOut() throws IOException {
+        seedLine();
+        differs(TURNS, false);
+        ProjectInputService.Report r = service.bring(new ProjectInputService.Request("knots", "run-k", brought, INTENT, "operator", false, true));
+
+        assertThat(service.pending()).singleElement().satisfies(p -> {
+            assertThat(p.inputId()).isEqualTo(r.inputId());
+            assertThat(p.label()).isEqualTo("knots");
+            assertThat(p.intent()).isEqualTo(INTENT);
+            assertThat(p.newFiles()).isEqualTo(r.placed().size());
+            assertThat(p.rulesThatDiffer()).isEqualTo(1);
+        });
+        assertThat(goals.purpose().openConflicts()).as("a pending import is not a conflict").hasSize(1);
+
+        service.keep(r.inputId(), "operator");
+
+        assertThat(service.pending()).isEmpty();
+        assertThatThrownBy(() -> service.keep(r.inputId(), "operator")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void aCancelledImportWaitsForNothing() throws IOException {
+        ProjectInputService.Report r = service.bring(new ProjectInputService.Request("knots", "run-k", brought, INTENT, "operator", false, true));
+
+        service.withdraw(r.inputId(), "operator");
+
+        assertThat(service.pending()).isEmpty();
+    }
+
+    @Test
+    void aScriptedInputIsKeptAsItLands() throws IOException {
+        bring();
+
+        assertThat(service.pending()).isEmpty();
+    }
+
+    /** T4-ED: field -- one project brought in three times, 59 open conflicts, most of them repeats. */
+    @Test
+    void theSameTreeIsNotBroughtInTwice_untilTheFirstIsTakenBackOut() throws IOException {
+        ProjectInputService.Report first = bring();
+
+        assertThatThrownBy(this::bring).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already brought in").hasMessageContaining("take that import back out");
+
+        service.withdraw(first.inputId(), "operator");
+        assertThat(bring().inputId()).isNotEqualTo(first.inputId());
+    }
 }

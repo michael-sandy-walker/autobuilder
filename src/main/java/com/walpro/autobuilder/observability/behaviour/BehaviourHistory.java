@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +32,7 @@ public class BehaviourHistory {
 
     private final Path file;
 
+    @Autowired // two constructors: without this Spring cannot choose and the run context does not start
     public BehaviourHistory(@Value("${file.base-path:}") String basePath) {
         this.file = basePath == null || basePath.isBlank() ? null : Path.of(basePath, "logs", "behaviour.ndjson");
     }

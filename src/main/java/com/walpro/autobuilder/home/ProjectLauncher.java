@@ -2,6 +2,7 @@ package com.walpro.autobuilder.home;
 
 import com.walpro.autobuilder.AutobuilderApplication;
 import com.walpro.autobuilder.core.init.StartMode;
+import com.walpro.autobuilder.core.service.AutobuilderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.logging.LoggingSystem;
@@ -16,7 +17,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.Optional;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * T4-ED: starts the run context on a chosen project -- the one path from "no project" to a running loop.
@@ -32,8 +35,11 @@ import java.util.function.BiFunction;
 @Slf4j
 public class ProjectLauncher {
 
-    /** Where a run stands, as the home screen shows it. */
-    public enum State { IDLE, STARTING, RUNNING, FAILED }
+    /**
+     * Where a run stands, as the home screen shows it. ENDED: the loop has stopped (a terminal, or a person's
+     * pause) and the run context stays up so its results can be read, until the operator returns home.
+     */
+    public enum State { IDLE, STARTING, RUNNING, ENDED, FAILED }
 
     /** System property {@code logback-spring.xml} and the startup log rotator write under. */
     static final String LOG_ROOT = "autobuilder.log.root";
@@ -46,6 +52,9 @@ public class ProjectLauncher {
     private Instant since;
     private String failure;
     private ConfigurableApplicationContext runContext;
+    private Runnable homeLogging = () -> {};
+    /** Why the run's loop has stopped, or empty while it runs. Replaced in tests. */
+    Function<ConfigurableApplicationContext, Optional<String>> haltProbe = ProjectLauncher::loopHalt;
 
     public ProjectLauncher(String[] startupArgs) {
         this(startupArgs, ProjectLauncher::bootRunContext);
@@ -66,8 +75,9 @@ public class ProjectLauncher {
      */
     public synchronized CompletableFuture<ConfigurableApplicationContext> start(ProjectChoice choice) {
         if (state == State.STARTING || state == State.RUNNING) {
-            throw new IllegalStateException("a run is already " + state.name().toLowerCase(Locale.ROOT)
-                    + " on " + current.project() + "; one run at a time");
+            throw new IllegalStateException("a run is already " + state().name().toLowerCase(Locale.ROOT)
+                    + " on " + current.project() + "; one run at a time"
+                    + (state() == State.ENDED ? " -- return to the home screen first" : ""));
         }
         if (choice.mode() != null) StartMode.valueOf(choice.mode().trim().toUpperCase(Locale.ROOT));
         String[] args = runArgs(choice);
@@ -117,6 +127,42 @@ public class ProjectLauncher {
         return new SpringApplicationBuilder(AutobuilderApplication.class).main(AutobuilderApplication.class).run(args);
     }
 
+    /** What re-points logging to the home log once a run context has closed; set by the home context. */
+    public void onReturnHome(Runnable homeLogging) {
+        this.homeLogging = homeLogging;
+    }
+
+    /**
+     * Back to the home screen: closes a run that has ENDED, or clears a start that FAILED, so the next project
+     * can be started. Never automatic (user, 2026-11-03): a finished run stays readable until someone chooses
+     * this. A run whose loop is still going is not closed from here.
+     *
+     * @throws IllegalStateException while a run is starting or its loop is still running
+     */
+    public synchronized void returnHome() {
+        State now = state();
+        if (now == State.STARTING || now == State.RUNNING) {
+            throw new IllegalStateException("the run on " + current.project() + " is still "
+                    + now.name().toLowerCase(Locale.ROOT) + "; it can be left once it has ended");
+        }
+        if (now == State.ENDED) {
+            log.info("T4-ED: closing the ended run on {} and returning to the home screen", current.project());
+            runContext.close();
+            homeLogging.run();
+        }
+        runContext = null;
+        current = null;
+        failure = null;
+        since = null;
+        state = State.IDLE;
+    }
+
+    private static Optional<String> loopHalt(ConfigurableApplicationContext ctx) {
+        if (!ctx.isActive()) return Optional.empty();
+        AutobuilderService service = ctx.getBeanProvider(AutobuilderService.class).getIfAvailable();
+        return service == null ? Optional.empty() : service.haltReason();
+    }
+
     /**
      * The run context's arguments: the startup arguments, with the project, mode and profiles the choice sets
      * replacing any the startup arguments carried (a repeated option would reach Spring as a list).
@@ -137,7 +183,9 @@ public class ProjectLauncher {
     /** What the home screen shows: the state, the project, since when, and why a start failed. */
     public synchronized Map<String, Object> describe() {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("state", state.name());
+        State now = state();
+        body.put("state", now.name());
+        if (now == State.ENDED) body.put("endReason", haltProbe.apply(runContext).orElse(""));
         if (current != null) {
             body.put("project", current.project());
             body.put("projectExists", Files.isDirectory(Path.of(current.project())));
@@ -146,7 +194,7 @@ public class ProjectLauncher {
         }
         if (since != null) body.put("since", since.toString());
         if (failure != null) body.put("failure", failure);
-        if (runContext != null && state == State.RUNNING) {
+        if (runContext != null && state == State.RUNNING && runContext.isActive()) {
             String port = runContext.getEnvironment().getProperty("local.server.port");
             if (port != null) body.put("runPort", Integer.parseInt(port));
         }
@@ -154,6 +202,7 @@ public class ProjectLauncher {
     }
 
     public synchronized State state() {
+        if (state == State.RUNNING && runContext != null && haltProbe.apply(runContext).isPresent()) return State.ENDED;
         return state;
     }
 }

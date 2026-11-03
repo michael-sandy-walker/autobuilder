@@ -1,5 +1,8 @@
 package com.walpro.autobuilder.core.init;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.walpro.autobuilder.core.service.AutobuilderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -38,10 +41,23 @@ public class TargetCatalog {
      * @param sourceFiles    how many source files that tree holds
      * @param priorRunState  leftovers from earlier runs, named — mutations, snapshots, checkpoints
      * @param supportedModes the modes this target can actually be started in
+     * @param lastEnd        how the last run that wrote an end report ended, or null when none did
      */
     public record Target(String name, boolean hasSeed, String seedSummary, boolean hasYardstick,
                          StartModeService.Situation situation, int sourceFiles,
-                         List<String> priorRunState, List<StartMode> supportedModes) {}
+                         List<String> priorRunState, List<StartMode> supportedModes, LastEnd lastEnd) {}
+
+    /**
+     * T4-ED: the last end report's reason and time, from {@code meta/run-end-report.json}. A run stopped from
+     * outside writes none, so this can be older than the latest run; the time says which run it was.
+     *
+     * @param reason     the terminal reason as the loop wrote it, e.g. {@code goal-fulfilled}
+     * @param at         when the report was written
+     * @param fulfilled  the goal was reached -- continuing such a project has nothing left to do
+     */
+    public record LastEnd(String reason, String at, boolean fulfilled) {}
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** Subdirectories that mean a run has already happened here. */
     private static final List<String> RUN_STATE_DIRS =
@@ -93,7 +109,19 @@ public class TargetCatalog {
         if (situation != StartModeService.Situation.EMPTY) modes.add(StartMode.ADOPT_PROJECT);
 
         return new Target(dir.getFileName().toString(), hasSeed, firstMeaningfulLine(dir), hasYardstick,
-                situation, sources, priorState, modes);
+                situation, sources, priorState, modes, lastEnd(dir));
+    }
+
+    private LastEnd lastEnd(Path dir) {
+        Path report = dir.resolve("meta/run-end-report.json");
+        if (!Files.isRegularFile(report)) return null;
+        try {
+            JsonNode r = MAPPER.readTree(report.toFile());
+            String reason = r.path("terminalReason").asText("");
+            return new LastEnd(reason, r.path("writtenAt").asText(null), AutobuilderService.GOAL_FULFILLED_REASON.equals(reason));
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /** Enough of the specification to tell one target from another, never the whole of it. */

@@ -7,7 +7,7 @@ default in the code, and the value `application.yml` sets when it sets one (prof
 What a key does is the first sentence of the comment on the field that reads it, so it is written once, in
 the code.
 
-117 keys.
+118 keys.
 
 ## `autobuilder.bootstrap`
 
@@ -63,7 +63,7 @@ the code.
 | `autobuilder.build.test-scope-command` | Build command used when the staged mutation ITSELF touches test sources. | `mvn test-compile` | `mvn test-compile` | `CompileProbeService` |
 | `autobuilder.build.timeout-ms` | The longest one build command may run before it is stopped. | `120000` | `120000` | `BuildExecutor` |
 | `autobuilder.build.tool-detection` | `filename -> toolName` (e.g. | `new LinkedHashMap<>()` |  | `BuildToolProbeProperties` |
-| `autobuilder.build.working-dir` | A directory every build command runs in instead of the one asked for; empty runs each where it is asked (the target's output). | (empty) | `${FILE_BASE_PATH:data/firestarter}/output` | `BuildExecutor` |
+| `autobuilder.build.working-dir` | A directory every build command runs in instead of the one asked for; empty runs each where it is asked (the target's output). | (empty) | `${file.base-path}/output` | `BuildExecutor` |
 
 ## `autobuilder.checkpoint`
 
@@ -129,6 +129,12 @@ the code.
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
 | `autobuilder.heuristic.score-strategy` | Name of the score strategy bean, e.g. | `weightedAverageScoreAdjustmentStrategy` | `weightedAverageScoreAdjustmentStrategy` | `HeuristicConfigProperties` |
+
+## `autobuilder.home`
+
+| Key | What it does | Default in code | application.yml | Read by |
+|---|---|---|---|---|
+| `autobuilder.home.projects-dir` | The directory whose subdirectories the home screen offers as projects, and where a new one is created. | `data` |  | `HomeApplication` |
 
 ## `autobuilder.log-consultation`
 
@@ -252,7 +258,7 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `file.base-path` | The target directory: its bootstrap/, output/, meta/ and logs/ (see the functional documentation). | (empty) | `${FILE_BASE_PATH:data/firestarter}` | `AutobuilderController`, `BootGate`, `BrokenTestQuarantine`, `CompileProbeService`, `DeferredMutationRestager`, `FileService`, `FileWatcherService`, `LogConsultation`, `MergeAgent`, `PackageGate`, `RetentionPolicy`, `TargetCatalog`, `TestRunGate`, `ValueObservationProbe` |
+| `file.base-path` | The target directory: its bootstrap/, output/, meta/ and logs/ (see the functional documentation). | (empty) | `${FILE_BASE_PATH:}` | `AutobuilderController`, `BootGate`, `BrokenTestQuarantine`, `CompileProbeService`, `DeferredMutationRestager`, `FileService`, `FileWatcherService`, `LogConsultation`, `MergeAgent`, `PackageGate`, `RetentionPolicy`, `TargetCatalog`, `TestRunGate`, `ValueObservationProbe` |
 
 ## `llm.api`
 

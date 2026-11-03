@@ -88,8 +88,9 @@
   <div id="current"></div>
 
   <h2>Other targets</h2>
-  <p class="note">A target is chosen when the process starts, because the file root is fixed then.
-    To work on one of these, launch with its name and restart.</p>
+  <p class="note">A run keeps the project it was started on. To work on one of these, use the
+    <a id="home-link" href="#">home screen</a> (port 8080 unless <code>autobuilder.home.port</code> says otherwise),
+    or launch with its name as below.</p>
   <div id="others"></div>
 </div>
 
@@ -216,6 +217,7 @@ async function start(mode) {
   }
 }
 
+document.getElementById('home-link').href = location.protocol + '//' + location.hostname + ':8080/';
 load();
 setInterval(() => { if (state && state.held) load(); }, 10000);
 </script>

@@ -185,6 +185,8 @@ public class AutobuilderService implements CheckpointableState {
      * exactly this reason auto-resume when the breaker's timed cooldown elapses.
      */
     private static final String LLM_BREAKER_PAUSE_REASON = "llm-circuit-breaker";
+    /** The pause reason and end-report reason of a run that reached its goal (also read by the home screen). */
+    public static final String GOAL_FULFILLED_REASON = "goal-fulfilled";
 
     /**
      * T1-GC: the floor and ceiling for backing off after a cycle that could not even start.
@@ -467,6 +469,19 @@ public class AutobuilderService implements CheckpointableState {
 
     public Optional<CycleContextData> getContext() {
         return Optional.ofNullable(context);
+    }
+
+    /**
+     * T4-ED: why the loop has stopped, when it has -- a terminal or a person's pause. Empty while it runs, and
+     * while it only waits for the model endpoint to come back, which is not an end.
+     */
+    public Optional<String> haltReason() {
+        if (!systemPaused || context == null) return Optional.empty();
+        // A fulfilled run carries no pausedReason (see the GOAL_FULFILLED branch of the tick).
+        if (context.cycleResultState() == CycleResultState.GOAL_FULFILLED) return Optional.of(GOAL_FULFILLED_REASON);
+        String reason = context.pausedReason();
+        if (LLM_BREAKER_PAUSE_REASON.equals(reason)) return Optional.empty();
+        return Optional.of(reason == null || reason.isBlank() ? "paused" : reason);
     }
 
     /**
@@ -1016,7 +1031,7 @@ public class AutobuilderService implements CheckpointableState {
                         // T5-BF: the happy-path halt leaves the same terminal marker in the
                         // behaviour stream as every other pause (fulfilled runs carry no
                         // pausedReason, so the post-cycle catch-all cannot see this one).
-                        emitSystemPausedOnce(context.cycleName(), "goal-fulfilled", 0);
+                        emitSystemPausedOnce(context.cycleName(), GOAL_FULFILLED_REASON, 0);
                         // T4-CA (2026-07-24): the fulfilled terminal is an in-process halt too, so
                         // preserve the best verified snapshot here as well — the generic pause
                         // branch above (DerivedFacts.systemPaused) does this, but a fulfilled run
@@ -1029,7 +1044,7 @@ public class AutobuilderService implements CheckpointableState {
                         // T4-CD slice 2: a fulfilled terminal writes its end report too — the
                         // lineage's self-description says it finished, not just how it failed.
                         // AFTER preserve so the provenance on disk is this episode's own.
-                        writeEndReportOnce(context, "goal-fulfilled");
+                        writeEndReportOnce(context, GOAL_FULFILLED_REASON);
                     }
                     return;
                 }

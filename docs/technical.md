@@ -447,6 +447,20 @@ prompts.
 
 ## 10. Starting and resuming a run
 
+**Two contexts** (`home`, T4-ED). `AutobuilderApplication.main` opens the home context
+(`home.HomeApplication`, profile `home`, port `autobuilder.home.port`, default 8080): only the web stack, nothing
+scanned, no loop, graph, database or project. It owns a `ProjectLauncher`, which starts the run context --
+`AutobuilderApplication`, exactly as a JVM has always been booted on a target -- on a chosen project, on a worker
+thread, one run at a time. A project named at startup (`--file.base-path`, a system property, or `FILE_BASE_PATH`)
+is started through the same `ProjectLauncher.start`; the choice's project, mode and profiles replace the startup
+arguments' own and the rest pass through, so scripted runs are unchanged. A fast-forwarded run that fails to start
+ends the JVM; a home port already in use does not stop a scripted run. There is no default project: `FileService`
+refuses a blank `file.base-path`. Logging follows a system property the launcher sets (`ProjectLauncher.LOG_ROOT`,
+read by `logback-spring.xml`) -- `~/.autobuilder/home/logs` while no project is bound, the project's `logs/` once a run starts (logging is
+released so the run context configures it again). Why two contexts rather than beans that attach late: fourteen
+beans take the project path at construction, five startup hooks read the project, the log location is fixed when
+logging starts, and about half the components keep state in fields.
+
 `StartMode` names the four ways a run can begin; `autobuilder.start.mode` chooses one and `StartModeService`
 checks it against what is actually in `output/` before anything is touched:
 
@@ -586,7 +600,10 @@ a goal's activity. `BehaviourEventController` and `EventController` (`/events/..
 `FileController` (`/files/...`): reading, listing, writing and uploading files of the target.
 `TtsController` (`/tts/synthesize`, through `TtsService`): narration, spoken in-process.
 
-Pages under `src/main/resources/static`: `start.html` (choosing a start mode and a target), `goals.html` (the goal
+`HomeController` (home context only): `GET /` (redirects to `home.html`), `GET /home/state`, `GET /home/projects`,
+`POST /home/projects` (a new project from a specification), `POST /home/start`.
+
+Pages under `src/main/resources/static`: `home.html` (the home screen, served by the home context), `start.html` (choosing a start mode and a target), `goals.html` (the goal
 tree, live, narrated), `graph.html` and `graph-explorer.html` (the graph). Swagger UI: `/swagger-ui/index.html`.
 
 ---
@@ -600,6 +617,7 @@ tree, live, narrated), `graph.html` and `graph-explorer.html` (the graph). Swagg
 | `dev-local` | on | off | cycles on request; obligations generated |
 | `dev-auto` | on | on | the autonomous loop |
 | `fast` | -- | -- | combine with another profile; only trims waiting (`inter-cycle-delay-ms: 1`) |
+| `home` | -- | -- | the home context only (section 10); sets its port |
 
 Every configuration key the code reads, with its default and the class reading it, is listed in
 [configuration.md](configuration.md), generated from the code by `scripts/doc_config_reference.py`.

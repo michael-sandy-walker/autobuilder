@@ -125,6 +125,45 @@ declaration it had as it was -- new declarations are added beside them -- except
 
 ## 4. Starting a run
 
+### 4.1 From the home screen
+
+Start Autobuilder without naming a project and open `http://localhost:8080` in a browser (the port is
+`autobuilder.home.port`). The home screen shows whether a run is going and lets you choose a direction:
+
+- **New project** -- give it a name (it becomes the directory) and write the specification. "Create and start"
+  writes `<projects>/<name>/bootstrap/seed.txt`, nothing else, and starts it in `NEW_PROJECT` mode. A name that is
+  already taken is refused; nothing is overwritten. Below the form, any project that carries a specification can
+  be **begun again** from it -- this clears its `output/`, and the page asks first.
+- **Continue** -- the projects Autobuilder has worked on before; "Continue" starts one in `CONTINUE_LINEAGE` mode.
+- **Import one** and **Import several** are not built yet.
+
+"How the run proceeds" picks the profile for the run: autonomous (`dev-auto`), autonomous with the waiting trimmed
+(`dev-auto,fast`, what scripted runs use), or manual (`dev-local`). The projects are the directories in
+`autobuilder.home.projects-dir` (default `data`, relative to the directory Autobuilder is started in).
+
+One run at a time: while a run is starting or running, the start buttons are disabled and a second start is
+refused. A running run's own pages (goals, graph, start state) are linked from the banner; the run listens on
+port 8081. A run that has finished stays as it is, so its results can still be read later.
+
+Everything the page does is a REST call on the home port, so it can also be done with curl:
+
+```bash
+curl http://localhost:8080/home/state                    # IDLE, STARTING, RUNNING or FAILED, and on what
+curl http://localhost:8080/home/projects                 # the projects, and the modes each can start in
+curl -X POST -H 'Content-Type: application/json' \
+     -d '{"name": "my-service", "seed": "What to build ..."}' \
+     http://localhost:8080/home/projects                 # a new project from a specification
+curl -X POST -H 'Content-Type: application/json' \
+     -d '{"project": "my-service", "mode": "NEW_PROJECT", "profiles": "dev-auto"}' \
+     http://localhost:8080/home/start                    # start a run (202), or 409 while one is going
+```
+
+### 4.2 From the command line
+
+Naming a project at startup (`--file.base-path=data/my-service` or `FILE_BASE_PATH=data/my-service`) skips the
+choice: the run starts at once, the same way "Start" starts it, and the home screen still shows it on port 8080.
+This is how scripted runs start.
+
 Choose how the run begins with `autobuilder.start.mode`. Autobuilder checks your choice against what is in
 `output/` and refuses, without touching anything, when it does not fit.
 

@@ -96,6 +96,49 @@ class ProjectLauncherTest {
         assertThat(launcher.state()).isEqualTo(ProjectLauncher.State.IDLE);
     }
 
+    @Test
+    void aRunWhoseLoopHasStoppedIsEndedAndStaysUpUntilTheOperatorGoesHome() throws Exception {
+        ConfigurableApplicationContext ctx = mock(ConfigurableApplicationContext.class);
+        ProjectLauncher launcher = new ProjectLauncher(new String[0], (c, args) -> ctx);
+        java.util.concurrent.atomic.AtomicReference<String> halt = new java.util.concurrent.atomic.AtomicReference<>();
+        launcher.haltProbe = c -> java.util.Optional.ofNullable(halt.get());
+        java.util.concurrent.atomic.AtomicInteger homeLogging = new java.util.concurrent.atomic.AtomicInteger();
+        launcher.onReturnHome(homeLogging::incrementAndGet);
+        launcher.start(new ProjectChoice("data/a", null, null)).get(5, TimeUnit.SECONDS);
+
+        assertThatThrownBy(launcher::returnHome).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("still running");
+        halt.set("goal-fulfilled");
+        assertThat(launcher.state()).isEqualTo(ProjectLauncher.State.ENDED);
+        assertThat(launcher.describe()).containsEntry("state", "ENDED").containsEntry("endReason", "goal-fulfilled");
+        assertThatThrownBy(() -> launcher.start(new ProjectChoice("data/b", null, null)))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("return to the home screen");
+        org.mockito.Mockito.verify(ctx, org.mockito.Mockito.never()).close();
+
+        launcher.returnHome();
+
+        org.mockito.Mockito.verify(ctx).close();
+        assertThat(homeLogging.get()).isEqualTo(1);
+        assertThat(launcher.describe()).containsOnlyKeys("state").containsEntry("state", "IDLE");
+        launcher.start(new ProjectChoice("data/b", null, null)).get(5, TimeUnit.SECONDS);
+        assertThat(launcher.describe().get("project")).isEqualTo("data/b");
+    }
+
+    @Test
+    void goingHomeAfterAFailedStartClosesNothing() {
+        ProjectLauncher launcher = new ProjectLauncher(new String[0], (c, args) -> {
+            throw new IllegalStateException("port in use");
+        });
+        java.util.concurrent.atomic.AtomicInteger homeLogging = new java.util.concurrent.atomic.AtomicInteger();
+        launcher.onReturnHome(homeLogging::incrementAndGet);
+        launcher.start(new ProjectChoice("data/a", null, null)).exceptionally(e -> null).join();
+
+        launcher.returnHome();
+
+        assertThat(launcher.state()).isEqualTo(ProjectLauncher.State.IDLE);
+        assertThat(homeLogging.get()).isZero();
+    }
+
     private static void awaitQuietly(CountDownLatch latch) {
         try {
             latch.await(5, TimeUnit.SECONDS);

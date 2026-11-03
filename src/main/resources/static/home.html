@@ -1,0 +1,293 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autobuilder</title>
+<style>
+  :root {
+    --bg: #050710; --panel: #0b1220; --panel-2: #111827; --rule: #1f2937;
+    --ink: #e5e7eb; --muted: #9ca3af; --dim: #6b7280;
+    --accent: #3b82f6; --accent-bg: #1e3a8a;
+    --good: #86efac; --good-bg: #052e16; --good-rule: #14532d;
+    --warn: #fcd34d; --warn-bg: #451a03; --warn-rule: #78350f;
+    --bad: #fca5a5; --bad-bg: #2a0a0a; --bad-rule: #7f1d1d;
+    --violet: #c4b5fd; --violet-rule: #4c1d95; --violet-bg: #2e1065;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 28px 20px 80px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 22px; font-size: 12.5px; }
+  h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--dim); margin: 30px 0 10px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+  .banner { border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; margin-bottom: 6px;
+    background: var(--panel); display: flex; gap: 14px; align-items: flex-start; }
+  .banner.STARTING { border-color: var(--warn-rule); background: var(--warn-bg); }
+  .banner.RUNNING { border-color: var(--good-rule); background: var(--good-bg); }
+  .banner.ENDED { border-color: var(--accent-bg); }
+  .banner.FAILED { border-color: var(--bad-rule); background: var(--bad-bg); }
+  .banner .dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 6px; flex: none; background: var(--muted); }
+  .banner.STARTING .dot { background: var(--warn); }
+  .banner.RUNNING .dot { background: var(--good); }
+  .banner.ENDED .dot { background: var(--accent); }
+  .banner.FAILED .dot { background: var(--bad); }
+  .banner b { display: block; margin-bottom: 3px; }
+  .banner.STARTING b { color: var(--warn); }
+  .banner.RUNNING b { color: var(--good); }
+  .banner.FAILED b { color: var(--bad); }
+  .banner .why { color: var(--muted); font-size: 12.5px; }
+  .links { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+
+  .directions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .direction { text-align: left; padding: 12px 13px; }
+  .direction b { display: block; font-size: 13.5px; margin-bottom: 3px; }
+  .direction.on { background: var(--accent-bg); border-color: var(--accent); }
+  .direction .what { display: block; font-size: 11.5px; color: var(--muted); }
+
+  .card { border: 1px solid var(--rule); border-radius: 8px; background: var(--panel);
+    padding: 16px 18px; margin-bottom: 10px; }
+  .card .head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .card .name { font-size: 15px; font-weight: 600; }
+  .seed { color: var(--muted); font-style: italic; margin: 0 0 10px; }
+  .facts { color: var(--dim); font-size: 12px; margin: 0 0 12px; }
+  .tag { font-size: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule);
+    color: var(--muted); white-space: nowrap; }
+  .tag.FOREIGN { color: var(--violet); border-color: var(--violet-rule); background: var(--violet-bg); }
+  .tag.LOOP_AUTHORED { color: var(--good); border-color: var(--good-rule); background: var(--good-bg); }
+
+  label { display: block; color: var(--dim); font-size: 12px; margin: 12px 0 4px; }
+  input, textarea, select { font: inherit; color: var(--ink); background: var(--panel-2);
+    border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; width: 100%; }
+  textarea { min-height: 220px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+
+  button { font: inherit; cursor: pointer; border-radius: 6px; padding: 8px 13px;
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--rule); }
+  button:hover:not(:disabled) { background: var(--accent-bg); border-color: var(--accent); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.primary { background: var(--accent-bg); border-color: var(--accent); }
+  button.destructive { border-color: var(--bad-rule); color: var(--bad); }
+  button.destructive:hover:not(:disabled) { background: var(--bad-bg); border-color: var(--bad); }
+
+  #result { margin-top: 10px; padding: 12px 14px; border-radius: 8px; display: none;
+    border: 1px solid var(--rule); background: var(--panel); font-size: 12.5px; }
+  #result.show { display: block; }
+  #result.ok { border-color: var(--good-rule); background: var(--good-bg); color: var(--good); }
+  #result.no { border-color: var(--bad-rule); background: var(--bad-bg); color: var(--bad); }
+
+  .note { color: var(--dim); font-size: 12px; margin: 8px 0 0; }
+  a { color: #93c5fd; }
+  [hidden] { display: none !important; }
+  @media (max-width: 700px) { .directions { grid-template-columns: 1fr 1fr; } }
+</style>
+
+<div class="wrap">
+  <h1>Autobuilder</h1>
+  <p class="sub">Choose what to work on. One run at a time; a run is started on a project and keeps it until it ends.</p>
+
+  <div id="banner" class="banner"><span class="dot"></span><div><b>Reading&hellip;</b></div></div>
+  <div id="result"></div>
+
+  <h2>Direction</h2>
+  <div class="directions">
+    <button class="direction" data-dir="new"><b>New project</b><span class="what">from a specification</span></button>
+    <button class="direction" data-dir="continue"><b>Continue</b><span class="what">a project worked on before</span></button>
+    <button class="direction" disabled title="Not built yet"><b>Import one</b><span class="what">adopt a codebase -- coming</span></button>
+    <button class="direction" disabled title="Not built yet"><b>Import several</b><span class="what">merge or integrate -- coming</span></button>
+  </div>
+
+  <label for="profiles">How the run proceeds</label>
+  <select id="profiles">
+    <option value="dev-auto">Autonomous -- cycles run on their own</option>
+    <option value="dev-auto,fast">Autonomous, overhead trimmed (as scripted runs use)</option>
+    <option value="dev-local">Manual -- set up, then cycles only when triggered</option>
+  </select>
+
+  <section id="new" hidden>
+    <h2>A new project</h2>
+    <div class="card">
+      <label for="name">Name -- becomes its directory</label>
+      <input id="name" placeholder="my-service" autocomplete="off" spellcheck="false">
+      <label for="seed">Specification -- what to build, in prose</label>
+      <textarea id="seed" placeholder="Describe the project: what it does, its inputs and outputs, and how you would tell it works."></textarea>
+      <div class="row">
+        <button id="create" class="primary">Create and start</button>
+        <span class="note">Writes only <code>bootstrap/seed.txt</code> in the new directory, then starts it as a new project.</span>
+      </div>
+    </div>
+
+    <h2>Or begin again from an existing specification</h2>
+    <p class="note">These projects carry a specification. Beginning again clears the code they hold.</p>
+    <div id="fresh"></div>
+  </section>
+
+  <section id="continue" hidden>
+    <h2>Projects to continue</h2>
+    <div id="continuable"></div>
+    <div id="finished-head" hidden>
+      <h2>Finished</h2>
+      <p class="note">Their goal is fulfilled, so continuing has nothing left to do. Begin one again under New
+        project, or bring new input into it once Import is built.</p>
+    </div>
+    <div id="finished"></div>
+  </section>
+</div>
+
+<script>
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const busy = s => s === 'STARTING' || s === 'RUNNING' || s === 'ENDED';
+const REASON = { 'goal-fulfilled': 'goal fulfilled', 'user-pause': 'paused by a person' };
+const reasonText = r => REASON[r] || String(r || 'stopped').replace(/[-_]/g, ' ');
+const when = iso => iso ? new Date(iso).toLocaleString() : '';
+
+let run = { state: 'IDLE' };
+let projects = [];
+
+function remember(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
+function recall(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+
+async function loadState() {
+  try {
+    run = await fetch('/home/state').then(r => r.json());
+  } catch (e) {
+    banner('FAILED', 'Cannot reach Autobuilder', e.message);
+    return;
+  }
+  renderBanner();
+  document.querySelectorAll('button[data-start], #create').forEach(b => b.disabled = busy(run.state));
+  const back = document.getElementById('back');
+  if (back) back.onclick = returnHome;
+}
+
+async function loadProjects() {
+  const d = await fetch('/home/projects').then(r => r.json());
+  projects = d.projects || [];
+  renderLists();
+}
+
+function banner(cls, title, why, extra) {
+  const el = document.getElementById('banner');
+  el.className = 'banner ' + cls;
+  el.innerHTML = '<span class="dot"></span><div><b>' + esc(title) + '</b>'
+    + (why ? '<div class="why">' + esc(why) + '</div>' : '') + (extra || '') + '</div>';
+}
+
+function name(path) { return String(path || '').replace(/\/+$/, '').split('/').pop(); }
+
+function renderBanner() {
+  const p = name(run.project);
+  if (run.state === 'IDLE') {
+    banner('IDLE', 'Nothing is running', 'Choose a direction below.');
+  } else if (run.state === 'STARTING') {
+    banner('STARTING', 'Starting ' + p + (run.mode ? ' (' + run.mode + ')' : ''),
+      'Setting up the run; this takes about a minute. Since ' + new Date(run.since).toLocaleTimeString() + '.');
+  } else if (run.state === 'FAILED') {
+    banner('FAILED', p + ' did not start', run.failure,
+      '<div class="row"><button id="back">Back to home</button></div>');
+  } else {
+    const base = location.protocol + '//' + location.hostname + ':' + run.runPort;
+    const ended = run.state === 'ENDED';
+    const links = [['goals.html', 'Goals'], ['graph.html', 'Graph'], ['graph-explorer.html', 'Graph explorer'],
+                   ['start.html', 'Start state']]
+      .map(([page, label]) => '<a href="' + base + '/' + page + '" target="_blank" rel="noopener">' + label + '</a>').join('');
+    banner(run.state, (ended ? 'Ended: ' + p + ' -- ' + reasonText(run.endReason) : 'Running ' + p)
+        + (run.mode ? ' (' + run.mode + ')' : ''),
+      ended ? 'Its results stay readable here until you go back to the home screen. One run at a time: '
+              + 'starting another means going back first.'
+            : 'On port ' + run.runPort + ' since ' + new Date(run.since).toLocaleTimeString()
+              + '. One run at a time: another can be started once this one has ended.',
+      '<div class="links">' + links + '</div>'
+      + (ended ? '<div class="row"><button id="back" class="primary">Back to home</button></div>' : ''));
+  }
+}
+
+async function returnHome() {
+  const r = await post('/home/return', {});
+  if (r.status !== 200) result(false, 'Could not go back: ' + (r.body.message || r.status));
+  else document.getElementById('result').className = '';
+  await loadState();
+  loadProjects();
+}
+
+function card(t, mode, label, destructive) {
+  return '<div class="card"><div class="head"><span class="name">' + esc(t.name) + '</span>'
+    + '<span class="tag ' + esc(t.situation) + '">' + esc(t.situation.toLowerCase().replace('_', ' ')) + '</span></div>'
+    + (t.seedSummary ? '<p class="seed">' + esc(t.seedSummary) + '</p>' : '')
+    + '<p class="facts">' + t.sourceFiles + ' source file' + (t.sourceFiles === 1 ? '' : 's')
+    + (t.lastEnd ? ' &middot; last run ended: ' + esc(reasonText(t.lastEnd.reason))
+        + (t.lastEnd.at ? ' (' + esc(when(t.lastEnd.at)) + ')' : '') : '')
+    + '</p>' + (mode ? '<button data-start="' + esc(t.name) + '" data-mode="' + mode + '"'
+    + (destructive ? ' class="destructive"' : '') + '>' + esc(label) + '</button>' : '') + '</div>';
+}
+
+function renderLists() {
+  const fresh = projects.filter(t => t.supportedModes.includes('NEW_PROJECT'));
+  const lineage = projects.filter(t => t.supportedModes.includes('CONTINUE_LINEAGE'));
+  const cont = lineage.filter(t => !(t.lastEnd && t.lastEnd.fulfilled));
+  const done = lineage.filter(t => t.lastEnd && t.lastEnd.fulfilled);
+  document.getElementById('fresh').innerHTML = fresh.length
+    ? fresh.map(t => card(t, 'NEW_PROJECT', 'Begin again', true)).join('')
+    : '<p class="note">No project carries a specification yet.</p>';
+  document.getElementById('continuable').innerHTML = cont.length
+    ? cont.map(t => card(t, 'CONTINUE_LINEAGE', 'Continue', false)).join('')
+    : '<p class="note">No project has unfinished work to continue.</p>';
+  document.getElementById('finished').innerHTML = done.map(t => card(t, null)).join('');
+  document.getElementById('finished-head').hidden = !done.length;
+  document.querySelectorAll('button[data-start]').forEach(b => {
+    b.disabled = busy(run.state);
+    b.onclick = () => {
+      if (b.dataset.mode === 'NEW_PROJECT' && !confirm('Begin "' + b.dataset.start + '" again?\n\n'
+          + 'This CLEARS the code it holds before it begins. Anything not kept elsewhere is gone.')) return;
+      start(b.dataset.start, b.dataset.mode);
+    };
+  });
+}
+
+function result(ok, text) {
+  const out = document.getElementById('result');
+  out.className = 'show ' + (ok ? 'ok' : 'no');
+  out.textContent = text;
+}
+
+async function post(url, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                 body: JSON.stringify(body) });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+
+async function start(project, mode) {
+  const r = await post('/home/start', { project, mode, profiles: document.getElementById('profiles').value });
+  if (r.status === 202) result(true, 'Starting ' + project + ' as ' + mode + '.');
+  else result(false, 'Refused: ' + (r.body.message || r.status));
+  loadState();
+}
+
+document.getElementById('create').onclick = async () => {
+  const projectName = document.getElementById('name').value.trim();
+  const seed = document.getElementById('seed').value;
+  const r = await post('/home/projects', { name: projectName, seed });
+  if (r.status !== 201) { result(false, 'Not created: ' + (r.body.message || r.status)); return; }
+  await loadProjects();
+  start(projectName, 'NEW_PROJECT');
+};
+
+function choose(dir) {
+  document.querySelectorAll('.direction[data-dir]').forEach(b => b.classList.toggle('on', b.dataset.dir === dir));
+  document.getElementById('new').hidden = dir !== 'new';
+  document.getElementById('continue').hidden = dir !== 'continue';
+  remember('home.direction', dir);
+}
+document.querySelectorAll('.direction[data-dir]').forEach(b => b.onclick = () => choose(b.dataset.dir));
+
+const profiles = document.getElementById('profiles');
+profiles.value = recall('home.profiles') || 'dev-auto';
+profiles.onchange = () => remember('home.profiles', profiles.value);
+
+choose(recall('home.direction') || 'new');
+loadState().then(loadProjects);
+setInterval(loadState, 4000);
+</script>

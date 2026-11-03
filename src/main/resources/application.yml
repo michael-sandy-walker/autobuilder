@@ -518,5 +518,9 @@ spring:
     activate:
       on-profile: home
 
+autobuilder:
+  home:
+    # The home screen's port; the run context keeps server.port (8081).
+    port: 8080
 server:
-  port: ${autobuilder.home.port:8080}
+  port: ${autobuilder.home.port}

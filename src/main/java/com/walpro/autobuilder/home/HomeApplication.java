@@ -12,6 +12,9 @@ import org.springframework.boot.autoconfigure.web.servlet.ServletWebServerFactor
 import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.servlet.error.ErrorMvcAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.logging.LoggingInitializationContext;
+import org.springframework.boot.logging.LoggingSystem;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Profile;
@@ -44,7 +47,9 @@ import java.nio.file.Path;
 public class HomeApplication {
 
     @Bean
-    ProjectsDirectory projectsDirectory(@Value("${autobuilder.home.projects-dir:data}") String dir) {
+    ProjectsDirectory projectsDirectory(
+            // The directory whose subdirectories the home screen offers as projects, and where a new one is created.
+            @Value("${autobuilder.home.projects-dir:data}") String dir) {
         return new ProjectsDirectory(Path.of(dir));
     }
 
@@ -63,9 +68,17 @@ public class HomeApplication {
         try {
             // The startup arguments go to the launcher, not to this context: they describe the run.
             // main(): named for this class, so "Started AutobuilderApplication" keeps meaning the run context.
-            new SpringApplicationBuilder(HomeApplication.class).main(HomeApplication.class).profiles("home")
+            ConfigurableApplicationContext home = new SpringApplicationBuilder(HomeApplication.class)
+                    .main(HomeApplication.class).profiles("home")
                     .initializers(ctx -> ctx.getBeanFactory().registerSingleton("projectLauncher", launcher))
                     .run();
+            // Back home, the log root returns here and logging is configured again from this context.
+            launcher.onReturnHome(() -> {
+                System.setProperty(ProjectLauncher.LOG_ROOT, homeDirectory().toString());
+                LoggingSystem logging = LoggingSystem.get(HomeApplication.class.getClassLoader());
+                logging.cleanUp();
+                logging.initialize(new LoggingInitializationContext(home.getEnvironment()), null, null);
+            });
         } catch (RuntimeException e) {
             // A busy home port must not stop a scripted run: it is started through the same launcher.
             if (fastForward == null) throw e;

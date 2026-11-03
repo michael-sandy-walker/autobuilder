@@ -179,9 +179,19 @@ port 8081), and:
   that has ended stays open, with how it ended, until you close it.
 - For adopted code without a goal: what Autobuilder read in the code (its cold read) and a goal box; **Set goal**
   writes it byte for byte to `bootstrap/seed.txt`.
-- While projects are being brought in: each one's outcome (files placed, corrections, conflicts, criteria not yet
-  met), the open conflicts with both sides -- **Keep this project's** or **Take what came in** -- and **Done -- let
-  the loop work** once none is open. Without conflicts the loop starts by itself.
+- While projects are being brought in: a progress bar and the step each one is at (placing its code, writing its
+  obligations, holding files both projects have, finding the types its intent uses, comparing its types with this
+  project's -- the slow step, with a count -- answering its criteria, checking what cannot hold here, placing its
+  goals), then each one's outcome (files placed, corrections, conflicts, criteria not yet met).
+- Open conflicts, with both sides. For each: **Keep this project's**, **Take what came in**, or **Decide
+  differently...** (**Merge them...** for a file both projects have) -- your own resolution in your words, which
+  becomes a requirement of the project and work for the loop. **Ask for options** has the model lay out two to four
+  ways to resolve it, each with what it changes; **Use this** copies one into your resolution to send or edit. The
+  model only advises; you decide. While a conflict is open the project cannot be finished, so open conflicts are
+  shown whenever the project's run is up.
+- When the import is complete and nothing is open: **Start <project>** (a new one) or **Continue <project>** (one
+  that was at rest) starts Autobuilder on the combined project. A project whose loop was already running needs no
+  button: it carries on once the last conflict is decided.
 
 One run at a time: while a run is up, the buttons that would start another are disabled.
 
@@ -210,8 +220,10 @@ curl -X POST -H 'Content-Type: application/json' -d '{"name": "combined", "goal"
      "inputs": [{"project": "a", "intent": "...", "runs": true}, {"project": "b", "intent": "..."}]}' \
      http://localhost:8080/home/integrate                # bring projects together (follow with GET /home/integrate)
 curl http://localhost:8080/home/run/conflicts            # what waits for a decision
+curl http://localhost:8080/home/run/input-progress      # the step the input under way is at (204 when none)
+curl http://localhost:8080/home/run/conflicts/<id>/options  # the model's suggested resolutions, each with its effect
 curl -X POST -H 'Content-Type: application/json' -d '{"decision": "input"}' \
-     http://localhost:8080/home/run/conflicts/<id>       # or "receiving"
+     http://localhost:8080/home/run/conflicts/<id>       # or "receiving", or {"decision": "own", "resolution": "..."}
 curl -X POST -H 'Content-Type: application/json' -d '{"project": "base", "profiles": "dev-auto",
      "input": {"project": "lib", "intent": "..."}}' \
      http://localhost:8080/home/extend                   # bring lib into base ("path": "/abs/dir" for code elsewhere)

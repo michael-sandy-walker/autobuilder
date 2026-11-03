@@ -494,7 +494,7 @@ function jobBox() {
     + '<table class="inputs" style="margin-top:8px"><thead><tr><th>Brought in</th><th>Status</th><th>Files</th><th>Corrections</th>'
     + '<th>Conflicts</th><th>Unmet criteria</th></tr></thead><tbody>'
     + job.inputs.map(i => '<tr><td>' + esc(i.project) + '</td><td>' + esc(i.status) + (i.message ? ': ' + esc(i.message) : '')
-      + '</td><td>' + (i.placed ?? '') + '</td><td>' + (i.corrections ?? '') + '</td><td>' + esc((i.conflicts || []).join('; '))
+      + '</td><td>' + (i.placed ?? '') + '</td><td>' + (i.corrections ?? '') + '</td><td>' + (i.conflicts ? i.conflicts.length : '')
       + '</td><td>' + (i.unmet ?? '') + '</td></tr>').join('') + '</tbody></table>'
     + (job.phase === 'DECIDING' ? conflictsHtml() + releaseHtml() : '')
     + '</div>';

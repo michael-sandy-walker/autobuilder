@@ -296,6 +296,8 @@ function stateOf(t) {
   return t.lastEnd && t.lastEnd.fulfilled ? 'finished' : 'progress';
 }
 const STATE_LABEL = { new: 'not started', progress: 'in progress', finished: 'finished', existing: 'existing code', blank: 'empty' };
+// The open project's imports as its run reports them; another's as its record on disk does.
+const importsOf = t => isCurrent(t) && run.runPort ? imports.length : t.imports;
 const isCurrent = t => run.state !== 'IDLE' && baseName(run.project) === t.name;
 
 // The one action a project's state calls for, and the less frequent ones in its menu.
@@ -309,7 +311,7 @@ function actionsOf(t) {
         + 'run is not read. Anything not kept elsewhere is gone. (Duplicate keeps it and starts a copy instead.)' }) : null;
   const duplicate = t.hasSeed ? { label: 'Duplicate', hint: 'a new project from its specification, without code', run: () => duplicateOf(t) } : null;
   // An import waiting for confirmation comes first: the project is held to review it, nothing runs.
-  const manage = t.imports ? start('Manage imports...', 'ASK', { hint: 'open it held, to keep or take back out what was brought in' }) : null;
+  const manage = importsOf(t) ? start('Manage imports...', 'ASK', { hint: 'open it held, to keep or take back out what was brought in' }) : null;
   const cont = start('Continue', 'CONTINUE_LINEAGE', { hint: 'its goal is reached; the run opens and ends' });
   const main = (t.pendingImports || []).length ? start('Review import', 'ASK')
     : { new: start('Start', 'NEW_PROJECT'), progress: start('Continue', 'CONTINUE_LINEAGE'),
@@ -345,7 +347,7 @@ function renderProjects() {
                       : '<span class="badge ' + s + '">' + STATE_LABEL[s] + '</span>')
       + ((t.pendingImports || []).length ? ' <span class="badge waiting" title="' + esc(t.pendingImports.join(', '))
           + '">import waiting</span>'
-          : t.imports ? ' <span class="badge" title="Projects brought into this one">' + t.imports + ' import' + (t.imports === 1 ? '' : 's') + '</span>' : '')
+          : importsOf(t) ? ' <span class="badge" title="Projects brought into this one">' + importsOf(t) + ' import' + (importsOf(t) === 1 ? '' : 's') + '</span>' : '')
       + '</div>'
       + '<div class="acts"></div>'
       + '<div class="what">' + esc(t.seedSummary || (s === 'existing' ? 'no goal yet' : '')) + '</div>'
@@ -445,7 +447,7 @@ function renderNow() {
     + (why ? '<div class="why">' + esc(why) + '</div>' : '') + links
     + (actions ? '<div class="row">' + actions + '</div>' : '')
     + (waiting ? goalBox() : '') + (job ? jobBox() : '')
-    + (imports.length && !(job && job.phase === 'DECIDING') ? importsHtml() : '')
+    + (run.runPort && !(job && job.phase === 'DECIDING') && !(job && job.phase === 'BRINGING_IN') ? importsHtml() : '')
     + (conflicts.length && !(job && job.phase === 'DECIDING') ? '<div class="sub"><div class="title"><b>Waiting for your decision</b>'
        + '</div><div class="why">Conflicts from an import. While one is open, this project cannot be finished.</div>'
        + conflictsHtml() + '</div>' : '');
@@ -467,6 +469,8 @@ let lastNowHtml = '';
 
 // What was brought into this project and is still in: pending ones wait to be kept, any can be taken back out.
 function importsHtml() {
+  if (!imports.length) return '<div class="sub"><div class="title"><b>Imports in this project</b></div>'
+    + '<div class="why">Nothing brought in is still in this project.</div></div>';
   return '<div class="sub"><div class="title"><b>' + (pending.length ? 'Imports -- ' + pending.length + ' waiting for your confirmation'
       : 'Imports in this project') + '</b></div>'
     + '<div class="why">' + (pending.length ? 'What was brought in is in the project, but not yet kept. Keep it, or cancel it to take it back out. '

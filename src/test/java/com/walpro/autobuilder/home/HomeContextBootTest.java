@@ -17,9 +17,10 @@ class HomeContextBootTest {
     void theHomeContextStartsAndServesItsEndpoints() {
         ProjectLauncher launcher = new ProjectLauncher(new String[0]);
         try (ConfigurableApplicationContext home = new SpringApplicationBuilder(HomeApplication.class)
-                .profiles("home").properties("autobuilder.home.port=0", "autobuilder.home.projects-dir=./test-root")
+                .profiles("home")
                 .initializers(ctx -> ctx.getBeanFactory().registerSingleton("projectLauncher", launcher))
-                .run()) {
+                // As arguments: application.yml's home profile outranks default properties, and its 8080 may be in use.
+                .run("--autobuilder.home.port=0", "--autobuilder.home.projects-dir=./test-root")) {
             assertThat(home.getBean(HomeController.class).state()).containsEntry("state", "IDLE");
             assertThat(home.getEnvironment().getProperty("local.server.port")).isNotEqualTo("0");
         }

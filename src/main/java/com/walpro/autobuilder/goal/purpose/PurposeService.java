@@ -83,6 +83,10 @@ public class PurposeService {
             }
         }
         ledger = loaded.isEmpty() ? readFile() : loaded;
+        // T4-ED: the file is what is read before any run is up (the home screen's project list); loaded from the
+        // graph, it is brought level here, so the two cannot go on disagreeing (field: the graph had three imports
+        // withdrawn, the file still listed them).
+        if (!loaded.isEmpty()) writeFile();
     }
 
     public InputLedger ledger() {

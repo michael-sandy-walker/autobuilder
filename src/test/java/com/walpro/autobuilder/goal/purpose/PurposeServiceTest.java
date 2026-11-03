@@ -129,4 +129,43 @@ class PurposeServiceTest {
         assertThat(purpose.answeredByGate("tests")).isEmpty();
         assertThat(purpose.writtenLines()).isEmpty();
     }
+
+    /**
+     * T4-ED: loaded from the graph, the file the home screen reads is brought level (field: three imports withdrawn in
+     * the graph were still listed in the file, so the project list and the opened project disagreed).
+     */
+    @Test
+    void aLedgerLoadedFromTheGraphRewritesTheFile() throws Exception {
+        PurposeService.fileOnly(files).recordSeed("Build a quill registry.", "operator");
+        InputEntry seed = PurposeService.fileOnly(files).ledger().seed();
+        InputEntry brought = new InputEntry("input-x", 2, InputEntry.KIND_PROJECT, "use x", "d", "operator",
+                java.time.Instant.now(), null, null, null, null);
+        InputEvent out = new InputEvent("event-w", InputEvent.WITHDRAWAL, "input-x", "withdrawn", null, null, null, null,
+                java.util.List.of(), InputEvent.DECIDED, null, "operator", java.time.Instant.now());
+        var graph = org.mockito.Mockito.mock(com.walpro.autobuilder.graph.input.InputGraphService.class);
+        org.mockito.Mockito.when(graph.findAll()).thenReturn(java.util.List.of(seed, brought));
+        org.mockito.Mockito.when(graph.findEvents()).thenReturn(java.util.List.of(out));
+        GoalPlannerConfigPropertiesStub config = new GoalPlannerConfigPropertiesStub();
+
+        PurposeService fromGraph = new PurposeService(files, provider(graph), provider(null), config);
+        fromGraph.load();
+
+        String file = Files.readString(base.resolve(PurposeService.PATH));
+        assertThat(file).contains("input-x").contains("\"withdrawal\"");
+        assertThat(PurposeService.fileOnly(files).ledger().withdrawn("input-x")).isTrue();
+    }
+
+    private static <T> org.springframework.beans.factory.ObjectProvider<T> provider(T value) {
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<T> p = org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.when(p.getIfAvailable()).thenReturn(value);
+        return p;
+    }
+
+    private static final class GoalPlannerConfigPropertiesStub extends com.walpro.autobuilder.config.GoalPlannerConfigProperties {
+        @Override
+        public boolean isSyncFromGraph() {
+            return true;
+        }
+    }
 }

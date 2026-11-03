@@ -61,13 +61,22 @@ public class HomeController {
         return body;
     }
 
-    /** The body of "New project": a name for its directory and the specification it is built from. */
-    public record NewProject(String name, String seed) {}
+    /**
+     * The body of "New project": a name for its directory, and either the specification it is built from or
+     * {@code from}, an existing project whose {@code bootstrap/} it duplicates.
+     */
+    public record NewProject(String name, String seed, String from) {
+        public NewProject(String name, String seed) {
+            this(name, seed, null);
+        }
+    }
 
     /**
-     * Creates a project from a specification: {@code <projects>/<name>/bootstrap/seed.txt}, nothing else. It
-     * is then started like any other project, in NEW_PROJECT mode. Refused when the name is taken: an existing
-     * project is continued or begun again from its own specification, never overwritten from here.
+     * Creates a project: {@code <projects>/<name>/bootstrap/seed.txt} from a specification, or -- with {@code from}
+     * -- a copy of that project's whole {@code bootstrap/} (specification, obligations, protected paths, yardstick),
+     * byte for byte, so obligations keyed to the specification's text stay valid. Nothing else: no code, no run
+     * history. It is then started like any other project, in NEW_PROJECT mode. Refused when the name is taken: an
+     * existing project is continued or restarted from its own specification, never overwritten from here.
      */
     @PostMapping("/home/projects")
     public ResponseEntity<Map<String, Object>> create(@RequestBody NewProject request) {
@@ -75,16 +84,27 @@ public class HomeController {
             return refuse(400, "a project name is lower case letters, digits, '.', '-' or '_', at most 64, "
                     + "starting with a letter or digit");
         }
-        if (request.seed() == null || request.seed().isBlank()) {
+        Path source = null;
+        if (request.from() != null) {
+            if (!PROJECT_NAME.matcher(request.from()).matches()
+                    || !Files.isRegularFile(projects.path().resolve(request.from()).resolve("bootstrap/seed.txt"))) {
+                return refuse(404, "no project named " + request.from() + " with a specification to duplicate");
+            }
+            source = projects.path().resolve(request.from()).resolve("bootstrap");
+        } else if (request.seed() == null || request.seed().isBlank()) {
             return refuse(400, "a new project needs a specification to be built from");
         }
         Path dir = projects.path().resolve(request.name());
         if (Files.exists(dir)) return refuse(409, "a project named " + request.name() + " already exists");
         try {
-            Path seed = dir.resolve("bootstrap/seed.txt");
-            Files.createDirectories(seed.getParent());
-            Files.writeString(seed, request.seed().endsWith("\n") ? request.seed() : request.seed() + "\n",
-                    StandardCharsets.UTF_8);
+            if (source != null) {
+                copyTree(source, dir.resolve("bootstrap"));
+            } else {
+                Path seed = dir.resolve("bootstrap/seed.txt");
+                Files.createDirectories(seed.getParent());
+                Files.writeString(seed, request.seed().endsWith("\n") ? request.seed() : request.seed() + "\n",
+                        StandardCharsets.UTF_8);
+            }
         } catch (IOException e) {
             return refuse(500, "the project could not be written: " + e.getMessage());
         }
@@ -126,6 +146,16 @@ public class HomeController {
             return refuse(409, e.getMessage());
         }
         return ResponseEntity.ok(launcher.describe());
+    }
+
+    private static void copyTree(Path from, Path to) throws IOException {
+        try (var walk = Files.walk(from)) {
+            for (Path p : walk.toList()) {
+                Path target = to.resolve(from.relativize(p).toString());
+                if (Files.isDirectory(p)) Files.createDirectories(target);
+                else Files.copy(p, target);
+            }
+        }
     }
 
     private static ResponseEntity<Map<String, Object>> refuse(int status, String message) {

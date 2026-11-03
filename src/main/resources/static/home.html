@@ -62,6 +62,7 @@
     border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; width: 100%; }
   textarea { min-height: 220px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
   input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  .modes { display: flex; gap: 8px; flex-wrap: wrap; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
 
   button { font: inherit; cursor: pointer; border-radius: 6px; padding: 8px 13px;
@@ -119,8 +120,10 @@
       </div>
     </div>
 
-    <h2>Or begin again from an existing specification</h2>
-    <p class="note">These projects carry a specification. Beginning again clears the code they hold.</p>
+    <h2>Or start from an existing specification</h2>
+    <p class="note">Restart clears a project's code and starts a new lineage from its specification, never reading
+      the earlier run. Duplicate makes a new project from a copy of its specification, obligations and settings,
+      and leaves the original as it is.</p>
     <div id="fresh"></div>
   </section>
 
@@ -129,8 +132,8 @@
     <div id="continuable"></div>
     <div id="finished-head" hidden>
       <h2>Finished</h2>
-      <p class="note">Their goal is fulfilled, so continuing has nothing left to do. Begin one again under New
-        project, or bring new input into it once Import is built.</p>
+      <p class="note">Their goal is fulfilled, so continuing has nothing left to do. Restart one from its
+        specification, duplicate it, or bring new input into it once Import is built.</p>
     </div>
     <div id="finished"></div>
   </section>
@@ -213,38 +216,69 @@ async function returnHome() {
   loadProjects();
 }
 
-function card(t, mode, label, destructive) {
+// The buttons a project card offers: Continue (unfinished lineage only), Start or Restart from its own
+// specification (NEW_PROJECT: clears its code, starts a new lineage), and Duplicate (a new project from a copy
+// of its bootstrap/).
+function card(t, withContinue) {
+  const actions = [];
+  if (withContinue) actions.push('<button data-start="' + esc(t.name) + '" data-mode="CONTINUE_LINEAGE">Continue</button>');
+  if (t.supportedModes.includes('NEW_PROJECT')) {
+    const fresh = t.situation === 'EMPTY';
+    actions.push('<button data-start="' + esc(t.name) + '" data-mode="NEW_PROJECT"'
+      + (fresh ? '' : ' data-clears="1" class="destructive"') + ' title="'
+      + (fresh ? 'Start it from its specification' : 'Clear its code and start again from its specification') + '">'
+      + (fresh ? 'Start' : 'Restart') + '</button>');
+  }
+  if (t.hasSeed) actions.push('<button data-duplicate="' + esc(t.name) + '" title="A new project with a copy of its '
+    + 'specification, obligations and settings; no code, no history">Duplicate</button>');
   return '<div class="card"><div class="head"><span class="name">' + esc(t.name) + '</span>'
     + '<span class="tag ' + esc(t.situation) + '">' + esc(t.situation.toLowerCase().replace('_', ' ')) + '</span></div>'
     + (t.seedSummary ? '<p class="seed">' + esc(t.seedSummary) + '</p>' : '')
     + '<p class="facts">' + t.sourceFiles + ' source file' + (t.sourceFiles === 1 ? '' : 's')
     + (t.lastEnd ? ' &middot; last run ended: ' + esc(reasonText(t.lastEnd.reason))
         + (t.lastEnd.at ? ' (' + esc(when(t.lastEnd.at)) + ')' : '') : '')
-    + '</p>' + (mode ? '<button data-start="' + esc(t.name) + '" data-mode="' + mode + '"'
-    + (destructive ? ' class="destructive"' : '') + '>' + esc(label) + '</button>' : '') + '</div>';
+    + '</p><div class="modes">' + actions.join('') + '</div></div>';
 }
 
 function renderLists() {
-  const fresh = projects.filter(t => t.supportedModes.includes('NEW_PROJECT'));
+  const withSpec = projects.filter(t => t.hasSeed);
   const lineage = projects.filter(t => t.supportedModes.includes('CONTINUE_LINEAGE'));
   const cont = lineage.filter(t => !(t.lastEnd && t.lastEnd.fulfilled));
   const done = lineage.filter(t => t.lastEnd && t.lastEnd.fulfilled);
-  document.getElementById('fresh').innerHTML = fresh.length
-    ? fresh.map(t => card(t, 'NEW_PROJECT', 'Begin again', true)).join('')
+  document.getElementById('fresh').innerHTML = withSpec.length
+    ? withSpec.map(t => card(t, false)).join('')
     : '<p class="note">No project carries a specification yet.</p>';
   document.getElementById('continuable').innerHTML = cont.length
-    ? cont.map(t => card(t, 'CONTINUE_LINEAGE', 'Continue', false)).join('')
+    ? cont.map(t => card(t, true)).join('')
     : '<p class="note">No project has unfinished work to continue.</p>';
-  document.getElementById('finished').innerHTML = done.map(t => card(t, null)).join('');
+  document.getElementById('finished').innerHTML = done.map(t => card(t, false)).join('');
   document.getElementById('finished-head').hidden = !done.length;
   document.querySelectorAll('button[data-start]').forEach(b => {
     b.disabled = busy(run.state);
     b.onclick = () => {
-      if (b.dataset.mode === 'NEW_PROJECT' && !confirm('Begin "' + b.dataset.start + '" again?\n\n'
-          + 'This CLEARS the code it holds before it begins. Anything not kept elsewhere is gone.')) return;
+      if (b.dataset.clears && !confirm('Restart "' + b.dataset.start + '" from its specification?\n\n'
+          + 'This CLEARS the code it holds and starts a new lineage. Anything not kept elsewhere is gone. '
+          + '(Duplicate keeps it and starts a copy instead.)')) return;
       start(b.dataset.start, b.dataset.mode);
     };
   });
+  document.querySelectorAll('button[data-duplicate]').forEach(b => b.onclick = () => duplicate(b.dataset.duplicate));
+}
+
+async function duplicate(from) {
+  const taken = new Set(projects.map(t => t.name));
+  let suggestion = from + '-2';
+  for (let i = 3; taken.has(suggestion); i++) suggestion = from + '-' + i;
+  const projectName = (prompt('Duplicate "' + from + '" as a new project named:', suggestion) || '').trim();
+  if (!projectName) return;
+  const r = await post('/home/projects', { name: projectName, from });
+  if (r.status !== 201) { result(false, 'Not duplicated: ' + (r.body.message || r.status)); return; }
+  await loadProjects();
+  if (!busy(run.state) && confirm('"' + projectName + '" created from "' + from + '". Start it now?')) {
+    start(projectName, 'NEW_PROJECT');
+  } else {
+    result(true, '"' + projectName + '" created from "' + from + '" -- listed under New project.');
+  }
 }
 
 function result(ok, text) {

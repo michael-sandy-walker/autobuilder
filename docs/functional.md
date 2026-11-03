@@ -132,9 +132,15 @@ Start Autobuilder without naming a project and open `http://localhost:8080` in a
 
 - **New project** -- give it a name (it becomes the directory) and write the specification. "Create and start"
   writes `<projects>/<name>/bootstrap/seed.txt`, nothing else, and starts it in `NEW_PROJECT` mode. A name that is
-  already taken is refused; nothing is overwritten. Below the form, any project that carries a specification can
-  be **begun again** from it -- this clears its `output/`, and the page asks first.
-- **Continue** -- the projects Autobuilder has worked on before; "Continue" starts one in `CONTINUE_LINEAGE` mode.
+  already taken is refused; nothing is overwritten. Below the form, every project that carries a specification
+  offers:
+  - **Restart** (**Start** if it has never run) -- clears its `output/` and starts a new lineage from its
+    specification (`NEW_PROJECT`); the earlier run is not read. The page asks first.
+  - **Duplicate** -- a new project under a new name with a byte-for-byte copy of its `bootstrap/` (specification,
+    obligations, protected paths, yardstick): no code and no run history. The original is left as it is.
+- **Continue** -- projects with unfinished work, each with how its last run ended; "Continue" starts one in
+  `CONTINUE_LINEAGE` mode. Projects whose goal is fulfilled are listed as finished: continuing them has nothing
+  left to do, so they offer Restart and Duplicate instead.
 - **Import one** and **Import several** are not built yet.
 
 "How the run proceeds" picks the profile for the run: autonomous (`dev-auto`), autonomous with the waiting trimmed
@@ -143,7 +149,8 @@ Start Autobuilder without naming a project and open `http://localhost:8080` in a
 
 One run at a time: while a run is starting or running, the start buttons are disabled and a second start is
 refused. A running run's own pages (goals, graph, start state) are linked from the banner; the run listens on
-port 8081. A run that has finished stays as it is, so its results can still be read later.
+port 8081. A run that has ended stays as it is, so its results can still be read later; the banner then
+says how it ended and offers **Back to home**, which closes it so another can be started.
 
 Everything the page does is a REST call on the home port, so it can also be done with curl:
 
@@ -154,8 +161,12 @@ curl -X POST -H 'Content-Type: application/json' \
      -d '{"name": "my-service", "seed": "What to build ..."}' \
      http://localhost:8080/home/projects                 # a new project from a specification
 curl -X POST -H 'Content-Type: application/json' \
+     -d '{"name": "my-service-2", "from": "my-service"}' \
+     http://localhost:8080/home/projects                 # a duplicate: a copy of my-service's bootstrap/
+curl -X POST -H 'Content-Type: application/json' \
      -d '{"project": "my-service", "mode": "NEW_PROJECT", "profiles": "dev-auto"}' \
      http://localhost:8080/home/start                    # start a run (202), or 409 while one is going
+curl -X POST http://localhost:8080/home/return           # back home once the run has ended (409 while it runs)
 ```
 
 ### 4.2 From the command line

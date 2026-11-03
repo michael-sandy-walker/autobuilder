@@ -127,4 +127,37 @@ class HomeControllerTest {
                         org.assertj.core.groups.Tuple.tuple("halted", false));
         assertThat(listed.get(2).lastEnd().reason()).isEqualTo("root-convergence-stall");
     }
+
+    @Test
+    void aDuplicateIsACopyOfTheBootstrapAndNothingElse() throws Exception {
+        Path src = projects.resolve("original");
+        Files.createDirectories(src.resolve("bootstrap/spec"));
+        Files.createDirectories(src.resolve("output"));
+        Files.createDirectories(src.resolve("meta"));
+        Files.writeString(src.resolve("bootstrap/seed.txt"), "Build a thing.\n");
+        Files.writeString(src.resolve("bootstrap/seed.obligations.txt"), "obligations keyed to the seed\n");
+        Files.writeString(src.resolve("bootstrap/spec/part.md"), "part\n");
+        Files.writeString(src.resolve("output/A.java"), "class A {}");
+        Files.writeString(src.resolve("meta/run-end-report.json"), "{}");
+
+        var res = controller(idle()).create(new HomeController.NewProject("copy", null, "original"));
+
+        assertThat(res.getStatusCode().value()).isEqualTo(201);
+        try (var all = Files.walk(projects.resolve("copy"))) {
+            assertThat(all.filter(Files::isRegularFile).map(p -> projects.resolve("copy").relativize(p).toString()).sorted())
+                    .containsExactly("bootstrap/seed.obligations.txt", "bootstrap/seed.txt", "bootstrap/spec/part.md");
+        }
+        assertThat(Files.mismatch(src.resolve("bootstrap/seed.txt"), projects.resolve("copy/bootstrap/seed.txt"))).isEqualTo(-1);
+        assertThat(res.getBody().get("project")).asString().contains("NEW_PROJECT");
+    }
+
+    @Test
+    void aDuplicateNeedsAProjectWithASpecification() throws Exception {
+        Files.createDirectories(projects.resolve("bare/output"));
+        HomeController c = controller(idle());
+
+        assertThat(c.create(new HomeController.NewProject("copy", null, "bare")).getStatusCode().value()).isEqualTo(404);
+        assertThat(c.create(new HomeController.NewProject("copy", null, "../bare")).getStatusCode().value()).isEqualTo(404);
+        assertThat(projects.resolve("copy")).doesNotExist();
+    }
 }

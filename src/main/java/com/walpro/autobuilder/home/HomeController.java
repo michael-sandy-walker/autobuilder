@@ -322,6 +322,12 @@ public class HomeController {
         return relayed(run.get("/autobuilder/inputs/pending"));
     }
 
+    /** The running loop at a glance, as the run reports it. */
+    @GetMapping(value = "/home/run/live", produces = "application/json")
+    public ResponseEntity<String> live() {
+        return relayed(run.get("/autobuilder/live"));
+    }
+
     /** Every import of the running project not taken back out, kept or pending. */
     @GetMapping(value = "/home/run/imports", produces = "application/json")
     public ResponseEntity<String> imports() {

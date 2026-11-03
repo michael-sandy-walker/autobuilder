@@ -80,6 +80,16 @@
     border: 1px solid var(--rule); border-radius: 6px; background: var(--panel-2); }
   .conflict .pickc { width: auto; margin: 0 8px 0 0; vertical-align: -1px; }
   .suggested { color: var(--violet); font-size: 12px; margin: 4px 0 0; }
+  .live-counts { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+  .live-counts b { color: var(--ink); font-size: 15px; margin-right: 4px; }
+  .recurring { border: 1px solid var(--warn-rule); background: var(--warn-bg); border-radius: 6px; padding: 8px 10px; margin-top: 10px;
+    font-size: 12.5px; }
+  .recurring b { color: var(--warn); }
+  ul.events { list-style: none; padding: 0; margin: 8px 0 0; font-size: 12px; }
+  ul.events li { display: grid; grid-template-columns: 86px 112px 1fr; gap: 8px; padding: 3px 0; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+  ul.events .t { color: var(--dim); } ul.events .k { color: var(--muted); }
+  ul.events .merged { color: var(--good); } ul.events .rejected, ul.events .refused { color: var(--warn); }
+  ul.events .x { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badge.rec { color: var(--violet); border-color: var(--violet-rule); background: var(--violet-bg); }
   .option { border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; margin-top: 6px; display: flex; gap: 10px;
     align-items: flex-start; }
@@ -241,6 +251,7 @@ let job = null;
 let progress = null;
 let conflicts = [];
 let pending = [];
+let live = null;
 let imports = [];
 let projects = [];
 
@@ -273,6 +284,12 @@ async function refresh() {
       progress = pr.status === 200 ? await pr.json() : null;
     }
     // Open conflicts belong to the project, not to the job that raised them: shown whenever its run serves.
+    // The loop at a glance, while it runs and after it has ended.
+    live = null;
+    if (run.runPort && (run.state === 'ENDED' || (run.state === 'RUNNING' && !run.notBegun))) {
+      const lr = await fetch('/home/run/live').catch(() => null);
+      live = lr && lr.ok ? await lr.json().catch(() => null) : null;
+    }
     if (run.runPort && !(job && job.phase === 'BRINGING_IN')) {
       const list = await fetch('/home/run/conflicts').then(r => r.json()).catch(() => []);
       conflicts = Array.isArray(list) ? list : [];
@@ -451,6 +468,7 @@ function renderNow() {
   const html = '<div class="title"><span class="dot"></span><b>' + esc(title) + '</b></div>'
     + (why ? '<div class="why">' + esc(why) + '</div>' : '') + links
     + (actions ? '<div class="row">' + actions + '</div>' : '')
+    + (live ? liveHtml() : '')
     + (waiting ? goalBox() : '') + (job ? jobBox() : '')
     + (run.runPort && !(job && job.phase === 'DECIDING') && !(job && job.phase === 'BRINGING_IN') && showImports() ? importsHtml() : '')
     + (conflicts.length && !(job && job.phase === 'DECIDING') ? '<div class="sub"><div class="title"><b>Waiting for your decision</b>'
@@ -480,6 +498,28 @@ function showImports() {
   const t = projects.find(x => x.name === baseName(run.project));
   return !!(t && t.imports);
 }
+const EVENT_LABEL = { cycle_start: ['cycle', ''], mutation_merged: ['merged', 'merged'], mutation_rejected: ['rejected', 'rejected'],
+  closure_refused: ['closure refused', 'refused'], goal_status_changed: ['goal', ''], system_paused: ['paused', 'refused'] };
+function liveHtml() {
+  const mins = live.since && live.cycles ? (Date.now() - Date.parse(live.since)) / 60000 / live.cycles : null;
+  const n = (v, one, many) => '<span><b>' + v + '</b>' + (v === 1 ? one : many) + '</span>';
+  const top = live.mostRefused;
+  return '<div class="sub" style="border-top:0;margin-top:6px;padding-top:0">'
+    + '<div class="live-counts">' + n(live.cycles, 'cycle', 'cycles') + n(live.merged, 'merged', 'merged')
+    + n(live.rejected, 'rejected', 'rejected') + n(live.closureRefused, 'closure refused', 'closures refused')
+    + (mins ? '<span>about <b>' + (mins < 1 ? '<1' : Math.round(mins)) + '</b>min per cycle</span>' : '') + '</div>'
+    + (live.workingOn ? '<div class="why" style="margin-top:8px">Working on: ' + esc(String(live.workingOn).slice(0, 240)) + '</div>' : '')
+    + (top && top.times > 1 ? '<div class="recurring"><b>The same closure refusal came back ' + top.times + ' times</b>'
+       + (live.cycles ? ' in ' + live.cycles + ' cycles' : '') + ', last at ' + esc(new Date(top.last).toLocaleTimeString()) + ':'
+       + '<div class="side">' + esc(top.reason) + '</div></div>' : '')
+    + (live.recent && live.recent.length ? '<ul class="events">' + live.recent.slice(0, 10).map(e => {
+        const [label, cls] = EVENT_LABEL[e.event] || [e.event, ''];
+        return '<li><span class="t">' + esc(new Date(e.at).toLocaleTimeString()) + '</span><span class="k ' + cls + '">' + esc(label)
+          + '</span><span class="x" title="' + esc(e.text) + '">' + esc(e.text) + '</span></li>';
+      }).join('') + '</ul>' : '')
+    + '</div>';
+}
+
 function importsHtml() {
   if (!imports.length) return '<div class="sub"><div class="title"><b>Imports in this project</b></div>'
     + '<div class="why">Nothing brought in is still in this project.</div></div>';

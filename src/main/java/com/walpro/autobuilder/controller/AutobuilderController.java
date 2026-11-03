@@ -357,6 +357,16 @@ public class AutobuilderController {
     public record ConflictDecision(String decision, String by, String resolution) {
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.observability.behaviour.BehaviourLogger behaviourLoggerForLive;
+
+    /** T4-ED: the running loop at a glance -- counts, what it works on, its latest events, the refusal that recurs most. */
+    @GetMapping("/live")
+    public ResponseEntity<?> live() {
+        if (behaviourLoggerForLive == null) return ResponseEntity.status(503).body(Map.of("error", "not available in this context"));
+        return ResponseEntity.ok(behaviourLoggerForLive.live());
+    }
+
     /** T4-ED: every project brought in and not taken back out, kept or pending. */
     @GetMapping("/inputs/imports")
     public ResponseEntity<?> imports() {

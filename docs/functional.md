@@ -178,7 +178,10 @@ refused, nothing is overwritten):
   code, goals and criteria, each as a module of its own; each can take minutes. Conflicts wait for your decision.
 
 **Now** shows the run: what it is doing and since when, its own pages (goals, graph, start state; the run listens on
-port 8081), and:
+port 8081), and -- while its loop runs and after it has ended -- the loop at a glance: cycles, merged and rejected
+changes, refused closures, about how long a cycle takes, what it works on, its latest events (cycles, merges,
+rejections, refused closures, goal changes, pauses), and, when the same closure refusal keeps coming back, that
+refusal with how often it came back -- what a stuck run looks like. And:
 
 - **Stop** while its loop runs -- it halts after its current cycle (which can take a few minutes) and its results
   stay as they are.
@@ -235,6 +238,7 @@ curl -X POST -H 'Content-Type: application/json' -d '{"name": "combined", "goal"
 curl http://localhost:8080/home/run/conflicts            # what waits for a decision
 curl http://localhost:8080/home/run/input-progress      # the step the input under way is at (204 when none)
 curl http://localhost:8080/home/run/conflicts/<id>/options  # the model's suggested resolutions, each with its effect
+curl http://localhost:8080/home/run/live                 # the running loop at a glance
 curl http://localhost:8080/home/run/imports              # every import still in, kept or pending
 curl http://localhost:8080/home/run/pending              # imports not yet kept
 curl -X POST http://localhost:8080/home/run/imports/<input-id>/keep      # keep one ...

@@ -56,6 +56,14 @@ public class BehaviourLogger {
     private volatile String lastSubGoalDescription;
     private volatile Instant sessionStart;
 
+    // T4-ED: what the home screen shows of a running loop -- the latest notable events, newest last, and how often each
+    // closure refusal came back (the same refusal returning cycle after cycle is what a stuck run looks like).
+    static final int RECENT = 15;
+    private final java.util.ArrayDeque<Map<String, Object>> recent = new java.util.ArrayDeque<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.LongAdder>
+            refusals = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, Instant> refusalLast = new java.util.concurrent.ConcurrentHashMap<>();
+
     /**
      * SSE publisher is optional so unit tests can construct a logger without standing up
      * the publisher bean (mirrors the {@code @Autowired(required = false)} pattern used
@@ -99,6 +107,69 @@ public class BehaviourLogger {
                 && start.subGoalDescription() != null && !start.subGoalDescription().isBlank()) {
             lastSubGoalDescription = start.subGoalDescription();
         }
+        String said = notable(event);
+        if (said != null) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("at", event.timestamp() == null ? Instant.now().toString() : event.timestamp().toString());
+            row.put("event", event.event());
+            row.put("text", said.length() > 300 ? said.substring(0, 299) + "..." : said);
+            synchronized (recent) {
+                recent.addLast(row);
+                while (recent.size() > RECENT) recent.removeFirst();
+            }
+        }
+        if (event instanceof BehaviourEvent.ClosureRefused refused && refused.reason() != null) {
+            refusals.computeIfAbsent(refused.reason(), k -> new java.util.concurrent.atomic.LongAdder()).increment();
+            refusalLast.put(refused.reason(), event.timestamp() == null ? Instant.now() : event.timestamp());
+        }
+    }
+
+    /** What a person watching the run would want to know of an event, or null for one they would not. */
+    private static String notable(BehaviourEvent event) {
+        if (event instanceof BehaviourEvent.CycleStart e) return e.subGoalDescription() != null ? e.subGoalDescription() : e.goalDescription();
+        if (event instanceof BehaviourEvent.MutationMerged e) {
+            int n = e.files() == null ? 0 : e.files().size();
+            return n + " file" + (n == 1 ? "" : "s") + (e.files() == null || e.files().isEmpty() ? "" : ": "
+                    + String.join(", ", e.files().stream().map(f -> f.substring(f.lastIndexOf('/') + 1)).limit(4).toList())
+                    + (n > 4 ? ", ..." : ""));
+        }
+        if (event instanceof BehaviourEvent.MutationRejected e) return e.reason();
+        if (event instanceof BehaviourEvent.ClosureRefused e) return e.reason();
+        if (event instanceof BehaviourEvent.GoalStatusChanged e) return e.from() + " -> " + e.to() + (e.reason() == null ? "" : ": " + e.reason());
+        if (event instanceof BehaviourEvent.SystemPaused e) return e.reason();
+        return null;
+    }
+
+    /**
+     * T4-ED: the running loop as the home screen shows it -- counts, what it works on, the latest notable events (newest
+     * first), and the closure refusal that came back most often.
+     */
+    public Map<String, Object> live() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        java.util.function.ToLongFunction<String> count = k -> {
+            var a = sessionCounts.get(k);
+            return a == null ? 0 : a.sum();
+        };
+        out.put("since", sessionStart != null ? sessionStart.toString() : null);
+        out.put("cycles", count.applyAsLong("cycle_start"));
+        out.put("merged", count.applyAsLong("mutation_merged"));
+        out.put("rejected", count.applyAsLong("mutation_rejected"));
+        out.put("closureRefused", count.applyAsLong("closure_refused"));
+        out.put("workingOn", lastSubGoalDescription);
+        java.util.List<Map<String, Object>> rows;
+        synchronized (recent) {
+            rows = new java.util.ArrayList<>(recent);
+        }
+        java.util.Collections.reverse(rows);
+        out.put("recent", rows);
+        refusals.entrySet().stream().max(java.util.Comparator.comparingLong(e -> e.getValue().sum())).ifPresent(e -> {
+            Map<String, Object> top = new LinkedHashMap<>();
+            top.put("reason", e.getKey());
+            top.put("times", e.getValue().sum());
+            top.put("last", String.valueOf(refusalLast.get(e.getKey())));
+            out.put("mostRefused", top);
+        });
+        return out;
     }
 
     /**

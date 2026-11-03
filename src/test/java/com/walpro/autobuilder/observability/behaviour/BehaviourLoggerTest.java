@@ -285,4 +285,37 @@ class BehaviourLoggerTest {
             last.set(envelope);
         }
     }
+
+    /** T4-ED: the running loop at a glance for the home screen. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theLiveViewCountsWhatHappened_listsTheLatestFirst_andNamesTheRefusalThatRecursMost() {
+        logger.cycleStart("c1", "root", "sub", "Build it", "Implement Book");
+        logger.mutationMerged("c1", "m1", java.util.List.of("src/main/java/a/Book.java", "src/main/java/a/BookService.java"));
+        logger.cycleStart("c2", "root", "sub", "Build it", "Implement Loan");
+        logger.mutationRejected("c2", "m2", "does not compile");
+        for (int i = 0; i < 3; i++) logger.closureRefused("c2", "boot", "root", "GET /loans answers 500", java.util.List.of());
+        logger.closureRefused("c2", "boot", "root", "GET /books answers 404", java.util.List.of());
+
+        java.util.Map<String, Object> live = logger.live();
+
+        assertThat(live).containsEntry("cycles", 2L).containsEntry("merged", 1L).containsEntry("rejected", 1L)
+                .containsEntry("closureRefused", 4L).containsEntry("workingOn", "Implement Loan");
+        java.util.List<java.util.Map<String, Object>> recent = (java.util.List<java.util.Map<String, Object>>) live.get("recent");
+        assertThat(recent.get(0)).containsEntry("event", "closure_refused").containsEntry("text", "GET /books answers 404");
+        assertThat(recent).anySatisfy(r -> assertThat(r).containsEntry("text", "2 files: Book.java, BookService.java"));
+        assertThat((java.util.Map<String, Object>) live.get("mostRefused")).containsEntry("reason", "GET /loans answers 500")
+                .containsEntry("times", 3L);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theLiveViewKeepsOnlyTheLatestEvents() {
+        for (int i = 0; i < BehaviourLogger.RECENT + 5; i++) logger.cycleStart("c" + i, "root", "sub", "Build it", "step " + i);
+
+        java.util.List<java.util.Map<String, Object>> recent = (java.util.List<java.util.Map<String, Object>>) logger.live().get("recent");
+
+        assertThat(recent).hasSize(BehaviourLogger.RECENT);
+        assertThat(recent.get(0)).containsEntry("text", "step " + (BehaviourLogger.RECENT + 4));
+    }
 }

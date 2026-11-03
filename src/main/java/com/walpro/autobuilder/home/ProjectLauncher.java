@@ -54,6 +54,7 @@ public class ProjectLauncher {
     private String failure;
     private ConfigurableApplicationContext runContext;
     private Runnable homeLogging = () -> {};
+    private Instant stopRequested;
     /** Why the run's loop has stopped, or empty while it runs. Replaced in tests. */
     Function<ConfigurableApplicationContext, Optional<String>> haltProbe = ProjectLauncher::loopHalt;
     /** Whether the run is an adopted project waiting for its goal. Replaced in tests. */
@@ -161,7 +162,23 @@ public class ProjectLauncher {
         current = null;
         failure = null;
         since = null;
+        stopRequested = null;
         state = State.IDLE;
+    }
+
+    /**
+     * Records that the operator asked the running loop to stop. The stop itself is the run's own pause, which
+     * waits for the current cycle; until the loop has halted, the home screen says it is stopping.
+     *
+     * @throws IllegalStateException unless a loop is running (a run that has not begun is left with returnHome)
+     */
+    public synchronized void stopRequested() {
+        State now = state();
+        if (now != State.RUNNING || notBegunProbe.test(runContext)) {
+            throw new IllegalStateException("no loop is running" + (now == State.RUNNING
+                    ? "; it has not begun -- leave it with Back to home" : ""));
+        }
+        if (stopRequested == null) stopRequested = Instant.now();
     }
 
     private static boolean notBegun(ConfigurableApplicationContext ctx) {
@@ -207,6 +224,7 @@ public class ProjectLauncher {
         if (now == State.ENDED) body.put("endReason", haltProbe.apply(runContext).orElse(""));
         if (now == State.RUNNING && goalWaitProbe.test(runContext)) body.put("waitingForGoal", true);
         if (now == State.RUNNING && notBegunProbe.test(runContext)) body.put("notBegun", true);
+        if (now == State.RUNNING && stopRequested != null) body.put("stopping", stopRequested.toString());
         if (current != null) {
             body.put("project", current.project());
             body.put("projectExists", Files.isDirectory(Path.of(current.project())));

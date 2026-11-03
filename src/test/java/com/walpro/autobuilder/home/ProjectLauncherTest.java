@@ -148,6 +148,28 @@ class ProjectLauncherTest {
     }
 
     @Test
+    void aStopIsTakenOnlyWhileALoopRunsAndShowsUntilItHalts() throws Exception {
+        ProjectLauncher launcher = new ProjectLauncher(new String[0], (c, args) -> mock(ConfigurableApplicationContext.class));
+        assertThatThrownBy(launcher::stopRequested).isInstanceOf(IllegalStateException.class);
+        java.util.concurrent.atomic.AtomicBoolean notBegun = new java.util.concurrent.atomic.AtomicBoolean(true);
+        launcher.notBegunProbe = c -> notBegun.get();
+        java.util.concurrent.atomic.AtomicReference<String> halt = new java.util.concurrent.atomic.AtomicReference<>();
+        launcher.haltProbe = c -> java.util.Optional.ofNullable(halt.get());
+        launcher.start(new ProjectChoice("data/a", null, null)).get(5, TimeUnit.SECONDS);
+
+        assertThatThrownBy(launcher::stopRequested).hasMessageContaining("Back to home");
+        notBegun.set(false);
+        launcher.stopRequested();
+
+        assertThat(launcher.describe()).containsEntry("state", "RUNNING").containsKey("stopping");
+        halt.set("user-pause");
+        assertThat(launcher.describe()).containsEntry("state", "ENDED").containsEntry("endReason", "user-pause")
+                .doesNotContainKey("stopping");
+        launcher.returnHome();
+        assertThat(launcher.describe()).doesNotContainKey("stopping");
+    }
+
+    @Test
     void goingHomeAfterAFailedStartClosesNothing() {
         ProjectLauncher launcher = new ProjectLauncher(new String[0], (c, args) -> {
             throw new IllegalStateException("port in use");

@@ -188,6 +188,7 @@ class HomeControllerTest {
         HomeController c = controller(idle());
 
         assertThat(c.coldRead().getStatusCode().value()).isEqualTo(409);
+        assertThat(c.stop().getStatusCode().value()).as("nothing to stop").isEqualTo(409);
         assertThat(c.goal("a goal").getStatusCode().value()).isEqualTo(409);
     }
 

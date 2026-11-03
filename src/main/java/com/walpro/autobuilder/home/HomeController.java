@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.home;
 
 import com.walpro.autobuilder.core.init.TargetCatalog;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +26,7 @@ import java.util.regex.Pattern;
  *
  * <p>Every action the page takes is one of these, so a script can take it with curl.
  */
+@Slf4j
 @Profile("home")
 @RestController
 public class HomeController {
@@ -284,6 +286,27 @@ public class HomeController {
         } catch (IllegalArgumentException e) {
             return refuse(400, "unknown mode " + request.mode());
         }
+        return ResponseEntity.accepted().body(launcher.describe());
+    }
+
+    /**
+     * Stops the running loop: the run's own pause ({@code user-pause}), which waits for the current cycle to
+     * finish. Sent in the background, since that can take minutes; the run then shows as ENDED, its results
+     * readable until the operator goes back home.
+     */
+    @PostMapping("/home/stop")
+    public ResponseEntity<Map<String, Object>> stop() {
+        try {
+            launcher.stopRequested();
+        } catch (IllegalStateException e) {
+            return refuse(409, e.getMessage());
+        }
+        Thread t = new Thread(() -> {
+            RunClient.Reply reply = run.postJson("/autobuilder/pause", "", Duration.ofHours(2));
+            if (!reply.ok()) log.warn("T4-ED: the run did not take the stop: {} {}", reply.status(), reply.body());
+        }, "home-stop");
+        t.setDaemon(true);
+        t.start();
         return ResponseEntity.accepted().body(launcher.describe());
     }
 

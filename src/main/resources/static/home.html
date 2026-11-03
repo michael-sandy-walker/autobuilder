@@ -227,7 +227,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
 // Everything that starts a run, disabled while one is up (one run at a time).
 const STARTERS = 'button[data-start], button[data-import-copy], #create, #import-go, #sev-go';
 const busy = s => s === 'STARTING' || s === 'RUNNING' || s === 'ENDED';
-const REASON = { 'goal-fulfilled': 'goal fulfilled', 'user-pause': 'paused by a person' };
+const REASON = { 'goal-fulfilled': 'goal fulfilled', 'user-pause': 'stopped by a person' };
 const reasonText = r => REASON[r] || String(r || 'stopped').replace(/[-_]/g, ' ');
 const when = iso => iso ? new Date(iso).toLocaleString() : '';
 
@@ -248,6 +248,8 @@ async function loadState() {
   document.querySelectorAll(STARTERS).forEach(b => b.disabled = busy(run.state));
   const back = document.getElementById('back');
   if (back) back.onclick = returnHome;
+  const stop = document.getElementById('stop');
+  if (stop) stop.onclick = stopRun;
   const waiting = run.state === 'RUNNING' && run.waitingForGoal;
   const panel = document.getElementById('adopt');
   if (waiting && panel.hidden) readCold();
@@ -310,16 +312,27 @@ function renderBanner() {
       .map(([page, label]) => '<a href="' + base + '/' + page + '" target="_blank" rel="noopener">' + label + '</a>').join('');
     banner(run.state, (ended ? 'Ended: ' + p + ' -- ' + reasonText(run.endReason)
         : waiting ? 'Adopted ' + p + ' -- waiting for a goal'
-        : held ? 'Held: ' + p + ' -- its loop has not begun' : 'Running ' + p)
+        : held ? 'Held: ' + p + ' -- its loop has not begun'
+        : run.stopping ? 'Stopping ' + p + ' -- it halts after its current cycle' : 'Running ' + p)
         + (run.mode ? ' (' + run.mode + ')' : ''),
       ended ? 'Its results stay readable here until you go back to the home screen. One run at a time: '
               + 'starting another means going back first.'
             : 'On port ' + run.runPort + ' since ' + new Date(run.since).toLocaleTimeString()
               + '. One run at a time: another can be started once this one has ended.',
       '<div class="links">' + links + '</div>'
+      + (!canLeave && !run.stopping ? '<div class="row"><button id="stop" class="destructive">Stop</button>'
+          + '<span class="note">The loop halts after its current cycle; its results stay readable.</span></div>' : '')
       + (canLeave ? '<div class="row"><button id="back"' + (ended ? ' class="primary"' : '') + '>Back to home</button>'
           + (ended ? '' : '<span class="note">Leaves it as it is on disk; nothing has run on it.</span>') + '</div>' : ''));
   }
+}
+
+async function stopRun() {
+  if (!confirm('Stop "' + name(run.project) + '"?\n\nThe loop halts after its current cycle, which can take a few '
+      + 'minutes. Its code and results stay as they are, readable here until you go back home.')) return;
+  const r = await post('/home/stop', {});
+  if (r.status !== 202) result(false, 'Not stopped: ' + (r.body.message || r.status));
+  loadState();
 }
 
 async function returnHome() {

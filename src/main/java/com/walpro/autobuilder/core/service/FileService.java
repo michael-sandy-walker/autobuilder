@@ -37,7 +37,13 @@ public class FileService {
     private final ObjectMapper objectMapper;
     private FileWatcherService fileWatcherService;
 
-    public FileService(@Value("${file.base-path}") String basePath, ObjectMapper objectMapper) {
+    public FileService(@Value("${file.base-path:}") String basePath, ObjectMapper objectMapper) {
+        // T4-ED: no project is bound until one is chosen. A blank path used to resolve to the working
+        // directory, where the folders below would then be created; the fallback to a toy case is gone.
+        if (basePath == null || basePath.isBlank()) {
+            throw new IllegalStateException("no project is bound: file.base-path is not set "
+                    + "(start a project from the home screen, or pass FILE_BASE_PATH)");
+        }
         this.rootDir = Paths.get(basePath).normalize().toAbsolutePath();
         this.objectMapper = objectMapper;
     }

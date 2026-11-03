@@ -11,7 +11,13 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-02 (Opus 5.5, session 23) -- T1-GH FILED AND CLOSED: THE CAPABILITY MANIFEST SAID THE LOOP CANNOT BUILD -- START HERE
+## 2026-11-03 (Opus 5.5, session 24) -- T4-ED PICKED UP AND REDEFINED (A HOME SCREEN BEFORE ANY RUN); SLICE 1 (TWO CONTEXTS) BUILT -- START HERE
+
+- **Nothing is live.** Uncommitted at hand-off unless the user authorised a commit: slice 1 code, docs, roadmap, `scripts/run_outcomes.json` (one row, the fast-forward check).
+- **T4-ED redefined with the user** over three option rounds (preflight-driven console and a product supervisor both rejected): the app starts UNBOUND on a home screen (new project, import one, import several, continue); the home screen is the default; a project parameter fast-forwards through the SAME launcher; browser only, over REST; one run at a time. Detail on the ticket.
+- **Slice 1 built:** home context (8080) + `ProjectLauncher` starting the run context (8081); `data/firestarter` fallback removed everywhere. Suite 4250/0/16. Field check: `preflight.sh live 20` firestarter unchanged -> GOAL_FULFILLED 23/23 (`run-archive/2026-11-03_00-20-00`, build `53d6355f-dirty`). Next: slice 2, the home page (new project + continue).
+
+## 2026-11-02 (Opus 5.5, session 23) -- T1-GH FILED AND CLOSED: THE CAPABILITY MANIFEST SAID THE LOOP CANNOT BUILD
 
 - **Nothing is live.** T1-GH and the case fix below committed (user: "commit as seen fit").
 - From the user's idea (a log-analysis capability agents are told about): the existing `SystemCapabilityManifest` (T3-K, March) told planner and analysis every call that the system cannot compile, test or start anything. Filed and closed `T1-GH` at the user's word; detail and replay on the ticket. Replay: wording moved in 17 of 17 plans, no directional change -- not claimed as improvement.

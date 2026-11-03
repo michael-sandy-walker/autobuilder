@@ -189,7 +189,7 @@ autobuilder:
     # run 17 (2026-07-06) merged born-broken tests invisibly and died in closure churn on them.
     test-scope-command: mvn test-compile
     timeout-ms: 120000
-    working-dir: ${FILE_BASE_PATH:data/firestarter}/output
+    working-dir: ${file.base-path}/output
     # T4-BN-2 reverted: javac-direct probe compiles main only too (mirror of `mvn compile` above).
     include-test-compile: false
     # T4-BM (2026-07-08): project-aware package discovery — a missing symbol/package resolves
@@ -367,7 +367,9 @@ autobuilder:
       max-active-days: 7
       max-size-mb: 200
 file:
-    base-path: ${FILE_BASE_PATH:data/firestarter}
+    # T4-ED: no fallback. Unset means no project is bound and the app opens the home screen;
+    # set (FILE_BASE_PATH or --file.base-path) means the run starts at once on that project.
+    base-path: ${FILE_BASE_PATH:}
 llm:
     api:
         #url: https://api.openai.com/v1/chat/completions
@@ -505,3 +507,16 @@ spring:
 autobuilder:
   scheduler:
     inter-cycle-delay-ms: 1
+
+---
+# ============================================
+# HOME PROFILE (T4-ED: the home context only -- no project, no loop)
+# ============================================
+# Active only in the small context that serves the home screen. The run context never has it.
+spring:
+  config:
+    activate:
+      on-profile: home
+
+server:
+  port: ${autobuilder.home.port:8080}

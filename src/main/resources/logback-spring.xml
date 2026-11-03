@@ -4,7 +4,10 @@
     <!-- LOG LEVELS -->
     <property name="LOG_LEVEL" value="INFO"/>
     <property name="FILE_LOG_LEVEL" value="DEBUG"/>
-    <property name="ROOT_PATH" value="${FILE_BASE_PATH:-data/firestarter}"/>
+    <!-- T4-ED: the launcher sets autobuilder.log.root to the bound project (or to the home directory
+         while none is bound) before each context starts; FILE_BASE_PATH remains for contexts that
+         are not started by the launcher, such as tests. -->
+    <property name="ROOT_PATH" value="${autobuilder.log.root:-${FILE_BASE_PATH:-${user.home}/.autobuilder/home}}"/>
 
     <!-- PATTERN -->
     <property name="CONSOLE_PATTERN"

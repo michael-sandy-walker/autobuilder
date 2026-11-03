@@ -16996,7 +16996,39 @@
    "terminal": "objective-met",
    "total_cycles": "51",
    "toycase": "ladder-grind v2"
+  },
+  "2026-11-03_00-20-00": {
+   "build": "53d6355f-dirty",
+   "clauses_closed_vs_control": "1",
+   "cost_readout": "build=97500ms/48 boot-gate=29361ms/9 package-gate=20639ms/9 sms-commit=6627ms/14 sms-batch-build=1675ms/14 sms-lineage-stamp=82ms/14 sms-cycle-merge=53ms/14 sms-cycle-link=42ms/13",
+   "criteria_authored": "38",
+   "criteria_elaboration": "13",
+   "criteria_executable_count": "14",
+   "criteria_executable_pct": "37",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "70",
+   "merges": "13",
+   "peaked_at_cycle": "cycle-1793662674472 (15/15)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-11-03",
+   "repeat_proposals": "0",
+   "repeats_refused": "0",
+   "run_duration_min": "19.5",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 23/23",
+   "smoke_pass": 23,
+   "smoke_preserved": "SMOKE: 23/23",
+   "smoke_strict": "23/23 discounted=none",
+   "smoke_total": 23,
+   "start_cleared_tree": "yes",
+   "start_mode": "NEW_PROJECT",
+   "start_tree": "LOOP_AUTHORED",
+   "target": "firestarter",
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "15",
+   "toycase": "firestarter v3"
   }
  },
- "updated": "2026-11-02"
+ "updated": "2026-11-03"
 }

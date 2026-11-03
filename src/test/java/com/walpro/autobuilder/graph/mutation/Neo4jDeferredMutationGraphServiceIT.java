@@ -40,6 +40,8 @@ class Neo4jDeferredMutationGraphServiceIT {
 
     @DynamicPropertySource
     static void neo4jProps(DynamicPropertyRegistry registry) {
+        // T4-ED: no project is bound by default any more; the test fixture tree, as the test profile uses.
+        registry.add("file.base-path", () -> "./test-root");
         registry.add("spring.data.neo4j.uri", SharedNeo4jTestContainer.NEO4J::getBoltUrl);
         registry.add("spring.data.neo4j.username", () -> "neo4j");
         registry.add("spring.data.neo4j.password", () -> "test-password");

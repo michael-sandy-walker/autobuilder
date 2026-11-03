@@ -23,7 +23,9 @@ cycle at a time, using a language model for the parts that need judgement and de
 everything that can be decided without one. It runs against a local model behind an OpenAI-compatible endpoint
 (`llm.api.url`, `llm.api.model`); Neo4j keeps the history of every run.
 
-A target lives in its own directory, `file.base-path` (default `data/firestarter`). Inside it:
+A target lives in its own directory, `file.base-path`. It has no default: started without one, the app opens a
+home context (port 8080) where a project is chosen, and the run context is then started on it; a project named
+at startup is started at once through the same launcher (`home/ProjectLauncher`). Inside it:
 
 | Path | What it holds |
 |---|---|

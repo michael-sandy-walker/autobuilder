@@ -61,10 +61,16 @@ public class StartupLogRotator implements ApplicationListener<ApplicationStartin
         rotate(logsDir.resolve(NDJSON_FILE), NDJSON_FIRST_TIMESTAMP);
     }
 
-    /** Visible for testing: resolves {@code ${FILE_BASE_PATH:/data/firestarter}/logs}. */
+    /**
+     * Visible for testing: the same root {@code logback-spring.xml} writes under --
+     * {@code autobuilder.log.root}, else {@code FILE_BASE_PATH}, else the home directory (T4-ED).
+     */
     Path resolveLogsDir() {
-        String basePath = System.getenv("FILE_BASE_PATH");
-        if (basePath == null || basePath.isBlank()) basePath = "/data/firestarter";
+        String basePath = System.getProperty("autobuilder.log.root");
+        if (basePath == null || basePath.isBlank()) basePath = System.getenv("FILE_BASE_PATH");
+        if (basePath == null || basePath.isBlank()) {
+            basePath = Path.of(System.getProperty("user.home"), ".autobuilder", "home").toString();
+        }
         return Path.of(basePath, LOGS_SUBDIR);
     }
 

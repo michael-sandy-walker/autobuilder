@@ -42,8 +42,9 @@ artifact, tracing a failing test) rely on that.
   programs on the same machine slow or endanger a run.
 - A **target directory** for your project, under `data/<name>/` (see below).
 
-Build Autobuilder with `mvn clean install`; it runs as `java -jar target/autobuilder-*.jar` and listens on port
-8081 (`server.port`).
+Build Autobuilder with `mvn clean install`; it runs as `java -jar target/autobuilder-*.jar`. Started without a
+project, it opens the home screen on port 8080 (`autobuilder.home.port`), where you choose what to work on; the
+run itself listens on port 8081 (`server.port`). Started with a project (below), it begins the run at once.
 
 ---
 

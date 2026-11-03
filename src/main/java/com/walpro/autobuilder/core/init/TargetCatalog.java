@@ -53,7 +53,11 @@ public class TargetCatalog {
     /** Every target beside the configured one, newest name order, with what each supports. */
     public List<Target> targets() {
         Path here = Path.of(fileBasePath).toAbsolutePath().normalize();
-        Path root = here.getParent();
+        return targetsUnder(here.getParent());
+    }
+
+    /** Every target directly under {@code root} -- T4-ED: the home screen lists them before any is bound. */
+    public List<Target> targetsUnder(Path root) {
         List<Target> out = new ArrayList<>();
         if (root == null || !Files.isDirectory(root)) return out;
         try (Stream<Path> children = Files.list(root)) {

@@ -676,6 +676,22 @@ public class AutobuilderService implements CheckpointableState {
             return;
         }
         repairInheritedTree(startedAs);
+        firstCycleWhenReady = true;
+    }
+
+    /** T4-EG: the first cycle is owed once the application is up (see {@link #runFirstCycle}). */
+    private volatile boolean firstCycleWhenReady = false;
+
+    /**
+     * The first cycle, once every bean exists. It used to run at the end of {@code init}, inside this bean's own
+     * creation, so the state manifest could not hand this service over: the first cycle's checkpoint was written
+     * without its decisions (field, 2026-11-04: "checkpoint was incomplete when taken: autobuilderService:
+     * unresolvable -- currently in creation"), and a Continue from that point re-ran a fulfilled terminal.
+     */
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+    public void runFirstCycle() {
+        if (!firstCycleWhenReady) return;
+        firstCycleWhenReady = false;
         runAutobuilderCycle();
     }
 

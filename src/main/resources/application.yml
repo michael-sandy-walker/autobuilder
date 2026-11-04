@@ -117,10 +117,6 @@ autobuilder:
     confirm-discard-foreign-tree: false
   service:
     reset-on-start: true
-    # T4-CD slice 1: resume a preserved prior lineage at boot (output/ from meta/preserved-artifact/,
-    # goal state kept + re-grounded). Wins over reset-on-start when resumable state exists;
-    # falls through to it otherwise — so both flags together mean "resume if possible, else fresh".
-    resume-from-preserved: false
   preserve:
     # T3-BY: preserve the best verified snapshot every N MERGED cycles during the run, not only
     # at an in-process terminal. Measured over 64 runs: 4 ended after their peak and all 4 scored

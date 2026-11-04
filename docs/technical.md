@@ -467,7 +467,7 @@ checks it against what is actually in `output/` before anything is touched:
 | Mode | What it does | Refused when |
 |---|---|---|
 | `NEW_PROJECT` | clears `output/` and seeds the goal from `bootstrap/seed.txt` | there is no seed; or `output/` holds code the loop did not write (unless `autobuilder.start.confirm-discard-foreign-tree`) |
-| `CONTINUE_LINEAGE` | continues a lineage this loop built, restoring its artifact and goal state (`RunResumeService`) | `output/` is empty |
+| `CONTINUE_LINEAGE` | continues the project exactly as it was left: the point it stands at (tree, goals, inputs, the loop's decisions, the carried context) restored in total through the rewind; a person's stop is lifted, a halt the loop reached stays | `output/` is empty |
 | `ADOPT_PROJECT` | works on a codebase as it is: nothing cleared, nothing seeded; the loop waits for a goal (`POST /autobuilder/goal`) | `output/` is empty |
 | `ASK` | touches nothing and waits | always -- it is a resting state |
 

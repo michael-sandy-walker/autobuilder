@@ -121,13 +121,93 @@ public class CheckpointService {
 
     private volatile Position position;
 
+    /**
+     * T4-EG: the position, kept beside the points so it outlives the JVM. Continue returns to it: after a rewind the
+     * loop stands at an older point than the newest on disk, and continuing from the newest would undo the rewind.
+     */
+    static final String POSITION_FILE = CHECKPOINTS_DIR + "/position.json";
+
+    /** T4-EG: where a point outside a cycle gets its tree copy. Optional so a context without one writes cycle points only. */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.persistence.MutationSnapshotService snapshotService;
+
     public Optional<Position> position() {
         return Optional.ofNullable(position);
     }
 
     /** Called by the rewind once its restore succeeded: the loop's state is now that of {@code toCycleId}. */
     public void notePositionAfterRewind(String toCycleId, String fromCycleId) {
-        position = new Position(toCycleId, java.time.Instant.now(), true, fromCycleId);
+        setPosition(new Position(toCycleId, java.time.Instant.now(), true, fromCycleId));
+    }
+
+    private void setPosition(Position p) {
+        position = p;
+        try {
+            fileService.writeJson(POSITION_FILE, p);
+        } catch (IOException | RuntimeException e) {
+            log.warn("T4-EG: the position {} was not written -- a continue would return to the newest point: {}",
+                    p.cycleId(), e.getMessage());
+        }
+    }
+
+    /**
+     * T4-EG: the point the project stands at -- the position as last written, by this JVM or an earlier one, or the
+     * newest point when none was. Empty when there is nothing to return to.
+     */
+    public Optional<CheckpointRecord> standing() {
+        try {
+            if (fileService.exists(POSITION_FILE)) {
+                Position p = objectMapper.readValue(fileService.readString(POSITION_FILE), Position.class);
+                Optional<CheckpointRecord> at = read(p.cycleId()).filter(CheckpointRecord::restorable)
+                        .filter(this::treeStillPresent);
+                if (at.isPresent()) return at;
+                log.warn("T4-EG: the position {} has no restorable point on disk -- standing at the newest one", p.cycleId());
+            }
+        } catch (IOException | RuntimeException e) {
+            log.warn("T4-EG: the position is unreadable ({}) -- standing at the newest point", e.getMessage());
+        }
+        return restorableCheckpoints().stream().findFirst();
+    }
+
+    /**
+     * T4-EG: a point where the state changed outside a cycle -- the loop halted, an input came in or was decided -- so
+     * the project can be continued from exactly there. {@code carried} is the context the next tick reads, kept as it
+     * is; with none (nothing ran in this JVM), the standing point's. The tree is copied as it is now, under the point's
+     * own id, which sorts after every cycle before it.
+     */
+    public Optional<CheckpointRecord> writePoint(CycleContextData carried, String why) {
+        if (!enabled || snapshotService == null) return Optional.empty();
+        try {
+            CycleContextData base = carried;
+            if (base == null) {
+                base = standing().map(r -> readCarriedContext(r.cycleId(), null).context()).orElse(null);
+            }
+            if (base == null) base = CycleContextData.builder().build();
+            String id = nextPointId();
+            CycleContextData copy = snapshotService.writeSnapshot(base.withCycleName(id).withMerged(false)
+                    .withOutputPath(fileService.resolveSecurePath("output").toString()));
+            Optional<CheckpointRecord> written = writeRecord(base, id, copy.snapshotPath(), false);
+            written.ifPresent(r -> log.info("T4-EG: point {} written outside a cycle -- {}", id, why));
+            return written;
+        } catch (IOException | RuntimeException e) {
+            log.warn("T4-EG: the point for '{}' was not written: {}", why, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private String nextPointId() {
+        long now = java.time.Instant.now().toEpochMilli();
+        List<String> cycles = listCheckpointCycles();
+        if (!cycles.isEmpty()) {
+            String last = cycles.get(cycles.size() - 1);
+            try {
+                now = Math.max(now, Long.parseLong(last.substring(last.indexOf('-') + 1)) + 1);
+            } catch (NumberFormatException ignored) {
+                // a point not named by its time: the clock alone orders this one
+            }
+        }
+        return "cycle-" + now;
     }
 
     /**
@@ -136,15 +216,20 @@ public class CheckpointService {
      */
     public Optional<CheckpointRecord> write(CycleContextData context) {
         if (!enabled || context == null || context.cycleName() == null) return Optional.empty();
+        return writeRecord(context, context.cycleName(), context.snapshotPath(), context.merged());
+    }
+
+    /** The point {@code id}: the holders now, {@code context} as the carried context, {@code snapshotPath} as its tree. */
+    private Optional<CheckpointRecord> writeRecord(CycleContextData context, String id, String snapshotPath, boolean merged) {
         try {
-            String dir = CHECKPOINTS_DIR + "/" + context.cycleName();
+            String dir = CHECKPOINTS_DIR + "/" + id;
             fileService.ensureFolderExists(dir);
 
             StateManifest.Capture capture = stateManifest.capture();
             boolean cacheCopied = copyCache(dir);
 
             CheckpointRecord record = new CheckpointRecord(
-                    context.cycleName(),
+                    id,
                     java.time.Instant.now(),
                     runIdentityService.runId(),
                     runIdentityService.lineageId(),
@@ -156,9 +241,9 @@ public class CheckpointService {
                     // divergence on the first two field rewinds.
                     goalPlannerService.getCurrentSubGoalId(),
                     goalTransitionLog.currentSeq(),
-                    context.snapshotPath(),
+                    snapshotPath,
                     context.mutationPath() == null ? null : context.mutationPath() + "/meta.json",
-                    context.merged(),
+                    merged,
                     cacheCopied,
                     capture.state(),
                     capture.failures(),
@@ -167,10 +252,10 @@ public class CheckpointService {
                     stateFingerprintService.of(capture, context),
                     // T6-T: only at a merge -- an unmerged cycle can leave injected writes on disk that
                     // no suite run has seen, and only merged points are rewound to anyway.
-                    context.merged() && suiteMeasure != null ? suiteMeasure.ofTree() : null);
+                    merged && suiteMeasure != null ? suiteMeasure.ofTree() : null);
 
             fileService.writeJson(dir + "/" + CHECKPOINT_FILE, record);
-            position = new Position(record.cycleId(), record.at(), false, null);
+            setPosition(new Position(record.cycleId(), record.at(), false, null));
 
             // The carried context is not a holder — it is the record of the cycle that just ran,
             // and the one thing the restore cannot rebuild from holders and goals. Without it a
@@ -206,14 +291,14 @@ public class CheckpointService {
             }
             return Optional.of(record);
         } catch (Exception e) {
-            log.warn("T4-DQ: checkpoint for cycle {} failed: {}", context.cycleName(), e.getMessage());
+            log.warn("T4-DQ: checkpoint for cycle {} failed: {}", id, e.getMessage());
             // Leave no directory that looks like a point and holds none — the listing would offer
             // it and every read of it would fail.
             try {
-                fileService.deleteRecursively(CHECKPOINTS_DIR + "/" + context.cycleName());
+                fileService.deleteRecursively(CHECKPOINTS_DIR + "/" + id);
             } catch (IOException | RuntimeException cleanup) {
                 log.debug("T4-DQ: could not clear the failed checkpoint directory for {}: {}",
-                        context.cycleName(), cleanup.getMessage());
+                        id, cleanup.getMessage());
             }
             return Optional.empty();
         }
@@ -497,13 +582,13 @@ public class CheckpointService {
      * <ol>
      *   <li><b>Still open.</b> See {@link #canContinueFrom}: a point whose root goal was already
      *       settled restores perfectly and then halts on the next cycle.</li>
-     *   <li><b>This run's own.</b> Off by default, and deliberately so. The checkpoint directory
-     *       and the cross-run index both outlive the run that filled them, so "the newest point
-     *       that landed work" silently reaches back into earlier runs of the lineage — which is
-     *       how a stalled run ended up adopting a FINISHED one's state. Crossing a run boundary
-     *       changes which run's work the loop is continuing, and that is a judgement a person
-     *       should make while looking at the runs, not one a grind detector should make at 3am.
-     *       The capability stays available and stays exercised by hand.</li>
+     *   <li><b>This project's own.</b> The points on this disk of this lineage: the runs a Continue
+     *       joined into one (T4-EG: a stop and a restart are not a boundary, the project goes on as it
+     *       was). Reaching into the cross-run index -- archived points, other lineages -- is off by
+     *       default, and deliberately so: that is how a stalled run once ended up adopting a FINISHED
+     *       one's state, and which work to go back to there is a judgement a person should make while
+     *       looking at the runs, not one a grind detector should make at 3am. The capability stays
+     *       available and stays exercised by hand.</li>
      * </ol>
      *
      * <p>With the switch on, the source widens to the whole lineage rather than only what is on
@@ -515,10 +600,10 @@ public class CheckpointService {
         List<CheckpointRecord> source = autoCrossRunEnabled
                 ? restorableAcrossRuns(runIdentityService.lineageId(), ACROSS_RUN_LIMIT)
                 : restorableCheckpoints();
-        String runId = runIdentityService.runId();
+        String lineageId = runIdentityService.lineageId();
         return source.stream()
                 .filter(record -> autoCrossRunEnabled
-                        || java.util.Objects.equals(record.runId(), runId))
+                        || java.util.Objects.equals(record.lineageId(), lineageId))
                 .filter(this::canContinueFrom)
                 .toList();
     }

@@ -44,11 +44,6 @@ public class CycleContextCoordinator {
     @Autowired(required = false)
     private BehaviourLogger behaviourLogger;
 
-    /** T4-CD slice 2: source of the parent run's rendered end report on a resumed boot. */
-    @Setter
-    @Autowired(required = false)
-    private com.walpro.autobuilder.core.init.RunResumeService runResumeService;
-
     public Optional<CycleContextData> prepareRuntimeContext(CycleContextData previous) {
         try {
             String cycleName = "cycle-" + Instant.now().toEpochMilli();
@@ -158,12 +153,6 @@ public class CycleContextCoordinator {
                 .completedGoals(goalPlannerService.getCompletedGoals())
                 .abandonedGoals(goalPlannerService.getAbandonedGoals())
                 .rejectionFeedback(null)
-                // T4-CD slice 2: seed the parent's end report on the first context of a resumed
-                // run; carry it until this run's first merge (real progress = own momentum),
-                // then drop it. Fresh starts have no holder value and stay null.
-                .priorRunEndReport(previous == null
-                        ? (runResumeService != null ? runResumeService.priorEndReportPromptBlock() : null)
-                        : (previous.merged() ? null : previous.priorRunEndReport()))
                 .recommendation(null)
                 .evolutionOutcome(null)
                 .evaluationOutcome(null)

@@ -402,7 +402,7 @@ public class AutobuilderController {
     public ResponseEntity<?> keepImport(@PathVariable String id, @RequestParam(defaultValue = "operator") String by) {
         if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
         try {
-            return ResponseEntity.ok(projectInputService.keep(id, by));
+            return ResponseEntity.ok(autobuilderService.keepInput(projectInputService, id, by));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

@@ -143,7 +143,9 @@ rest.
 | finished -- its goal was reached | **Extend...** | Continue, Restart, Duplicate |
 | existing code -- code Autobuilder did not write | **Work on it** | Extend, Duplicate |
 
-- **Start** builds it from its specification (`NEW_PROJECT`); **Continue** resumes its lineage (`CONTINUE_LINEAGE`);
+- **Start** builds it from its specification (`NEW_PROJECT`); **Continue** picks the project up exactly where it was
+  left (`CONTINUE_LINEAGE`) -- the code, goals, imports and the loop's own decisions as they were, whether it was
+  stopped mid-run, rewound or finished; a run you stopped runs on, a finished project opens finished;
   **Work on it** adopts the code as it is (`ADOPT_PROJECT`) -- nothing is cleared, and it waits for a goal (below).
 - **Extend...** brings something into the project: another project here, or code in a directory on this machine,
   with what to take from it (its *intent*). Its code, goals and criteria join; a finished project reopens with the

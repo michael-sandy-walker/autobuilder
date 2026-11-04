@@ -18,18 +18,6 @@ class PlannerProtocolContractTest {
                 .currentSubGoalDescription("Implement POST /books");
     }
 
-    // -------------------------------------------------------------------------
-    // T4-CD slice 2: --- PRIOR RUN OF THIS LINEAGE --- block
-    // -------------------------------------------------------------------------
-
-    @Test
-    void priorRunEndReport_renderedWhenPresent_absentOtherwise() {
-        String block = "--- PRIOR RUN OF THIS LINEAGE (advisory) ---\nThat run ended: exhaustion-runaway";
-        assertThat(PlannerProtocolContract.getUserPrompt(base().priorRunEndReport(block).build()))
-                .contains("--- PRIOR RUN OF THIS LINEAGE (advisory) ---");
-        assertThat(PlannerProtocolContract.getUserPrompt(base().build()))
-                .doesNotContain("PRIOR RUN OF THIS LINEAGE");
-    }
 
     // -------------------------------------------------------------------------
     // T3-BG: --- CURRENT SUBGOAL STATUS --- block

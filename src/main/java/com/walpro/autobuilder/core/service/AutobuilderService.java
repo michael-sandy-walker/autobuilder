@@ -103,14 +103,6 @@ public class AutobuilderService implements CheckpointableState {
     private com.walpro.autobuilder.core.build.PreHaltPackagingCheck preHaltPackagingCheck;
 
     /**
-     * T4-CD slice 1: optional — resumes a preserved prior lineage at boot instead of resetting.
-     * Null in pure-unit tests, where init() behaves exactly as before.
-     */
-    @Setter
-    @Autowired(required = false)
-    private com.walpro.autobuilder.core.init.RunResumeService runResumeService;
-
-    /**
      * T4-CD slice 2: optional — writes the run end report (terminal self-description) once per
      * pause episode, at the same home as T4-CA preserve. Null in pure-unit tests.
      */
@@ -777,6 +769,43 @@ public class AutobuilderService implements CheckpointableState {
         return startRefused;
     }
 
+    /**
+     * T4-EG: Continue is "continue with what we stopped" (user, 2026-11-04): the state the project stands at -- its tree,
+     * goals, inputs, the loop's decisions and the context the next tick reads -- returned to in total, whatever it is: a
+     * rewound state, one with a project brought in, a fulfilled goal. The point it stands at is the one a rewind would
+     * restore, so Continue is that restore with the newest position as its target. Only leaving is taken back: a person's
+     * stop is lifted, so a loop that was running runs on; a halt the loop reached itself stays as it was.
+     *
+     * <p>Not carried over, as for any rewind: the run's time and its allowance of rewinds, which are this run's own.
+     */
+    private void continueProject() {
+        var standing = checkpointService != null
+                ? checkpointService.standing() : Optional.<com.walpro.autobuilder.core.checkpoint.CheckpointRecord>empty();
+        if (standing.isEmpty() || rewindService == null) {
+            log.info("T4-EG: continuing with no point to return to -- the tree and goals as they are on disk.");
+            return;
+        }
+        String at = standing.get().cycleId();
+        var result = rewindService.rewindTo(at, com.walpro.autobuilder.core.checkpoint.CacheMode.FAITHFUL, "continue", at);
+        if (!result.performed()) {
+            log.warn("T4-EG: continuing from {} was refused ({}) -- the tree and goals as they are on disk.",
+                    at, result.refusedBecause());
+            return;
+        }
+        CycleContextData restored = result.carriedContext();
+        boolean stoppedByAPerson = restored != null && "user-pause".equals(restored.pausedReason());
+        if (restored != null) context = stoppedByAPerson ? restored.withPausedReason(null) : restored;
+        if (stoppedByAPerson) {
+            systemPaused = false;
+            pauseEventEmitted = false;
+            endReportWrittenThisEpisode = false;
+        }
+        if (rootConvergenceTracker != null) rootConvergenceTracker.resyncAfterRewind();
+        log.warn("T4-EG: continued from {} as it was left{}{}", at,
+                stoppedByAPerson ? " -- the stop lifted" : systemPaused ? " -- halted, as it was" : "",
+                result.failures().isEmpty() ? "" : "; " + result.failures());
+    }
+
     /** The start actions themselves, shared by the boot path and the release. */
     private void performStart(StartModeService.Decision start) throws IOException {
         StartMode mode = start != null ? start.mode() : StartMode.NEW_PROJECT;
@@ -784,18 +813,12 @@ public class AutobuilderService implements CheckpointableState {
             log.info("T4-DP: starting in {} ({}) — {}", mode, start.situation(), start.explanation());
         }
 
-        // T4-CD slice 1: resume wins over reset when a resumable lineage exists — the reset
-        // would delete the very artifact the resume restores. attemptResume() is false unless
-        // the flag is on AND preserved state + a non-COMPLETED root are present, so passing
-        // both flags means "resume if possible, else fresh".
-        //
-        // T4-DP: the modes below are what those flags always meant, said out loud. NEW_PROJECT is
-        // the only one that may clear the tree, and ADOPT_PROJECT neither clears it nor seeds over
-        // what someone else wrote.
+        // T4-DP: NEW_PROJECT is the only mode that may clear the tree, and ADOPT_PROJECT neither
+        // clears it nor seeds over what someone else wrote. T4-EG: CONTINUE_LINEAGE is the project
+        // exactly as it was left (continueProject).
         boolean treeCleared = false;
-        if (mode == StartMode.CONTINUE_LINEAGE
-                && runResumeService != null && runResumeService.attemptResume()) {
-            log.info("T4-CD: resumed prior lineage — skipping reset-on-start.");
+        if (mode == StartMode.CONTINUE_LINEAGE) {
+            continueProject();
         } else if (mode.discardsTheTree() && autobuilderConfig.isResetOnStart()) {
             log.warn("Autobuilder system reset triggered via config (AutobuilderService)");
             systemResetConfig.resetSystem();
@@ -992,6 +1015,7 @@ public class AutobuilderService implements CheckpointableState {
                     // T4-CD slice 2: end report AFTER preserve so the provenance on disk is this
                     // episode's own (the writer's haltCycle guard rejects a parent run's file).
                     writeEndReportOnce(context, context.pausedReason());
+                    pointOutsideACycle("the loop halted (" + context.pausedReason() + ")");
                 }
                 return;
             }
@@ -1045,6 +1069,7 @@ public class AutobuilderService implements CheckpointableState {
                         // lineage's self-description says it finished, not just how it failed.
                         // AFTER preserve so the provenance on disk is this episode's own.
                         writeEndReportOnce(context, GOAL_FULFILLED_REASON);
+                        pointOutsideACycle("the goal is fulfilled");
                     }
                     return;
                 }
@@ -2056,6 +2081,7 @@ public class AutobuilderService implements CheckpointableState {
                         .withCycleResultState(CycleResultState.CONTINUE);
             }
             systemPaused = false;
+            pointOutsideACycle("an input was brought in");
             return report;
         } finally {
             lock.unlock();
@@ -2074,6 +2100,7 @@ public class AutobuilderService implements CheckpointableState {
                         .withCycleResultState(CycleResultState.CONTINUE);
             }
             systemPaused = false;
+            pointOutsideACycle("an input was taken back out");
             return event;
         } finally {
             lock.unlock();
@@ -2098,10 +2125,32 @@ public class AutobuilderService implements CheckpointableState {
                         .withCycleResultState(CycleResultState.CONTINUE);
             }
             systemPaused = false;
+            pointOutsideACycle("a conflict was decided");
             return event;
         } finally {
             lock.unlock();
         }
+    }
+
+    /** T4-EG: a pending import kept, between cycles, under the lock a cycle holds; the project is continued from here. */
+    public com.walpro.autobuilder.goal.purpose.InputEvent keepInput(
+            com.walpro.autobuilder.core.merge.ProjectInputService inputs, String id, String by) {
+        lock.lock();
+        try {
+            var event = inputs.keep(id, by);
+            pointOutsideACycle("an import was kept");
+            return event;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * T4-EG: the state changed outside a cycle, so a Continue must find it as it is now: a point, with the carried
+     * context the next tick reads. Without one the newest point is the end of the last cycle, from before the change.
+     */
+    private void pointOutsideACycle(String why) {
+        if (checkpointService != null) checkpointService.writePoint(context, why);
     }
 
     public CoverageReviewResult triggerCoverageReview() {

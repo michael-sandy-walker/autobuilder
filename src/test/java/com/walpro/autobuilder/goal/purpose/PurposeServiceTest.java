@@ -131,28 +131,85 @@ class PurposeServiceTest {
     }
 
     /**
-     * T4-ED: loaded from the graph, the file the home screen reads is brought level (field: three imports withdrawn in
-     * the graph were still listed in the file, so the project list and the opened project disagreed).
+     * T4-EG: the file is the project's state and the graph its history. A rewind puts the file back and leaves the
+     * graph's record of an import made since, so the graph may not bring that import back at the next boot.
      */
     @Test
-    void aLedgerLoadedFromTheGraphRewritesTheFile() throws Exception {
+    void theFileIsTheStateTheGraphIsNotReadOverIt() throws Exception {
         PurposeService.fileOnly(files).recordSeed("Build a quill registry.", "operator");
         InputEntry seed = PurposeService.fileOnly(files).ledger().seed();
-        InputEntry brought = new InputEntry("input-x", 2, InputEntry.KIND_PROJECT, "use x", "d", "operator",
-                java.time.Instant.now(), null, null, null, null);
+        var graph = org.mockito.Mockito.mock(com.walpro.autobuilder.graph.input.InputGraphService.class);
+        org.mockito.Mockito.when(graph.findAll()).thenReturn(java.util.List.of(seed, brought()));
+
+        PurposeService loaded = new PurposeService(files, provider(graph), provider(null), new GoalPlannerConfigPropertiesStub());
+        loaded.load();
+
+        assertThat(loaded.ledger().entries()).containsExactly(seed);
+        org.mockito.Mockito.verify(graph, org.mockito.Mockito.never()).findAll();
+    }
+
+    /** T4-ED, kept for a project whose file is gone: the graph answers, and the file the home screen reads is written. */
+    @Test
+    void withoutTheFileTheLedgerComesFromTheGraphAndIsWritten() throws Exception {
+        PurposeService.fileOnly(files).recordSeed("Build a quill registry.", "operator");
+        InputEntry seed = PurposeService.fileOnly(files).ledger().seed();
+        Files.delete(base.resolve(PurposeService.PATH));
         InputEvent out = new InputEvent("event-w", InputEvent.WITHDRAWAL, "input-x", "withdrawn", null, null, null, null,
                 java.util.List.of(), InputEvent.DECIDED, null, "operator", java.time.Instant.now());
         var graph = org.mockito.Mockito.mock(com.walpro.autobuilder.graph.input.InputGraphService.class);
-        org.mockito.Mockito.when(graph.findAll()).thenReturn(java.util.List.of(seed, brought));
+        org.mockito.Mockito.when(graph.findAll()).thenReturn(java.util.List.of(seed, brought()));
         org.mockito.Mockito.when(graph.findEvents()).thenReturn(java.util.List.of(out));
-        GoalPlannerConfigPropertiesStub config = new GoalPlannerConfigPropertiesStub();
 
-        PurposeService fromGraph = new PurposeService(files, provider(graph), provider(null), config);
+        PurposeService fromGraph = new PurposeService(files, provider(graph), provider(null), new GoalPlannerConfigPropertiesStub());
         fromGraph.load();
 
-        String file = Files.readString(base.resolve(PurposeService.PATH));
-        assertThat(file).contains("input-x").contains("\"withdrawal\"");
+        assertThat(Files.readString(base.resolve(PurposeService.PATH))).contains("input-x").contains("\"withdrawal\"");
         assertThat(PurposeService.fileOnly(files).ledger().withdrawn("input-x")).isTrue();
+    }
+
+    /** T4-EG: a rewind returns the inputs' files to the point, and a later point brings them back. */
+    @Test
+    void theInputsFilesGoBackAndForwardWithTheirPoint() throws Exception {
+        PurposeService purpose = PurposeService.fileOnly(files);
+        purpose.recordSeed("Build a quill registry.", "operator");
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        com.fasterxml.jackson.databind.JsonNode before = mapper.valueToTree(purpose.captureState());
+
+        InputEntry input = purpose.addProjectInput("use the reader", "operator", null, null, "digest");
+        Files.createDirectories(base.resolve("meta/inputs/" + input.id()));
+        Files.writeString(base.resolve("meta/inputs/" + input.id() + "/placed.txt"), "src/main/java/Reader.java\n");
+        Files.createDirectories(base.resolve("meta/adoption-baseline/src"));
+        Files.writeString(base.resolve("meta/adoption-baseline/src/Reader.java"), "class Reader {}");
+        com.fasterxml.jackson.databind.JsonNode after = mapper.valueToTree(purpose.captureState());
+
+        purpose.restoreState(before, mapper);
+        assertThat(purpose.ledger().entries()).hasSize(1);
+        assertThat(base.resolve("meta/inputs")).doesNotExist();
+        assertThat(base.resolve("meta/adoption-baseline")).doesNotExist();
+        assertThat(PurposeService.fileOnly(files).ledger().entries()).hasSize(1);
+
+        purpose.restoreState(after, mapper);
+        assertThat(purpose.ledger().entries()).extracting(InputEntry::id).contains(input.id());
+        assertThat(base.resolve("meta/inputs/" + input.id() + "/placed.txt")).hasContent("src/main/java/Reader.java\n");
+        assertThat(base.resolve("meta/adoption-baseline/src/Reader.java")).hasContent("class Reader {}");
+    }
+
+    /** T4-EG: a point from before the inputs were captured restores nothing of them -- it must not delete them. */
+    @Test
+    void aPointThatCapturedNoInputsLeavesThemAsTheyAre() throws Exception {
+        PurposeService purpose = PurposeService.fileOnly(files);
+        purpose.recordSeed("Build a quill registry.", "operator");
+        InputEntry input = purpose.addProjectInput("use the reader", "operator", null, null, "digest");
+
+        purpose.restoreState(null, new ObjectMapper());
+
+        assertThat(purpose.ledger().entries()).extracting(InputEntry::id).contains(input.id());
+        assertThat(base.resolve(PurposeService.PATH)).exists();
+    }
+
+    private static InputEntry brought() {
+        return new InputEntry("input-x", 2, InputEntry.KIND_PROJECT, "use x", "d", "operator",
+                java.time.Instant.now(), null, null, null, null);
     }
 
     private static <T> org.springframework.beans.factory.ObjectProvider<T> provider(T value) {

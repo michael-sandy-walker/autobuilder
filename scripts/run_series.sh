@@ -1,7 +1,7 @@
 #!/bin/bash
 # run_series.sh — T4-CH: the deterministic outer relaunch policy, mechanized.
 #
-# The framework already self-resumes at boot (T4-CD: resume-if-possible-else-fresh) and
+# The framework continues a project at boot (T4-EG: CONTINUE_LINEAGE is the project as it was left) and
 # classifies its own terminals + watch results (T5-BE, T4-CE slice 1). What still needed a
 # human was the relaunch seat: watch the terminal, restart the JVM, repeat until the lineage
 # fulfills. This driver is that policy — nothing more. All continuation intelligence lives in
@@ -68,11 +68,13 @@ while [ "$run_no" -lt "$MAX_RUNS" ]; do
         sleep 2
     fi
 
-    # Resume flag always on — the BOOT decides fresh-vs-resume (T4-CD semantics); the driver
-    # deliberately carries no continuation policy of its own.
+    # Run 1 starts the project, every later run continues it as it was left (T4-EG); the
+    # driver deliberately carries no continuation policy of its own.
+    mode_flag=""
+    [ "$run_no" -gt 1 ] && mode_flag="--autobuilder.start.mode=CONTINUE_LINEAGE"
     launchlog="/tmp/preflight_runs/series-$STAMP-run$run_no.log"
     say "run $run_no/$MAX_RUNS: launching preflight live $MINUTES (log: $launchlog)"
-    PREFLIGHT_EXTRA_FLAGS="--autobuilder.service.resume-from-preserved=true" \
+    PREFLIGHT_EXTRA_FLAGS="$mode_flag" \
         setsid nohup scripts/preflight.sh live "$MINUTES" > "$launchlog" 2>&1 < /dev/null &
     launcher=$!
 

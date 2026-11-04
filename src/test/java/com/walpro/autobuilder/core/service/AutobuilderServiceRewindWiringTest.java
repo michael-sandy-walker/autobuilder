@@ -230,6 +230,61 @@ class AutobuilderServiceRewindWiringTest {
         assertThat(service.rewindIfGrinding(cycle("cycle-30", null))).isFalse();
     }
 
+    // ---- T4-EG: Continue is the project as it was left ----
+
+    private com.walpro.autobuilder.core.checkpoint.CheckpointService standingAt(String cycleId) {
+        var checkpoints = mock(com.walpro.autobuilder.core.checkpoint.CheckpointService.class);
+        var record = mock(com.walpro.autobuilder.core.checkpoint.CheckpointRecord.class);
+        when(record.cycleId()).thenReturn(cycleId);
+        when(checkpoints.standing()).thenReturn(java.util.Optional.of(record));
+        ReflectionTestUtils.setField(service, "checkpointService", checkpoints);
+        return checkpoints;
+    }
+
+    @Test
+    @DisplayName("T4-EG: Continue after a person's stop runs on from the state it was stopped in")
+    void continueLiftsAPersonsStop() {
+        standingAt("cycle-30");
+        CycleContextData stopped = cycle("cycle-29", "user-pause").withCycleResultState(CycleResultState.CONTINUE);
+        when(rewinds.rewindTo(eq("cycle-30"), eq(CacheMode.FAITHFUL), eq("continue"), eq("cycle-30")))
+                .thenReturn(performed("cycle-30", stopped));
+        ReflectionTestUtils.setField(service, "systemPaused", true); // as the point's holders restored it
+
+        ReflectionTestUtils.invokeMethod(service, "continueProject");
+
+        CycleContextData after = service.getContext().orElseThrow();
+        assertThat(after.cycleName()).as("the carried context as it was, not a fresh one").isEqualTo("cycle-29");
+        assertThat(after.pausedReason()).isNull();
+        assertThat(service.isPaused()).isFalse();
+    }
+
+    @Test
+    @DisplayName("T4-EG: Continue on a fulfilled project opens it as it was -- fulfilled, halted, nothing re-run")
+    void continueKeepsAHaltTheLoopReachedItself() {
+        standingAt("cycle-30");
+        CycleContextData fulfilled = cycle("cycle-29", null).withCycleResultState(CycleResultState.GOAL_FULFILLED);
+        when(rewinds.rewindTo(anyString(), any(), anyString(), anyString())).thenReturn(performed("cycle-30", fulfilled));
+        ReflectionTestUtils.setField(service, "systemPaused", true);
+
+        ReflectionTestUtils.invokeMethod(service, "continueProject");
+
+        assertThat(service.getContext().orElseThrow().cycleResultState()).isEqualTo(CycleResultState.GOAL_FULFILLED);
+        assertThat(service.isPaused()).isTrue();
+    }
+
+    @Test
+    @DisplayName("T4-EG: with no point to return to, Continue leaves the project as it is on disk")
+    void continueWithoutAPointChangesNothing() {
+        var checkpoints = mock(com.walpro.autobuilder.core.checkpoint.CheckpointService.class);
+        when(checkpoints.standing()).thenReturn(java.util.Optional.empty());
+        ReflectionTestUtils.setField(service, "checkpointService", checkpoints);
+
+        ReflectionTestUtils.invokeMethod(service, "continueProject");
+
+        verify(rewinds, never()).rewindTo(anyString(), any(), anyString(), anyString());
+        assertThat(service.getContext()).isEmpty();
+    }
+
     private static CycleContextData cycle(String cycleId, String pausedReason) {
         return CycleContextData.builder()
                 .cycleName(cycleId)

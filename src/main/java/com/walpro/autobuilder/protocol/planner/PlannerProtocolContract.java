@@ -316,12 +316,6 @@ Data must never be written to disk.
     public static String getUserPrompt(CycleContextData input) {
         StringBuilder sb = new StringBuilder();
 
-        // T4-CD slice 2: a resumed run's first planning consults the parent run's end report —
-        // how the lineage's previous run ended and what blocked it — before re-deriving a plan.
-        if (input.priorRunEndReport() != null) {
-            sb.append(input.priorRunEndReport()).append("\n\n");
-        }
-
         InterpretationResult interp = input.evaluationInterpretation();
 
         String interpretationBlock = interp == null

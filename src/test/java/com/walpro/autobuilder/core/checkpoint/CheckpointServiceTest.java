@@ -224,18 +224,30 @@ class CheckpointServiceTest {
     }
 
     @Test
-    @DisplayName("an automatic rewind stays inside its own run, though the directory outlives earlier ones")
-    void anAutomaticRewindDoesNotCrossARunBoundary() {
-        // The checkpoint directory is not cleared at a run boundary, so an earlier run's points sit
-        // right beside this run's and "the newest that landed work" reaches back into them.
+    @DisplayName("T4-EG: an automatic rewind reaches back across a Continue -- an earlier run of the same project is its own")
+    void anAutomaticRewindReachesAcrossAContinue() {
+        // A stop and a Continue are not a boundary: the project goes on as it was, rewinds included.
         writeForeignRunCheckpoint("cycle-0", "run-0");
+        checkpoints.write(context("cycle-1", "snapshots/cycle-1"));
+
+        assertThat(checkpoints.autoRewindCandidates()).extracting(CheckpointRecord::cycleId)
+                .as("both are this lineage's, on this disk")
+                .containsExactly("cycle-1", "cycle-0");
+    }
+
+    @Test
+    @DisplayName("an automatic rewind stays inside its own lineage, though the directory may hold another's")
+    void anAutomaticRewindDoesNotCrossALineage() {
+        when(identity.lineageId()).thenReturn("lineage-0");
+        checkpoints.write(context("cycle-0", "snapshots/cycle-0"));
+        when(identity.lineageId()).thenReturn("lineage-1");
         checkpoints.write(context("cycle-1", "snapshots/cycle-1"));
 
         assertThat(checkpoints.restorableCheckpoints()).extracting(CheckpointRecord::cycleId)
                 .as("both are on disk and both restore")
                 .containsExactly("cycle-1", "cycle-0");
         assertThat(checkpoints.autoRewindCandidates()).extracting(CheckpointRecord::cycleId)
-                .as("the loop may only choose its own run's")
+                .as("the loop may only choose its own lineage's")
                 .containsExactly("cycle-1");
     }
 

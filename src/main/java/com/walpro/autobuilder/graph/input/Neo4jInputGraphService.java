@@ -137,7 +137,7 @@ public class Neo4jInputGraphService implements InputGraphService {
     }
 
     @HistoryRead(span = HistorySpan.LINEAGE, use = HistoryUse.BINDING,
-            note = "The project's inputs loaded at boot; the purpose every reader works from is read from them.")
+            note = "The project's inputs, read at boot only when meta/inputs.json is missing (T4-EG: the file is the state, the graph its history).")
     @Override
     public List<InputEntry> findAll() {
         return neo4jClient.query("""

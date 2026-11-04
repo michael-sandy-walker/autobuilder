@@ -165,54 +165,7 @@ class RunEndReportServiceTest {
         assertThat(tempDir.resolve("meta/run-end-report.json")).doesNotExist();
     }
 
-    @Test
-    void readForLineage_matchingRoot_returnsEndReport() {
-        when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.GIVEN_UP));
-        service.write(context(), "exhaustion-runaway");
 
-        assertThat(service.readForLineage("root-1")).isPresent();
-    }
 
-    @Test
-    void readForLineage_foreignRoot_refuses() {
-        when(goalPlannerService.getRootGoal()).thenReturn(root(GoalStatus.GIVEN_UP));
-        service.write(context(), "exhaustion-runaway");
 
-        assertThat(service.readForLineage("some-other-root")).isEmpty();
-        assertThat(service.readForLineage(null)).isEmpty();
-    }
-
-    @Test
-    void readForLineage_absentOrCorrupt_isEmpty() throws IOException {
-        assertThat(service.readForLineage("root-1")).isEmpty();
-        Files.createDirectories(tempDir.resolve("meta"));
-        Files.writeString(tempDir.resolve("meta/run-end-report.json"), "not-json");
-        assertThat(service.readForLineage("root-1")).isEmpty();
-    }
-
-    @Test
-    void renderPromptBlock_carriesTheDiagnosis_andStaysAdvisory() {
-        var t = new RunEndReportService.RunEndReport(
-                "1", "exhaustion-runaway", "cycle-77", Instant.now(), "root-1", "Evolve the app",
-                "GIVEN_UP", 4, 9, 2,
-                List.of(),
-                List.of(new RunEndReportService.OpenItem("g-2", "GIVEN_UP", "GET /loans lists loans",
-                        List.of("lists all loans"), "exhausted")),
-                new RunEndReportService.DefectShape("LoanRepository", 0.8, 3, true),
-                List.of("the change does not persist the loan"),
-                true, "cycle-50", "COMPILE_OK", 12, 3);
-
-        String block = service.renderPromptBlock(t);
-
-        assertThat(block).startsWith("--- PRIOR RUN OF THIS LINEAGE (advisory) ---");
-        assertThat(block).contains("exhaustion-runaway");
-        assertThat(block).contains("9 completed / 4 open / 2 abandoned");
-        assertThat(block).contains("preserved artifact");
-        assertThat(block).contains("LoanRepository");
-        assertThat(block).contains("GET /loans lists loans");
-        assertThat(block).contains("[unmet: lists all loans]");
-        assertThat(block).contains("the change does not persist the loan");
-        assertThat(block).contains("code on disk is the ground truth");
-        assertThat(service.renderPromptBlock(null)).isNull();
-    }
 }

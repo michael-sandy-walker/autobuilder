@@ -3,6 +3,9 @@ package com.walpro.autobuilder.goal.purpose;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
+import com.walpro.autobuilder.core.checkpoint.CheckpointableState;
+import com.walpro.autobuilder.core.checkpoint.StateBucket;
+import com.walpro.autobuilder.core.checkpoint.StateHolder;
 import com.walpro.autobuilder.core.init.RunIdentityService;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.goal.SeedObligationsFile;
@@ -28,18 +31,32 @@ import java.util.UUID;
  * T4-EC slice 1: what this project is for, as the record of the inputs it was given.
  *
  * <p>Every reader of the purpose asks here instead of reading the root goal's text. The seed is entry 1 of the
- * {@link InputLedger}; the ledger lives in the graph (primary, like goals) with {@value #PATH} derived beside
- * {@code meta/GoalStack.json}, so it travels with the project and can be read by hand.
+ * {@link InputLedger}; the ledger is {@value #PATH} beside {@code meta/GoalStack.json}, so it travels with the project
+ * and can be read by hand, and every entry and event is recorded in the graph as history.
+ *
+ * <p>T4-EG: what the inputs left in the project's files is checkpointed state: a rewind returns it to the point, and a
+ * later point brings it back ({@link #FILES}).
  *
  * <p>Wherever a root goal is set, the seed is recorded ({@link #recordSeed}); a project whose root predates the
  * ledger gets its entry from the root's text when it boots ({@link #ensureFor}).
  */
 @Slf4j
 @Service
-public class PurposeService {
+@StateHolder(value = StateBucket.CAPTURE,
+        note = "the project's inputs as their files hold them: the ledger, what each input placed, protected and held, and the adoption record")
+public class PurposeService implements CheckpointableState {
 
     public static final String PATH = "meta/inputs.json";
     static final String SEED_FILE = "bootstrap/seed.txt";
+
+    /**
+     * T4-EG: every file an input writes outside {@code output/}, file or directory. The tree itself is the checkpoint's
+     * snapshot and the goals its goal history; this is the rest of what bringing a project in changes.
+     */
+    static final List<String> FILES = List.of(PATH, "meta/inputs",
+            com.walpro.autobuilder.core.build.AdoptionManifest.PATH,
+            com.walpro.autobuilder.core.build.AdoptionManifest.SERVED_PATH,
+            com.walpro.autobuilder.core.build.ProtectedPaths.BASELINE_DIR);
 
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules()
             .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -72,25 +89,77 @@ public class PurposeService {
         return s;
     }
 
+    /**
+     * T4-EG: the file is the project's state and the graph its history. A rewind puts the file back as it was and
+     * leaves the graph's record of what came in since, so reading the graph first would bring a rewound-out import
+     * back at the next boot. The graph answers only for a project whose file is gone, and the file is written from it.
+     */
     @PostConstruct
     public void load() {
-        InputLedger loaded = InputLedger.EMPTY;
-        if (loadFromGraph && graph != null) {
-            try {
-                loaded = new InputLedger(graph.findAll(), graph.findEvents());
-            } catch (Exception e) {
-                log.warn("T4-EC: inputs not readable from the graph ({}) -- reading {}", e.getMessage(), PATH);
-            }
+        ledger = readFile();
+        if (!ledger.isEmpty() || !loadFromGraph || graph == null) return;
+        try {
+            ledger = new InputLedger(graph.findAll(), graph.findEvents());
+        } catch (Exception e) {
+            log.warn("T4-EC: {} is missing and the graph cannot be read ({}) -- no inputs", PATH, e.getMessage());
+            return;
         }
-        ledger = loaded.isEmpty() ? readFile() : loaded;
-        // T4-ED: the file is what is read before any run is up (the home screen's project list); loaded from the
-        // graph, it is brought level here, so the two cannot go on disagreeing (field: the graph had three imports
-        // withdrawn, the file still listed them).
-        if (!loaded.isEmpty()) writeFile();
+        if (!ledger.isEmpty()) writeFile();
     }
 
     public InputLedger ledger() {
         return ledger;
+    }
+
+    @Override
+    public String stateKey() {
+        return "purpose";
+    }
+
+    /** Each of {@link #FILES} that exists, by path relative to the project, with its text. */
+    @Override
+    public synchronized Object captureState() {
+        Map<String, String> out = new java.util.TreeMap<>();
+        for (String path : FILES) {
+            try {
+                java.nio.file.Path p = fileService.resolveSecurePath(path);
+                if (java.nio.file.Files.isRegularFile(p)) {
+                    out.put(path, java.nio.file.Files.readString(p));
+                } else if (java.nio.file.Files.isDirectory(p)) {
+                    try (var walk = java.nio.file.Files.walk(p)) {
+                        for (java.nio.file.Path f : walk.filter(java.nio.file.Files::isRegularFile).sorted().toList()) {
+                            out.put(path + "/" + p.relativize(f).toString().replace('\\', '/'), java.nio.file.Files.readString(f));
+                        }
+                    }
+                }
+            } catch (java.io.IOException e) {
+                throw new IllegalStateException("T4-EG: " + path + " could not be captured: " + e.getMessage(), e);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The files as captured, and nothing else of {@link #FILES}; the ledger read back from them. A point that captured
+     * nothing -- one written before the inputs were part of a point -- leaves them as they are: its start-of-run value
+     * is what is on disk, and deleting it would take a project's inputs away on its first Continue.
+     */
+    @Override
+    public synchronized void restoreState(JsonNode state, ObjectMapper mapper) {
+        if (state == null || state.isNull()) {
+            ledger = readFile();
+            return;
+        }
+        try {
+            for (String path : FILES) fileService.deleteRecursively(path);
+            for (var it = state.fields(); it.hasNext(); ) {
+                var e = it.next();
+                fileService.writeFile(e.getKey(), e.getValue().asText());
+            }
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("T4-EG: the inputs' files could not be restored: " + e.getMessage(), e);
+        }
+        ledger = readFile();
     }
 
     /** The inputs so far as one specification; null while the project has none. */

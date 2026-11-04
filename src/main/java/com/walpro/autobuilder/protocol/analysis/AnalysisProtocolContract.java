@@ -42,7 +42,6 @@ public final class AnalysisProtocolContract {
             %s
             %s
             %s
-            %s
             Respond using this exact format:
             Findings:
             - [SEVERITY] <type> :: <observation> :: <path or (n/a)>
@@ -101,18 +100,8 @@ public final class AnalysisProtocolContract {
                 ctx.projectDiff() == null ? "(none)" : ctx.projectDiff().summary(),
                 packageConstraintBlock(ctx),
                 abandonedGoalsBlock(ctx),
-                seedCoverageBlock(ctx),
-                priorRunEndReportBlock(ctx)
+                seedCoverageBlock(ctx)
         );
-    }
-
-    /**
-     * T4-CD slice 2: a resumed run's first diagnosis consults the parent run's end report —
-     * the lineage's prior terminal reason, blockers, and failed approaches — as advisory
-     * context. Empty on fresh runs and after the resumed run's first merge.
-     */
-    static String priorRunEndReportBlock(CycleContextData ctx) {
-        return ctx.priorRunEndReport() == null ? "" : ctx.priorRunEndReport() + "\n";
     }
 
     static String abandonedGoalsBlock(CycleContextData ctx) {

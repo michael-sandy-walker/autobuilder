@@ -16,7 +16,7 @@ A bundle lives in ~/.autobuilder/bundles/<name>/:
 Why the cut is clean: after T1-D + T4-CJ a lineage is a self-contained subgraph -- nearly every node
 carries lineageId, and the boot loads goals by the lineage named in meta/run-identity.json. So a
 restore that brings the files and the subgraph back together is a lineage the loop resumes as its
-own (CONTINUE_LINEAGE; RunResumeService's ownership check compares exactly these two).
+own (CONTINUE_LINEAGE; the rewind's lineage check compares exactly these two).
 
 Restore CONTINUES the stored lineage under its own id, so it refuses a database that already holds
 that lineage (a second copy would be two roots claiming one id) unless --replace, which first removes
@@ -272,7 +272,7 @@ def restore(args):
     print(f"bundle: restored {args.name} into data/{args.target}: {got}/{prov['nodes']} lineage nodes, "
           f"{len(edge)} boundary ({reused} already present), {len(graph['rels'])} relationships")
     print(f"bundle: continue it with PREFLIGHT_TARGET={args.target} PREFLIGHT_EXTRA_FLAGS=\""
-          f"--autobuilder.start.mode=CONTINUE_LINEAGE --autobuilder.service.resume-from-preserved=true\"")
+          f"--autobuilder.start.mode=CONTINUE_LINEAGE\"")
     if got != prov["nodes"]:
         sys.exit("bundle: node count differs from the stored bundle")
 

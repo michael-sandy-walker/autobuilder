@@ -46,7 +46,6 @@ import java.util.List;
 public class PreservedArtifactService {
 
     static final String SNAPSHOTS_DIR = "snapshots";
-    // Public: RunResumeService (T4-CD) restores from the same locations this service writes.
     public static final String PRESERVED_DIR = "meta/preserved-artifact";
     public static final String PROVENANCE_FILE = "meta/preserved-artifact-provenance.json";
 

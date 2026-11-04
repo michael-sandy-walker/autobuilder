@@ -24,21 +24,6 @@ class AnalysisProtocolContractTest {
         assertThat(prompt).contains("src/main/java/com/example/demo/");
     }
 
-    @Test
-    void getUserPrompt_rendersPriorRunEndReport_whenPresent() {
-        // T4-CD slice 2: a resumed run's first diagnosis consults the parent run's end report.
-        CycleContextData ctx = CycleContextData.builder()
-                .cycleName("c-1")
-                .currentGoalDescription("Library API")
-                .currentSubGoalDescription("Create Loan entity")
-                .priorRunEndReport("--- PRIOR RUN OF THIS LINEAGE (advisory) ---\nThat run ended: deadline")
-                .build();
-
-        assertThat(AnalysisProtocolContract.getUserPrompt(ctx))
-                .contains("--- PRIOR RUN OF THIS LINEAGE (advisory) ---");
-        assertThat(AnalysisProtocolContract.getUserPrompt(ctx.withPriorRunEndReport(null)))
-                .doesNotContain("PRIOR RUN OF THIS LINEAGE");
-    }
 
     @Test
     void getUserPrompt_rendersSignalStrengths_notJustNames() {

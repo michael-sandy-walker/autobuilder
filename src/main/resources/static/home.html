@@ -244,6 +244,8 @@ const REASON = { 'goal-fulfilled': 'goal fulfilled', 'user-pause': 'stopped by a
 const reasonText = r => REASON[r] || String(r || 'stopped').replace(/[-_]/g, ' ');
 const when = iso => iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
 const baseName = p => String(p || '').replace(/\/+$/, '').split('/').pop();
+// A code directory by name: a project's output/ is named after the project it belongs to.
+const codeName = p => baseName(String(p || '').replace(/\/+$/, '').replace(/\/output$/, ''));
 function remember(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 function recall(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 
@@ -944,7 +946,7 @@ function suggestIntent() {
   const fromProject = document.querySelector('input[name=ext-src]:checked').value === 'project';
   $('ext-project').hidden = !fromProject; $('ext-path').hidden = fromProject;
   if ($('ext-intent').dataset.touched) return;
-  const n = fromProject ? $('ext-project').value : baseName($('ext-path').value);
+  const n = fromProject ? $('ext-project').value : codeName($('ext-path').value);
   const t = projects.find(x => x.name === n);
   $('ext-intent').value = n ? 'Use ' + n + ' in ' + extending.name + (t && t.seedSummary ? ': ' + t.seedSummary : '.') : '';
 }
@@ -958,7 +960,7 @@ $('ext-go').onclick = async () => {
                             : { path: $('ext-path').value.trim(), intent: $('ext-intent').value };
   const r = await post('/home/extend', { project: extending.name, profiles: profiles(), input });
   if (r.status !== 202) { toast(false, 'Not started: ' + message(r)); return; }
-  $('dlg-extend').close(); toast(true, 'Bringing ' + (input.project || baseName(input.path)) + ' into ' + extending.name + '.');
+  $('dlg-extend').close(); toast(true, 'Bringing ' + (input.project || codeName(input.path)) + ' into ' + extending.name + '.');
   refresh();
 };
 

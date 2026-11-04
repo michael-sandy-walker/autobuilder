@@ -54,8 +54,15 @@ class IntegrationJob {
             this(project, null, intent, runs);
         }
 
+        /**
+         * What came in, by name: the project, or the directory's name -- its parent's when the path is a project's
+         * {@code output/} (field: an import from ".../cashbook/output" was labelled "output").
+         */
         String label() {
-            return project != null ? project : Path.of(path).getFileName().toString();
+            if (project != null) return project;
+            Path p = Path.of(path).normalize();
+            Path named = "output".equals(String.valueOf(p.getFileName())) && p.getParent() != null ? p.getParent() : p;
+            return String.valueOf(named.getFileName());
         }
 
         Path dir(Path projectsDir) {

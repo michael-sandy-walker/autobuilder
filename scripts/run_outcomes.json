@@ -17028,7 +17028,39 @@
    "terminal": "GOAL_FULFILLED",
    "total_cycles": "15",
    "toycase": "firestarter v3"
+  },
+  "2026-11-04_00-47-59": {
+   "build": "b7ccfecf",
+   "clauses_closed_vs_control": "0",
+   "cost_readout": "build=62592ms/23 package-gate=10133ms/4 sms-commit=9896ms/18 sms-batch-build=2727ms/18 boot-gate=1292ms/5 sms-lineage-stamp=133ms/18 sms-cycle-link=102ms/17 sms-cycle-merge=89ms/18",
+   "criteria_authored": "71",
+   "criteria_elaboration": "50",
+   "criteria_executable_count": "0",
+   "criteria_executable_pct": "0",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "0",
+   "injector_files_created": "1",
+   "injector_files_kept": "1",
+   "injector_fixes_rederived": "0",
+   "median_cycle_seconds": "69",
+   "merges": "0",
+   "peaked_at_cycle": "cycle-1793751298042 (19/19)",
+   "preserved_source": "reconstructed:cycle-1793751298042",
+   "recorded": "2026-11-04",
+   "repeat_proposals": "1",
+   "repeats_refused": "1",
+   "run_duration_min": "27.8",
+   "score_delta": "n/a (boot-failed vs boot-failed)",
+   "smoke": "boot-failed",
+   "smoke_preserved": "boot-failed",
+   "start_cleared_tree": "yes",
+   "start_mode": "NEW_PROJECT",
+   "start_tree": "LOOP_AUTHORED",
+   "target": "rung1",
+   "terminal": "deadline",
+   "total_cycles": "19",
+   "toycase": "rung1 v8"
   }
  },
- "updated": "2026-11-03"
+ "updated": "2026-11-04"
 }

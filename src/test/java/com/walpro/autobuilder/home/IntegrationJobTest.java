@@ -235,4 +235,12 @@ class IntegrationJobTest {
         assertThat(IntegrationJob.extendProblem(projects, "base", new IntegrationJob.Input("lib", "  ", false))).contains("what to take");
         assertThat(IntegrationJob.extendProblem(projects, "base", new IntegrationJob.Input("lib", "use it", false))).isNull();
     }
+
+    @Test
+    void aPathInputIsNamedAfterItsProject_notItsOutputFolder() {
+        assertThat(new IntegrationJob.Input(null, "/x/code/cashbook/output", "i", false).label()).isEqualTo("cashbook");
+        assertThat(new IntegrationJob.Input(null, "/x/code/cashbook/output/", "i", false).label()).isEqualTo("cashbook");
+        assertThat(new IntegrationJob.Input(null, "/x/code/their-lib", "i", false).label()).isEqualTo("their-lib");
+        assertThat(new IntegrationJob.Input("lib", null, "i", false).label()).isEqualTo("lib");
+    }
 }

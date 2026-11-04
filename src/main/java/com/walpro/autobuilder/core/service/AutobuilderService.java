@@ -335,6 +335,9 @@ public class AutobuilderService implements CheckpointableState {
      */
     private volatile boolean awaitingGoal = false;
 
+    /** T4-EG: a Continue asked for at the start, done on the first tick (see performStart). */
+    private volatile boolean continuePending = false;
+
     /** T5-BF follow-up: guards {@link #emitSystemPausedOnce} — one behaviour event per pause
      *  episode. Reset alongside {@code systemPaused} on the first provably-unpaused tick. */
     private boolean pauseEventEmitted = false;
@@ -818,7 +821,11 @@ public class AutobuilderService implements CheckpointableState {
         // exactly as it was left (continueProject).
         boolean treeCleared = false;
         if (mode == StartMode.CONTINUE_LINEAGE) {
-            continueProject();
+            // Not here: at boot this runs inside this bean's own creation, so the state manifest
+            // cannot hand this service over and its own decisions would come back fresh (field,
+            // 2026-11-04: "autobuilderService: unresolvable -- currently in creation"). The first
+            // tick, under the cycle lock, restores with every holder in place.
+            continuePending = true;
         } else if (mode.discardsTheTree() && autobuilderConfig.isResetOnStart()) {
             log.warn("Autobuilder system reset triggered via config (AutobuilderService)");
             systemResetConfig.resetSystem();
@@ -951,6 +958,10 @@ public class AutobuilderService implements CheckpointableState {
         // T4-CQ: adopted with no goal is the same restraint for a different reason — there is
         // nothing to work towards, and the planner's fallback would invent goals that do not exist.
         if (startRefused || awaitingGoal) return;
+        if (continuePending) {
+            continuePending = false;
+            continueProject();
+        }
 
         // T1-FL: a breaker-caused pause is a suspension, not a terminal. The breaker's timed
         // open (T1-FD) already encodes when the next attempt is allowed; once its cooldown

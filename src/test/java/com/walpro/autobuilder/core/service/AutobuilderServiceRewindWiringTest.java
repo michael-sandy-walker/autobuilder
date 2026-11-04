@@ -285,6 +285,25 @@ class AutobuilderServiceRewindWiringTest {
         assertThat(service.getContext()).isEmpty();
     }
 
+    @Test
+    @DisplayName("T4-EG: a Continue asked for at the start waits for the first tick, when every holder can be handed over")
+    void continueIsDoneOnTheFirstTickNotDuringTheStart() {
+        standingAt("cycle-30");
+        when(rewinds.rewindTo(anyString(), any(), anyString(), anyString()))
+                .thenReturn(performed("cycle-30", cycle("cycle-29", null)));
+        ReflectionTestUtils.setField(service, "continuePending", true);
+
+        verify(rewinds, never()).rewindTo(anyString(), any(), anyString(), anyString());
+        try {
+            ReflectionTestUtils.invokeMethod(service, "runAutobuilderCycleLocked");
+        } catch (RuntimeException rest) {
+            // the cycle after the restore needs collaborators this test does not wire
+        }
+
+        verify(rewinds).rewindTo("cycle-30", CacheMode.FAITHFUL, "continue", "cycle-30");
+        assertThat((Boolean) ReflectionTestUtils.getField(service, "continuePending")).isFalse();
+    }
+
     private static CycleContextData cycle(String cycleId, String pausedReason) {
         return CycleContextData.builder()
                 .cycleName(cycleId)

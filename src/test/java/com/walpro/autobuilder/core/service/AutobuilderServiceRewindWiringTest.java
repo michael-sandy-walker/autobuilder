@@ -286,22 +286,21 @@ class AutobuilderServiceRewindWiringTest {
     }
 
     @Test
-    @DisplayName("T4-EG: a Continue asked for at the start waits for the first tick, when every holder can be handed over")
-    void continueIsDoneOnTheFirstTickNotDuringTheStart() {
-        standingAt("cycle-30");
-        when(rewinds.rewindTo(anyString(), any(), anyString(), anyString()))
-                .thenReturn(performed("cycle-30", cycle("cycle-29", null)));
-        ReflectionTestUtils.setField(service, "continuePending", true);
+    @DisplayName("T4-EG: Continue restores the service's own decisions from the point -- the manifest cannot during the service's creation")
+    void continueRestoresTheServicesOwnDecisions() {
+        var checkpoints = standingAt("cycle-30");
+        var point = checkpoints.standing().orElseThrow();
+        when(point.holders()).thenReturn(java.util.Map.of("runBrakes", java.util.Map.of(
+                "cyclesSincePreserve", 2, "consecutiveZeroWorkCycles", 3, "subgoalRetryCount", java.util.Map.of(),
+                "systemPaused", true, "pauseEventEmitted", true, "endReportWrittenThisEpisode", true)));
+        CycleContextData fulfilled = cycle("cycle-29", null).withCycleResultState(CycleResultState.GOAL_FULFILLED);
+        when(rewinds.rewindTo(anyString(), any(), anyString(), anyString())).thenReturn(performed("cycle-30", fulfilled));
 
-        verify(rewinds, never()).rewindTo(anyString(), any(), anyString(), anyString());
-        try {
-            ReflectionTestUtils.invokeMethod(service, "runAutobuilderCycleLocked");
-        } catch (RuntimeException rest) {
-            // the cycle after the restore needs collaborators this test does not wire
-        }
+        ReflectionTestUtils.invokeMethod(service, "continueProject");
 
-        verify(rewinds).rewindTo("cycle-30", CacheMode.FAITHFUL, "continue", "cycle-30");
-        assertThat((Boolean) ReflectionTestUtils.getField(service, "continuePending")).isFalse();
+        assertThat(service.isPaused()).as("halted, as it was -- the fulfilled terminal is not run again").isTrue();
+        assertThat((Boolean) ReflectionTestUtils.getField(service, "endReportWrittenThisEpisode")).isTrue();
+        assertThat((Integer) ReflectionTestUtils.getField(service, "consecutiveZeroWorkCycles")).isEqualTo(3);
     }
 
     private static CycleContextData cycle(String cycleId, String pausedReason) {

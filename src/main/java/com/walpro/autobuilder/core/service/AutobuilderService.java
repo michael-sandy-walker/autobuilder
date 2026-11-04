@@ -335,9 +335,6 @@ public class AutobuilderService implements CheckpointableState {
      */
     private volatile boolean awaitingGoal = false;
 
-    /** T4-EG: a Continue asked for at the start, done on the first tick (see performStart). */
-    private volatile boolean continuePending = false;
-
     /** T5-BF follow-up: guards {@link #emitSystemPausedOnce} — one behaviour event per pause
      *  episode. Reset alongside {@code systemPaused} on the first provably-unpaused tick. */
     private boolean pauseEventEmitted = false;
@@ -795,6 +792,8 @@ public class AutobuilderService implements CheckpointableState {
                     at, result.refusedBecause());
             return;
         }
+        List<String> failures = new java.util.ArrayList<>(result.failures());
+        restoreOwnDecisions(standing.get(), failures);
         CycleContextData restored = result.carriedContext();
         boolean stoppedByAPerson = restored != null && "user-pause".equals(restored.pausedReason());
         if (restored != null) context = stoppedByAPerson ? restored.withPausedReason(null) : restored;
@@ -806,7 +805,26 @@ public class AutobuilderService implements CheckpointableState {
         if (rootConvergenceTracker != null) rootConvergenceTracker.resyncAfterRewind();
         log.warn("T4-EG: continued from {} as it was left{}{}", at,
                 stoppedByAPerson ? " -- the stop lifted" : systemPaused ? " -- halted, as it was" : "",
-                result.failures().isEmpty() ? "" : "; " + result.failures());
+                failures.isEmpty() ? "" : "; " + failures);
+    }
+
+    /**
+     * T4-EG: this service's own decisions, from the point. At boot a Continue runs inside this bean's creation
+     * ({@code init} starts the first cycle), and the state manifest cannot hand over a bean that is still being created
+     * (field, 2026-11-04: "autobuilderService: unresolvable -- currently in creation"), so the service took its pause
+     * flags and streaks fresh and re-ran a fulfilled terminal. Restored here, and the rewind's reports about it are
+     * dropped once what was restored equals what the point recorded.
+     */
+    private void restoreOwnDecisions(com.walpro.autobuilder.core.checkpoint.CheckpointRecord point, List<String> failures) {
+        Object own = point.holders() == null ? null : point.holders().get(stateKey());
+        if (own == null) return;
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.databind.JsonNode recorded = mapper.valueToTree(own);
+        restoreState(recorded, mapper);
+        if (recorded.equals(mapper.valueToTree(captureState()))) {
+            failures.removeIf(f -> f.startsWith("autobuilderService: unresolvable") || f.endsWith("holder:" + stateKey())
+                    || f.endsWith("holder:autobuilderService"));
+        }
     }
 
     /** The start actions themselves, shared by the boot path and the release. */
@@ -821,11 +839,7 @@ public class AutobuilderService implements CheckpointableState {
         // exactly as it was left (continueProject).
         boolean treeCleared = false;
         if (mode == StartMode.CONTINUE_LINEAGE) {
-            // Not here: at boot this runs inside this bean's own creation, so the state manifest
-            // cannot hand this service over and its own decisions would come back fresh (field,
-            // 2026-11-04: "autobuilderService: unresolvable -- currently in creation"). The first
-            // tick, under the cycle lock, restores with every holder in place.
-            continuePending = true;
+            continueProject();
         } else if (mode.discardsTheTree() && autobuilderConfig.isResetOnStart()) {
             log.warn("Autobuilder system reset triggered via config (AutobuilderService)");
             systemResetConfig.resetSystem();
@@ -958,10 +972,6 @@ public class AutobuilderService implements CheckpointableState {
         // T4-CQ: adopted with no goal is the same restraint for a different reason — there is
         // nothing to work towards, and the planner's fallback would invent goals that do not exist.
         if (startRefused || awaitingGoal) return;
-        if (continuePending) {
-            continuePending = false;
-            continueProject();
-        }
 
         // T1-FL: a breaker-caused pause is a suspension, not a terminal. The breaker's timed
         // open (T1-FD) already encodes when the next attempt is allowed; once its cooldown

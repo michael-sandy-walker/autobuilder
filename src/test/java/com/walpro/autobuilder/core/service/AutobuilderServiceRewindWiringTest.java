@@ -292,15 +292,20 @@ class AutobuilderServiceRewindWiringTest {
         var point = checkpoints.standing().orElseThrow();
         when(point.holders()).thenReturn(java.util.Map.of("runBrakes", java.util.Map.of(
                 "cyclesSincePreserve", 2, "consecutiveZeroWorkCycles", 3, "subgoalRetryCount", java.util.Map.of(),
+                "lastEvaluatedScore", "NaN", // as the point writes it
                 "systemPaused", true, "pauseEventEmitted", true, "endReportWrittenThisEpisode", true)));
         CycleContextData fulfilled = cycle("cycle-29", null).withCycleResultState(CycleResultState.GOAL_FULFILLED);
-        when(rewinds.rewindTo(anyString(), any(), anyString(), anyString())).thenReturn(performed("cycle-30", fulfilled));
+        when(rewinds.rewindTo(anyString(), any(), anyString(), anyString())).thenReturn(new RewindService.Result(true,
+                "cycle-30", null, CacheMode.FAITHFUL, 12, 0, 0, 0, 0, true,
+                List.of("autobuilderService: unresolvable -- currently in creation",
+                        "state diverged after restore: holder:runBrakes"), fulfilled, "checkpoint"));
 
         ReflectionTestUtils.invokeMethod(service, "continueProject");
 
         assertThat(service.isPaused()).as("halted, as it was -- the fulfilled terminal is not run again").isTrue();
         assertThat((Boolean) ReflectionTestUtils.getField(service, "endReportWrittenThisEpisode")).isTrue();
         assertThat((Integer) ReflectionTestUtils.getField(service, "consecutiveZeroWorkCycles")).isEqualTo(3);
+        assertThat(Double.isNaN((Double) ReflectionTestUtils.getField(service, "lastEvaluatedScore"))).isTrue();
     }
 
     private static CycleContextData cycle(String cycleId, String pausedReason) {

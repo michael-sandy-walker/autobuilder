@@ -837,7 +837,8 @@ public class AutobuilderService implements CheckpointableState {
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         com.fasterxml.jackson.databind.JsonNode recorded = mapper.valueToTree(own);
         restoreState(recorded, mapper);
-        if (recorded.equals(mapper.valueToTree(captureState()))) {
+        // As values, not as JSON: the point writes a NaN score as the string "NaN", a fresh tree as a number.
+        if (mapper.convertValue(recorded, Snapshot.class).equals(captureState())) {
             failures.removeIf(f -> f.startsWith("autobuilderService: unresolvable") || f.endsWith("holder:" + stateKey())
                     || f.endsWith("holder:autobuilderService"));
         }

@@ -17267,6 +17267,7 @@
    "clauses_closed_vs_control": "0",
    "drift_tail_cycles": "n/a",
    "merges": "0",
+   "note": "T4-EG slice 1 field check, part 5 (6df8158a): Continue of a fulfilled project from a complete point -- halted as it was: 0 cycles, no fulfilled terminal, no preserve, no end report. The log still listed the service's holder as diverged (a NaN score compared as JSON); fixed after.",
    "peaked_at_cycle": "n/a",
    "preserved_source": "no-eligible-snapshot-after-stale-loop-copy",
    "recorded": "2026-11-04",
@@ -17283,8 +17284,30 @@
    "target": "cashbook",
    "terminal": "deadline",
    "total_cycles": "n/a",
-   "toycase": "cashbook v1",
-   "note": "T4-EG slice 1 field check, part 5 (6df8158a): Continue of a fulfilled project from a complete point -- halted as it was: 0 cycles, no fulfilled terminal, no preserve, no end report. The log still listed the service's holder as diverged (a NaN score compared as JSON); fixed after."
+   "toycase": "cashbook v1"
+  },
+  "2026-11-04_15-46-47": {
+   "build": "3da55e13",
+   "drift_tail_cycles": "n/a",
+   "merges": "0",
+   "peaked_at_cycle": "n/a",
+   "preserved_source": "none",
+   "recorded": "2026-11-04",
+   "run_duration_min": "n/a",
+   "score_delta": "n/a (SMOKE: 2/11 vs none)",
+   "smoke": "SMOKE: 2/11",
+   "smoke_pass": 2,
+   "smoke_preserved": "none",
+   "smoke_strict": "2/11 discounted=none",
+   "smoke_total": 11,
+   "start_cleared_tree": "no",
+   "start_mode": "ADOPT_PROJECT",
+   "start_tree": "FOREIGN",
+   "target": "edit-hunks-withheld",
+   "terminal": "silent-918s",
+   "total_cycles": "n/a",
+   "toycase": "edit-hunks-withheld v2",
+   "note": "NOT A MEASUREMENT: post_adopted_goal.sh read the previous run's log before rotation and posted the goal 14 s before the app existed; the run waited for a goal until called silent. Script fixed after."
   }
  },
  "updated": "2026-11-04"

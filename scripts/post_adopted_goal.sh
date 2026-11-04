@@ -18,8 +18,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOG="$ROOT/data/$TGT/logs/autobuilder.log"
 [ -f "$GOAL" ] || { echo "no goal file: $GOAL" >&2; exit 1; }
 end=$((SECONDS + 900))
+# Only a log written after this script started: launched beside a run, the unsuffixed log is still the PREVIOUS
+# run's until the new JVM rotates it, and it holds both lines below (2026-11-04: the goal was posted 14 s before the
+# app existed, and the run waited for a goal until it was called silent).
+since=$(mktemp)
+trap 'rm -f "$since"' EXIT
 # Both lines: the adopt line is logged before the web server is up, and posting then races Tomcat.
-until [ -f "$LOG" ] && grep -q 'T4-CQ: adopted' "$LOG" && grep -q 'Started AutobuilderApplication' "$LOG"; do
+until [ -f "$LOG" ] && [ "$LOG" -nt "$since" ] && grep -q 'T4-CQ: adopted' "$LOG" && grep -q 'Started AutobuilderApplication' "$LOG"; do
     [ $SECONDS -gt $end ] && { echo "the app never adopted $TGT within 15 minutes" >&2; exit 1; }
     sleep 5
 done

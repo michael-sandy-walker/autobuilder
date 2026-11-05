@@ -11,7 +11,13 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-05/06 (Opus 5.5, session 25) -- T4-EI FILED AND SHAPED WITH THE USER (CAPABILITY IMPORT); NEXT: T4-EH -- START HERE
+## 2026-11-06 (Opus 5.5, session 26) -- T4-EH BUILT; THE FIELD RUN'S REAL BLOCKER WAS CONSOLIDATION UNDOING THE MODEL'S CORRECT MOVE -- START HERE
+
+- **Nothing is live. Code UNCOMMITTED** (awaiting the user's word): scan-reach fact (`WiringFactsAnalyzer.scanReach`, vocabulary rows in `AnnotationVocabularies`) into the evolution prompt and `BootGate`'s 404 refusal; `PackageFragmentationCheck` deletion-aware, used by `PackageConsolidationService` and the probe gate. Suite 4316/0/16 (before the last test was added); BootGateTest 60/0 after it. Ticket notes committed.
+- **Finding:** in the 2026-11-03 firestarter run the model proposed the right fix 16 of 20 times; T4-BL consolidation rewrote each explicit move back to `domain/`, and the answer's own `#Delete` then removed the entry point. Detail and the remaining open link (a compiling wiring fix earns no evaluation credit) on T4-EH.
+- **Next:** commit the code (user's word), then a short field run of firestarter on the fixed build ([[feedback-short-field-run-after-context-change]]); close T4-EH on it.
+
+## 2026-11-05/06 (Opus 5.5, session 25) -- T4-EI FILED AND SHAPED WITH THE USER (CAPABILITY IMPORT); NEXT: T4-EH
 
 - **Nothing is live; no code changed.** Notes only, all committed (`bdf648f6` .. `fcd0f557`).
 - **T4-EI filed** from the user's brainstorm with another assistant ("Capability Transfer"), then reshaped by the user over four turns: a **capability import** option wrapped around today's import, which stays unchanged -- stage 1 discovers and lists the source's capabilities, the operator chooses and describes each (code / adapted / idea), stage 2 is today's import on the narrowed input with conflicts as now. Capability size is not fixed (goal nodes, dependencies, undescribed principles); cutting is by LLM interaction; keeping the source as a reference depends on complexity. Two points marked as my reading, to confirm at the design pass. Needs a design pass with the user (page shape, a toy case with three separable capabilities) before code.

@@ -145,7 +145,7 @@ public class ProjectInputService {
                     .filter(e -> InputEntry.KIND_PROJECT.equals(e.kind()) && landing.treeDigest().equals(e.sourceDigest()))
                     .findFirst().ifPresent(e -> {
                         throw new IllegalArgumentException(r.label() + " was already brought in, unchanged, at " + e.addedAt()
-                                + "; take that import back out first to bring it in again");
+                                + (goals.purpose().ledger().pending(e.id()) ? "; cancel that import first to bring it in again" : ""));
                     });
         }
 
@@ -452,15 +452,22 @@ public class ProjectInputService {
     }
 
     /**
-     * T4-EC slice 8: an input taken back out, the work done since kept. Its files leave the tree, its module the build;
-     * its obligations, corrections and open conflicts stop counting, its goals are subsumed; the ledger records the
-     * withdrawal, so nothing of the history is lost. What referred to its files is the loop's work now: goal text names them.
+     * A pending import cancelled: it leaves nothing. Its files leave the tree, its module the build; its goals are
+     * subsumed; the ledger records the cancellation (a {@code withdrawal} event), so the history keeps it. Nothing was
+     * built on it -- the loop holds while an import is pending.
+     *
+     * <p>T4-EG: only a PENDING import can be taken out. A kept one is the project, and what was built on it since cannot
+     * be cut out of it (user, 2026-11-04: taking out was meant for the pending stage only); to go back to before an
+     * import, the project is rewound.
      */
-    public synchronized InputEvent withdraw(String inputId, String by) throws IOException {
+    public synchronized InputEvent cancel(String inputId, String by) throws IOException {
         InputEntry input = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(inputId)).findFirst().orElse(null);
         if (input == null) throw new IllegalArgumentException("no such input: " + inputId);
-        if (input.sequence() == 1) throw new IllegalArgumentException("the seed is what the project is; it cannot be withdrawn");
-        if (goals.purpose().ledger().withdrawn(inputId)) throw new IllegalArgumentException("already withdrawn: " + inputId);
+        if (goals.purpose().ledger().withdrawn(inputId)) throw new IllegalArgumentException("already cancelled: " + inputId);
+        if (!goals.purpose().ledger().pending(inputId)) {
+            throw new IllegalArgumentException("a kept input is part of the project and cannot be taken out;"
+                    + " to go back to before it, rewind the project");
+        }
         String dir = "meta/inputs/" + inputId;
         List<String> placed = files.exists(dir + "/placed.txt")
                 ? files.readFile(dir + "/placed.txt").lines().filter(l -> !l.isBlank()).toList() : List.of();
@@ -481,10 +488,7 @@ public class ProjectInputService {
         files.writeFile(dir + ProtectedPaths.INPUT_FILE, "\n");
         manifest.removeFiles(placed);
         InputEvent event = goals.purpose().recordWithdrawal(inputId, by, goals.withdrawGoals(inputId));
-        if (!placed.isEmpty()) {
-            goals.addDecidedWork("The project builds and works without these files, which were withdrawn: " + String.join(", ", placed), null);
-        }
-        log.warn("T4-EC: input {} withdrawn by {} -- {} file(s) out", inputId, by, placed.size());
+        log.warn("T4-EG: pending import {} cancelled by {} -- {} file(s) out", inputId, by, placed.size());
         return event;
     }
 

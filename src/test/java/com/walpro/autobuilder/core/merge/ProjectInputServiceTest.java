@@ -156,41 +156,51 @@ class ProjectInputServiceTest {
         assertThat(carried.getMetadata().get("criteriaPassStatus").toString()).contains("2=false").contains("1=true");
     }
 
+    /** T4-EG: a cancelled import leaves nothing; the ledger keeps the record of it. */
     @Test
-    void aWithdrawnInputLeavesTheTreeAndTheRequirements_theLedgerKeepsIt_andLaterWorkStays() throws IOException {
+    void aCancelledImportLeavesNothing_theLedgerKeepsIt() throws IOException {
         seedLine();
         differs(TURNS, true);
         ProjectInputService.Report r = bring();
-        write(base.resolve("output/src/main/java/org/warp/Later.java"), "package org.warp;\nclass Later { }\n");
 
-        service.withdraw(r.inputId(), "operator");
+        service.cancel(r.inputId(), "operator");
 
         assertThat(base.resolve("output/src/main/java/org/knot/Knot.java")).doesNotExist();
-        assertThat(base.resolve("output/src/main/java/org/warp/Later.java")).exists();
         assertThat(goals.purpose().ledger().entries()).hasSize(2);
-        assertThat(goals.requirements().obligationsOrClauses()).as("what it replaced counts again").contains("A coil has at most 3 turns.")
+        assertThat(goals.requirements().obligationsOrClauses()).contains("A coil has at most 3 turns.")
                 .doesNotContain("the turn limit: at most 9 turns", "A knot holds.");
         assertThat(goals.specification()).isEqualTo(SEED);
         assertThat(goals.getGoalById(r.goalId()).getStatus()).isEqualTo(GoalStatus.SUBSUMED);
-        assertThat(goals.getAllGoals()).anyMatch(g -> g.getDescription().startsWith("The project builds and works without")
-                && g.getStatus() == GoalStatus.ACTIVE);
+        assertThat(goals.getAllGoals()).as("nothing was built on it, so there is nothing to repair")
+                .noneMatch(g -> g.getDescription().startsWith("The project builds and works without"));
         assertThat(new ProtectedPaths(files).isProtected("src/test/java/org/knot/KnotTest.java")).isFalse();
         assertThat(manifest.changes()).hasValueSatisfying(c -> assertThat(c.removed()).isEmpty());
     }
 
+    /** T4-EG: a kept import is the project -- it cannot be taken out (user: taking out was for the pending stage only). */
     @Test
-    void aWithdrawnInputsOpenConflictsWaitForNobody_andTheSeedCannotBeWithdrawn() throws IOException {
+    void aKeptImportCannotBeTakenOut() throws IOException {
+        ProjectInputService.Report r = bring();
+        service.keep(r.inputId(), "operator");
+
+        assertThatThrownBy(() -> service.cancel(r.inputId(), "operator")).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("rewind");
+        assertThat(base.resolve("output/src/main/java/org/knot/Knot.java")).exists();
+    }
+
+    @Test
+    void aCancelledImportsOpenConflictsWaitForNobody_andTheSeedCannotBeCancelled() throws IOException {
         seedLine();
         differs(TURNS, false);
         ProjectInputService.Report r = bring();
         assertThat(goals.purpose().openConflicts()).hasSize(1);
 
-        service.withdraw(r.inputId(), "operator");
+        service.cancel(r.inputId(), "operator");
 
         assertThat(goals.purpose().openConflicts()).isEmpty();
         String seed = goals.purpose().ledger().seed().id();
-        assertThatThrownBy(() -> service.withdraw(seed, "operator")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.withdraw(r.inputId(), "operator")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.cancel(seed, "operator")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.cancel(r.inputId(), "operator")).isInstanceOf(IllegalArgumentException.class);
     }
 
     /** T4-EC slice 7: a half-made change is not landed over. */
@@ -472,7 +482,7 @@ class ProjectInputServiceTest {
     void aCancelledImportWaitsForNothing() throws IOException {
         ProjectInputService.Report r = service.bring(new ProjectInputService.Request("knots", "run-k", brought, INTENT, "operator", false));
 
-        service.withdraw(r.inputId(), "operator");
+        service.cancel(r.inputId(), "operator");
 
         assertThat(service.pending()).isEmpty();
     }
@@ -518,17 +528,17 @@ class ProjectInputServiceTest {
 
     /** T4-ED: field -- one project brought in three times, 59 open conflicts, most of them repeats. */
     @Test
-    void theSameTreeIsNotBroughtInTwice_untilTheFirstIsTakenBackOut() throws IOException {
+    void theSameTreeIsNotBroughtInTwice_untilTheFirstIsCancelled() throws IOException {
         ProjectInputService.Report first = bring();
 
         assertThatThrownBy(this::bring).isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("already brought in").hasMessageContaining("take that import back out");
+                .hasMessageContaining("already brought in").hasMessageContaining("cancel that import first");
 
-        service.withdraw(first.inputId(), "operator");
+        service.cancel(first.inputId(), "operator");
         assertThat(bring().inputId()).isNotEqualTo(first.inputId());
     }
 
-    /** T4-ED: every import still in, kept or pending, each one takeable back out -- the home screen's list. */
+    /** T4-ED: every import still in, kept or pending -- the home screen's list; a pending one can be cancelled. */
     @Test
     void theImportsListShowsWhatIsStillIn_keptOrPending() throws IOException {
         ProjectInputService.Report kept = bring();
@@ -543,9 +553,9 @@ class ProjectInputServiceTest {
                         org.assertj.core.groups.Tuple.tuple(waiting.inputId(), true, "knots-2"));
         assertThat(service.imports().get(0).newFiles()).isEqualTo(kept.placed().size());
 
-        service.withdraw(kept.inputId(), "operator");
+        service.cancel(waiting.inputId(), "operator");
 
-        assertThat(service.imports()).extracting(ProjectInputService.Import::inputId).containsExactly(waiting.inputId());
+        assertThat(service.imports()).extracting(ProjectInputService.Import::inputId).containsExactly(kept.inputId());
     }
 
     /**

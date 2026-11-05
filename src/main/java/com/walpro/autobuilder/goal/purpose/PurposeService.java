@@ -244,9 +244,9 @@ public class PurposeService implements CheckpointableState {
     public java.util.Set<String> linesOut() {
         java.util.Set<String> out = new java.util.HashSet<>();
         for (InputEvent e : ledger.events()) {
-            if (InputEvent.WITHDRAWAL.equals(e.kind())) {
-                e.replaces().forEach(l -> out.add(l.strip()));
-            } else if (ledger.isKept(e.inputId())) {
+            // T4-EG: only a pending import can be cancelled, and a pending import never counted -- a cancellation
+            // takes nothing out of the project's own lines (they may well read the same as the import's).
+            if (ledger.isKept(e.inputId())) {
                 if (e.keepsLineOut()) out.add(e.heldLine().strip());
                 if (e.replacedReceiving()) e.replaces().forEach(l -> out.add(l.strip()));
             }
@@ -294,7 +294,7 @@ public class PurposeService implements CheckpointableState {
         return decide(pending, InputEvent.KEPT, by, List.of());
     }
 
-    /** An input taken back out: it stays in the record and asks nothing; {@code carried} are its goals' criteria. */
+    /** A pending import cancelled: it stays in the record and asks nothing; {@code carried} are its goals' criteria. */
     public synchronized InputEvent recordWithdrawal(String inputId, String by, List<String> carried) {
         return store(new InputEvent("event-" + UUID.randomUUID(), InputEvent.WITHDRAWAL, inputId, "withdrawn", null, null,
                 null, null, carried, InputEvent.DECIDED, null, by, Instant.now()));

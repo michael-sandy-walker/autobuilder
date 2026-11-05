@@ -340,7 +340,7 @@ public class HomeController {
         return relayed(run.get("/autobuilder/live/events?before=" + before + "&limit=50"));
     }
 
-    /** Every import of the running project not taken back out, kept or pending. */
+    /** Every import of the running project not cancelled, kept or pending. */
     @GetMapping(value = "/home/run/imports", produces = "application/json")
     public ResponseEntity<String> imports() {
         return relayed(run.get("/autobuilder/inputs/imports"));
@@ -353,11 +353,11 @@ public class HomeController {
         return relayed(run.postJson("/autobuilder/inputs/" + id + "/keep?by=operator%20(home%20screen)", "", Duration.ofMinutes(2)));
     }
 
-    /** One import taken back out -- pending or kept -- the record kept, the work done since staying. */
+    /** One pending import cancelled; it leaves nothing. A kept import is part of the project (T4-EG). */
     @PostMapping(value = "/home/run/imports/{id}/cancel", produces = "application/json")
     public ResponseEntity<String> cancelImport(@PathVariable String id) {
         if (!id.matches("[A-Za-z0-9._-]+")) return ResponseEntity.badRequest().body("{\"ok\":false,\"message\":\"no such import\"}");
-        return relayed(run.postJson("/autobuilder/inputs/" + id + "/withdraw?by=operator%20(home%20screen)", "", Duration.ofMinutes(5)));
+        return relayed(run.postJson("/autobuilder/inputs/" + id + "/cancel?by=operator%20(home%20screen)", "", Duration.ofMinutes(5)));
     }
 
     /**

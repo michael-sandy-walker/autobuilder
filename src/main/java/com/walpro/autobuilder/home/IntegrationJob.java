@@ -273,8 +273,8 @@ class IntegrationJob {
     }
 
     /**
-     * Takes everything this job brought in back out (the run's withdraw: files, goals, requirements, conflicts), the
-     * record kept. A project the job started held stays held, to be closed.
+     * Cancels everything this job brought in, still pending (the run's cancel: files, goals, conflicts), the record
+     * kept. A project the job started held stays held, to be closed.
      *
      * @throws IllegalStateException while the job is under way or already done
      */
@@ -283,11 +283,11 @@ class IntegrationJob {
             throw new IllegalStateException("nothing to cancel: the job is " + phase.name().toLowerCase());
         }
         for (String id : landedIds()) {
-            expect(run.postJson("/autobuilder/inputs/" + id + "/withdraw?by=operator%20(home%20screen)", "", Duration.ofMinutes(5)),
-                    "the import was not taken back out");
+            expect(run.postJson("/autobuilder/inputs/" + id + "/cancel?by=operator%20(home%20screen)", "", Duration.ofMinutes(5)),
+                    "the import was not cancelled");
         }
         phase = Phase.CANCELLED;
-        log.info("T4-ED: what was brought into {} was taken back out", name);
+        log.info("T4-ED: what was brought into {} was cancelled", name);
     }
 
     private List<String> landedIds() {

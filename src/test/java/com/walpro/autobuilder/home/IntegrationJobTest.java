@@ -167,8 +167,8 @@ class IntegrationJobTest {
 
         assertThat(job.phase()).isEqualTo(IntegrationJob.Phase.CANCELLED);
         assertThat(job.busy()).isFalse();
-        assertThat(run.calls).contains("POST /autobuilder/inputs/in-one/withdraw?by=operator%20(home%20screen)",
-                "POST /autobuilder/inputs/in-two/withdraw?by=operator%20(home%20screen)");
+        assertThat(run.calls).contains("POST /autobuilder/inputs/in-one/cancel?by=operator%20(home%20screen)",
+                "POST /autobuilder/inputs/in-two/cancel?by=operator%20(home%20screen)");
         assertThat(run.calls).noneMatch(c -> c.contains("/start") || c.contains("/keep"));
         assertThatThrownBy(job::release).isInstanceOf(IllegalStateException.class);
     }

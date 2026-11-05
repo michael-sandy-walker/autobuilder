@@ -344,7 +344,7 @@ function actionsOf(t) {
         + 'run is not read. Anything not kept elsewhere is gone. (Duplicate keeps it and starts a copy instead.)' }) : null;
   const duplicate = t.hasSeed ? { label: 'Duplicate', hint: 'a new project from its specification, without code', run: () => duplicateOf(t) } : null;
   // An import waiting for confirmation comes first: the project is held to review it, nothing runs.
-  const manage = importsOf(t) ? start('Manage imports...', 'ASK', { hint: 'open it held, to keep or take back out what was brought in' }) : null;
+  const manage = importsOf(t) ? start('Manage imports...', 'ASK', { hint: 'open it held, to see what was brought in and keep or cancel what waits' }) : null;
   const cont = start('Continue', 'CONTINUE_LINEAGE', { hint: 'its goal is reached; the run opens and ends' });
   const main = (t.pendingImports || []).length ? start('Review import', 'ASK')
     : { new: start('Start', 'NEW_PROJECT'), progress: start('Continue', 'CONTINUE_LINEAGE'),
@@ -510,7 +510,7 @@ function renderNow() {
 }
 let lastNowHtml = '';
 
-// What was brought into this project and is still in: pending ones wait to be kept, any can be taken back out.
+// What was brought into this project: pending ones wait to be kept or cancelled; a kept one is part of the project.
 // Shown when the project has imports, or when its record on disk said it had some the run does not: then the empty
 // list answers why "Manage imports" shows nothing. A project that never took an import shows nothing at all.
 function showImports() {
@@ -565,8 +565,9 @@ function importsHtml() {
     + '<div class="why">Nothing brought in is still in this project.</div></div>';
   return '<div class="sub"><div class="title"><b>' + (pending.length ? 'Imports -- ' + pending.length + ' waiting for your confirmation'
       : 'Imports in this project') + '</b></div>'
-    + '<div class="why">' + (pending.length ? 'What was brought in is in the project, but not yet kept. Keep it, or cancel it to take it back out. '
-      : '') + 'Taking an import back out removes its files, goals and requirements and drops its open conflicts; the record of it stays.</div>'
+    + '<div class="why">' + (pending.length ? 'What was brought in waits: nothing runs and none of it counts until you keep it. '
+      + 'Cancelling it removes its files, goals and open conflicts; the record of it stays. ' : '')
+      + 'A kept import is part of the project; to go back to before it, rewind the project.</div>'
     + imports.map(i => {
       const name = i.label || (i.intent || '').slice(0, 80);
       return '<div class="pending"' + (i.pending ? '' : ' style="border-color:var(--rule)"') + '><b' + (i.pending ? '' : ' style="color:var(--ink)"') + '>'
@@ -574,9 +575,9 @@ function importsHtml() {
         + '</span> <span class="note">' + esc(when(i.at)) + '</span>'
         + '<div class="side">' + esc(i.intent) + '</div>'
         + '<div class="side">' + countsText(i.newFiles, i.filesBothHave, i.rulesThatDiffer, i.claims) + '</div>'
-        + '<div class="row">' + (i.pending ? '<button data-keep="' + esc(i.inputId) + '" class="primary">Keep it</button>' : '')
-        + '<button data-cancel="' + esc(i.inputId) + '" data-label="' + esc(name) + '" class="destructive">'
-        + (i.pending ? 'Cancel the import' : 'Take it back out') + '</button></div></div>';
+        + (i.pending ? '<div class="row"><button data-keep="' + esc(i.inputId) + '" class="primary">Keep it</button>'
+          + '<button data-cancel="' + esc(i.inputId) + '" data-label="' + esc(name) + '" class="destructive">Cancel the import</button></div>' : '')
+        + '</div>';
     }).join('') + '</div>';
 }
 function countsText(newFiles, both, rules, claims) {
@@ -592,10 +593,10 @@ async function keepImport(id) {
   refresh(); loadProjects();
 }
 async function cancelImport(id, label) {
-  if (!confirm('Take the import of "' + label + '" back out?\n\nIts files leave the project, its goals and requirements stop '
-      + 'counting, and its open conflicts are dropped. The record of it stays.')) return;
+  if (!confirm('Cancel the import of "' + label + '"?\n\nIts files leave the project, its goals are dropped, '
+      + 'and its open conflicts with them. The record of it stays.')) return;
   const r = await post('/home/run/imports/' + encodeURIComponent(id) + '/cancel');
-  if (r.status !== 200) toast(false, 'Not cancelled: ' + message(r)); else toast(true, 'The import of ' + label + ' was taken back out.');
+  if (r.status !== 200) toast(false, 'Not cancelled: ' + message(r)); else toast(true, 'The import of ' + label + ' was cancelled.');
   refresh(); loadProjects();
 }
 async function continueHeld() {
@@ -643,7 +644,7 @@ function wireGoalBox() {
 
 // Projects being brought in: each input's outcome, the conflicts, and letting the loop work.
 const PHASE = { STARTING: 'starting', SETTING_GOAL: 'setting the goal', BRINGING_IN: 'bringing in',
-  DECIDING: 'waiting for you', RELEASED: 'kept', CANCELLED: 'cancelled -- taken back out', FAILED: 'stopped' };
+  DECIDING: 'waiting for you', RELEASED: 'kept', CANCELLED: 'cancelled', FAILED: 'stopped' };
 // What each conflict's own resolution says so far, and the options asked for: kept here, outside the rebuilt HTML.
 const drafts = {};
 const draftOf = id => drafts[id] || (drafts[id] = { open: false, text: '', options: null, asking: false });
@@ -755,7 +756,7 @@ function releaseHtml() {
   return '<div class="row"><button id="release" class="primary"' + (conflicts.length ? ' disabled' : '') + '>' + esc(label) + '</button>'
     + '<button id="cancel-job" class="destructive">Cancel the import</button>'
     + '<span class="note">' + (conflicts.length ? 'Decide every conflict first. ' : '')
-    + 'Until you keep it, you can take it all back out.</span></div>';
+    + 'Until you keep it, you can cancel it all.</span></div>';
 }
 
 function wireJobBox() {
@@ -772,7 +773,7 @@ function wireJobBox() {
     if (!confirm('Cancel the import into "' + job.name + '"?\n\nEverything it brought in leaves the project again: files, goals, '
         + 'requirements and open conflicts. The record of it stays.')) return;
     const r = await post('/home/integrate/cancel');
-    if (r.status !== 200) toast(false, 'Not cancelled: ' + message(r)); else toast(true, 'Taken back out.');
+    if (r.status !== 200) toast(false, 'Not cancelled: ' + message(r)); else toast(true, 'Cancelled.');
     refresh(); loadProjects();
   };
 }

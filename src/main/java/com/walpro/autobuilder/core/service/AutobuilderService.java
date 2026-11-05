@@ -2117,19 +2117,19 @@ public class AutobuilderService implements CheckpointableState {
         }
     }
 
-    /** T4-EC slice 8: an input withdrawn between cycles, under the lock a cycle holds. */
-    public com.walpro.autobuilder.goal.purpose.InputEvent withdrawInput(
+    /** T4-EG: a pending import cancelled between cycles, under the lock a cycle holds. */
+    public com.walpro.autobuilder.goal.purpose.InputEvent cancelInput(
             com.walpro.autobuilder.core.merge.ProjectInputService inputs, String id, String by) throws IOException {
         lock.lock();
         try {
-            var event = inputs.withdraw(id, by);
+            var event = inputs.cancel(id, by);
             if (rootConvergenceTracker != null) rootConvergenceTracker.inputArrived();
             if (context != null) {
                 context = context.withPausedReason(null).withGoalExhaustedReason(null)
                         .withCycleResultState(CycleResultState.CONTINUE);
             }
             systemPaused = false;
-            pointOutsideACycle("an input was taken back out");
+            pointOutsideACycle("an import was cancelled");
             return event;
         } finally {
             lock.unlock();

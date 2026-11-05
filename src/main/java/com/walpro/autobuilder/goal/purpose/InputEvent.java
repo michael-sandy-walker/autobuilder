@@ -6,7 +6,7 @@ import java.util.List;
 /**
  * T4-EC slice 5: what was decided about an input, in the ledger beside the inputs. A CORRECTION is a difference the
  * operator's intent settled for the input. A CONFLICT is one nothing settled, or a claim the input carried that
- * cannot be true of the project receiving it: raised, held, and decided by someone. A WITHDRAWAL takes an input back out:
+ * cannot be true of the project receiving it: raised, held, and decided by someone. A WITHDRAWAL cancels a pending import (T4-EG: only a pending one -- a kept import is the project):
  * undo is an event, so the ledger keeps the history; its {@code replaces} are the criteria its goals carried.
  *
  * @param subject   what differs

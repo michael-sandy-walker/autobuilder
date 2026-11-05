@@ -395,7 +395,7 @@ public class AutobuilderController {
         return ResponseEntity.ok(projectInputService.pending());
     }
 
-    /** T4-ED: a pending import kept (cancelling one is {@code POST /inputs/{id}/withdraw}). */
+    /** T4-ED: a pending import kept (cancelling one is {@code POST /inputs/{id}/cancel}). */
     @PostMapping("/inputs/{id}/keep")
     public ResponseEntity<?> keepImport(@PathVariable String id, @RequestParam(defaultValue = "operator") String by) {
         if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
@@ -424,12 +424,12 @@ public class AutobuilderController {
         }
     }
 
-    /** T4-EC slice 8: an input taken back out. The ledger keeps it, and the work done since stays. */
-    @PostMapping("/inputs/{id}/withdraw")
-    public ResponseEntity<?> withdrawInput(@PathVariable String id, @RequestParam(defaultValue = "operator") String by) {
+    /** T4-EG: a pending import cancelled; it leaves nothing, and the ledger keeps the record. A kept one is refused. */
+    @PostMapping("/inputs/{id}/cancel")
+    public ResponseEntity<?> cancelInput(@PathVariable String id, @RequestParam(defaultValue = "operator") String by) {
         if (projectInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
         try {
-            return ResponseEntity.ok(autobuilderService.withdrawInput(projectInputService, id, by));
+            return ResponseEntity.ok(autobuilderService.cancelInput(projectInputService, id, by));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (java.io.IOException e) {

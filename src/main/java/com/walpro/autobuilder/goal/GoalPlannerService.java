@@ -342,7 +342,7 @@ public class GoalPlannerService {
     }
 
     /**
-     * T4-EC slice 8: an input's goals leave with it: subsumed, so closure's ledger accounts for them.
+     * A cancelled import's goals leave with it: subsumed, so closure's ledger accounts for them.
      *
      * @return the criteria they carried, which stop counting
      */
@@ -353,7 +353,7 @@ public class GoalPlannerService {
             carried.addAll(acceptanceCriteriaOf(g));
             if (g.getStatus() == GoalStatus.ACTIVE || g.getStatus() == GoalStatus.COMPLETED) {
                 g.setStatus(GoalStatus.SUBSUMED);
-                g.setResolution("its input was withdrawn");
+                g.setResolution("its import was cancelled");
                 goalGraphService.save(g);
             }
         }

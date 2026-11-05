@@ -152,7 +152,7 @@ rest.
   new work. What it brings is compared with what is there, and a difference no intent settles is a **conflict**,
   which waits for your decision in Now. An import is **not final until you keep it**: it lands, you see what came in
   (new files, files both projects have, rules that differ), decide its conflicts, and then **keep** it -- or
-  **cancel** it, which takes all of it back out again (files, goals, requirements, open conflicts; the record of it
+  **cancel** it, which removes all of it again (files, goals, requirements, open conflicts; the record of it
   stays). The same project, unchanged, cannot be brought in a second time while an earlier import of it is still
   in. A project at rest is held throughout, so nothing runs on it before you keep the import; the project whose
   loop is running takes the input between two cycles. How an input lands is described in the technical
@@ -165,7 +165,9 @@ rest.
 Each row also says how the project's last run ended, and when. A project with an import that is not yet kept shows
 **import waiting**, and its button is **Review import**: it is opened held, so you can keep or cancel the import. A
 project with imports shows how many ("2 imports"), and its "..." menu offers **Manage imports...**, which opens it
-held -- nothing runs -- to take an import back out. The filter above the list narrows it to one state.
+held -- nothing runs -- to see what was brought in and keep or cancel what waits. A kept import is part of the
+project and cannot be taken out again; to go back to before it, rewind the project. The filter above the list
+narrows it to one state.
 
 **+ New project** offers three ways in, each under a new name (it becomes the directory; a name already taken is
 refused, nothing is overwritten):
@@ -212,8 +214,8 @@ brings older ones from the run's log, back to the run's start. And:
 - When every conflict is decided: **Keep the imports and start <project>** (a new project), **Keep the import and
   continue <project>** (one that was at rest), or **Keep the import** (one whose loop was running) -- or **Cancel
   the import** at any point before. Whenever the project's run is up, Now lists its **imports** -- kept, or still
-  waiting from an earlier session -- with what each brought; a waiting one has **Keep it** and **Cancel the import**,
-  a kept one **Take it back out**. Once nothing waits, **Continue <project>** starts a held project.
+  waiting from an earlier session -- with what each brought; a waiting one has **Keep it** and **Cancel the import**.
+  Once nothing waits, **Continue <project>** starts a held project.
 
 One run at a time: while a run is up, the buttons that would start another are disabled.
 
@@ -248,7 +250,7 @@ curl http://localhost:8080/home/run/live                 # the running loop at a
 curl http://localhost:8080/home/run/imports              # every import still in, kept or pending
 curl http://localhost:8080/home/run/pending              # imports not yet kept
 curl -X POST http://localhost:8080/home/run/imports/<input-id>/keep      # keep one ...
-curl -X POST http://localhost:8080/home/run/imports/<input-id>/cancel    # ... or take it back out
+curl -X POST http://localhost:8080/home/run/imports/<input-id>/cancel    # ... or cancel a pending one
 curl -X POST -H 'Content-Type: application/json' -d '{"decision": "input"}' \
      http://localhost:8080/home/run/conflicts/<id>       # or "receiving", or {"decision": "own", "resolution": "..."}
 curl -X POST -H 'Content-Type: application/json' -d '{"project": "base", "profiles": "dev-auto",

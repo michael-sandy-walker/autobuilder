@@ -111,7 +111,7 @@ class IntegrationJobTest {
         assertThat(run.calls.get(0)).isEqualTo("POST /autobuilder/goal Combine them.");
         assertThat(run.calls.get(1)).startsWith("POST /autobuilder/inputs").contains("\"label\":\"one\"")
                 .contains("\"intent\":\"take one\"").contains("\"runs\":true").contains("\"runId\":\"unrecorded\"")
-                .contains("\"pending\":true");
+                .doesNotContain("pending"); // T4-EG: every import lands pending; there is nothing to ask for
         assertThat(run.calls.get(2)).contains("\"label\":\"three\"").contains("\"runs\":false");
         assertThat(job.describe().get("inputs")).asString().contains("landed").contains("newFiles=2").contains("unmet=1");
 

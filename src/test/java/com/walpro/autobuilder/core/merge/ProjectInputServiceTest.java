@@ -115,6 +115,7 @@ class ProjectInputServiceTest {
                     assertThat(g.getMetadata()).containsEntry("inputId", input.id()).containsEntry("sourceGoalId", "root-k");
                 });
 
+        service.keep(r.inputId(), "operator");
         assertThat(goals.requirements().obligationsOrClauses()).contains("A knot holds.");
         assertThat(goals.requirements().answeredByGate("tests")).contains("The suite passes.");
         assertThat(files.readFile("meta/inputs/" + input.id() + "/placed.txt")).contains("org/knot/Knot.java");
@@ -204,25 +205,34 @@ class ProjectInputServiceTest {
     }
 
     @Test
-    void theInputsFilesAreNotTheLoopsChanges_andItsTestsAreProtected() throws IOException {
-        bring();
+    void theInputsFilesAreNotTheLoopsChanges_andWhilePendingItsTestsAreProtected() throws IOException {
+        ProjectInputService.Report r = bring();
 
         assertThat(manifest.changes()).hasValueSatisfying(c -> assertThat(c.changedOrAdded()).isEmpty());
         assertThat(new ProtectedPaths(files).isProtected("src/test/java/org/knot/KnotTest.java")).isTrue();
         assertThat(new ProtectedPaths(files).isProtected("src/main/java/org/knot/Knot.java")).isFalse();
+
+        service.keep(r.inputId(), "operator");
+        assertThat(new ProtectedPaths(files).isProtected("src/test/java/org/knot/KnotTest.java"))
+                .as("T4-EG: kept, its tests are the project's tests").isFalse();
     }
 
-    /** field118: the loop turned a third party's public constructor into a private factory, breaking its own tests. */
+    /**
+     * field118: the loop turned a third party's public constructor into a private factory, breaking its own tests --
+     * what a PENDING input declares is kept. T4-EG: once kept it is the project's code (field, 2026-11-05: an imported
+     * controller's message could not change to meet a test, and the run spent half an hour on one letter).
+     */
     @Test
-    void whatAnInputDeclaresIsKept_addingToItIsNot() throws IOException {
+    void whatAPendingInputDeclaresIsKept_aKeptOneIsTheProjectsToChange() throws IOException {
         write(brought.resolve("output/src/main/java/org/knot/Knot.java"), "package org.knot;\npublic class Knot {\n    public Knot(int n) { }\n}\n");
-        bring();
-        ProtectedPaths protect = new ProtectedPaths(files);
+        ProjectInputService.Report r = bring();
         String path = "src/main/java/org/knot/Knot.java";
+        String rewritten = "package org.knot;\npublic class Knot {\n    private Knot(int n) { }\n    public static Knot of(int n) { return new Knot(n); }\n}\n";
 
-        String kept = protect.preserve("evolution", path, "package org.knot;\npublic class Knot {\n    private Knot(int n) { }\n    public static Knot of(int n) { return new Knot(n); }\n}\n");
+        assertThat(new ProtectedPaths(files).preserve("evolution", path, rewritten)).contains("public Knot(int n)").contains("of(int n)");
 
-        assertThat(kept).contains("public Knot(int n)").contains("of(int n)");
+        service.keep(r.inputId(), "operator");
+        assertThat(new ProtectedPaths(files).preserve("evolution", path, rewritten)).isEqualTo(rewritten);
     }
 
     @Test
@@ -254,9 +264,11 @@ class ProjectInputServiceTest {
 
         assertThat(r.corrections()).containsExactly("the turn limit");
         assertThat(r.conflicts()).isEmpty();
+        service.keep(r.inputId(), "operator");
         assertThat(goals.requirements().obligationsOrClauses()).doesNotContain("A coil has at most 3 turns.")
                 .contains("the turn limit: at most 9 turns");
-        assertThat(goals.specification()).contains("--- decided: the turn limit ---").contains("This replaces: at most 3 turns");
+        assertThat(goals.specification()).contains("the turn limit: at most 9 turns (this replaces: at most 3 turns)")
+                .doesNotContain("---");
     }
 
     @Test
@@ -275,6 +287,9 @@ class ProjectInputServiceTest {
         assertThat(decided.status()).isEqualTo("decided");
         assertThat(decided.by()).isEqualTo("operator");
         assertThat(goals.purpose().openConflicts()).isEmpty();
+        assertThat(goals.requirements().obligationsOrClauses()).as("decided, but not yet the project's")
+                .contains("A coil has at most 3 turns.");
+        service.keep(r.inputId(), "operator");
         assertThat(goals.requirements().obligationsOrClauses()).doesNotContain("A coil has at most 3 turns.")
                 .contains("the turn limit: at most 9 turns");
         assertThat(goals.getAllGoals()).anyMatch(g -> g.getDescription().startsWith("the turn limit") && g.getStatus() == GoalStatus.ACTIVE);
@@ -289,7 +304,9 @@ class ProjectInputServiceTest {
         org.mockito.ArgumentCaptor<List<String>> asked = org.mockito.ArgumentCaptor.forClass(List.class);
         when(comparison.stating(asked.capture(), any())).thenReturn(List.of("A coil of 4 turns is refused."));
 
-        service.decide(bring().conflicts().get(0).id(), "input", "operator");
+        ProjectInputService.Report r = bring();
+        service.decide(r.conflicts().get(0).id(), "input", "operator");
+        service.keep(r.inputId(), "operator");
 
         assertThat(asked.getValue()).contains("A coil of 4 turns is refused.");
         assertThat(goals.purpose().linesOut()).contains("A coil of 4 turns is refused.");
@@ -326,10 +343,12 @@ class ProjectInputServiceTest {
         assertThat(r.conflicts()).singleElement().satisfies(c -> assertThat(c.heldLine()).isEqualTo("Knot is final"));
         assertThat(r.unmet()).as("not work to do").isEmpty();
         assertThat(r.met()).as("every criterion but the claim").isEqualTo(r.criteria() - 1);
-        assertThat(goals.requirements().obligationsOrClauses()).doesNotContain("Knot is final").contains("A knot holds.");
+        assertThat(goals.requirements().obligationsOrClauses()).as("pending, none of it counts yet")
+                .doesNotContain("Knot is final", "A knot holds.");
 
         service.decide(r.conflicts().get(0).id(), "input", "operator");
-        assertThat(goals.requirements().obligationsOrClauses()).as("decided to stand").contains("Knot is final");
+        service.keep(r.inputId(), "operator");
+        assertThat(goals.requirements().obligationsOrClauses()).as("decided to stand").contains("Knot is final", "A knot holds.");
     }
 
     @Test
@@ -361,10 +380,12 @@ class ProjectInputServiceTest {
     void aDifferenceDecidedInTheOperatorsOwnWords_replacesTheRuleAndBecomesWork() throws IOException {
         seedLine();
         differs(TURNS, false);
-        String id = bring().conflicts().get(0).id();
+        ProjectInputService.Report r = bring();
+        String id = r.conflicts().get(0).id();
 
         assertThatThrownBy(() -> service.decide(id, "own", "operator", " ")).isInstanceOf(IllegalArgumentException.class);
         var decided = service.decide(id, "own", "operator", "at most 5 turns");
+        service.keep(r.inputId(), "operator");
 
         assertThat(decided.decision()).isEqualTo("own");
         assertThat(decided.resolution()).isEqualTo("at most 5 turns");
@@ -401,6 +422,7 @@ class ProjectInputServiceTest {
         ProjectInputService.Report r = bring();
 
         service.decide(r.conflicts().get(0).id(), "own", "operator", "Knot may be extended by Rope only");
+        service.keep(r.inputId(), "operator");
 
         assertThat(goals.requirements().obligationsOrClauses()).doesNotContain("Knot is final")
                 .contains("Knot may be extended by Rope only");
@@ -423,12 +445,12 @@ class ProjectInputServiceTest {
         assertThatThrownBy(() -> service.options(id)).isInstanceOf(IllegalArgumentException.class);
     }
 
-    /** T4-ED: an import from the home screen waits to be kept; a scripted one is kept as it lands. */
+    /** T4-ED: an import waits to be kept. */
     @Test
     void anImportCanWaitForConfirmation_untilItIsKeptOrTakenBackOut() throws IOException {
         seedLine();
         differs(TURNS, false);
-        ProjectInputService.Report r = service.bring(new ProjectInputService.Request("knots", "run-k", brought, INTENT, "operator", false, true));
+        ProjectInputService.Report r = service.bring(new ProjectInputService.Request("knots", "run-k", brought, INTENT, "operator", false));
 
         assertThat(service.pending()).singleElement().satisfies(p -> {
             assertThat(p.inputId()).isEqualTo(r.inputId());
@@ -439,6 +461,7 @@ class ProjectInputServiceTest {
         });
         assertThat(goals.purpose().openConflicts()).as("a pending import is not a conflict").hasSize(1);
 
+        service.decide(goals.purpose().openConflicts().get(0).id(), "receiving", "operator");
         service.keep(r.inputId(), "operator");
 
         assertThat(service.pending()).isEmpty();
@@ -447,17 +470,49 @@ class ProjectInputServiceTest {
 
     @Test
     void aCancelledImportWaitsForNothing() throws IOException {
-        ProjectInputService.Report r = service.bring(new ProjectInputService.Request("knots", "run-k", brought, INTENT, "operator", false, true));
+        ProjectInputService.Report r = service.bring(new ProjectInputService.Request("knots", "run-k", brought, INTENT, "operator", false));
 
         service.withdraw(r.inputId(), "operator");
 
         assertThat(service.pending()).isEmpty();
     }
 
+    /** T4-EG: every import lands pending, scripted or not; keeping it is the one way into the project. */
     @Test
-    void aScriptedInputIsKeptAsItLands() throws IOException {
-        bring();
+    void everyImportLandsPending_andCountsForNothingUntilKept() throws IOException {
+        String before = goals.purpose().specification();
+        ProjectInputService.Report r = bring();
 
+        assertThat(service.pending()).extracting(ProjectInputService.Import::inputId).containsExactly(r.inputId());
+        assertThat(goals.purpose().specification()).as("a pending import is a proposal").isEqualTo(before);
+    }
+
+    /** T4-EG: a kept import's goals are the project's goals, and their rules count; a pending one's do not yet. */
+    @Test
+    void aKeptImportsGoalsStateTheProjectsRules_aPendingOnesDoNot() throws IOException {
+        ProjectInputService.Report r = bring();
+        @SuppressWarnings("unchecked")
+        List<String> criteria = (List<String>) goals.getGoalById(r.goalId()).getMetadata().get("acceptanceCriteria");
+        assertThat(criteria).isNotEmpty();
+
+        assertThat(goals.statedRules()).doesNotContainAnyElementsOf(criteria);
+        service.keep(r.inputId(), "operator");
+        assertThat(goals.statedRules()).containsAll(criteria);
+    }
+
+    /** T4-EG: the pending stage is where conflicts are settled -- or the import is not continued. */
+    @Test
+    void anImportIsNotKeptWhileItsConflictsAreOpen() throws IOException {
+        seedLine();
+        differs(TURNS, false);
+        ProjectInputService.Report r = bring();
+        assertThat(goals.purpose().openConflicts()).hasSize(1);
+
+        assertThatThrownBy(() -> service.keep(r.inputId(), "operator")).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("decide its conflicts");
+
+        service.decide(goals.purpose().openConflicts().get(0).id(), "receiving", "operator");
+        service.keep(r.inputId(), "operator");
         assertThat(service.pending()).isEmpty();
     }
 
@@ -477,13 +532,14 @@ class ProjectInputServiceTest {
     @Test
     void theImportsListShowsWhatIsStillIn_keptOrPending() throws IOException {
         ProjectInputService.Report kept = bring();
+        service.keep(kept.inputId(), "operator");
         write(brought.resolve("output/src/main/java/org/knot/Extra.java"), "package org.knot;\npublic class Extra { }\n");
         ProjectInputService.Report waiting = service.bring(new ProjectInputService.Request("knots-2", "run-k2", brought, INTENT,
-                "operator", false, true));
+                "operator", false));
 
         assertThat(service.imports()).extracting(ProjectInputService.Import::inputId, ProjectInputService.Import::pending,
                         ProjectInputService.Import::label)
-                .containsExactly(org.assertj.core.groups.Tuple.tuple(kept.inputId(), false, null),
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(kept.inputId(), false, "knots"),
                         org.assertj.core.groups.Tuple.tuple(waiting.inputId(), true, "knots-2"));
         assertThat(service.imports().get(0).newFiles()).isEqualTo(kept.placed().size());
 

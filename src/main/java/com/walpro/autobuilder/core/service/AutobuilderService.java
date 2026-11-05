@@ -248,8 +248,6 @@ public class AutobuilderService implements CheckpointableState {
 
     /** T6-U: the halt reason when only a requirement no kept test answers stands between the root and closure. */
     static final String UNANSWERABLE_HALT = "requirement-no-test-answers";
-    /** T4-EC slice 5: everything else is done and a conflict waits for a decision; a decision lifts this halt. */
-    static final String CONFLICT_HALT = "open-conflict";
 
     /**
      * T4-CJ slice 2: may this snapshot be used as proof of progress in the CURRENT run?
@@ -988,7 +986,7 @@ public class AutobuilderService implements CheckpointableState {
         // the point of the refusal, which is that the tree is left exactly as it was found.
         // T4-CQ: adopted with no goal is the same restraint for a different reason — there is
         // nothing to work towards, and the planner's fallback would invent goals that do not exist.
-        if (startRefused || awaitingGoal) return;
+        if (startRefused || awaitingGoal || importPending()) return;
 
         // T1-FL: a breaker-caused pause is a suspension, not a terminal. The breaker's timed
         // open (T1-FD) already encodes when the next attempt is allowed; once its cooldown
@@ -1522,9 +1520,8 @@ public class AutobuilderService implements CheckpointableState {
         Optional<String> unanswerable = goalPlannerService.unanswerableAtClosure();
         if (unanswerable.isPresent() && context.goalExhaustedReason() == null) {
             log.error("T6-U: the root cannot close in this run -- {}. Pausing for review.", unanswerable.get());
-            String halt = goalPlannerService.conflictAtClosure() ? CONFLICT_HALT : UNANSWERABLE_HALT;
-            emitSystemPausedOnce(context.cycleName(), halt, 1);
-            context = context.withGoalExhaustedReason(halt).withPausedReason(halt);
+            emitSystemPausedOnce(context.cycleName(), UNANSWERABLE_HALT, 1);
+            context = context.withGoalExhaustedReason(UNANSWERABLE_HALT).withPausedReason(UNANSWERABLE_HALT);
         }
 
         // T4-I (root-scoped slice): convergence brake — activity without convergence. Unlike the
@@ -1814,7 +1811,7 @@ public class AutobuilderService implements CheckpointableState {
     // T6-U: nor the halt on a requirement no kept test answers -- the tests are frozen, so a different path meets the
     // same refusal the moment its work is done.
     private static final java.util.Set<String> NON_REWINDABLE_PAUSES =
-            java.util.Set.of("user-pause", LLM_BREAKER_PAUSE_REASON, UNANSWERABLE_HALT, CONFLICT_HALT);
+            java.util.Set.of("user-pause", LLM_BREAKER_PAUSE_REASON, UNANSWERABLE_HALT);
 
     /**
      * T3-BY: is this cycle the one that should re-preserve? Counts MERGED cycles only — an
@@ -2104,8 +2101,8 @@ public class AutobuilderService implements CheckpointableState {
      * @return list of injected feature descriptions; empty if no gaps found
      */
     /**
-     * T4-EC slice 4: a project brought in between cycles, under the lock a cycle holds; a held or paused project goes on
-     * from the new state when it runs.
+     * T4-EC slice 4: a project brought in between cycles, under the lock a cycle holds. T4-EG: it lands pending, and the
+     * loop holds until it is kept (then goes on from the new state) or cancelled.
      */
     public com.walpro.autobuilder.core.merge.ProjectInputService.Report bringInput(
             com.walpro.autobuilder.core.merge.ProjectInputService inputs,
@@ -2113,12 +2110,6 @@ public class AutobuilderService implements CheckpointableState {
         lock.lock();
         try {
             var report = inputs.bring(request);
-            if (rootConvergenceTracker != null) rootConvergenceTracker.inputArrived();
-            if (context != null) {
-                context = context.withPausedReason(null).withGoalExhaustedReason(null)
-                        .withCycleResultState(CycleResultState.CONTINUE);
-            }
-            systemPaused = false;
             pointOutsideACycle("an input was brought in");
             return report;
         } finally {
@@ -2151,6 +2142,16 @@ public class AutobuilderService implements CheckpointableState {
         return decideConflict(inputs, id, decision, by, null);
     }
 
+    /**
+     * T4-EG: an import waits to be kept or cancelled, so the loop holds: it does not work on a project that may not stay
+     * as it is (user, 2026-11-04). Read from the ledger each tick, so a hold cannot outlive its import. Not a halt -- a
+     * halt settles on the furthest branch, and that rewind would take the pending import away with it.
+     */
+    private boolean importPending() {
+        var purpose = goalPlannerService != null ? goalPlannerService.purpose() : null;
+        return purpose != null && !purpose.pendingImports().isEmpty();
+    }
+
     /** T4-ED: as above, with the operator's own resolution for an {@code own} decision. */
     public com.walpro.autobuilder.goal.purpose.InputEvent decideConflict(
             com.walpro.autobuilder.core.merge.ProjectInputService inputs, String id, String decision, String by,
@@ -2176,6 +2177,13 @@ public class AutobuilderService implements CheckpointableState {
         lock.lock();
         try {
             var event = inputs.keep(id, by);
+            // Kept, it is the project: the loop goes on from the new state, a finished project included.
+            if (rootConvergenceTracker != null) rootConvergenceTracker.inputArrived();
+            if (context != null) {
+                context = context.withPausedReason(null).withGoalExhaustedReason(null)
+                        .withCycleResultState(CycleResultState.CONTINUE);
+            }
+            systemPaused = false;
             pointOutsideACycle("an import was kept");
             return event;
         } finally {

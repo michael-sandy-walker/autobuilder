@@ -47,13 +47,20 @@ import java.util.UUID;
 public class PurposeService implements CheckpointableState {
 
     public static final String PATH = "meta/inputs.json";
+
+    /**
+     * T4-EG: the project's specification as one text, written whenever what the project consists of changes and read
+     * as it is by every reader of the purpose. Absent while the project is only its seed, which is then the
+     * specification itself.
+     */
+    public static final String SPEC_FILE = "meta/specification.txt";
     static final String SEED_FILE = "bootstrap/seed.txt";
 
     /**
      * T4-EG: every file an input writes outside {@code output/}, file or directory. The tree itself is the checkpoint's
      * snapshot and the goals its goal history; this is the rest of what bringing a project in changes.
      */
-    static final List<String> FILES = List.of(PATH, "meta/inputs",
+    static final List<String> FILES = List.of(PATH, SPEC_FILE, "meta/inputs",
             com.walpro.autobuilder.core.build.AdoptionManifest.PATH,
             com.walpro.autobuilder.core.build.AdoptionManifest.SERVED_PATH,
             com.walpro.autobuilder.core.build.ProtectedPaths.BASELINE_DIR);
@@ -162,9 +169,33 @@ public class PurposeService implements CheckpointableState {
         ledger = readFile();
     }
 
-    /** The inputs so far as one specification; null while the project has none. */
+    /**
+     * The project's specification -- {@value #SPEC_FILE} as written, or the seed while the project is nothing more; null
+     * while it has none. A project kept before the file existed gets it written on first read.
+     */
     public String specification() {
+        try {
+            if (fileService.exists(SPEC_FILE)) return fileService.readString(SPEC_FILE);
+        } catch (Exception e) {
+            log.warn("T4-EG: {} unreadable ({}) -- the specification is joined from the ledger", SPEC_FILE, e.getMessage());
+            return ledger.specification();
+        }
+        if (ledger.kept().size() > 1) writeSpecification();
         return ledger.specification();
+    }
+
+    /** {@value #SPEC_FILE} as the ledger now says the project is: removed while it is only the seed. */
+    private void writeSpecification() {
+        try {
+            if (ledger.kept().size() <= 1) {
+                fileService.deleteRecursively(SPEC_FILE);
+            } else {
+                fileService.ensureFolderExists("meta");
+                fileService.writeFile(SPEC_FILE, ledger.specification());
+            }
+        } catch (Exception e) {
+            log.warn("T4-EG: {} not written: {}", SPEC_FILE, e.getMessage());
+        }
     }
 
     /**
@@ -190,28 +221,32 @@ public class PurposeService implements CheckpointableState {
         }
     }
 
-    /** A line of what the project must do, and the input it came from. */
-    public record Requirement(String inputId, String text) {
-    }
-
-    private List<Requirement> across(java.util.function.BiFunction<String, String, List<String>> read) {
+    /**
+     * What the project must do, as one list: every kept input's lines read alike (T4-EG -- a line does not say which
+     * input it came from, so nothing can treat an imported one differently). Each input's lines stay in its own file
+     * because each file is checked against its own text's hash, and the seed's is a tracked file.
+     */
+    private List<String> across(java.util.function.BiFunction<String, String, List<String>> read) {
         java.util.Set<String> out_ = linesOut();
-        List<Requirement> out = new ArrayList<>();
-        for (InputEntry e : ledger.active()) {
+        List<String> out = new ArrayList<>();
+        for (InputEntry e : ledger.kept()) {
             for (String line : read.apply(e.content(), obligationsText(e))) {
-                if (!out_.contains(line.strip())) out.add(new Requirement(e.id(), line));
+                if (!out_.contains(line.strip())) out.add(line);
             }
         }
         return out;
     }
 
-    /** Lines that are not requirements now: a claim held or set aside, and what a decided rule replaced. */
+    /**
+     * Lines that are not requirements now: a claim held or set aside, and what a decided rule replaced -- by a kept
+     * input; a pending one changes nothing until it is kept.
+     */
     public java.util.Set<String> linesOut() {
         java.util.Set<String> out = new java.util.HashSet<>();
         for (InputEvent e : ledger.events()) {
             if (InputEvent.WITHDRAWAL.equals(e.kind())) {
                 e.replaces().forEach(l -> out.add(l.strip()));
-            } else if (!ledger.withdrawn(e.inputId())) {
+            } else if (ledger.isKept(e.inputId())) {
                 if (e.keepsLineOut()) out.add(e.heldLine().strip());
                 if (e.replacedReceiving()) e.replaces().forEach(l -> out.add(l.strip()));
             }
@@ -290,50 +325,41 @@ public class PurposeService implements CheckpointableState {
         return event;
     }
 
-    private static List<String> texts(List<Requirement> requirements) {
-        return requirements.stream().map(Requirement::text).toList();
-    }
-
-    /** Every input's lines answered by {@code gate}, each with its input. */
-    public List<Requirement> gated(String gate) {
+    public List<String> answeredByGate(String gate) {
         return across((spec, written) -> SeedRequirements.answeredByGate(spec, written, gate));
     }
 
-    public List<String> answeredByGate(String gate) {
-        return texts(gated(gate));
-    }
-
     public List<String> rules() {
-        return texts(across(SeedRequirements::rules));
+        return across(SeedRequirements::rules);
     }
 
     public List<String> obligationsOrClauses() {
-        return texts(across(SeedRequirements::obligationsOrClauses));
+        return across(SeedRequirements::obligationsOrClauses);
     }
 
     public List<String> verifiableObligationsOrSplit() {
-        return texts(across(SeedRequirements::verifiableObligationsOrSplit));
+        return across(SeedRequirements::verifiableObligationsOrSplit);
     }
 
     public List<String> notAlreadyCoveredVerifiable(List<String> banked) {
-        return texts(across((spec, written) -> SeedRequirements.notAlreadyCoveredVerifiable(spec, banked, written)));
+        return across((spec, written) -> SeedRequirements.notAlreadyCoveredVerifiable(spec, banked, written));
     }
 
-    /** Every input's written obligation lines as written, markers kept. */
+    /** The project's written obligation lines as written, markers kept. */
     public List<String> writtenLines() {
         java.util.Set<String> out_ = linesOut();
         List<String> out = new ArrayList<>();
-        for (InputEntry e : ledger.active()) {
+        for (InputEntry e : ledger.kept()) {
             String written = obligationsText(e);
             if (written != null) written.lines().filter(l -> !l.isBlank() && !l.startsWith("#") && !out_.contains(l.strip())).forEach(out::add);
         }
         return out;
     }
 
-    /** Every input's obligations file as it stands, for a digest of what the project was asked. */
+    /** The project's obligations files as they stand, for a digest of what the project was asked. */
     public String writtenText() {
         StringBuilder out = new StringBuilder();
-        for (InputEntry e : ledger.active()) {
+        for (InputEntry e : ledger.kept()) {
             String written = obligationsText(e);
             if (written != null) out.append(written);
         }
@@ -442,6 +468,8 @@ public class PurposeService implements CheckpointableState {
         } catch (Exception e) {
             log.warn("T4-EC: {} not written: {}", PATH, e.getMessage());
         }
+        // T4-EG: what the project consists of may have changed -- an input kept, a text input given, a seed set.
+        writeSpecification();
     }
 
     static String sha256(String text) {

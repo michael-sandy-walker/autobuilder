@@ -308,6 +308,24 @@ class AutobuilderServiceRewindWiringTest {
         assertThat(Double.isNaN((Double) ReflectionTestUtils.getField(service, "lastEvaluatedScore"))).isTrue();
     }
 
+    @Test
+    @DisplayName("T4-EG: while an import waits to be kept or cancelled the loop holds -- not even the last result is processed")
+    void theLoopHoldsWhileAnImportIsPending() {
+        var planner = mock(com.walpro.autobuilder.goal.GoalPlannerService.class);
+        var purpose = mock(com.walpro.autobuilder.goal.purpose.PurposeService.class);
+        when(planner.purpose()).thenReturn(purpose);
+        when(purpose.pendingImports()).thenReturn(List.of(new com.walpro.autobuilder.goal.purpose.InputEvent("e", "import",
+                "input-2", "reader", null, null, null, null, List.of(), "open", null, "operator", java.time.Instant.now())));
+        ReflectionTestUtils.setField(service, "goalPlannerService", planner);
+        ReflectionTestUtils.setField(service, "context",
+                cycle("cycle-30", null).withCycleResultState(CycleResultState.GOAL_FULFILLED));
+
+        ReflectionTestUtils.invokeMethod(service, "runAutobuilderCycleLocked");
+
+        assertThat(service.isPaused()).as("held, not halted: the fulfilled result waits until the import is settled").isFalse();
+        assertThat(service.getContext().orElseThrow().cycleResultState()).isEqualTo(CycleResultState.GOAL_FULFILLED);
+    }
+
     private static CycleContextData cycle(String cycleId, String pausedReason) {
         return CycleContextData.builder()
                 .cycleName(cycleId)

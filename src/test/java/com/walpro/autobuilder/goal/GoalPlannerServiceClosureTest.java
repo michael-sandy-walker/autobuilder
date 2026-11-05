@@ -1719,34 +1719,6 @@ public class GoalPlannerServiceClosureTest {
         assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
     }
 
-    /** T4-EC slice 5: with everything else done, an open conflict refuses closure and names itself; a decision lifts it. */
-    @Test
-    void autoCompleteRoot_anOpenConflictRefusesClosureUntilItIsDecided() throws IOException {
-        lenient().doNothing().when(fileService).writeFile(anyString(), anyString());
-        lenient().doNothing().when(goalGraphService).setState(anyString(), any());
-        lenient().doNothing().when(goalGraphService).setParent(anyString(), anyString());
-        lenient().doNothing().when(goalGraphService).save(any(GoalEntity.class));
-        String seed = "Answer the failure.\n\nOBJECTIVE: the failure is answered, and the whole suite passes.\n";
-        DerivedTests derived = mock(DerivedTests.class);
-        com.walpro.autobuilder.core.build.TestRunGate passing = mock(com.walpro.autobuilder.core.build.TestRunGate.class);
-        when(passing.isLive()).thenReturn(true);
-        GoalPlannerService service = derivedClosureService(seed, passing, derived);
-        service.requirements();
-        var conflict = service.purpose().raiseConflict("input-1", "the title limit", "120", "200", null, null);
-
-        service.autoCompleteRootIfSatisfied();
-        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
-        assertThat(service.conflictAtClosure()).isTrue();
-        assertThat(service.unanswerableAtClosure()).hasValueSatisfying(r -> assertThat(r).contains("the title limit"));
-
-        service.purpose().decide(conflict, "receiving", "operator", List.of());
-        service.conflictDecided();
-        service.autoCompleteRootIfSatisfied();
-        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.COMPLETED);
-        assertThat(service.conflictAtClosure()).isFalse();
-        assertThat(service.unanswerableAtClosure()).isEmpty();
-    }
-
     /**
      * T4-EC slice 3: seed-level authority is every input's. A line marked in a LATER input's obligations refuses closure
      * exactly as the seed's own does; read from the seed alone, this root would close.

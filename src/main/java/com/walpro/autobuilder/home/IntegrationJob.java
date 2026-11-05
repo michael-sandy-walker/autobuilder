@@ -204,7 +204,6 @@ class IntegrationJob {
         body.put("intent", i.intent());
         body.put("addedBy", "operator (home screen)");
         body.put("runs", i.runs());
-        body.put("pending", true);
         RunClient.Reply reply = run.postJson("/autobuilder/inputs", MAPPER.writeValueAsString(body), INPUT_TIMEOUT);
         if (!reply.ok()) {
             synchronized (this) {

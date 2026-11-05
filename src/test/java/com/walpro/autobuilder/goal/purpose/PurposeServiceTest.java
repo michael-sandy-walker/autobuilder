@@ -88,20 +88,41 @@ class PurposeServiceTest {
     }
 
     @Test
-    void aLaterInputIsAppended_andSeveralReadInArrivalOrderEachNamed() {
+    void aLaterInputIsAppended_andTheSpecificationIsOneTextWrittenAsAFile() throws Exception {
         PurposeService purpose = PurposeService.fileOnly(files);
         purpose.recordSeed("Build a quill registry.", "seed-file");
+        assertThat(base.resolve(PurposeService.SPEC_FILE)).as("only the seed: it is the specification").doesNotExist();
         InputEntry second = purpose.addInput(InputEntry.KIND_TEXT, "Add an ink ledger.", "operator");
 
         assertThat(second.sequence()).isEqualTo(2);
         assertThat(purpose.ledger().seed().content()).isEqualTo("Build a quill registry.");
-        assertThat(purpose.specification()).isEqualTo("--- input 1 (seed) ---\nBuild a quill registry.\n\n"
-                + "--- input 2 (text) ---\nAdd an ink ledger.");
+        // T4-EG: one text, nothing in it says which part came from where
+        assertThat(purpose.specification()).isEqualTo("Build a quill registry.\n\nAdd an ink ledger.");
+        assertThat(base.resolve(PurposeService.SPEC_FILE)).hasContent("Build a quill registry.\n\nAdd an ink ledger.");
         assertThat(PurposeService.fileOnly(files).ledger()).isEqualTo(purpose.ledger());
     }
 
+    /** T4-EG: a pending import is a proposal -- not in the specification or the requirements until it is kept. */
     @Test
-    void requirementsAreReadAcrossEveryInput_eachCheckedAgainstItsOwnText_andKnowTheirInput() throws Exception {
+    void aPendingImportCountsForNothingUntilKept() throws Exception {
+        PurposeService purpose = PurposeService.fileOnly(files);
+        purpose.recordSeed("Build a quill registry.", "seed-file");
+        InputEntry brought = purpose.addProjectInput("use the reader", "operator", null, null, "digest");
+        InputEvent pending = purpose.recordPendingImport(brought.id(), "reader", "operator");
+        files.ensureFolderExists("meta/inputs/" + brought.id());
+        files.writeFile(purpose.obligationsPath(brought), SeedObligationsFile.render(brought.content(),
+                java.util.List.of("A reader reads lines.")));
+
+        assertThat(purpose.specification()).isEqualTo("Build a quill registry.");
+        assertThat(purpose.obligationsOrClauses()).doesNotContain("A reader reads lines.");
+
+        purpose.keepImport(pending, "operator");
+        assertThat(purpose.specification()).isEqualTo("Build a quill registry.\n\nuse the reader");
+        assertThat(purpose.obligationsOrClauses()).contains("A reader reads lines.");
+    }
+
+    @Test
+    void requirementsAreReadAcrossEveryInput_eachCheckedAgainstItsOwnText_asOneList() throws Exception {
         PurposeService purpose = PurposeService.fileOnly(files);
         purpose.recordSeed("Build a quill registry.", "seed-file");
         InputEntry seed = purpose.ledger().seed();
@@ -115,7 +136,6 @@ class PurposeServiceTest {
         assertThat(purpose.obligationsPath(seed)).isEqualTo(SeedObligationsFile.PATH);
         assertThat(purpose.obligationsPath(second)).isEqualTo("meta/inputs/" + second.id() + "/obligations.txt");
         assertThat(purpose.answeredByGate("tests")).containsExactly("The whole suite passes.", "The ink tests pass.");
-        assertThat(purpose.gated("tests")).extracting(PurposeService.Requirement::inputId).containsExactly(seed.id(), second.id());
         assertThat(purpose.rules()).hasSize(2);
         assertThat(purpose.obligationsOrClauses()).contains("A quill has a nib.", "A ledger holds ink in millilitres.");
         assertThat(purpose.writtenLines()).hasSize(6);

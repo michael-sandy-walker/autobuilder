@@ -43,14 +43,10 @@ public class ProjectInputService {
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
     /**
-     * @param runs    this input's module is what the project runs, in a project of modules
-     * @param pending T4-ED: the import waits for the operator to keep it (or take it back out); a scripted input is
-     *                kept as it lands
+     * @param runs this input's module is what the project runs, in a project of modules. T4-EG: every import lands
+     *             pending, scripted or not -- keeping it ({@link #keep}) is the one way into the project
      */
-    public record Request(String label, String runId, Path dir, String intent, String addedBy, boolean runs, boolean pending) {
-        public Request(String label, String runId, Path dir, String intent, String addedBy, boolean runs) {
-            this(label, runId, dir, intent, addedBy, runs, false);
-        }
+    public record Request(String label, String runId, Path dir, String intent, String addedBy, boolean runs) {
     }
 
     /**
@@ -173,7 +169,7 @@ public class ProjectInputService {
 
         InputEntry input = goals.purpose().addProjectInput(r.intent(), r.addedBy(), r.runId(), landing.sourceLineage(),
                 landing.treeDigest());
-        if (r.pending()) goals.purpose().recordPendingImport(input.id(), r.label(), r.addedBy());
+        goals.purpose().recordPendingImport(input.id(), r.label(), r.addedBy());
         String dir = "meta/inputs/" + input.id();
         files.ensureFolderExists(dir);
         files.writeFile(dir + "/placed.txt", String.join("\n", landing.placed()) + "\n");
@@ -202,7 +198,11 @@ public class ProjectInputService {
             }
         }
         step(r.label(), 7, 0, 0);
-        java.util.Set<String> out = goals.purpose().linesOut();
+        // What stays out of the work: the project's own, and this import's held claims -- it is pending, so the
+        // project's list does not count its events yet.
+        java.util.Set<String> out = new java.util.HashSet<>(goals.purpose().linesOut());
+        goals.purpose().ledger().events().stream().filter(e -> e.inputId().equals(input.id()) && e.keepsLineOut())
+                .forEach(e -> out.add(e.heldLine().strip()));
         GoalEntity tree = null;
         if (landing.tree() != null) {
             stamp(landing.tree(), verdicts);
@@ -358,7 +358,6 @@ public class ProjectInputService {
         List<String> replaces = InputEvent.FOR_INPUT.equals(decision) && difference
                 ? comparison.stating(goals.statedRules(), d) : List.of();
         InputEvent decided = goals.purpose().decide(open, decision, by, replaces);
-        goals.conflictDecided();
         if (InputEvent.FOR_INPUT.equals(decision)) {
             if (open.heldPath() != null) {
                 Path to = files.getRootDir().resolve("output").resolve(open.subject());
@@ -379,7 +378,6 @@ public class ProjectInputService {
                 ? comparison.stating(goals.statedRules(), new InputComparison.Difference(open.subject(), open.receiving(), resolution))
                 : List.of();
         InputEvent decided = goals.purpose().decide(open, InputEvent.FOR_OWN, by, replaces, resolution);
-        goals.conflictDecided();
         String line = difference ? open.subject() + ": " + resolution
                 : open.heldPath() != null ? "Merge " + open.subject() + " with the copy brought in (kept at " + open.heldPath()
                         + "): " + resolution
@@ -424,10 +422,19 @@ public class ProjectInputService {
         return out;
     }
 
-    /** T4-ED: a pending import kept. Its conflicts stay as they are, to be decided. */
+    /**
+     * T4-ED: a pending import kept -- T4-EG: from here it is the project. Its conflicts are decided first: the pending
+     * stage is where they are settled, or the import is not continued (user, 2026-11-04).
+     */
     public synchronized InputEvent keep(String inputId, String by) {
         InputEvent pending = goals.purpose().pendingImports().stream().filter(e -> e.inputId().equals(inputId)).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("no import waits for confirmation: " + inputId));
+        List<String> open = goals.purpose().openConflicts().stream().filter(e -> e.inputId().equals(inputId))
+                .map(InputEvent::subject).toList();
+        if (!open.isEmpty()) {
+            throw new IllegalArgumentException("decide its conflicts before keeping it (" + open.size() + " open: "
+                    + String.join("; ", open) + ")");
+        }
         log.warn("T4-ED: import {} ({}) kept by {}", inputId, pending.subject(), by);
         return goals.purpose().keepImport(pending, by);
     }
@@ -474,7 +481,6 @@ public class ProjectInputService {
         files.writeFile(dir + ProtectedPaths.INPUT_FILE, "\n");
         manifest.removeFiles(placed);
         InputEvent event = goals.purpose().recordWithdrawal(inputId, by, goals.withdrawGoals(inputId));
-        goals.conflictDecided();
         if (!placed.isEmpty()) {
             goals.addDecidedWork("The project builds and works without these files, which were withdrawn: " + String.join(", ", placed), null);
         }

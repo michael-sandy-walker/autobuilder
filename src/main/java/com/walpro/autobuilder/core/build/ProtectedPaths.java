@@ -40,7 +40,7 @@ public class ProtectedPaths {
     /** Where the adopted text of member-protected files is kept, relative to the target. */
     public static final String BASELINE_DIR = "meta/adoption-baseline";
 
-    /** T4-EC: under {@code meta/inputs/<id>}, what a project brought in protects: its own lines and its tests. */
+    /** T4-EC: under {@code meta/inputs/<id>}, what a project brought in protects while it is pending: its own lines and its tests. */
     public static final String INPUT_FILE = "/protected.txt";
 
     static final String MEMBERS_MARKER = "members:";
@@ -341,12 +341,20 @@ public class ProtectedPaths {
         return out;
     }
 
-    /** Every input's protected lines; none where no project was brought in. */
+    /**
+     * Every PENDING import's protected lines; none where no project was brought in. T4-EG: a kept import is the
+     * project, and its code is as much the loop's to change as any other -- protecting it went on steering the loop
+     * after the keep (field, 2026-11-05: an imported controller's message could not change to meet a test, and the run
+     * spent its last half hour on one letter). Read from the ledger, so a rewind to before a keep protects it again.
+     */
     private String inputLines() {
         StringBuilder out = new StringBuilder();
         try {
             if (!Boolean.TRUE.equals(fileService.exists("meta/inputs"))) return "";
+            com.walpro.autobuilder.goal.purpose.InputLedger ledger =
+                    com.walpro.autobuilder.goal.purpose.PurposeService.fileOnly(fileService).ledger();
             for (java.nio.file.Path dir : fileService.listSubfolders("meta/inputs")) {
+                if (!ledger.pending(dir.getFileName().toString())) continue;
                 String file = "meta/inputs/" + dir.getFileName() + INPUT_FILE;
                 if (fileService.exists(file)) out.append('\n').append(fileService.readString(file));
             }

@@ -326,9 +326,8 @@ public class AutobuilderController {
     private com.walpro.autobuilder.core.merge.ProjectInputService projectInputService;
 
     /** A project to bring in: its label, the run that grew it (or none, for a third party's), its directory, what it is for. */
-    /** {@code pending} (T4-ED): the import waits for the operator to keep it; absent, it is kept as it lands. */
-    public record InputRequest(String label, String runId, String dir, String intent, String addedBy, boolean runs,
-                               boolean pending) {
+    /** T4-EG: every import lands pending; {@code POST /inputs/{id}/keep} makes it part of the project. */
+    public record InputRequest(String label, String runId, String dir, String intent, String addedBy, boolean runs) {
     }
 
     /**
@@ -341,8 +340,7 @@ public class AutobuilderController {
         if (r.label() == null || r.dir() == null) return ResponseEntity.badRequest().body(Map.of("error", "an input needs a label and a dir"));
         try {
             return ResponseEntity.ok(autobuilderService.bringInput(projectInputService, new com.walpro.autobuilder.core.merge.ProjectInputService.Request(
-                    r.label(), r.runId(), java.nio.file.Path.of(r.dir()), r.intent(), r.addedBy() == null ? "operator" : r.addedBy(), r.runs(),
-                    r.pending())));
+                    r.label(), r.runId(), java.nio.file.Path.of(r.dir()), r.intent(), r.addedBy() == null ? "operator" : r.addedBy(), r.runs())));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (java.io.IOException e) {

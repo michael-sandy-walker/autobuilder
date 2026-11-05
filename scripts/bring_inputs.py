@@ -56,6 +56,9 @@ def main():
         r = call(base, '/inputs', body)
         print(i['label'], 'corrections', r['corrections'], 'unmet', r['unmet'], 'conflicts', [c['subject'] for c in r['conflicts']], flush=True)
         decide(base, plan, r)
+        # T4-EG: an import is pending until kept; its conflicts are decided above, so it can be kept now.
+        call(base, '/inputs/' + r['inputId'] + '/keep?by=operator%20(scripted)', timeout=120)
+        print('kept', i['label'], flush=True)
     if not a.no_start:
         print(call(base, '/start?mode=ADOPT_PROJECT', timeout=60).get('message'), flush=True)
 

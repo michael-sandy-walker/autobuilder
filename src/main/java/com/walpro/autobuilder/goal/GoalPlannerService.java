@@ -297,7 +297,6 @@ public class GoalPlannerService {
             log.info("T4-EC: root goal reset to ACTIVE: an input arrived");
         }
         unanswerableAtClosure = null;
-        conflictAtClosure = false;
         String id = "goal-" + java.util.UUID.randomUUID();
         // Work under way finishes first: a half-made change is not landed over, and the planner reaches this goal next.
         GoalEntity current = getCurrentSubGoal();
@@ -315,12 +314,15 @@ public class GoalPlannerService {
     /**
      * T4-EC slice 5: every line that states a rule of this project: the obligations and the criteria banked on its goals.
      * A rule an input changes must go from both: field120 was decided for a 200-character title, and closure went on
-     * demanding the 120 its own completed goals had banked. An input's own goals are not the receiving project's rules.
+     * demanding the 120 its own completed goals had banked. T4-EG: a kept import's goals are the project's goals, so
+     * their rules count too; only a PENDING import's are not yet the project's.
      */
     public List<String> statedRules() {
         Set<String> out = new LinkedHashSet<>(requirements().obligationsOrClauses());
+        var ledger = purpose().ledger();
         for (GoalEntity g : goalMap.values()) {
-            if (g.getMetadata() == null || g.getMetadata().containsKey("inputId")) continue;
+            if (g.getMetadata() == null) continue;
+            if (g.getMetadata().get("inputId") instanceof String inputId && ledger.pending(inputId)) continue;
             if (g.getMetadata().get("acceptanceCriteria") instanceof List<?> criteria) criteria.forEach(c -> out.add(String.valueOf(c)));
         }
         return new ArrayList<>(out);
@@ -363,12 +365,6 @@ public class GoalPlannerService {
         return carried;
     }
 
-    /** T4-EC slice 5: a decision lifts the halt an open conflict caused; another conflict refuses closure again by itself. */
-    public void conflictDecided() {
-        unanswerableAtClosure = null;
-        conflictAtClosure = false;
-    }
-
     /** T4-EC slice 5: a decided rule as work: under the root, carrying the rule as its criterion; a finished root reopened. */
     public String addDecidedWork(String description, String inputId) {
         GoalEntity root = getRootGoal();
@@ -379,7 +375,6 @@ public class GoalPlannerService {
             goalGraphService.save(root);
         }
         unanswerableAtClosure = null;
-        conflictAtClosure = false;
         String id = "goal-" + java.util.UUID.randomUUID();
         addSubGoal(id, description, currentSubGoalId == null, rootGoalId, "planner", null);
         setGoalMetadataString(id, "inputId", inputId);
@@ -4202,16 +4197,6 @@ public class GoalPlannerService {
      * frozen); one of them had reached 16/16. Asked here, the refusal comes once, when the work is otherwise done.
      */
     private boolean completeRootUnlessUnanswerable(GoalEntity root) {
-        var conflicts = purpose().openConflicts();
-        if (!conflicts.isEmpty()) {
-            List<String> subjects = conflicts.stream().map(com.walpro.autobuilder.goal.purpose.InputEvent::subject).toList();
-            String reason = conflicts.size() + " conflict(s) between inputs wait for a decision: " + String.join("; ", subjects);
-            log.warn("T4-EC: root closure REFUSED -- {}", reason);
-            recordClosureRefusal("T4-EC", root.getId(), reason, subjects);
-            unanswerableAtClosure = reason;
-            conflictAtClosure = true;
-            return false;
-        }
         List<String> unused = inputTypesUnused();
         if (!unused.isEmpty()) {
             String reason = "the project's own code does not use what an input's intent says to use: " + String.join("; ", unused);
@@ -4259,7 +4244,7 @@ public class GoalPlannerService {
         Map<String, String> tree = outputNow();
         if (tree == null) return List.of();
         List<String> out = new ArrayList<>();
-        for (var input : purpose().ledger().active()) {
+        for (var input : purpose().ledger().kept()) {
             String dir = "meta/inputs/" + input.id();
             try {
                 if (!fileService.exists(dir + com.walpro.autobuilder.core.merge.IntentUse.USES_FILE)) continue;
@@ -4273,13 +4258,6 @@ public class GoalPlannerService {
             }
         }
         return out;
-    }
-
-    /** T4-EC slice 5: closure was refused for an open conflict, which a decision lifts: the halt is named for that. */
-    private volatile boolean conflictAtClosure;
-
-    public boolean conflictAtClosure() {
-        return conflictAtClosure;
     }
 
     /** T6-U: set when closure was refused only for a line no kept test answers; the run halts on it. */

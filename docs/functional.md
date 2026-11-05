@@ -204,8 +204,11 @@ brings older ones from the run's log, back to the run's start. And:
 - With two or more conflicts, a bar above them acts on the selected ones (all are selected at first; the
   checkboxes and "all" / "none" change that): **Keep this project's**, **Take what came in**, **Suggest** -- the
   model's recommended resolution put into each one's box, marked as suggested, for you to review and edit -- and
-  **Decide all as shown**, which decides each selected conflict as its box says. A line says how far a batch is. While a conflict is open the project cannot be finished, so open conflicts are
+  **Decide all as shown**, which decides each selected conflict as its box says. A line says how far a batch is. An import is kept only once its conflicts are decided, so open conflicts are
   shown whenever the project's run is up.
+- Until it is kept, an import is a proposal: the loop holds (a running project stops working until you keep or cancel
+  it), and the import's text and requirements do not count yet. Kept, it is simply part of the project -- one
+  specification, one list of requirements, nothing marking which part came from where; cancelled, it leaves nothing.
 - When every conflict is decided: **Keep the imports and start <project>** (a new project), **Keep the import and
   continue <project>** (one that was at rest), or **Keep the import** (one whose loop was running) -- or **Cancel
   the import** at any point before. Whenever the project's run is up, Now lists its **imports** -- kept, or still

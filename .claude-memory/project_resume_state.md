@@ -16,7 +16,7 @@ metadata:
 - **Nothing is live; no code changed.** Notes only, all committed (`bdf648f6` .. `fcd0f557`).
 - **T4-EI filed** from the user's brainstorm with another assistant ("Capability Transfer"), then reshaped by the user over four turns: a **capability import** option wrapped around today's import, which stays unchanged -- stage 1 discovers and lists the source's capabilities, the operator chooses and describes each (code / adapted / idea), stage 2 is today's import on the narrowed input with conflicts as now. Capability size is not fixed (goal nodes, dependencies, undescribed principles); cutting is by LLM interaction; keeping the source as a reference depends on complexity. Two points marked as my reading, to confirm at the design pass. Needs a design pass with the user (page shape, a toy case with three separable capabilities) before code.
 - **Also fixed:** `roadmap-overview.md` still showed T4-EG open.
-- **Next: T4-EH** (component outside the application's scan). Field tree on disk: `data/firestarter/checkpoint-archive/cycle-1793661773585` (application class in `.domain`, controllers in `.controller`). `data/t4eg-recv/` (mine, T4-EG's DoD case) can be deleted.
+- **Next: T4-EH** (component outside the application's scan). Field tree on disk: `data/firestarter/checkpoint-archive/cycle-1793661773585` (application class in `.domain`, controllers in `.controller`). `data/t4eg-recv/` (mine, T4-EG's DoD case) deleted 2026-11-06 at the user's word (its graph nodes stay in Neo4j).
 
 ## 2026-11-03 (Opus 5.5, session 24) -- T4-ED: THE HOME SCREEN BUILT (NEW / CONTINUE / IMPORT ONE / BRING TOGETHER / EXTEND, PENDING IMPORTS, CONFLICT DECISIONS); T4-EG AND T1-GI FILED
 

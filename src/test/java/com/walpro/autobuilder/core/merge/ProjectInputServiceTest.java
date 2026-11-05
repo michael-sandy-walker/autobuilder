@@ -88,6 +88,12 @@ class ProjectInputServiceTest {
         service = new ProjectInputService(goals, files, manifest, gate, verifier, none, comparison);
     }
 
+    /** T4-EG: the goal a kept import's intent landed as. */
+    private GoalEntity intentGoal(String inputId) {
+        return goals.getAllGoals().stream().filter(g -> g.getMetadata() != null && inputId.equals(g.getMetadata().get("inputId"))
+                && INTENT.equals(g.getDescription())).findFirst().orElseThrow();
+    }
+
     private ProjectInputService.Report bring() throws IOException {
         return service.bring(new ProjectInputService.Request("knots", "run-k", brought, INTENT, "operator", false));
     }
@@ -103,19 +109,19 @@ class ProjectInputServiceTest {
         assertThat(input.content()).isEqualTo(INTENT);
         assertThat(input.sourceRunId()).isEqualTo("run-k");
 
-        assertThat(goals.getRootGoal().getStatus()).as("a finished root reopens").isEqualTo(GoalStatus.ACTIVE);
-        GoalEntity landed = goals.getGoalById(r.goalId());
-        assertThat(landed.getDescription()).isEqualTo(INTENT);
-        assertThat(landed.getParentId()).isEqualTo("root");
-        assertThat(landed.getMetadata()).containsEntry("inputId", input.id());
-        assertThat(goals.getCurrentSubGoal().getId()).isEqualTo(r.goalId());
-        assertThat(goals.getAllGoals()).filteredOn(g -> "Tie knots".equals(g.getDescription())).singleElement()
-                .satisfies(g -> {
-                    assertThat(g.getParentId()).isEqualTo(r.goalId());
-                    assertThat(g.getMetadata()).containsEntry("inputId", input.id()).containsEntry("sourceGoalId", "root-k");
-                });
+        // T4-EG: pending, it is not in the goal tree, and a finished project stays finished
+        assertThat(r.goalId()).isNull();
+        assertThat(goals.getAllGoals()).noneMatch(g -> g.getMetadata() != null && input.id().equals(g.getMetadata().get("inputId")));
+        assertThat(goals.getRootGoal().getStatus()).isEqualTo(GoalStatus.COMPLETED);
 
         service.keep(r.inputId(), "operator");
+
+        assertThat(goals.getRootGoal().getStatus()).as("kept, a finished root reopens").isEqualTo(GoalStatus.ACTIVE);
+        GoalEntity landed = intentGoal(input.id());
+        assertThat(landed.getParentId()).isEqualTo("root");
+        assertThat(goals.getCurrentSubGoal().getId()).isEqualTo(landed.getId());
+        assertThat(goals.getAllGoals()).as("the import's root is not copied: one tree, one root")
+                .noneMatch(g -> "Tie knots".equals(g.getDescription()));
         assertThat(goals.requirements().obligationsOrClauses()).contains("A knot holds.");
         assertThat(goals.requirements().answeredByGate("tests")).contains("The suite passes.");
         assertThat(files.readFile("meta/inputs/" + input.id() + "/placed.txt")).contains("org/knot/Knot.java");
@@ -135,8 +141,9 @@ class ProjectInputServiceTest {
     @Test
     void theInputsGoalClosesOnWhatTheIntentAsks() throws IOException {
         ProjectInputService.Report r = bring();
+        service.keep(r.inputId(), "operator");
 
-        assertThat(goals.getGoalById(r.goalId()).getMetadata().get("acceptanceCriteria")).asList().isNotEmpty();
+        assertThat(intentGoal(r.inputId()).getMetadata().get("acceptanceCriteria")).asList().isNotEmpty();
     }
 
     @Test
@@ -151,9 +158,14 @@ class ProjectInputServiceTest {
 
         assertThat(r.unmet()).containsExactly("Knot is final");
         assertThat(r.byModel()).isGreaterThan(0);
-        assertThat(goals.getGoalById(r.goalId()).getMetadata().get("acceptanceCriteria")).asList().contains("Knot is final");
-        GoalEntity carried = goals.getAllGoals().stream().filter(g -> "Tie knots".equals(g.getDescription())).findFirst().orElseThrow();
-        assertThat(carried.getMetadata().get("criteriaPassStatus").toString()).contains("2=false").contains("1=true");
+        service.keep(r.inputId(), "operator");
+        GoalEntity landed = intentGoal(r.inputId());
+        // T4-EG: the import's root is not copied; what it asked goes onto the intent goal -- unmet as work, met as banked
+        @SuppressWarnings("unchecked")
+        List<Object> criteria = (List<Object>) landed.getMetadata().get("acceptanceCriteria");
+        assertThat(criteria).contains("Knot is final", "Knot exists");
+        assertThat(goals.getCriteriaPassStatus(landed)).containsEntry(criteria.indexOf("Knot exists") + 1, true)
+                .doesNotContainEntry(criteria.indexOf("Knot is final") + 1, true);
     }
 
     /** T4-EG: a cancelled import leaves nothing; the ledger keeps the record of it. */
@@ -170,7 +182,9 @@ class ProjectInputServiceTest {
         assertThat(goals.requirements().obligationsOrClauses()).contains("A coil has at most 3 turns.")
                 .doesNotContain("the turn limit: at most 9 turns", "A knot holds.");
         assertThat(goals.specification()).isEqualTo(SEED);
-        assertThat(goals.getGoalById(r.goalId()).getStatus()).isEqualTo(GoalStatus.SUBSUMED);
+        assertThat(goals.getAllGoals()).as("a pending import never entered the goal tree")
+                .noneMatch(g -> g.getMetadata() != null && r.inputId().equals(g.getMetadata().get("inputId")));
+        assertThat(goals.getRootGoal().getStatus()).as("a finished project stays finished").isEqualTo(GoalStatus.COMPLETED);
         assertThat(goals.getAllGoals()).as("nothing was built on it, so there is nothing to repair")
                 .noneMatch(g -> g.getDescription().startsWith("The project builds and works without"));
         assertThat(new ProtectedPaths(files).isProtected("src/test/java/org/knot/KnotTest.java")).isFalse();
@@ -209,9 +223,10 @@ class ProjectInputServiceTest {
         goals.addSubGoal("under-way", "Wind the coil", true);
 
         ProjectInputService.Report r = bring();
+        service.keep(r.inputId(), "operator");
 
         assertThat(goals.getCurrentSubGoal().getId()).isEqualTo("under-way");
-        assertThat(goals.getGoalById(r.goalId()).getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(intentGoal(r.inputId()).getStatus()).isEqualTo(GoalStatus.ACTIVE);
     }
 
     @Test
@@ -414,6 +429,9 @@ class ProjectInputServiceTest {
         service.decide(r.conflicts().get(0).id(), "own", "operator", "keep both constructors");
 
         assertThat(Files.readString(base.resolve("output/src/main/java/org/knot/Knot.java"))).contains("Ours");
+        assertThat(goals.getAllGoals()).as("T4-EG: decided work lands with the import, at keep")
+                .noneMatch(g -> g.getDescription().startsWith("Merge src/main/java/org/knot/Knot.java"));
+        service.keep(r.inputId(), "operator");
         assertThat(goals.getAllGoals()).anyMatch(g -> g.getDescription().startsWith("Merge src/main/java/org/knot/Knot.java")
                 && g.getDescription().contains("keep both constructors") && g.getStatus() == GoalStatus.ACTIVE);
     }
@@ -501,12 +519,13 @@ class ProjectInputServiceTest {
     @Test
     void aKeptImportsGoalsStateTheProjectsRules_aPendingOnesDoNot() throws IOException {
         ProjectInputService.Report r = bring();
-        @SuppressWarnings("unchecked")
-        List<String> criteria = (List<String>) goals.getGoalById(r.goalId()).getMetadata().get("acceptanceCriteria");
-        assertThat(criteria).isNotEmpty();
+        List<String> before = goals.statedRules();
 
-        assertThat(goals.statedRules()).doesNotContainAnyElementsOf(criteria);
         service.keep(r.inputId(), "operator");
+        @SuppressWarnings("unchecked")
+        List<String> criteria = (List<String>) intentGoal(r.inputId()).getMetadata().get("acceptanceCriteria");
+        assertThat(criteria).isNotEmpty();
+        assertThat(before).as("pending, it stated nothing").doesNotContainAnyElementsOf(criteria);
         assertThat(goals.statedRules()).containsAll(criteria);
     }
 

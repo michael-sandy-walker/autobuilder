@@ -14,6 +14,13 @@ public interface InputGraphService {
     /** {@code inputId} landed as {@code goalId}; it came from {@code sourceRootGoalId} when the graph holds that goal. */
     void link(String inputId, String goalId, String sourceRootGoalId);
 
+    /**
+     * T4-EG: {@code inputId} brought {@code goalId} -- added it ({@code how} = {@code added}) or was unified with it
+     * ({@code text}, {@code criteria}, {@code model}: what judged them the same). Provenance only: nothing in the loop
+     * reads it; "what did this import bring" is a query.
+     */
+    void linkBrought(String inputId, String goalId, String how);
+
     /** Upserts one event: a conflict's decision replaces its open state. */
     void saveEvent(InputEvent event, String lineageId);
 

@@ -281,13 +281,13 @@ public class GoalPlannerService {
     }
 
     /**
-     * T4-EC slice 4: a project input lands in the goal tree: its intent a goal under the root, current, carrying what
-     * closes it, and current unless work is under way; the input's own tree below it, every node stamped; a finished
-     * root reopened.
+     * T4-EG: a kept import's intent lands in the goal tree as a goal under the root, carrying what closes it, and current
+     * unless work is under way; a finished root reopened. The import's own goal tree is NOT hung below it: its goals are
+     * unified with the project's ({@code GoalUnifier}), so there is one tree and one root.
      *
-     * @return the id of the goal the input landed as
+     * @return the id of the goal the intent landed as
      */
-    public String landInput(String inputId, String intent, GoalEntity tree, List<String> criteria) {
+    public String landIntent(String inputId, String intent, List<String> criteria) {
         GoalEntity root = getRootGoal();
         if (root.getStatus() == GoalStatus.COMPLETED || root.getStatus() == GoalStatus.GIVEN_UP) {
             root.setStatus(GoalStatus.ACTIVE);
@@ -302,13 +302,55 @@ public class GoalPlannerService {
         GoalEntity current = getCurrentSubGoal();
         addSubGoal(id, intent, current == null || current.getStatus() != GoalStatus.ACTIVE, rootGoalId, "planner", null);
         setGoalMetadataString(id, "inputId", inputId);
-        if (tree != null) {
-            flattenRecursive(tree, id);
-            saveLanded(tree, inputId);
-        }
         if (!criteria.isEmpty()) setAcceptanceCriteria(id, criteria);
         persist();
         return id;
+    }
+
+    /**
+     * T4-EG: a goal a kept import brought that matches nothing in the project, added under {@code parentId} -- with a
+     * fresh id, so it belongs to this project's lineage (a reused source id matched the source project's own graph node
+     * and re-parented it). Lands COMPLETED when the merged code already meets it.
+     *
+     * @return the new goal's id
+     */
+    public String addLandedGoal(String parentId, String description, List<String> criteria, Map<Integer, Boolean> passStatus,
+                                boolean met, String inputId, String sourceGoalId) {
+        String id = "goal-" + java.util.UUID.randomUUID();
+        addSubGoal(id, description, false, parentId, "planner", null);
+        setGoalMetadataString(id, "inputId", inputId);
+        if (sourceGoalId != null) setGoalMetadataString(id, "sourceGoalId", sourceGoalId);
+        if (criteria != null && !criteria.isEmpty()) setAcceptanceCriteria(id, criteria);
+        if (passStatus != null && !passStatus.isEmpty()) saveCriteriaPassStatus(id, passStatus);
+        if (met) {
+            GoalEntity g = goalMap.get(id);
+            g.setStatus(GoalStatus.COMPLETED);
+            g.setCompleted(java.time.Instant.now());
+            g.setResolution("already met when its import was kept");
+            goalGraphService.save(g);
+        }
+        persist();
+        return id;
+    }
+
+    /** T4-EG: {@code criteria} added to a goal a kept import's goal was unified with, each banked as met. */
+    public void addMetCriteria(String goalId, List<String> criteria) {
+        GoalEntity g = goalMap.get(goalId);
+        if (g == null || criteria.isEmpty()) return;
+        List<String> all = new ArrayList<>(acceptanceCriteriaOf(g));
+        List<String> added = criteria.stream().filter(c -> !all.contains(c)).distinct().toList();
+        if (added.isEmpty()) return;
+        all.addAll(added);
+        Map<Integer, Boolean> status = new HashMap<>(getCriteriaPassStatus(g));
+        setAcceptanceCriteria(goalId, all);
+        // Banked by where each one actually stands: the write may drop a line it will not keep as a criterion.
+        List<String> stored = acceptanceCriteriaOf(g);
+        for (String c : added) {
+            int at = stored.indexOf(c);
+            if (at >= 0) status.put(at + 1, true);
+        }
+        saveCriteriaPassStatus(goalId, status);
+        persist();
     }
 
     /**
@@ -381,13 +423,6 @@ public class GoalPlannerService {
         setAcceptanceCriteria(id, List.of(description));
         persist();
         return id;
-    }
-
-    private void saveLanded(GoalEntity node, String inputId) {
-        node.getMetadata().put("inputId", inputId);
-        goalGraphService.save(node);
-        goalGraphService.setParent(node.getId(), node.getParentId());
-        for (GoalEntity child : node.getSubGoals()) saveLanded(child, inputId);
     }
 
     public void setCurrentCycleContext(CycleContextData ctx) {

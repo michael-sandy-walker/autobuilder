@@ -38,6 +38,8 @@ public class InputComparison {
             + " was brought into another. You lay out the ways it can be resolved and what each changes; the person decides."
             + " Answer only in the format asked for.";
 
+    private static final String GOAL_SYSTEM = "You compare the goals of two software projects that are being merged into one."
+            + " Answer only in the format asked for.";
     private static final String USE_SYSTEM = "You read what a person asks of a software project. Answer only in the format asked for.";
 
     /**
@@ -148,6 +150,19 @@ public class InputComparison {
         Matcher m = DIFFERENCE.matcher(answer);
         while (m.find()) out.add(new Difference(m.group(1), m.group(2), m.group(3)));
         return out;
+    }
+
+    /**
+     * T4-EG: whether two goals, one from each project, are the same piece of work -- asked only for a pair structure
+     * could not settle (the text differs and the criteria do not largely agree).
+     */
+    public boolean sameGoal(String specification, String ours, String theirs) {
+        String answer = ask(GOAL_SYSTEM, "BOTH PROJECTS ARE FOR:\n" + specification
+                + "\n\nA GOAL OF THE RECEIVING PROJECT:\n" + ours
+                + "\n\nA GOAL OF THE PROJECT BROUGHT INTO IT:\n" + theirs
+                + "\n\nAre these the same piece of work -- would finishing one finish the other? SAME only when they ask"
+                + " for the same thing; a goal that is a part of the other, or covers more, is DIFFERENT.\n\nANSWER: SAME or DIFFERENT");
+        return answer.contains("SAME") && !answer.contains("DIFFERENT");
     }
 
     /** True when the operator's intent names this rule, deciding it for the input. */

@@ -419,6 +419,16 @@ public class PurposeService implements CheckpointableState {
         }
     }
 
+    /** T4-EG: {@code inputId} brought {@code goalId}, {@code how}; provenance in the graph, read by nothing in the loop. */
+    public void linkBrought(String inputId, String goalId, String how) {
+        if (graph == null) return;
+        try {
+            graph.linkBrought(inputId, goalId, how);
+        } catch (Exception e) {
+            log.warn("T4-EG: what input {} brought was not linked in the graph: {}", inputId, e.getMessage());
+        }
+    }
+
     /**
      * The root goal as loaded: record it as the seed when the ledger has none, or when the ledger's seed is not the
      * root's text (a root set by a path that did not record it).

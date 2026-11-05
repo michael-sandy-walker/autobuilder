@@ -203,20 +203,19 @@ public class ProjectInputService {
         java.util.Set<String> out = new java.util.HashSet<>(goals.purpose().linesOut());
         goals.purpose().ledger().events().stream().filter(e -> e.inputId().equals(input.id()) && e.keepsLineOut())
                 .forEach(e -> out.add(e.heldLine().strip()));
-        GoalEntity tree = null;
-        if (landing.tree() != null) {
-            stamp(landing.tree(), verdicts);
-            tree = MAPPER.treeToValue(landing.tree(), GoalEntity.class);
-        }
+        if (landing.tree() != null) stamp(landing.tree(), verdicts);
         List<String> unmet = verdicts.stream().filter(v -> Boolean.FALSE.equals(v.met())).map(Verdict::criterion)
                 .filter(c -> !out.contains(c.strip())).toList();
         // The goal closes on what the intent asks: without criteria nothing could ever close it (field119: the run sat on
         // it from 39/39 to its deadline), and field117 only closed because a stale line happened to land on its goal.
         List<String> criteria = new ArrayList<>(intentLines);
         unmet.stream().filter(u -> !criteria.contains(u)).forEach(criteria::add);
-        String goalId = goals.landInput(input.id(), r.intent(), tree, criteria);
-        String sourceRoot = landing.tree() == null ? null : landing.tree().path("metadata").path("sourceGoalId").asText(null);
-        goals.purpose().linkInput(input.id(), goalId, sourceRoot);
+        // T4-EG: nothing lands in the goal tree while the import is pending; keep() lands it from what is kept here.
+        ObjectNode kept = MAPPER.createObjectNode();
+        kept.set("criteria", MAPPER.valueToTree(criteria));
+        if (landing.tree() != null) kept.set("tree", landing.tree());
+        files.writeFile(dir + LANDING_FILE, MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(kept));
+        String goalId = null;
 
         log.warn("T4-EC: {} brought in as {} -- {} file(s) placed, {} correction(s), {} conflict(s) held, {} criteria answered, {} unmet, {} obligation(s), to use: {}",
                 r.label(), input.id(), landing.placed().size(), corrections.size(), goals.purpose().openConflicts().size(),
@@ -366,7 +365,7 @@ public class ProjectInputService {
                 String line = open.subject() + ": " + open.other();
                 InputEntry input = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(open.inputId())).findFirst().orElseThrow();
                 addRequirement(input, line);
-                goals.addDecidedWork(line, open.inputId());
+                decidedWork(open.inputId(), line);
             }
         }
         log.warn("T4-EC: conflict '{}' decided for {} by {}", open.subject(), decision, by);
@@ -384,7 +383,7 @@ public class ProjectInputService {
                 : resolution;
         InputEntry input = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(open.inputId())).findFirst().orElseThrow();
         addRequirement(input, line);
-        goals.addDecidedWork(line, open.inputId());
+        decidedWork(open.inputId(), line);
         log.warn("T4-EC: conflict '{}' decided by {} with their own resolution: {}", open.subject(), by, resolution);
         return decided;
     }
@@ -435,8 +434,47 @@ public class ProjectInputService {
             throw new IllegalArgumentException("decide its conflicts before keeping it (" + open.size() + " open: "
                     + String.join("; ", open) + ")");
         }
+        landKept(inputId);
         log.warn("T4-ED: import {} ({}) kept by {}", inputId, pending.subject(), by);
         return goals.purpose().keepImport(pending, by);
+    }
+
+    /** What keep() lands: the criteria of the intent goal and the import's stamped goal tree. */
+    static final String LANDING_FILE = "/landing.json";
+    /** Work a decision made while the import was pending, one line each, landed at keep. */
+    static final String WORK_FILE = "/work.txt";
+
+    /** A decision's work: kept beside the pending import and landed with it (T4-EG: nothing lands while pending). */
+    private void decidedWork(String inputId, String line) throws IOException {
+        String path = "meta/inputs/" + inputId + WORK_FILE;
+        String before = files.exists(path) ? files.readFile(path) : "";
+        files.writeFile(path, before + line.replace('\n', ' ') + "\n");
+    }
+
+    /**
+     * T4-EG slice 4: the kept import enters the goal tree -- its intent as a goal under the root, its own goals unified
+     * with the project's (GoalUnifier: one tree, no second root), the work its decisions made, and provenance links.
+     */
+    private void landKept(String inputId) {
+        String dir = "meta/inputs/" + inputId;
+        InputEntry input = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(inputId)).findFirst().orElseThrow();
+        try {
+            JsonNode kept = files.exists(dir + LANDING_FILE) ? MAPPER.readTree(files.readFile(dir + LANDING_FILE)) : MAPPER.createObjectNode();
+            List<String> criteria = new ArrayList<>();
+            kept.path("criteria").forEach(c -> criteria.add(c.asText()));
+            String goalId = goals.landIntent(inputId, input.content(), criteria);
+            JsonNode tree = kept.get("tree");
+            String sourceRoot = tree == null ? null : tree.path("metadata").path("sourceGoalId").asText(null);
+            goals.purpose().linkInput(inputId, goalId, sourceRoot);
+            if (tree != null) new GoalUnifier(goals, comparison, goals.specification(), inputId).unify(tree, goalId);
+            if (files.exists(dir + WORK_FILE)) {
+                for (String line : files.readFile(dir + WORK_FILE).lines().filter(l -> !l.isBlank()).toList()) {
+                    goals.addDecidedWork(line, inputId);
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("the import could not be landed: " + e.getMessage(), e);
+        }
     }
 
     /** T4-ED: the ways an open conflict can be resolved, each with what it changes -- advice for the operator. */

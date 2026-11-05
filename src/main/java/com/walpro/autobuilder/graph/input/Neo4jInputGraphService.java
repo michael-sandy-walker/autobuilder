@@ -119,6 +119,22 @@ public class Neo4jInputGraphService implements InputGraphService {
     }
 
     @Override
+    public void linkBrought(String inputId, String goalId, String how) {
+        Map<String, Object> p = new HashMap<>();
+        p.put("inputId", inputId);
+        p.put("goalId", goalId);
+        p.put("how", how);
+        neo4jClient.query("""
+                MATCH (i:Input {id: $inputId})
+                MATCH (g:Goal {id: $goalId})
+                MERGE (i)-[b:BROUGHT]->(g)
+                SET b.how = $how
+                """)
+                .bindAll(p)
+                .run();
+    }
+
+    @Override
     public void link(String inputId, String goalId, String sourceRootGoalId) {
         Map<String, Object> p = new HashMap<>();
         p.put("inputId", inputId);

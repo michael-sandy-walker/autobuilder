@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-03 (Opus 5.5, session 24) -- T4-ED: THE HOME SCREEN BUILT (NEW / CONTINUE / IMPORT ONE / BRING TOGETHER / EXTEND, PENDING IMPORTS, CONFLICT DECISIONS); T4-EG AND T1-GI FILED -- START HERE
+## 2026-11-05/06 (Opus 5.5, session 25) -- T4-EI FILED AND SHAPED WITH THE USER (CAPABILITY IMPORT); NEXT: T4-EH -- START HERE
+
+- **Nothing is live; no code changed.** Notes only, all committed (`bdf648f6` .. `fcd0f557`).
+- **T4-EI filed** from the user's brainstorm with another assistant ("Capability Transfer"), then reshaped by the user over four turns: a **capability import** option wrapped around today's import, which stays unchanged -- stage 1 discovers and lists the source's capabilities, the operator chooses and describes each (code / adapted / idea), stage 2 is today's import on the narrowed input with conflicts as now. Capability size is not fixed (goal nodes, dependencies, undescribed principles); cutting is by LLM interaction; keeping the source as a reference depends on complexity. Two points marked as my reading, to confirm at the design pass. Needs a design pass with the user (page shape, a toy case with three separable capabilities) before code.
+- **Also fixed:** `roadmap-overview.md` still showed T4-EG open.
+- **Next: T4-EH** (component outside the application's scan). Field tree on disk: `data/firestarter/checkpoint-archive/cycle-1793661773585` (application class in `.domain`, controllers in `.controller`). `data/t4eg-recv/` (mine, T4-EG's DoD case) can be deleted.
+
+## 2026-11-03 (Opus 5.5, session 24) -- T4-ED: THE HOME SCREEN BUILT (NEW / CONTINUE / IMPORT ONE / BRING TOGETHER / EXTEND, PENDING IMPORTS, CONFLICT DECISIONS); T4-EG AND T1-GI FILED
 
 - **Nothing is live.** Uncommitted at hand-off unless the user authorised a commit: slice 1 code, docs, roadmap, `scripts/run_outcomes.json` (one row, the fast-forward check).
 - **T4-ED redefined with the user** over three option rounds (preflight-driven console and a product supervisor both rejected): the app starts UNBOUND on a home screen (new project, import one, import several, continue); the home screen is the default; a project parameter fast-forwards through the SAME launcher; browser only, over REST; one run at a time. Detail on the ticket.

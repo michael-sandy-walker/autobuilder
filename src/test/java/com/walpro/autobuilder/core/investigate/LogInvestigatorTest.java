@@ -74,6 +74,25 @@ class LogInvestigatorTest {
         assertThat(second.get(second.size() - 1).getContent()).contains("2 matching lines.", "(3 probes left)");
     }
 
+    /** T4-EI: another project's files with no logs -- the instructions and the opening speak of files only. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aProjectWithoutLogsIsProbedAsFilesOnly(@org.junit.jupiter.api.io.TempDir java.nio.file.Path tree) throws Exception {
+        java.nio.file.Files.writeString(tree.resolve("Store.java"), "class Store { long nextId; }\n");
+        replies("#Probe find nextId", "#Answer\nStore counts ids in nextId (Store.java:1).");
+
+        var result = new LogInvestigator(llm).investigate("How are ids given?", Map.of(), tree, 3, null);
+
+        assertThat(result.answer()).isEqualTo("Store counts ids in nextId (Store.java:1).");
+        ArgumentCaptor<List<Message>> sent = ArgumentCaptor.forClass(List.class);
+        verify(llm, times(2)).ask(sent.capture());
+        List<Message> first = sent.getAllValues().get(0);
+        assertThat(first.get(0).getContent()).startsWith("You answer a question about a software project by reading its FILES")
+                .contains("#Probe open").doesNotContain("#Probe search", "LOGS");
+        assertThat(first.get(1).getContent()).contains("How are ids given?", "THE PROJECT NOW: 1 files").doesNotContain("THE LOGS");
+        assertThat(result.steps().get(0).result()).contains("Store.java");
+    }
+
     @Test
     void probesRunOut_thenOneLastCallAsksForTheAnswer() {
         replies("#Probe count app.log alpha", "#Probe count app.log beta", "#Answer\nalpha and beta once each");

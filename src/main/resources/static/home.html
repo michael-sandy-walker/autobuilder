@@ -80,6 +80,13 @@
     border: 1px solid var(--rule); border-radius: 6px; background: var(--panel-2); }
   .conflict .pickc { width: auto; margin: 0 8px 0 0; vertical-align: -1px; }
   .suggested { color: var(--violet); font-size: 12px; margin: 4px 0 0; }
+  .capability { border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; margin-top: 8px; }
+  .capability select { width: auto; }
+  .capability .refbox { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .capability .refbox input { width: auto; margin: 0; }
+  .capability details, .preview details { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .preview { border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; margin-top: 10px; font-size: 12.5px; }
+  .preview .problem { color: var(--warn); }
   .live-counts { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
   .live-counts b { color: var(--ink); font-size: 15px; margin-right: 4px; }
   .recurring { border: 1px solid var(--warn-rule); background: var(--warn-bg); border-radius: 6px; padding: 8px 10px; margin-top: 10px;
@@ -236,8 +243,16 @@
   <select id="ext-project" style="margin-top:8px"></select>
   <div class="pathrow" id="ext-path-row" hidden><input id="ext-path" placeholder="/home/me/code/their-library" autocomplete="off" spellcheck="false">
     <button id="ext-browse" type="button">Browse...</button></div>
-  <label for="ext-intent">What to take from it, and how it is used here</label>
-  <textarea id="ext-intent"></textarea>
+  <label>What to take</label>
+  <div class="source">
+    <label><input type="radio" name="ext-what" value="whole" checked> the whole project</label>
+    <label><input type="radio" name="ext-what" value="capabilities"> chosen capabilities</label>
+  </div>
+  <p class="note" id="ext-cap-note" hidden>Autobuilder first finds what the project can do and lists its capabilities. For each
+    one you choose whether it comes in as code, adapted to this project, as an idea, or not at all, and say what it is for
+    here. Only then does anything come in.</p>
+  <div id="ext-intent-row"><label for="ext-intent">What to take from it, and how it is used here</label>
+  <textarea id="ext-intent"></textarea></div>
   <div class="foot">
     <button data-close>Cancel</button>
     <button id="ext-go" class="primary">Extend</button>
@@ -670,7 +685,8 @@ function wireGoalBox() {
 }
 
 // Projects being brought in: each input's outcome, the conflicts, and letting the loop work.
-const PHASE = { STARTING: 'starting', SETTING_GOAL: 'setting the goal', BRINGING_IN: 'bringing in',
+const PHASE = { STARTING: 'starting', SETTING_GOAL: 'setting the goal', DISCOVERING: 'finding capabilities',
+  CHOOSING: 'choosing capabilities', BRINGING_IN: 'bringing in',
   DECIDING: 'waiting for you', RELEASED: 'kept', CANCELLED: 'cancelled', FAILED: 'stopped' };
 // What each conflict's own resolution says so far, and the options asked for: kept here, outside the rebuilt HTML.
 const drafts = {};
@@ -691,8 +707,103 @@ function jobBox() {
     + job.inputs.map(i => '<tr><td>' + esc(i.project) + '</td><td>' + esc(i.status) + (i.message ? ': ' + esc(i.message) : '')
       + '</td><td>' + (i.newFiles ?? '') + '</td><td>' + conflictCell(i) + '</td><td>' + (i.corrections ?? '') + '</td><td>'
       + criteriaCell(i) + '</td></tr>').join('') + '</tbody></table>'
+    + (job.phase === 'DISCOVERING' ? '<p class="note">A model is reading ' + esc(job.inputs[0].project)
+       + ' to find what it can do. This can take minutes; nothing comes in yet.</p>' : '')
+    + (job.phase === 'CHOOSING' && job.capabilities ? capabilitiesHtml() : '')
     + (job.phase === 'DECIDING' ? conflictsHtml() + releaseHtml() : '')
     + '</div>';
+}
+
+// ---------- T4-EI: choosing capabilities ----------
+// Each capability's draft choice, kept here so a rebuilt page keeps what is being typed; changed since checked -> stale.
+const capDrafts = {};
+let capStale = true, capBusy = false;
+const MODES = [['leave_out', 'leave out'], ['code', 'take as code'], ['adapt', 'adapt'], ['idea', 'idea only']];
+function capDraft(c) {
+  if (!capDrafts[c.id]) {
+    const made = (job.capabilities.choices || []).find(x => x.capability === c.id);
+    capDrafts[c.id] = made ? { mode: made.mode.toLowerCase(), text: made.description, reference: made.reference, suggested: false }
+      : { mode: 'leave_out', text: c.summary || '', reference: !!c.reference, suggested: true };
+  }
+  return capDrafts[c.id];
+}
+function capabilitiesHtml() {
+  const sel = job.capabilities, p = sel.preview;
+  const rows = sel.capabilities.map(c => {
+    const d = capDraft(c), takes = d.mode !== 'leave_out', adapts = d.mode === 'adapt' || d.mode === 'idea';
+    return '<div class="capability"><b>' + esc(c.name) + '</b><div class="side">' + esc(c.summary) + '</div>'
+      + '<details><summary>' + c.declarations.length + ' declaration' + (c.declarations.length === 1 ? '' : 's')
+      + (c.dependencies.length ? '; needs ' + esc(c.dependencies.join(', ')) : '') + '</summary>' + esc(c.declarations.join(', ')) + '</details>'
+      + '<div class="row"><select data-capmode="' + esc(c.id) + '"' + (capBusy ? ' disabled' : '') + '>'
+      + MODES.map(([v, l]) => '<option value="' + v + '"' + (v === d.mode ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></div>'
+      + (takes ? '<label>What it is for here</label>' + (d.suggested ? '<div class="suggested">Suggested from what discovery found -- '
+          + 'say what this project should do with it.</div>' : '') + '<textarea data-captext="' + esc(c.id) + '"></textarea>' : '')
+      + (adapts ? '<label class="refbox"><input type="checkbox" data-capref="' + esc(c.id) + '"' + (d.reference ? ' checked' : '')
+          + '> keep ' + esc(sel.label) + '\'s source to read while doing it'
+          + (c.referenceWhy ? ' <span class="note" style="margin:0">(' + (c.reference ? 'proposed' : 'not proposed') + ': '
+              + esc(c.referenceWhy) + ')</span>' : '') + '</label>' : '')
+      + '</div>';
+  }).join('');
+  const unknown = sel.unknown && sel.unknown.length ? '<p class="note">Discovery also named ' + sel.unknown.length
+    + ' declaration(s) the source does not have; they were dropped: ' + esc(sel.unknown.join(', ')) + '</p>' : '';
+  return '<p class="note">' + sel.capabilities.length + ' capabilities found in ' + esc(sel.label) + ' (' + (sel.probes || []).length
+    + ' probes). Choose how each comes in; nothing is brought in until you continue.</p>' + unknown + rows
+    + '<div class="row"><button id="cap-check"' + (capBusy ? ' disabled' : '') + '>Check the choices</button>'
+    + '<button id="cap-go" class="primary"' + (capBusy || capStale || !p || p.problems.length ? ' disabled' : '') + '>Continue to import</button>'
+    + '<button id="cap-cancel" class="destructive"' + (capBusy ? ' disabled' : '') + '>Cancel</button>'
+    + '<span class="note">' + (capBusy ? 'A model is working out the cut from the source; structure then checks it...'
+      : capStale ? 'Check the choices before continuing.' : p && p.problems.length ? 'The choices cannot be met as made.' : '')
+    + '</span></div>' + (p && !capStale ? previewHtml(p) : '');
+}
+function previewHtml(p) {
+  const list = (title, items, cls) => items && items.length ? '<details' + (cls ? ' open' : '') + '><summary' + (cls ? ' class="' + cls + '"' : '') + '>'
+    + esc(title) + ' (' + items.length + ')</summary>' + items.map(i => '<div>' + esc(i) + '</div>').join('') + '</details>' : '';
+  return '<div class="preview"><b>What the choices bring in</b>'
+    + (p.problems.length ? list('Why they cannot be met', p.problems, 'problem') : '')
+    + '<div class="note">' + (p.files.length ? p.files.length + ' file(s) placed as code.' : 'No code is placed: only goals for this project.') + '</div>'
+    + list('Files placed', p.files.map(f => f + ' -- for ' + (p.provenance[f] || []).join(', ')))
+    + list('Taken out of files that come in', p.cutOut)
+    + list('Coming in although a capability not taken as code lists it too', p.shared)
+    + list('Coming in with their file, listed by no capability', p.unattributed)
+    + list('The code taken relies on', p.dependencies)
+    + '<details><summary>What this project is asked to do</summary><div class="side">' + esc(p.intent) + '</div></details></div>';
+}
+function wireCapabilities() {
+  const sel = job.capabilities;
+  document.querySelectorAll('[data-capmode]').forEach(x => x.onchange = () => {
+    capDrafts[x.dataset.capmode].mode = x.value; capStale = true; rerender();
+  });
+  document.querySelectorAll('[data-captext]').forEach(t => {
+    t.value = capDrafts[t.dataset.captext].text;
+    t.oninput = () => { const d = capDrafts[t.dataset.captext]; d.text = t.value; d.suggested = false; capStale = true; };
+  });
+  document.querySelectorAll('[data-capref]').forEach(x => x.onchange = () => {
+    capDrafts[x.dataset.capref].reference = x.checked; capStale = true; rerender();
+  });
+  $('cap-check').onclick = async () => {
+    const choices = sel.capabilities.map(c => { const d = capDraft(c);
+      return { capability: c.id, mode: d.mode, description: d.mode === 'leave_out' ? '' : d.text,
+        reference: (d.mode === 'adapt' || d.mode === 'idea') && d.reference }; });
+    capBusy = true; rerender();
+    const r = await post('/home/integrate/capabilities', choices);
+    capBusy = false;
+    if (r.status !== 200) { toast(false, 'Not accepted: ' + message(r)); rerender(); return; }
+    job = r.body; capStale = false; rerender();
+  };
+  $('cap-go').onclick = async () => {
+    capBusy = true; rerender();
+    const r = await post('/home/integrate/capabilities/import');
+    capBusy = false;
+    if (r.status !== 202) toast(false, 'Not brought in: ' + message(r));
+    else toast(true, 'Bringing the chosen capabilities into ' + job.name + '.');
+    refresh();
+  };
+  $('cap-cancel').onclick = async () => {
+    if (!confirm('Cancel the capability import into "' + job.name + '"? Nothing has come in yet.')) return;
+    const r = await post('/home/integrate/cancel');
+    if (r.status !== 200) toast(false, 'Not cancelled: ' + message(r)); else toast(true, 'Cancelled; nothing came in.');
+    refresh(); loadProjects();
+  };
 }
 
 // The current input's step, and a bar over all inputs: each input is one share, its steps divide the share.
@@ -787,6 +898,7 @@ function releaseHtml() {
 }
 
 function wireJobBox() {
+  if (job.phase === 'CHOOSING' && job.capabilities) { wireCapabilities(); return; }
   if (job.phase !== 'DECIDING') return;
   const rel = $('release');
   if (rel) rel.onclick = async () => {
@@ -973,19 +1085,26 @@ function openExtend(t) {
 function suggestIntent() {
   const fromProject = document.querySelector('input[name=ext-src]:checked').value === 'project';
   $('ext-project').hidden = !fromProject; $('ext-path-row').hidden = fromProject;
+  const capabilities = document.querySelector('input[name=ext-what]:checked').value === 'capabilities';
+  $('ext-intent-row').hidden = capabilities; $('ext-cap-note').hidden = !capabilities;
+  $('ext-go').textContent = capabilities ? 'Find its capabilities' : 'Extend';
   if ($('ext-intent').dataset.touched) return;
   const n = fromProject ? $('ext-project').value : codeName($('ext-path').value);
   const t = projects.find(x => x.name === n);
   $('ext-intent').value = n ? 'Use ' + n + ' in ' + extending.name + (t && t.seedSummary ? ': ' + t.seedSummary : '.') : '';
 }
 document.querySelectorAll('input[name=ext-src]').forEach(r => r.onchange = suggestIntent);
+document.querySelectorAll('input[name=ext-what]').forEach(r => r.onchange = suggestIntent);
 $('ext-project').onchange = suggestIntent;
 $('ext-path').oninput = suggestIntent;
 $('ext-intent').oninput = () => $('ext-intent').dataset.touched = '1';
 $('ext-go').onclick = async () => {
   const fromProject = document.querySelector('input[name=ext-src]:checked').value === 'project';
-  const input = fromProject ? { project: $('ext-project').value, intent: $('ext-intent').value }
-                            : { path: $('ext-path').value.trim(), intent: $('ext-intent').value };
+  const capabilities = document.querySelector('input[name=ext-what]:checked').value === 'capabilities';
+  const intent = capabilities ? null : $('ext-intent').value;
+  const input = fromProject ? { project: $('ext-project').value, intent, capabilities }
+                            : { path: $('ext-path').value.trim(), intent, capabilities };
+  Object.keys(capDrafts).forEach(k => delete capDrafts[k]); capStale = true;
   const r = await post('/home/extend', { project: extending.name, profiles: profiles(), input });
   if (r.status !== 202) { toast(false, 'Not started: ' + message(r)); return; }
   $('dlg-extend').close(); toast(true, 'Bringing ' + (input.project || codeName(input.path)) + ' into ' + extending.name + '.');

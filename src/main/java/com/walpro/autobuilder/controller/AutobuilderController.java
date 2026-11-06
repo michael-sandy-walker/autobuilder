@@ -348,6 +348,106 @@ public class AutobuilderController {
         }
     }
 
+    /** T4-EI: a capability import's stage in front of the import; optional. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.merge.CapabilityImportService capabilityImportService;
+
+    /** A source to take capabilities from: its label, the run that grew it (or none), its directory. */
+    public record CapabilitySource(String label, String runId, String dir, String addedBy) {
+    }
+
+    /** One choice: the capability, {@code leave_out} / {@code code} / {@code adapt} / {@code idea}, what it is for here. */
+    public record CapabilityChoice(String capability, String mode, String description, boolean reference) {
+    }
+
+    /** T4-EI: what a source can do, found by a model probing it; nothing in the project changes. Slow. */
+    @PostMapping("/capability-imports")
+    public ResponseEntity<?> discoverCapabilities(@RequestBody CapabilitySource r) {
+        if (capabilityImportService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        if (r.label() == null || r.dir() == null) return ResponseEntity.badRequest().body(Map.of("error", "a capability import needs a label and a dir"));
+        try {
+            return ResponseEntity.ok(capabilityImportService.discover(r.label(), r.runId(), java.nio.file.Path.of(r.dir()),
+                    r.addedBy() == null ? "operator" : r.addedBy()));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/capability-imports")
+    public ResponseEntity<?> openCapabilityImports() {
+        if (capabilityImportService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(capabilityImportService.open());
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/capability-imports/{id}")
+    public ResponseEntity<?> capabilityImport(@PathVariable String id) {
+        if (capabilityImportService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(capabilityImportService.get(id));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** T4-EI: the operator's choices; the answer previews what they bring in and what keeps them from being met. */
+    @PostMapping("/capability-imports/{id}/choices")
+    public ResponseEntity<?> chooseCapabilities(@PathVariable String id, @RequestBody List<CapabilityChoice> choices) {
+        if (capabilityImportService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        try {
+            List<com.walpro.autobuilder.core.merge.CapabilityCut.Choice> made = choices.stream()
+                    .map(c -> new com.walpro.autobuilder.core.merge.CapabilityCut.Choice(c.capability(),
+                            com.walpro.autobuilder.core.merge.CapabilityCut.Mode.of(c.mode()), c.description(), c.reference()))
+                    .toList();
+            return ResponseEntity.ok(capabilityImportService.choose(id, made));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * T4-EI: the chosen capabilities brought in -- the narrowed input through the ordinary import, which then waits
+     * pending like any other (conflicts, keep, cancel).
+     */
+    @PostMapping("/capability-imports/{id}/import")
+    public ResponseEntity<?> importCapabilities(@PathVariable String id) {
+        if (capabilityImportService == null || projectInputService == null) {
+            return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        }
+        try {
+            var request = capabilityImportService.request(id);
+            var report = autobuilderService.bringInput(projectInputService, request);
+            capabilityImportService.landed(id, report.inputId());
+            return ResponseEntity.ok(report);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** T4-EI: a capability import dropped before its import; the project was never touched. */
+    @PostMapping("/capability-imports/{id}/cancel")
+    public ResponseEntity<?> cancelCapabilityImport(@PathVariable String id) {
+        if (capabilityImportService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(capabilityImportService.cancel(id));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     /**
      * T4-EC slice 5: how a held conflict is decided: for {@code input}, for {@code receiving}, or (T4-ED) {@code own}
      * with the operator's {@code resolution} -- and by whom.

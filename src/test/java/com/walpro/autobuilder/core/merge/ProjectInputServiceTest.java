@@ -191,6 +191,30 @@ class ProjectInputServiceTest {
         assertThat(manifest.changes()).hasValueSatisfying(c -> assertThat(c.removed()).isEmpty());
     }
 
+    /**
+     * T4-EI: the import rewrote two of the project's own files -- its build gained the input's dependency, and a file
+     * both had was decided for the input. Cancelled, both are as they were (before: neither came back).
+     */
+    @Test
+    void aCancelledImportRestoresTheProjectFilesItRewrote() throws IOException {
+        String pom = Files.readString(base.resolve("output/pom.xml"));
+        write(brought.resolve("output/pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>k</groupId><artifactId>knot</artifactId>"
+                + "<version>1</version><dependencies><dependency><groupId>org.rope</groupId><artifactId>rope</artifactId>"
+                + "<version>2</version></dependency></dependencies></project>");
+        String coil = Files.readString(base.resolve("output/src/main/java/org/warp/Coil.java"));
+        write(brought.resolve("output/src/main/java/org/warp/Coil.java"), "package org.warp;\npublic class Coil { int turns; }\n");
+        ProjectInputService.Report r = bring();
+        assertThat(Files.readString(base.resolve("output/pom.xml"))).contains("org.rope");
+        String held = goals.purpose().openConflicts().stream().filter(e -> e.heldPath() != null).findFirst().orElseThrow().id();
+        service.decide(held, com.walpro.autobuilder.goal.purpose.InputEvent.FOR_INPUT, "operator");
+        assertThat(Files.readString(base.resolve("output/src/main/java/org/warp/Coil.java"))).contains("turns");
+
+        service.cancel(r.inputId(), "operator");
+
+        assertThat(Files.readString(base.resolve("output/pom.xml"))).isEqualTo(pom);
+        assertThat(Files.readString(base.resolve("output/src/main/java/org/warp/Coil.java"))).isEqualTo(coil);
+    }
+
     /** T4-EG: a kept import is the project -- it cannot be taken out (user: taking out was for the pending stage only). */
     @Test
     void aKeptImportCannotBeTakenOut() throws IOException {

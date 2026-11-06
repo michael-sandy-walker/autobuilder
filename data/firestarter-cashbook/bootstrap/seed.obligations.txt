@@ -1,0 +1,20 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 00a2febd9b367e5af4aac3aa76ca9cd8fd13095d5b32e24de4b2f9fb1eb075b7
+# body-sha256: 17551e99880cde4d58668da4bc0f383feb6fa8ace9aed354b2026b6a18d958a6
+An Entry needs an account that is not null or blank and a non-zero amount, else it raises IllegalArgumentException
+An Entry with a null memo has the empty string as its memo
+Ledger.append(entry) adds the entry at the end and returns its number counting from 1
+Ledger.transfer(from, to, cents, memo) appends from's debit then to's credit and returns the number of the credit
+Ledger.transfer raises IllegalArgumentException and appends nothing when cents is not positive or from and to are the same
+Ledger.entries() returns every entry in order, in a list that cannot be modified and does not change when more are appended
+Ledger.balance(account) returns the sum of that account's amounts, 0 for an account with no entries
+Ledger.accounts() returns the accounts with entries, each once, in alphabetical order, in a list that cannot be modified
+gate: tests Every test in LedgerSpecTest passes
+gate: tests The whole test suite passes
+rule: Create Entry and Ledger under src/main/java in package org.cashbook.ledger
+rule: Do not modify anything under src/test

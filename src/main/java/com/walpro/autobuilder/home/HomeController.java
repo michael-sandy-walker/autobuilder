@@ -300,6 +300,35 @@ public class HomeController {
         return ResponseEntity.accepted().body(job.describe());
     }
 
+    /**
+     * T4-EI: the operator's choices for a capability import -- a list of {@code {capability, mode, description,
+     * reference}} -- relayed to the run, which answers with what they would bring in.
+     */
+    @PostMapping(value = "/home/integrate/capabilities", consumes = "application/json")
+    public ResponseEntity<Map<String, Object>> chooseCapabilities(@RequestBody String choices) {
+        IntegrationJob j = job;
+        if (j == null) return refuse(409, "nothing is being brought in");
+        try {
+            j.choose(choices);
+        } catch (IllegalStateException e) {
+            return refuse(400, e.getMessage());
+        }
+        return ResponseEntity.ok(j.describe());
+    }
+
+    /** T4-EI: the chosen capabilities brought in; the import then waits for its conflicts and keep, as any other. */
+    @PostMapping("/home/integrate/capabilities/import")
+    public ResponseEntity<Map<String, Object>> importCapabilities() {
+        IntegrationJob j = job;
+        if (j == null) return refuse(409, "nothing is being brought in");
+        try {
+            j.importChosen();
+        } catch (IllegalStateException e) {
+            return refuse(409, e.getMessage());
+        }
+        return ResponseEntity.accepted().body(j.describe());
+    }
+
     /** The integration job, if there is one: its phase and each input's outcome. */
     @GetMapping("/home/integrate")
     public ResponseEntity<Map<String, Object>> integration() {

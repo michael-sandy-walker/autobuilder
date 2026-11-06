@@ -1,0 +1,96 @@
+{
+  "currentGoalId" : "goal-f8a1a33f-b342-4008-941c-1cd1abf843e5",
+  "currentSubGoalId" : null,
+  "goalTree" : {
+    "id" : "goal-f8a1a33f-b342-4008-941c-1cd1abf843e5",
+    "description" : "  A new project, adopted as it stands. Its tree holds only its build file (pom.xml), a README, and the\n  operator's specification under src/test/java; nothing exists under src/main/java yet. In its own words,\n  from its README:\n\n    \"cashbook -- An append-only ledger of entries in cents, per account: append, transfer between accounts,\n    balances, the accounts in use.\"\n\n  It is a library, in package org.cashbook.ledger, with no dependencies beyond the JDK.\n\n  - Entry is a record of an account (String), an amount in cents (long, amountCents) and a memo (String).\n    An entry needs an account that is not null or blank and an amount that is not zero, else it raises\n    IllegalArgumentException; a null memo becomes the empty string.\n  - Ledger is a class with a no-argument constructor; it starts empty.\n  - append(Entry) adds the entry at the end and returns its number, counting from 1.\n  - transfer(String from, String to, long cents, String memo) appends two entries with that memo: first\n    from's debit (-cents), then to's credit (+cents), and returns the number of the credit. It raises\n    IllegalArgumentException, appending nothing, when cents is not positive or from and to are the same.\n  - entries() returns every entry in the order appended, as a List that cannot be modified and does not change\n    when more are appended later.\n  - balance(String account) returns the sum of that account's amounts as a long, 0 for an account with no entries.\n  - accounts() returns the accounts that have entries, each once, in alphabetical order, as a List that cannot\n    be modified.\n\n  The specification is LedgerSpecTest in src/test/java: its tests say exactly what the ledger must return,\n  and they fail until the code provides it.\n\n  OBJECTIVE: every test in LedgerSpecTest passes, and the whole suite passes.\n\n  The classes to change are Entry and Ledger -- neither exists yet: create them under src/main/java in package\n  org.cashbook.ledger. DO NOT modify anything under src/test: the specification is the operator's, and if one\n  of its tests fails, the code is what is wrong.\n",
+    "role" : "system",
+    "type" : "GOAL",
+    "status" : "COMPLETED",
+    "created" : 1793801473.622422715,
+    "completed" : 1793801601.34160939,
+    "resolution" : "root goal satisfied: closure ledger clear: 2 subgoal(s) accounted for",
+    "metadata" : {
+      "planningRunId" : 2,
+      "activeAttemptId" : "attempt-e4d8bdea-a94b-4698-af4d-2d999875cb2d",
+      "plannedOnce" : true
+    },
+    "expectedArtifacts" : [ ],
+    "subGoals" : [ {
+      "id" : "goal-ad95b500-7f21-4669-aed4-847491eb6554",
+      "description" : "Create Entry in package org.cashbook.ledger under src/main/java as a record of account (String), amountCents (long), and memo (String); a null or blank account or a zero amountCents raises IllegalArgumentException, and a null memo is stored as the empty string",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793801483.560836511,
+      "completed" : 1793801522.749669075,
+      "resolution" : "fulfilled (score=0.89): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 1,
+        "lastProgressState" : "FULFILLED",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "new Entry(\"a\", 100L, null) yields account \"a\", amountCents 100, memo \"\"", "new Entry(null, 100L, \"m\") and new Entry(\"  \", 100L, \"m\") both raise IllegalArgumentException", "new Entry(\"a\", 0L, \"m\") raises IllegalArgumentException", "new Entry(\"a\", 100L, \"m\") yields account \"a\", amountCents 100, memo \"m\"" ],
+        "lastUpdated" : "2026-11-04T14:12:02.725093686Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-e4d8bdea-a94b-4698-af4d-2d999875cb2d",
+        "activeAttemptId" : "attempt-fa94f6cb-5ae9-4b80-9100-c353a1445882",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC",
+          "3" : "SPEC",
+          "4" : "SPEC"
+        },
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true
+        },
+        "mergedFiles" : [ "Entry.java" ],
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0
+        },
+        "mergeCount" : 1
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-108ff5ff-0852-492e-b524-f628a36d8ff0",
+      "description" : "[BUILD_FIX] Make the application packageable and startable — packaging failed: [ERROR] COMPILATION ERROR : | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/cashbook/output/src/test/java/org/cashbook/ledger/LedgerSpecTest.java:[15,9] cannot find symbol | [ERROR] /home/anugeshtu/IdeaProjects/autobuilder/data/cashbook/output/src/test/java/org/cashbook/ledger/LedgerSpecTest.java:[15,29] cannot find symbol",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793801526.815801954,
+      "completed" : 1793801591.66014259,
+      "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "The project packages into a startable application artifact without build errors" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-e4d8bdea-a94b-4698-af4d-2d999875cb2d",
+        "activeAttemptId" : "attempt-84e87c7a-b266-427b-9923-6ed861aedbdf",
+        "criteriaBinding" : {
+          "1" : "AUTHORED"
+        },
+        "originatingGate" : "package-gate",
+        "blockerType" : "BUILD_FIX",
+        "goalKind" : "HYBRID",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "Ledger.java" ],
+        "criteriaPassStatus" : {
+          "1" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-11-04T14:13:11.645633540Z"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    } ]
+  }
+}

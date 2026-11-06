@@ -35,9 +35,11 @@ class IntegrationJob {
 
     /**
      * Where the job stands. DECIDING: the inputs have landed and wait for the operator -- conflicts to decide, the
-     * import to keep or cancel. RELEASED: kept, and the loop works on them. CANCELLED: taken back out.
+     * import to keep or cancel. RELEASED: kept, and the loop works on them. CANCELLED: taken back out. T4-EI, a
+     * capability import only: DISCOVERING while a model finds what the source can do, CHOOSING while the operator
+     * says which capabilities come in and how.
      */
-    enum Phase { STARTING, SETTING_GOAL, BRINGING_IN, DECIDING, RELEASED, CANCELLED, FAILED }
+    enum Phase { STARTING, SETTING_GOAL, DISCOVERING, CHOOSING, BRINGING_IN, DECIDING, RELEASED, CANCELLED, FAILED }
 
     /** Whether the job still holds the project: a finished, cancelled or failed one does not. */
     boolean busy() {
@@ -47,9 +49,14 @@ class IntegrationJob {
 
     /**
      * One input: a project in the projects directory, or a directory on this machine (exactly one of the two),
-     * what to take from it, and whether its module is the one that runs.
+     * what to take from it, and whether its module is the one that runs. With {@code capabilities} (T4-EI), only the
+     * capabilities the operator then chooses come in, each as they say; the intent is written from their choices.
      */
-    record Input(String project, String path, String intent, boolean runs) {
+    record Input(String project, String path, String intent, boolean runs, boolean capabilities) {
+        Input(String project, String path, String intent, boolean runs) {
+            this(project, path, intent, runs, false);
+        }
+
         Input(String project, String intent, boolean runs) {
             this(project, null, intent, runs);
         }
@@ -88,6 +95,8 @@ class IntegrationJob {
     private String failure;
     private final Instant began = Instant.now();
     private final Map<String, Map<String, Object>> landed = new LinkedHashMap<>();
+    /** T4-EI: the capability import's selection as the run last returned it: capabilities, choices, preview. */
+    private JsonNode selection;
 
     /**
      * @param create true for a new project (Together), which then needs {@code goal}; false to extend an existing
@@ -143,7 +152,8 @@ class IntegrationJob {
             if (i.path() != null && !Path.of(i.path()).isAbsolute()) return "a path is an absolute path on this machine";
             if (i.dir(projectsDir).equals(receiving.toAbsolutePath().normalize())) return "a project cannot be brought into itself";
             if (!holdsCode(i.dir(projectsDir))) return i.label() + " holds no code to bring in";
-            if (i.intent() == null || i.intent().isBlank()) return "say what to take from " + i.label();
+            if (i.capabilities() && inputs.size() > 1) return "capabilities are taken from one project at a time";
+            if (!i.capabilities() && (i.intent() == null || i.intent().isBlank())) return "say what to take from " + i.label();
         }
         return null;
     }
@@ -182,6 +192,10 @@ class IntegrationJob {
                 phase(Phase.SETTING_GOAL);
                 expect(run.postText("/autobuilder/goal", goal), "the goal was refused");
             }
+            if (inputs.size() == 1 && inputs.get(0).capabilities()) {
+                discover(inputs.get(0));
+                return;
+            }
             phase(Phase.BRINGING_IN);
             for (Input i : inputs) bringIn(i);
             // Landed, not yet kept: the operator looks at what came in, decides its conflicts, then keeps or cancels it.
@@ -212,7 +226,12 @@ class IntegrationJob {
             }
             throw new IllegalStateException(i.label() + " was not brought in: " + messageOf(reply.body()));
         }
-        JsonNode r = MAPPER.readTree(reply.body());
+        landed(row, MAPPER.readTree(reply.body()));
+        log.info("T4-ED: brought {} into {}", i.label(), name);
+    }
+
+    /** What an input's landing reported, for the page. */
+    private void landed(Map<String, Object> row, JsonNode r) {
         synchronized (this) {
             row.put("status", "landed");
             row.put("inputId", r.path("inputId").asText());
@@ -233,8 +252,83 @@ class IntegrationJob {
             row.put("unmet", r.path("unmet").size());
             row.put("unanswered", r.path("unanswered").asLong());
         }
-        log.info("T4-ED: brought {} into {}: {} placed, {} corrections, {} conflicts", i.label(), name,
-                r.path("placed").size(), r.path("corrections").size(), r.path("conflicts").size());
+    }
+
+    /** T4-EI: a model finds what the source can do; the job then waits for the operator's choices. */
+    private void discover(Input i) throws IOException {
+        phase(Phase.DISCOVERING);
+        Map<String, Object> row = landed.get(i.label());
+        synchronized (this) {
+            row.put("status", "finding its capabilities");
+        }
+        Path dir = i.dir(projectsDir);
+        ObjectNode body = MAPPER.createObjectNode();
+        body.put("label", i.label());
+        body.put("runId", lineageOf(dir));
+        body.put("dir", dir.toString());
+        body.put("addedBy", "operator (home screen)");
+        RunClient.Reply reply = run.postJson("/autobuilder/capability-imports", MAPPER.writeValueAsString(body), INPUT_TIMEOUT);
+        if (!reply.ok()) {
+            synchronized (this) {
+                row.put("status", "refused");
+                row.put("message", messageOf(reply.body()));
+            }
+            throw new IllegalStateException("no capabilities were found in " + i.label() + ": " + messageOf(reply.body()));
+        }
+        synchronized (this) {
+            selection = MAPPER.readTree(reply.body());
+            row.put("status", "capabilities found");
+            phase = Phase.CHOOSING;
+        }
+        log.info("T4-EI: {} capabilities found in {} for {}", selection.path("capabilities").size(), i.label(), name);
+    }
+
+    /**
+     * T4-EI: the operator's choices sent to the run, which checks them and previews what they would bring in.
+     *
+     * @throws IllegalStateException while the job is not choosing, or the run refuses the choices
+     */
+    synchronized void choose(String choicesJson) {
+        if (phase != Phase.CHOOSING) throw new IllegalStateException("nothing to choose: the job is " + phase.name().toLowerCase());
+        String body = expect(run.postJson("/autobuilder/capability-imports/" + selection.path("id").asText() + "/choices",
+                choicesJson, Duration.ofMinutes(1)), "the choices were refused");
+        try {
+            selection = MAPPER.readTree(body);
+        } catch (IOException e) {
+            throw new IllegalStateException("the run's answer could not be read: " + e.getMessage());
+        }
+    }
+
+    /** T4-EI: the chosen capabilities brought in, on a thread of their own; the import then waits as any other. */
+    synchronized void importChosen() {
+        if (phase != Phase.CHOOSING) throw new IllegalStateException("nothing to import: the job is " + phase.name().toLowerCase());
+        if (selection.path("preview").isNull() || selection.path("preview").isMissingNode()) {
+            throw new IllegalStateException("choose the capabilities first");
+        }
+        if (selection.path("preview").path("problems").size() > 0) {
+            throw new IllegalStateException("the choices cannot be met as made; change them first");
+        }
+        phase = Phase.BRINGING_IN;
+        Thread t = new Thread(() -> {
+            Map<String, Object> row = landed.get(inputs.get(0).label());
+            try {
+                RunClient.Reply reply = run.postJson("/autobuilder/capability-imports/" + selection.path("id").asText() + "/import",
+                        "", INPUT_TIMEOUT);
+                if (!reply.ok()) {
+                    synchronized (this) {
+                        row.put("status", "refused");
+                        row.put("message", messageOf(reply.body()));
+                    }
+                    throw new IllegalStateException("the capabilities were not brought in: " + messageOf(reply.body()));
+                }
+                landed(row, MAPPER.readTree(reply.body()));
+                phase(Phase.DECIDING);
+            } catch (Exception e) {
+                fail(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            }
+        }, "capability-import-" + name);
+        t.setDaemon(true);
+        t.start();
     }
 
     /** The input's lineage as its provenance, or "unrecorded" when it never ran here. */
@@ -279,6 +373,14 @@ class IntegrationJob {
      * @throws IllegalStateException while the job is under way or already done
      */
     synchronized void cancel() {
+        if (phase == Phase.CHOOSING) {
+            // T4-EI: nothing was brought in yet; the run drops the selection, and the project is as it was.
+            expect(run.postJson("/autobuilder/capability-imports/" + selection.path("id").asText() + "/cancel", "",
+                    Duration.ofMinutes(1)), "the capability import was not cancelled");
+            phase = Phase.CANCELLED;
+            log.info("T4-EI: the capability import into {} was cancelled before anything came in", name);
+            return;
+        }
         if (phase != Phase.DECIDING && phase != Phase.FAILED) {
             throw new IllegalStateException("nothing to cancel: the job is " + phase.name().toLowerCase());
         }
@@ -336,6 +438,7 @@ class IntegrationJob {
         List<Map<String, Object>> rows = new ArrayList<>();
         landed.values().forEach(r -> rows.add(new LinkedHashMap<>(r)));
         body.put("inputs", rows);
+        if (selection != null) body.put("capabilities", selection);
         if (failure != null) body.put("failure", failure);
         return body;
     }

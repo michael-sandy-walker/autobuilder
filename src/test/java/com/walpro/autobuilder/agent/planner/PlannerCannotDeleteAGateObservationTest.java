@@ -79,6 +79,22 @@ class PlannerCannotDeleteAGateObservationTest {
                 anyString(), any(SubsumptionReason.class));
     }
 
+    /**
+     * T4-EI field 2026-11-06 (firestarter-cashbook, twice): two minutes after a capability import was kept, the planner
+     * listed its goal under #SubGoalRemove and appended the receiver's own finished spec in its place.
+     */
+    @Test
+    @DisplayName("the planner cannot delete the goal an import the operator kept landed")
+    void anImportsGoalSurvivesReplanning() {
+        GoalEntity imported = goal("g-input", null, "Capabilities taken from firestarter, as chosen: ...");
+        imported.getMetadata().put("inputId", "input-1");
+
+        planProposing(imported, "Implement Ledger class in package org.cashbook.ledger");
+
+        verify(goalPlannerService, never()).transitionGoal(eq("g-input"), eq(GoalStatus.SUBSUMED),
+                anyString(), any(SubsumptionReason.class));
+    }
+
     @Test
     @DisplayName("an ordinary planned subgoal is still pruned — only observations are protected")
     void anOrdinaryGoalIsStillPruned() {

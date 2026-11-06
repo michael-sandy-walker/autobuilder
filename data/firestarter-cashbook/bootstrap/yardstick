@@ -1,0 +1,3 @@
+# T4-DG: the yardstick this target is scored by. One line: <script> [mode]
+# A capability import (T4-EI): what the assignment and the two descriptions in README.md state, nothing more.
+scripts/smoke_capability_import.sh terminating

@@ -51,8 +51,21 @@ class IntegrationJobTest {
                                 + "{\"subject\":\"src/A.java\",\"heldPath\":\"meta/held/A.java\",\"heldLine\":null}]" : "[]")
                         + ",\"unmet\":[\"x\"],\"criteria\":4,\"met\":3,\"unanswered\":0}");
             }
+            if (path.equals("/autobuilder/capability-imports")) {
+                return new Reply(200, "{\"id\":\"cap-1\",\"capabilities\":[{\"id\":\"c1\",\"name\":\"Store\"}],\"preview\":null}");
+            }
+            if (path.endsWith("/choices")) {
+                return new Reply(200, "{\"id\":\"cap-1\",\"capabilities\":[{\"id\":\"c1\",\"name\":\"Store\"}],"
+                        + "\"preview\":{\"files\":[\"a\"],\"problems\":" + problems.get() + "}}");
+            }
+            if (path.endsWith("/import")) {
+                return new Reply(200, "{\"inputId\":\"in-cap\",\"placed\":[\"a\"],\"corrections\":[],\"conflicts\":[],"
+                        + "\"unmet\":[],\"criteria\":2,\"met\":0,\"unanswered\":0}");
+            }
             return new Reply(200, "{\"ok\":true}");
         }
+
+        final AtomicReference<String> problems = new AtomicReference<>("[]");
     }
 
     private void project(String name) throws Exception {
@@ -221,6 +234,48 @@ class IntegrationJobTest {
                 all.sorted(java.util.Comparator.reverseOrder()).forEach(f -> f.toFile().delete());
             }
         }
+    }
+
+    /** T4-EI: a capability import finds the capabilities, waits for the choices, then lands as any import. */
+    @Test
+    void aCapabilityImportFindsChoosesThenBringsIn_andCanBeCancelledWhileChoosing() throws Exception {
+        project("base");
+        project("lib");
+        ProjectLauncher launcher = launcher();
+        FakeRun run = new FakeRun(launcher);
+        IntegrationJob job = new IntegrationJob("base", projects, false, null, null,
+                List.of(new IntegrationJob.Input("lib", null, null, false, true)), launcher, run);
+
+        job.begin();
+        await(job, IntegrationJob.Phase.CHOOSING, IntegrationJob.Phase.FAILED);
+
+        assertThat(run.calls.get(0)).startsWith("POST /autobuilder/capability-imports {").contains("\"label\":\"lib\"");
+        assertThat(run.calls).noneMatch(c -> c.startsWith("POST /autobuilder/inputs"));
+        assertThat(job.describe().get("capabilities")).asString().contains("Store");
+        assertThatThrownBy(job::importChosen).hasMessageContaining("choose the capabilities first");
+
+        run.problems.set("[\"a.java uses B, which is not brought in\"]");
+        job.choose("[{\"capability\":\"c1\",\"mode\":\"code\",\"description\":\"keep records\"}]");
+        assertThat(run.calls).last().asString().startsWith("POST /autobuilder/capability-imports/cap-1/choices [");
+        assertThatThrownBy(job::importChosen).hasMessageContaining("cannot be met");
+
+        run.problems.set("[]");
+        job.choose("[{\"capability\":\"c1\",\"mode\":\"code\",\"description\":\"keep records\"}]");
+        job.importChosen();
+        await(job, IntegrationJob.Phase.DECIDING, IntegrationJob.Phase.FAILED);
+        assertThat(job.describe().get("inputs")).asString().contains("landed").contains("inputId=in-cap");
+        job.release();
+        assertThat(run.calls).contains("POST /autobuilder/inputs/in-cap/keep?by=operator%20(home%20screen)");
+
+        IntegrationJob other = new IntegrationJob("base", projects, false, null, null,
+                List.of(new IntegrationJob.Input("lib", null, null, false, true)), launcher, run);
+        other.begin();
+        await(other, IntegrationJob.Phase.CHOOSING, IntegrationJob.Phase.FAILED);
+        other.cancel();
+        assertThat(other.phase()).isEqualTo(IntegrationJob.Phase.CANCELLED);
+        assertThat(run.calls).last().isEqualTo("POST /autobuilder/capability-imports/cap-1/cancel");
+        assertThat(IntegrationJob.extendProblem(projects, "base", new IntegrationJob.Input("lib", null, null, false, true)))
+                .as("a capability import needs no intent: the choices write it").isNull();
     }
 
     @Test

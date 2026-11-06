@@ -590,6 +590,17 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
                                     log.info("Planner asked to prune subgoal [{}], but its criteria hold -- fulfilled instead", g.getId());
                                     return;
                                 }
+                                // T4-EI: a goal an import landed is the OPERATOR's input, kept on purpose. Field
+                                // 2026-11-06 (firestarter-cashbook, twice): two minutes after the capability import
+                                // was kept, the planner listed its goal under #SubGoalRemove as stale and appended
+                                // the receiver's own finished spec in its place; the loop then deleted the imported
+                                // code as a build fix. Replanning may refine such a goal's work, never retire it; it
+                                // still closes the ordinary ways (fulfilled, or given up when it exhausts).
+                                if (g.getMetadata() != null && g.getMetadata().get("inputId") != null) {
+                                    log.warn("T4-EI: refusing to prune subgoal [{}] -- an import the operator kept landed it ({}), "
+                                            + "so replanning cannot retire it", g.getId(), g.getMetadata().get("inputId"));
+                                    return;
+                                }
                                 // Planner removal IS supersession — replacement work carries
                                 // the obligation, so the retired goal becomes SUBSUMED (not
                                 // GIVEN_UP), which T2-DR's closure rule treats as a

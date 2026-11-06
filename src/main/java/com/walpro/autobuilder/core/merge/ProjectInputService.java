@@ -173,6 +173,11 @@ public class ProjectInputService {
         String dir = "meta/inputs/" + input.id();
         files.ensureFolderExists(dir);
         files.writeFile(dir + "/placed.txt", String.join("\n", landing.placed()) + "\n");
+        // T4-EI: a file the project already had and the landing rewrote (the build gaining the input's dependencies)
+        // goes back as it was if the import is cancelled.
+        for (String p : landing.files().keySet()) {
+            if (before.containsKey(p)) keepOriginal(input.id(), p, before.get(p));
+        }
         files.writeFile(dir + ProtectedPaths.INPUT_FILE, String.join("\n", landing.protectedLines()) + "\n");
         List<String> intentLines = new ArrayList<>();
         step(r.label(), 1, 0, 0);
@@ -360,6 +365,7 @@ public class ProjectInputService {
         if (InputEvent.FOR_INPUT.equals(decision)) {
             if (open.heldPath() != null) {
                 Path to = files.getRootDir().resolve("output").resolve(open.subject());
+                if (Files.isRegularFile(to)) keepOriginal(open.inputId(), open.subject(), Files.readString(to));
                 Files.copy(files.getRootDir().resolve(open.heldPath()), to, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             } else if (difference) {
                 String line = open.subject() + ": " + open.other();
@@ -523,11 +529,38 @@ public class ProjectInputService {
                 Files.writeString(pom, Files.readString(pom).replaceAll("\\s*<module>" + java.util.regex.Pattern.quote(module) + "</module>", ""));
             }
         }
+        // T4-EI: what the project had before the import rewrote it -- the landing's build changes, a held file decided for
+        // the input -- goes back as it was.
+        int restored = 0;
+        if (files.exists(dir + RESTORE_FILE)) {
+            for (String p : files.readFile(dir + RESTORE_FILE).lines().filter(l -> !l.isBlank()).toList()) {
+                Files.writeString(output.resolve(p), files.readFile(dir + RESTORE_DIR + p));
+                restored++;
+            }
+        }
+        // T4-EI: a source kept to be read while its capability is adapted leaves with the import.
+        Path reference = files.getRootDir().resolve(dir + REFERENCE_DIR);
+        if (Files.isDirectory(reference)) org.springframework.util.FileSystemUtils.deleteRecursively(reference);
         files.writeFile(dir + ProtectedPaths.INPUT_FILE, "\n");
         manifest.removeFiles(placed);
         InputEvent event = goals.purpose().recordWithdrawal(inputId, by, goals.withdrawGoals(inputId));
-        log.warn("T4-EG: pending import {} cancelled by {} -- {} file(s) out", inputId, by, placed.size());
+        log.warn("T4-EG: pending import {} cancelled by {} -- {} file(s) out, {} restored", inputId, by, placed.size(), restored);
         return event;
+    }
+
+    /** T4-EI: the project's own files an import rewrote, one path a line; their text before it under {@link #RESTORE_DIR}. */
+    static final String RESTORE_FILE = "/restore.txt";
+    static final String RESTORE_DIR = "/restore/";
+    /** T4-EI: a capability import's source, kept read-only while a capability is adapted from it. */
+    public static final String REFERENCE_DIR = "/reference";
+
+    /** Keeps {@code path}'s text before the import first rewrote it; a later rewrite keeps the first. */
+    private void keepOriginal(String inputId, String path, String text) throws IOException {
+        String dir = "meta/inputs/" + inputId;
+        String listed = files.exists(dir + RESTORE_FILE) ? files.readFile(dir + RESTORE_FILE) : "";
+        if (listed.lines().anyMatch(path::equals)) return;
+        files.writeFile(dir + RESTORE_DIR + path, text);
+        files.writeFile(dir + RESTORE_FILE, listed + path + "\n");
     }
 
     /** The intent's lines, generated like a text input's, then what the input verified; the operator may edit them. */

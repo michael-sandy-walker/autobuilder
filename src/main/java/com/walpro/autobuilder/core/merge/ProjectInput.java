@@ -102,7 +102,8 @@ public final class ProjectInput {
         List<String> conflictedFiles = conflicts.stream().filter(c -> c.contains(": both projects have it"))
                 .map(c -> c.substring(0, c.indexOf(": both projects have it"))).toList();
         return new Landing(changed, brought, conflicts, conflictedFiles, notes, goals, List.copyOf(criteria.values()), obligations,
-                List.copyOf(protect), ProjectMerge.lineageOf(input), digest(theirs),
+                // T4-EI: a capability import that takes nothing as code brings an empty tree; it is not "the same tree again".
+                List.copyOf(protect), ProjectMerge.lineageOf(input), theirs.isEmpty() ? null : digest(theirs),
                 modules ? at.substring(0, at.length() - 1) : null);
     }
 

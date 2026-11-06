@@ -112,6 +112,10 @@ public class EvolutionLLMAdapter {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.investigate.LogConsultation logConsultation;
 
+    /** T4-EI: one question of a capability's source, kept while it is adapted; optional in narrow tests. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.merge.ReferenceConsultation referenceConsultation;
+
     /** T4-DY: the project's classpath, for the dependency-API block; optional in narrow tests. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.stuck.ProjectTypeAuthority projectTypeAuthority;
@@ -190,9 +194,15 @@ public class EvolutionLLMAdapter {
         boolean retrying = refreshed.rejectionFeedback() != null && !refreshed.rejectionFeedback().isEmpty();
         String logOffer = retrying && logConsultation != null ? logConsultation.offerBlock() : null;
         if (logOffer != null) userPrompt = userPrompt + "\n\n" + logOffer;
-        java.util.function.Function<String, String> consult = logOffer == null ? null
-                : raw -> logConsultation.answer(raw, "evolution", refreshed.cycleName(),
-                        refreshed.outputPath() == null ? null : java.nio.file.Path.of(refreshed.outputPath()));
+        // T4-EI: adapting a capability whose source was kept, the model may instead ask one question of that source.
+        String referenceOffer = referenceConsultation != null ? referenceConsultation.offerBlock() : null;
+        if (referenceOffer != null) userPrompt = userPrompt + "\n\n" + referenceOffer;
+        java.util.function.Function<String, String> consult = logOffer == null && referenceOffer == null ? null
+                : raw -> {
+                    String answer = logOffer == null ? null : logConsultation.answer(raw, "evolution", refreshed.cycleName(),
+                            refreshed.outputPath() == null ? null : java.nio.file.Path.of(refreshed.outputPath()));
+                    return answer != null || referenceOffer == null ? answer : referenceConsultation.answer(raw, refreshed.cycleName());
+                };
 
         LLMResponseResult<EvolutionOutcome> response = llmAgentProtocolInvoker.callWithValidation(
                 llmClient,

@@ -1,0 +1,766 @@
+{
+  "currentGoalId" : "goal-95dc9dfc-a1ee-437c-81e4-0d0dae0063f4",
+  "currentSubGoalId" : null,
+  "goalTree" : {
+    "id" : "goal-95dc9dfc-a1ee-437c-81e4-0d0dae0063f4",
+    "description" : "  Evolve the Java 21 Spring Boot application into a library book-lending REST API with three resource types.\n                                                                                                                      \n  Books: POST /books (create; title required, max 120 chars; isbn required, must match \\d{13}), GET /books (list all),\n   GET /books/{id} (single; 404 if absent).                                                                           \n                                                                                                                      \n  Members: POST /members (create; name required; email required, must be unique — 409 on duplicate), GET /members/{id}\n   (404 if absent).\n                                                                                                                      \n  Loans: POST /loans (lend a book; body contains bookId and memberId; 404 if either not found; 409 if book is already \n  on loan; a member may hold at most 3 active loans — 422 if exceeded), POST /loans/{id}/return (mark returned; 404 if\n   loan absent; 409 if already returned), GET /loans?memberId={id} (list all loans for a member, active and returned).\n                                                                                                                    \n  All data stored in in-memory collections (no database). Invalid input returns HTTP 400 with JSON body {\"message\":   \n  \"<reason>\"}. Business-rule violations use the codes above with the same JSON shape.                                 \n                                                                                                                      \n  Success statuses: a create returns HTTP 201 with the created object as the body; a successful read returns HTTP 200;\n  a successful return of a loan returns HTTP 200.\n",
+    "role" : "system",
+    "type" : "GOAL",
+    "status" : "COMPLETED",
+    "created" : 1793924862.010201188,
+    "completed" : 1793927244.848453407,
+    "resolution" : "root goal satisfied: closure ledger clear: 23 subgoal(s) accounted for (10 subsumed)",
+    "metadata" : {
+      "planningRunId" : 7,
+      "activeAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+      "planRationale" : "The Book resource is complete; the next foundational resource is Members. These subgoals build the Member model, repository, service, and controller in dependency order, enforcing the spec's name/email validation and unique-email 409 rule.",
+      "plannedOnce" : true
+    },
+    "expectedArtifacts" : [ ],
+    "subGoals" : [ {
+      "id" : "goal-8739cb18-ac63-4a81-9978-901dbcfa4d68",
+      "description" : "Implement the Book domain model with id, title, isbn fields",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793924873.485392493,
+      "completed" : 1793924902.956009979,
+      "resolution" : "fulfilled (score=0.81): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 2,
+        "lastUpdated" : "2026-11-06T00:28:22.918813063Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-fe7d3ac6-2c57-4a76-8968-8512bb779284",
+        "mergedFiles" : [ "Book.java", "pom.xml" ],
+        "lastProgressState" : "PROGRESSING",
+        "mergeCount" : 1,
+        "goalKind" : "EXECUTABLE"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-b58d4aef-4e92-42ad-8e74-9ac2b6ae8a40",
+      "description" : "Implement the Book repository backed by an in-memory collection",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793924873.619086119,
+      "completed" : 1793924936.933887162,
+      "resolution" : "fulfilled (score=0.81): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 2,
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-4ea4eb9d-1fee-4fa7-a96a-4928361b2fa7",
+        "goalKind" : "EXECUTABLE",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "BookRepository.java" ],
+        "lastProgressState" : "PROGRESSING",
+        "lastUpdated" : "2026-11-06T00:28:56.913522679Z"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-62708347-e39d-45c0-95e7-8ca79f32e910",
+      "description" : "Implement the Book service with create, list, and findById operations enforcing title required (max 120 chars) and isbn required matching \\d{13}",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793924873.649318631,
+      "completed" : 1793925014.585867793,
+      "resolution" : "fulfilled (score=0.81): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 2,
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-fa24b97a-569c-42af-9e26-4e883f507230",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "BookService.java" ],
+        "lastProgressState" : "PROGRESSING",
+        "lastUpdated" : "2026-11-06T00:30:14.565732719Z"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-e45af55f-fc65-49f8-9389-35119b0dd74b",
+      "description" : "Implement POST /books, GET /books, and GET /books/{id} endpoints",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1793924873.68174493,
+      "givenUp" : 1793925240.783398473,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 2,
+        "acceptanceCriteria" : [ "POST /books returns HTTP 201 with the created book body on valid input", "POST /books returns HTTP 400 with {\"message\":\"<reason>\"} when title is missing or exceeds 120 chars", "POST /books returns HTTP 400 with {\"message\":\"<reason>\"} when isbn is missing or does not match \\d{13}", "GET /books returns HTTP 200 with a JSON array of all books", "GET /books/{id} returns HTTP 200 with the book body when present", "GET /books/{id} returns HTTP 404 with {\"message\":\"<reason>\"} when the book is absent" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-602c6ecf-be37-4439-9686-7f15af728e7e",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC",
+          "3" : "SPEC",
+          "4" : "SPEC",
+          "5" : "SPEC",
+          "6" : "SPEC"
+        },
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-9d7abf6f-b40b-4853-908a-f763ff4a17aa",
+        "description" : "Fix BookController error handling so invalid input and missing books return the required JSON error bodies",
+        "role" : "planner",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1793925240.890126157,
+        "givenUp" : 1793925276.535282796,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 3,
+          "cumulativeStagnatingCycles" : 1,
+          "lastProgressState" : "STAGNATING",
+          "acceptanceCriteria" : [ "POST /books returns HTTP 400 with {\"message\":\"<reason>\"} when title is missing or exceeds 120 chars", "POST /books returns HTTP 400 with {\"message\":\"<reason>\"} when isbn is missing or does not match \\d{13}", "GET /books/{id} returns HTTP 404 with {\"message\":\"<reason>\"} when the book is absent", "POST /books still returns HTTP 201 with the created book body on valid input", "GET /books still returns HTTP 200 with a JSON array of all books", "GET /books/{id} still returns HTTP 200 with the book body when present" ],
+          "lastUpdated" : "2026-11-06T00:34:08.995249051Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-602c6ecf-be37-4439-9686-7f15af728e7e",
+          "activeAttemptId" : "attempt-9b9ad95f-1002-4a22-bf85-6adb2c6b1368",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC",
+            "3" : "SPEC",
+            "4" : "SPEC",
+            "5" : "SPEC",
+            "6" : "SPEC"
+          },
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : false,
+            "3" : false,
+            "4" : true,
+            "5" : true,
+            "6" : false
+          },
+          "mergedFiles" : [ "BookController.java" ],
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 1,
+            "3" : 1,
+            "4" : 0,
+            "5" : 0,
+            "6" : 1
+          },
+          "mergeCount" : 1,
+          "subsumptionReason" : "REPLACED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ {
+          "id" : "goal-4b23e8f2-ffbb-4f7b-bf22-2a585c633e69",
+          "description" : "Implement a GlobalExceptionHandler that maps NotFoundException to HTTP 404 with JSON body {\"message\":\"<reason>\"} and ValidationException to HTTP 400 with JSON body {\"message\":\"<reason>\"}",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1793925276.620638619,
+          "completed" : 1793925410.532610287,
+          "metadata" : {
+            "planningRunId" : 4,
+            "undefinedSymbols" : "ValidationException",
+            "lastProgressState" : "FULFILLED",
+            "goalKind" : "EXECUTABLE",
+            "acceptanceCriteria" : [ "Create ValidationException.java", "GET /books/{id} returns HTTP 404 with JSON body {\"message\":\"<reason>\"} when the book is absent", "POST /books returns HTTP 400 with JSON body {\"message\":\"<reason>\"} when isbn is missing or does not match \\d{13}", "POST /books returns HTTP 400 with JSON body {\"message\":\"<reason>\"} when title is missing or exceeds 120 chars" ],
+            "lastUpdated" : "2026-11-06T00:36:45.887165495Z",
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-9b9ad95f-1002-4a22-bf85-6adb2c6b1368",
+            "activeAttemptId" : "attempt-2f092d60-fcb5-4f43-a2b5-bb1d3bc09e24",
+            "criteriaBinding" : {
+              "1" : "AUTHORED",
+              "2" : "SPEC",
+              "3" : "SPEC",
+              "4" : "SPEC"
+            },
+            "closureRefutedBy" : "the application runs, but acceptance criteria fail when exercised against it: \"POST /books returns HTTP 400 with JSON body {\"message\":\"<reason>\"} when isbn is missing or does not match \\d{13}\" — POST /books → 400, but the running application answered 500 to POST /books {}; \"POST /books returns HTTP 400 with JSON body {\"message\":\"<reason>\"} when title is missing or exceeds 120 chars\" — POST /books → 400, but the running application answered 500 to POST /books {}",
+            "criteriaPassStatus" : {
+              "1" : true,
+              "2" : true,
+              "3" : true,
+              "4" : true
+            },
+            "mergedFiles" : [ "GlobalExceptionHandler.java", "ValidationException.java" ],
+            "criteriaFailStreak" : {
+              "1" : 0,
+              "2" : 0,
+              "3" : 0,
+              "4" : 0,
+              "5" : 0,
+              "6" : 1
+            },
+            "mergeCount" : 1
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        }, {
+          "id" : "goal-dc4186fa-16f9-41a5-983e-cbdf24c7bc48",
+          "description" : "Update BookController.get to throw NotFoundException when the book is not found, and ensure BookService.create throws ValidationException for invalid title or isbn",
+          "role" : "planner",
+          "type" : "SUBGOAL",
+          "status" : "COMPLETED",
+          "created" : 1793925279.235077743,
+          "completed" : 1793925415.344442289,
+          "metadata" : {
+            "planningRunId" : 4,
+            "acceptanceCriteria" : [ "Create ValidationException.java", "GET /books/{id} returns HTTP 404 with JSON body {\"message\":\"<reason>\"} when the book is absent", "GET /books/{id} returns HTTP 200 with the book body when present", "POST /books returns HTTP 400 with JSON body {\"message\":\"<reason>\"} when isbn is missing or does not match \\d{13}", "POST /books returns HTTP 201 with the created book body on valid input" ],
+            "subgoalOrigin" : "extra",
+            "parentAttemptId" : "attempt-9b9ad95f-1002-4a22-bf85-6adb2c6b1368",
+            "activeAttemptId" : "attempt-30de1cea-258e-49c4-8be5-971fd1b48510",
+            "criteriaBinding" : {
+              "1" : "AUTHORED",
+              "2" : "SPEC",
+              "3" : "SPEC",
+              "4" : "SPEC",
+              "5" : "SPEC"
+            },
+            "undefinedSymbols" : "ValidationException",
+            "lastProgressState" : "FULFILLED",
+            "lastUpdated" : "2026-11-06T00:36:50.562512012Z",
+            "criteriaPassStatus" : {
+              "1" : true,
+              "2" : true,
+              "3" : true,
+              "4" : true,
+              "5" : true
+            }
+          },
+          "expectedArtifacts" : [ ],
+          "subGoals" : [ ]
+        } ]
+      } ]
+    }, {
+      "id" : "goal-56489e03-228e-492e-8724-dcf03cdfa60d",
+      "description" : "Provide a runnable application entry point — the goal specification names HTTP endpoints, but no class in the application sources declares a 'static void main' method, so the packaged artifact cannot start.",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1793924936.977149584,
+      "completed" : 1793924981.075464067,
+      "givenUp" : 1793925014.625880144,
+      "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+      "metadata" : {
+        "planningRunId" : 0,
+        "lastProgressState" : "FULFILLED",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "A class in the application sources declares a 'static void main' method" ],
+        "lastUpdated" : "2026-11-06T00:29:41.059186117Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-4a6448f7-882b-444a-9dee-94ad0dacb039",
+        "criteriaBinding" : {
+          "1" : "AUTHORED"
+        },
+        "originatingGate" : "boot-gate",
+        "bootClaim" : "entry-point",
+        "mergedFiles" : [ "LibraryApplication.java", "pom.xml" ],
+        "criteriaFailStreak" : {
+          "1" : 0
+        },
+        "mergeCount" : 1,
+        "closureEdgeReopens" : 1,
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-c50a5828-d2ab-40eb-967e-d001df3d2508",
+      "description" : "the application exits at startup (exit 1) — no main manifest attribute, in /home/anugeshtu/IdeaProjects/autobuilder/data/firestarter/output/target/app-0.0.1-SNAPSHOT.jar",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793925017.156302191,
+      "completed" : 1793925181.044971715,
+      "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+      "metadata" : {
+        "planningRunId" : 0,
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-88c415cd-eaf1-47c9-8278-453e0c04a6f8",
+        "originatingGate" : "boot-gate",
+        "bootClaim" : "serves",
+        "mergedFiles" : [ "BookRepository.java", "LibraryApplication.java", "BookService.java", "MemberController.java", "Loan.java", "UnprocessableEntityException.java", "LoanController.java", "pom.xml", "GlobalExceptionHandler.java", "MemberRepository.java", "Book.java", "NotFoundException.java", "ConflictException.java", "LoanService.java", "MemberService.java", "DuplicateEmailException.java", "Member.java", "BookController.java", "LoanRepository.java" ],
+        "mergeCount" : 1
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-b19a8bc1-05eb-499a-8c20-d2aca58ad75a",
+      "description" : "[BUILD_FIX] The running artifact contradicts acceptance criteria this work item closed on — repair the code so they hold: POST /books returns HTTP 400 with JSON body {\"message\":\"<reason>\"} when isbn is missing or does not match \\d{13}; POST /books returns HTTP 400 with JSON body {\"message\":\"<reason>\"} when title is missing or exceeds 120 chars",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793925332.145152798,
+      "completed" : 1793925384.492548087,
+      "resolution" : "fulfilled (score=0.78): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "POST /books returns HTTP 400 with JSON body {\"message\":\"<reason>\"} when isbn is missing or does not match \\d{13}", "POST /books returns HTTP 400 with JSON body {\"message\":\"<reason>\"} when title is missing or exceeds 120 chars" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-1eaf5053-0add-471b-80be-48acab93812c",
+        "originatingGate" : "criteria-gate",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC"
+        },
+        "blockerType" : "BUILD_FIX",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "BookService.java" ],
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-11-06T00:36:13.987498395Z"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-ed2c86f8-090d-49ce-b6ff-18a0dd893c15",
+      "description" : "Implement the Member domain model with id, name, email fields",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1793925396.961169866,
+      "givenUp" : 1793925784.278875778,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 5,
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-07cd9889-c40b-49f7-ba2c-bc3959b07336",
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-ba9451ab-f28b-449f-a489-bc32318cb0e8",
+      "description" : "Implement the Member service with create and findById operations enforcing name required, email required, and email unique (throw DuplicateEmailException on duplicate)",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1793925396.998634045,
+      "givenUp" : 1793925784.266860254,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 5,
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-56931496-8871-4842-9f26-c1a728e26475",
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-ee7a4ece-fbe8-41d1-8ca1-1165072b2ba9",
+      "description" : "Implement POST /members returning 201 with the created member, and 400 with {\"message\":\"<reason>\"} when name or email is missing",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1793925397.030484438,
+      "givenUp" : 1793925784.253904438,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 5,
+        "acceptanceCriteria" : [ "POST /members returns HTTP 201 with the created member body on valid input", "POST /members returns HTTP 400 with JSON body {\"message\":\"<reason>\"} when name is missing", "POST /members returns HTTP 400 with JSON body {\"message\":\"<reason>\"} when email is missing", "POST /members returns HTTP 409 with JSON body {\"message\":\"<reason>\"} when email already exists" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-e90af1f4-d6ba-4496-a56a-b97795fc82ad",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC",
+          "3" : "SPEC",
+          "4" : "SPEC"
+        },
+        "subsumptionReason" : "REPLACED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-3e4591d1-00e2-4c75-ab7f-ea77f6685fd9",
+      "description" : "Implement GET /members/{id} returning 200 with the member, and 404 with {\"message\":\"<reason>\"} when absent",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793925399.526162178,
+      "completed" : 1793925420.081508627,
+      "metadata" : {
+        "planningRunId" : 5,
+        "acceptanceCriteria" : [ "GET /members/{id} returns HTTP 200 with the member body when it exists", "GET /members/{id} returns HTTP 404 with JSON body {\"message\":\"<reason>\"} when the member is not found" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-a463e2a9-766d-404a-87d4-a8ee4f05c2d8",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC"
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-11-06T00:36:55.371103196Z",
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true
+        }
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-b8cec3fe-ffd0-4c77-a408-fd8b8b8f6efb",
+      "description" : "the application runs, but acceptance criteria fail when exercised against it: \"POST /members returns HTTP 400 — Invalid input returns HTTP 400 with JSON body {\"message\": \"<reason>\"}\" — POST /members → 400, but the running application answered 500 to POST /members {}; \"POST /loans returns HTTP 400 — Invalid input returns HTTP 400 with JSON body {\"message\": \"<reason>\"}\" — POST /loans → 400, but the running application answered 500 to POST /loans {}",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1793925405.846186632,
+      "givenUp" : 1793925926.559665588,
+      "resolution" : "The boot-gate observed the claim this item makes — no longer needed",
+      "metadata" : {
+        "planningRunId" : 0,
+        "bootClaimCriteria" : [ "POST /members returns HTTP 400 — Invalid input returns HTTP 400 with JSON body {\"message\": \"<reason>\"}", "POST /loans returns HTTP 400 — Invalid input returns HTTP 400 with JSON body {\"message\": \"<reason>\"}" ],
+        "lastProgressState" : "PROGRESSING",
+        "goalKind" : "HYBRID",
+        "lastUpdated" : "2026-11-06T00:39:48.407196873Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-f3e54632-11c9-4a22-bb7c-04985eb2dcfe",
+        "originatingGate" : "boot-gate",
+        "closureRefutedBy" : "the application runs, but acceptance criteria fail when exercised against it: \"POST /members returns HTTP 400 — Invalid input returns HTTP 400 with JSON body {\"message\": \"<reason>\"}\" — POST /members → 400, but the running application answered 500 to POST /members {}",
+        "bootClaim" : "criterion",
+        "mergedFiles" : [ "LoanService.java", "MemberController.java", "LoanController.java" ],
+        "mergeCount" : 2,
+        "subgoalRequests" : {
+          "LOW_CONFIDENCE" : {
+            "urgency" : 0.7,
+            "age" : 3,
+            "source" : "interpretation",
+            "validForCycles" : 7
+          }
+        },
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 1,
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-eb7a9eb7-280a-4087-a886-f26e00ae3e0d",
+        "description" : "GET /loans?memberId={id} returns HTTP 200 with a JSON array of all loans (active and returned) for the given member; returns HTTP 404 or an empty array when the member does not exist.",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "COMPLETED",
+        "created" : 1793925901.492562574,
+        "completed" : 1793927031.497446266,
+        "resolution" : "fulfilled (score=0.77): score-based closure + meaningful diff",
+        "metadata" : {
+          "planningRunId" : 7,
+          "lastProgressState" : "FULFILLED",
+          "goalKind" : "EXECUTABLE",
+          "acceptanceCriteria" : [ "GET /loans?memberId=1 after creating loans for member 1 returns HTTP 200 and a JSON array containing the created loan objects.", "GET /loans?memberId=9999 (non-existent member) returns HTTP 404 or HTTP 200 with an empty JSON array." ],
+          "lastUpdated" : "2026-11-06T01:03:46.717763878Z",
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-f3e54632-11c9-4a22-bb7c-04985eb2dcfe",
+          "activeAttemptId" : "attempt-4311dd66-ebc7-4beb-aed6-c9f89d52944d",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "AUTHORED"
+          },
+          "closureRefutedBy" : "the application runs, but acceptance criteria fail when exercised against it: \"GET /loans?memberId=1 after creating loans for member 1 returns HTTP 200 and a JSON array containing the created loan objects.\" — GET /loans → 200, but the running application answered 404 to GET /loans?memberId=1",
+          "criteriaPassStatus" : {
+            "1" : true,
+            "2" : true
+          },
+          "mergedFiles" : [ "LoanController.java", "LoanService.java", "LoanRepository.java" ],
+          "criteriaFailStreak" : {
+            "1" : 0,
+            "2" : 0
+          },
+          "spawnedBy" : "analysis",
+          "mergeCount" : 4
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-8638373b-ec50-4856-91d6-2845b6e28a28",
+      "description" : "the application runs, but acceptance criteria fail when exercised against it: \"POST /members returns HTTP 400 — Invalid input returns HTTP 400 with JSON body {\"message\": \"<reason>\"}\" — POST /members → 400, but the running application answered 500 to POST /members {}; \"GET /members/{} returns HTTP 404 — if absent\" — GET /members/{} → 404, but the running application answered 500 to GET /members/999999999",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1793925593.688287904,
+      "givenUp" : 1793925926.576074716,
+      "resolution" : "The boot-gate observed the claim this item makes — no longer needed",
+      "metadata" : {
+        "planningRunId" : 0,
+        "subgoalRequests" : {
+          "LOW_CONFIDENCE" : {
+            "urgency" : 1.7,
+            "age" : 1,
+            "source" : "evaluation",
+            "validForCycles" : 7
+          }
+        },
+        "bootClaimCriteria" : [ "POST /members returns HTTP 400 — Invalid input returns HTTP 400 with JSON body {\"message\": \"<reason>\"}", "GET /members/{} returns HTTP 404 — if absent" ],
+        "lastProgressState" : "NOT_EVALUATED",
+        "goalKind" : "HYBRID",
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "analysisInjectionCount" : 1,
+        "lastUpdated" : "2026-11-06T00:41:13.107110779Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-c51232ed-4bb9-45fd-a00b-8ca7072d5ec5",
+        "originatingGate" : "boot-gate",
+        "bootClaim" : "criterion",
+        "subsumptionReason" : "COVERED"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ {
+        "id" : "goal-74529ee3-8b47-4cba-b738-517959a4a903",
+        "description" : "GET /members/{id} returns HTTP 404 with JSON body {\"message\": \"<reason>\"} when the member ID does not exist in the in-memory store; returns HTTP 200 with the member object when the ID exists",
+        "role" : "analysis",
+        "type" : "SUBGOAL",
+        "status" : "SUBSUMED",
+        "created" : 1793925662.938029804,
+        "givenUp" : 1793925729.485978003,
+        "resolution" : "superseded by replanning",
+        "metadata" : {
+          "planningRunId" : 5,
+          "acceptanceCriteria" : [ "GET /members/999999999 returns HTTP 404 and JSON body containing a \"message\" field with a non-empty string", "After POST /members with valid data returns 201, GET /members/{thatId} returns HTTP 200 and JSON body containing the member's name and email" ],
+          "subgoalOrigin" : "extra",
+          "parentAttemptId" : "attempt-c51232ed-4bb9-45fd-a00b-8ca7072d5ec5",
+          "activeAttemptId" : "attempt-b1730e78-7a0b-4315-89df-70e8623fd73b",
+          "criteriaBinding" : {
+            "1" : "SPEC",
+            "2" : "SPEC"
+          },
+          "spawnedBy" : "analysis",
+          "subsumptionReason" : "REPLACED"
+        },
+        "expectedArtifacts" : [ ],
+        "subGoals" : [ ]
+      } ]
+    }, {
+      "id" : "goal-fece3d20-3b42-4ede-a007-d5280d248f25",
+      "description" : "Fix MemberController.get to return HTTP 404 with JSON body {\"message\":\"<reason>\"} when the member ID does not exist, and HTTP 200 with the member object when it does",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "SUBSUMED",
+      "created" : 1793925729.586864516,
+      "givenUp" : 1793925777.904263735,
+      "resolution" : "superseded by replanning",
+      "metadata" : {
+        "planningRunId" : 6,
+        "acceptanceCriteria" : [ "GET /members/999999999 returns HTTP 404 and JSON body containing a \"message\" field with a non-empty string", "After POST /members with valid data returns 201, GET /members/{thatId} returns HTTP 200 and JSON body containing the member's name and email", "No file under src/main/java/com/example/library/domain/controller/LoanController.java is changed" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "subgoalRequests" : {
+          "LOW_CONFIDENCE" : {
+            "urgency" : 0.7,
+            "age" : 1,
+            "source" : "interpretation",
+            "validForCycles" : 7
+          }
+        },
+        "cumulativeStagnatingCycles" : 1,
+        "activeAttemptId" : "attempt-62ba08bb-64b3-489c-9570-f26cfc81ad85",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC",
+          "3" : "AUTHORED"
+        },
+        "criteriaPassStatus" : {
+          "1" : false,
+          "2" : false
+        },
+        "criteriaFailStreak" : {
+          "1" : 1,
+          "2" : 1
+        },
+        "subsumptionReason" : "REPLACED",
+        "goalKind" : "EXECUTABLE"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-5a20d0de-7cc4-459f-8bb9-e37a57da805c",
+      "description" : "Fix MemberController.create and MemberService.create so that POST /members with a missing or empty name or email returns HTTP 400 with JSON body {\"message\":\"<reason>\"} (non-empty reason string), and POST /members with valid name and email returns HTTP 201 with the created member object as the body",
+      "role" : "planner",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793925784.321444607,
+      "completed" : 1793925858.803296697,
+      "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+      "metadata" : {
+        "planningRunId" : 7,
+        "lastProgressState" : "FULFILLED",
+        "goalKind" : "EXECUTABLE",
+        "acceptanceCriteria" : [ "POST /members with body {} returns HTTP 400 and JSON body containing a \"message\" field with a non-empty string", "POST /members with body {\"name\":\"Alice\",\"email\":\"alice@example.com\"} returns HTTP 201 and JSON body containing \"name\":\"Alice\" and \"email\":\"alice@example.com\"", "POST /members with body {\"name\":\"Bob\"} (missing email) returns HTTP 400 and JSON body containing a \"message\" field with a non-empty string", "No file under src/main/java/com/example/library/domain/controller/LoanController.java is changed" ],
+        "lastUpdated" : "2026-11-06T00:44:13.899870018Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-c7d52ae4-ea66-4c71-9ec9-d90b47712608",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC",
+          "3" : "SPEC",
+          "4" : "AUTHORED"
+        },
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true,
+          "3" : true,
+          "4" : true
+        },
+        "mergedFiles" : [ "MemberController.java", "MemberService.java" ],
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0,
+          "3" : 0,
+          "4" : 0
+        },
+        "mergeCount" : 1
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-2cd7ebf0-38e7-4af2-9a47-dff4e2cde77b",
+      "description" : "[BUILD_FIX] The running artifact contradicts acceptance criteria this work item closed on — repair the code so they hold: GET /loans?memberId=1 after creating loans for member 1 returns HTTP 200 and a JSON array containing the created loan objects.",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793925992.63528925,
+      "completed" : 1793926953.670685864,
+      "resolution" : "fulfilled (score=0.78): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "GET /loans?memberId=1 after creating loans for member 1 returns HTTP 200 and a JSON array containing the created loan objects." ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-97a0effc-c93b-41ac-992e-d306c962b4ff",
+        "originatingGate" : "criteria-gate",
+        "criteriaBinding" : {
+          "1" : "SPEC"
+        },
+        "blockerType" : "BUILD_FIX",
+        "goalKind" : "HYBRID",
+        "mergeCount" : 4,
+        "mergedFiles" : [ "LoanController.java", "LoanService.java", "Loan.java", "LoanRepository.java" ],
+        "criteriaFailStreak" : {
+          "1" : 0
+        },
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-11-06T01:02:23.796387128Z",
+        "closureEdgeReopens" : 1,
+        "criteriaPassStatus" : {
+          "1" : true
+        },
+        "closureRefutedBy" : "the application runs, but acceptance criteria fail when exercised against it: \"GET /loans?memberId=1 after creating loans for member 1 returns HTTP 200 and a JSON array containing the created loan objects.\" — GET /loans → 200, but the running application answered 404 to GET /loans?memberId=1",
+        "subgoalRequests" : {
+          "LOW_CONFIDENCE" : {
+            "urgency" : 3.0,
+            "age" : 2,
+            "source" : "evaluation",
+            "validForCycles" : 7
+          },
+          "DIVERGENCE_REQUEST" : {
+            "urgency" : 0.7,
+            "age" : 1,
+            "source" : "interpretation",
+            "validForCycles" : 7
+          }
+        },
+        "analysisClassifiedKind" : "EXECUTABLE"
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-5d87622a-ad37-4763-9a48-1f1653403af0",
+      "description" : "the application runs, but acceptance criteria fail when exercised against it: \"POST /loans returns HTTP 400 — Invalid input returns HTTP 400 with JSON body {\"message\": \"<reason>\"}\" — POST /loans → 400, but the running application answered 404 to POST /loans {}",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793926196.519094193,
+      "completed" : 1793926552.787408981,
+      "resolution" : "fulfilled (score=0.77): score-based closure + meaningful diff",
+      "metadata" : {
+        "planningRunId" : 0,
+        "subgoalRequests" : {
+          "LOW_CONFIDENCE" : {
+            "urgency" : 3.0,
+            "age" : 1,
+            "source" : "evaluation",
+            "validForCycles" : 7
+          }
+        },
+        "bootClaimCriteria" : [ "POST /loans returns HTTP 400 — Invalid input returns HTTP 400 with JSON body {\"message\": \"<reason>\"}" ],
+        "lastProgressState" : "PROGRESSING",
+        "goalKind" : "HYBRID",
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastUpdated" : "2026-11-06T00:55:47.847054736Z",
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-86e43338-e584-459a-8af1-58e995c29ad1",
+        "originatingGate" : "boot-gate",
+        "closureRefutedBy" : "the application runs, but acceptance criteria fail when exercised against it: \"POST /loans returns HTTP 400 — Invalid input returns HTTP 400 with JSON body {\"message\": \"<reason>\"}\" — POST /loans → 400, but the running application answered 404 to POST /loans {}",
+        "bootClaim" : "criterion",
+        "mergedFiles" : [ "LoanController.java", "Loan.java", "LoanService.java" ],
+        "mergeCount" : 2
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    }, {
+      "id" : "goal-49d1a846-609d-4fa4-a839-5f4c46e11b91",
+      "description" : "[BUILD_FIX] Implement the unconfirmed acceptance criteria against the current code — 2 acceptance criterion(s) not confirmed in the current code: GET /books/{id} returns HTTP 404 with {\"message\":\"<reason>\"} when the book is absent; GET /books/{id} returns HTTP 404 with JSON body {\"message\":\"<reason>\"} when the book is absent",
+      "role" : "coverage-retro",
+      "type" : "SUBGOAL",
+      "status" : "COMPLETED",
+      "created" : 1793927068.6410421,
+      "completed" : 1793927218.512092369,
+      "resolution" : "fulfilled (score=1.00): interpreter=FULFILLED",
+      "metadata" : {
+        "planningRunId" : 0,
+        "acceptanceCriteria" : [ "GET /books/{id} returns HTTP 404 with {\"message\":\"<reason>\"} when the book is absent", "GET /books/{id} returns HTTP 404 with JSON body {\"message\":\"<reason>\"} when the book is absent" ],
+        "subgoalOrigin" : "required",
+        "parentAttemptId" : "attempt-db959198-39a1-46bd-ad6e-8f910898ea5b",
+        "activeAttemptId" : "attempt-2a2df92b-924f-4baf-ab69-5caa05c4ff21",
+        "originatingGate" : "criteria-gate",
+        "criteriaBinding" : {
+          "1" : "SPEC",
+          "2" : "SPEC"
+        },
+        "blockerType" : "BUILD_FIX",
+        "subgoalRequests" : {
+          "LOW_CONFIDENCE" : {
+            "urgency" : 1.0,
+            "age" : 1,
+            "source" : "evaluation",
+            "validForCycles" : 7
+          }
+        },
+        "goalKind" : "HYBRID",
+        "analysisClassifiedKind" : "EXECUTABLE",
+        "lastProgressState" : "FULFILLED",
+        "lastUpdated" : "2026-11-06T01:06:48.043882050Z",
+        "mergeCount" : 1,
+        "mergedFiles" : [ "BookController.java" ],
+        "criteriaPassStatus" : {
+          "1" : true,
+          "2" : true
+        },
+        "criteriaFailStreak" : {
+          "1" : 0,
+          "2" : 0
+        }
+      },
+      "expectedArtifacts" : [ ],
+      "subGoals" : [ ]
+    } ]
+  }
+}

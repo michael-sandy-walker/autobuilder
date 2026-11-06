@@ -34,7 +34,7 @@ import java.util.regex.PatternSyntaxException;
 @Component
 public class LogInvestigator {
 
-    static final int DEFAULT_PROBES = 8;
+    public static final int DEFAULT_PROBES = 8;
     static final int MAX_MATCHES = 25;
     static final int MAX_READ_LINES = 60;
     static final int MAX_LINE_CHARS = 300;
@@ -59,6 +59,19 @@ public class LogInvestigator {
             #Probe open <path> <first line> <last line>
               those lines of a project file as it is NOW, at most %d at a time
             """.formatted(ProjectTree.MAX_FILES_LISTED, MAX_MATCHES, MAX_READ_LINES);
+
+    /**
+     * T4-EI: the instructions when there are no logs, only a project's files -- another project's source, read to find
+     * out what it can do or how it does something.
+     */
+    static String treeOnlySystem() {
+        return "You answer a question about a software project by reading its FILES. They are not shown to you whole: " +
+                "you look with probes, one probe per reply, and you see its result before you choose the next one.\n\n" +
+                "Reply with exactly ONE of these, nothing else:\n\n" +
+                TREE_PROBES + "\n" +
+                "#Answer\n<the answer, in the form the question asks for>\n\n" +
+                "Answer only from what your probes showed. If they did not show it, say so.";
+    }
 
     /** The instructions for the sources this investigation has: the run's logs, and the project now when given. */
     static String system(boolean withTree) {
@@ -103,7 +116,7 @@ public class LogInvestigator {
         ProjectTree tree = projectRoot == null || !java.nio.file.Files.isDirectory(projectRoot) ? null
                 : new ProjectTree(projectRoot);
         List<Message> conversation = new ArrayList<>();
-        conversation.add(new Message("system", system(tree != null)));
+        conversation.add(new Message("system", logs.isEmpty() && tree != null ? treeOnlySystem() : system(tree != null)));
         conversation.add(new Message("user", opening(question, logs, tree, probes)));
         List<Step> steps = new ArrayList<>();
         try (var scope = LlmCallContext.scope("log-investigator", cycleId)) {
@@ -150,7 +163,8 @@ public class LogInvestigator {
     }
 
     static String opening(String question, Map<String, List<String>> logs, ProjectTree tree, int probes) {
-        StringBuilder sb = new StringBuilder("QUESTION:\n").append(question).append("\n\nTHE LOGS:\n");
+        StringBuilder sb = new StringBuilder("QUESTION:\n").append(question).append("\n");
+        if (!logs.isEmpty()) sb.append("\nTHE LOGS:\n");
         logs.forEach((name, lines) -> sb.append("  ").append(name).append(" -- ").append(lines.size()).append(" lines\n"));
         if (tree != null) sb.append("\nTHE PROJECT NOW: ").append(tree.files().size()).append(" files\n");
         sb.append("\nYou have ").append(probes).append(" probes. Reply with your first #Probe.");

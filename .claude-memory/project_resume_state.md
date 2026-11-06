@@ -11,7 +11,15 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-06 (Opus 5.5, session 26) -- T4-EH BUILT; THE FIELD RUN'S REAL BLOCKER WAS CONSOLIDATION UNDOING THE MODEL'S CORRECT MOVE -- START HERE
+## 2026-11-06 (Opus 5.5, session 27) -- T4-EI SLICE 1 BUILT AND RUN; THE PLANNER RETIRED THE IMPORT'S GOAL -- START HERE
+
+- **Design pass done with the user** (both readings and page shape confirmed; toy case firestarter -> cashbook as proposed). Discussed further with Codex over the fakechat channel; my "acceptable outcomes" reading withdrawn (on T4-EI).
+- **Built, UNCOMMITTED (code commit needs the user's word):** capability stage (`CapabilityCut`, `CapabilityDiscovery` incl. the model cut, `CapabilityImportService`, `ReferenceConsultation`, endpoints, home Extend option + CHOOSING page), cancel restores what an import rewrote (verified gap), planner may not prune a kept import's goal. Toy case `data/firestarter-cashbook` v1 + `scripts/{prepare_capability_run.sh,smoke_capability_import.sh,capability_import.py}`.
+- **Field `2026-11-06_16-04-22`: objective-met, smoke 9/10** -- the adapted capability landed in cashbook's structure; the store taken as code was DELETED after the planner retired the import's goal. Detail and the open question (are LoanRepository's rule queries "loan rules"?) on T4-EI.
+- **An OOM at 15:52 (llama-server + Docker VM + Firefox + ChatGPT app) killed Docker/Neo4j and the previous Claude Code session**; that run discarded. Watch MemAvailable beside runs.
+- **NEXT:** the user's word on committing; then rerun the case on the planner fix (DoD needs it).
+
+## 2026-11-06 (Opus 5.5, session 26) -- T4-EH BUILT; THE FIELD RUN'S REAL BLOCKER WAS CONSOLIDATION UNDOING THE MODEL'S CORRECT MOVE
 
 - **Built:** scan-reach fact (`WiringFactsAnalyzer.scanReach`, vocabulary rows in `AnnotationVocabularies`) into the evolution prompt and `BootGate`'s 404 refusal; `PackageFragmentationCheck` deletion-aware, used by `PackageConsolidationService` and the probe gate. Suite 4316/0/16 (before the last test was added); BootGateTest 60/0 after it. Ticket notes committed.
 - **Finding:** in the 2026-11-03 firestarter run the model proposed the right fix 16 of 20 times; T4-BL consolidation rewrote each explicit move back to `domain/`, and the answer's own `#Delete` then removed the entry point. Detail and the remaining open link (a compiling wiring fix earns no evaluation credit) on T4-EH.

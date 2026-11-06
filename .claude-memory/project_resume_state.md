@@ -13,9 +13,9 @@ metadata:
 
 ## 2026-11-06 (Opus 5.5, session 26) -- T4-EH BUILT; THE FIELD RUN'S REAL BLOCKER WAS CONSOLIDATION UNDOING THE MODEL'S CORRECT MOVE -- START HERE
 
-- **Nothing is live. Code UNCOMMITTED** (awaiting the user's word): scan-reach fact (`WiringFactsAnalyzer.scanReach`, vocabulary rows in `AnnotationVocabularies`) into the evolution prompt and `BootGate`'s 404 refusal; `PackageFragmentationCheck` deletion-aware, used by `PackageConsolidationService` and the probe gate. Suite 4316/0/16 (before the last test was added); BootGateTest 60/0 after it. Ticket notes committed.
+- **Built:** scan-reach fact (`WiringFactsAnalyzer.scanReach`, vocabulary rows in `AnnotationVocabularies`) into the evolution prompt and `BootGate`'s 404 refusal; `PackageFragmentationCheck` deletion-aware, used by `PackageConsolidationService` and the probe gate. Suite 4316/0/16 (before the last test was added); BootGateTest 60/0 after it. Ticket notes committed.
 - **Finding:** in the 2026-11-03 firestarter run the model proposed the right fix 16 of 20 times; T4-BL consolidation rewrote each explicit move back to `domain/`, and the answer's own `#Delete` then removed the entry point. Detail and the remaining open link (a compiling wiring fix earns no evaluation credit) on T4-EH.
-- **Next:** commit the code (user's word), then a short field run of firestarter on the fixed build ([[feedback-short-field-run-after-context-change]]); close T4-EH on it.
+- **Then (same night, the user's word):** code committed `2655b208`; field run firestarter `2026-11-06_01-27-03` GOAL_FULFILLED 23/23 in about 40 min, mechanism not exercised (controllers landed inside the scan). **T4-EH CLOSED.** Nothing is running. Open in the queue: T4-EI (design pass with the user first) and the older live list.
 
 ## 2026-11-05/06 (Opus 5.5, session 25) -- T4-EI FILED AND SHAPED WITH THE USER (CAPABILITY IMPORT); NEXT: T4-EH
 

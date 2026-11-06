@@ -17684,6 +17684,7 @@
    "drift_tail_cycles": "0",
    "median_cycle_seconds": "75",
    "merges": "9",
+   "note": "T4-EG slice 4 DoD: the receiving project, built fresh from firestarter's bootstrap in data/t4eg-recv; firestarter-2 brought into it afterwards (no loop run).",
    "peaked_at_cycle": "cycle-1793913467380 (16/16)",
    "preserved_source": "loop-preserved",
    "recorded": "2026-11-05",
@@ -17702,9 +17703,40 @@
    "target": "t4eg-recv",
    "terminal": "GOAL_FULFILLED",
    "total_cycles": "16",
-   "toycase": "t4eg-recv v3",
-   "note": "T4-EG slice 4 DoD: the receiving project, built fresh from firestarter's bootstrap in data/t4eg-recv; firestarter-2 brought into it afterwards (no loop run)."
+   "toycase": "t4eg-recv v3"
+  },
+  "2026-11-06_01-27-03": {
+   "build": "2655b208",
+   "clauses_closed_vs_control": "1",
+   "cost_readout": "build=212436ms/91 boot-gate=81862ms/32 package-gate=80319ms/32 sms-commit=14912ms/30 sms-batch-build=3379ms/30 sms-lineage-stamp=162ms/30 sms-cycle-merge=103ms/30 sms-cycle-link=103ms/29",
+   "criteria_authored": "44",
+   "criteria_elaboration": "6",
+   "criteria_executable_count": "36",
+   "criteria_executable_pct": "82",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "0",
+   "median_cycle_seconds": "73",
+   "merges": "22",
+   "peaked_at_cycle": "cycle-1793927142267 (31/31)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-11-06",
+   "repeat_proposals": "0",
+   "repeats_refused": "0",
+   "run_duration_min": "39.1",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 23/23",
+   "smoke_pass": 23,
+   "smoke_preserved": "SMOKE: 23/23",
+   "smoke_strict": "23/23 discounted=none",
+   "smoke_total": 23,
+   "start_cleared_tree": "yes",
+   "start_mode": "NEW_PROJECT",
+   "start_tree": "LOOP_AUTHORED",
+   "target": "firestarter",
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "31",
+   "toycase": "firestarter v3"
   }
  },
- "updated": "2026-11-05"
+ "updated": "2026-11-06"
 }

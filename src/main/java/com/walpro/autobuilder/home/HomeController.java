@@ -192,6 +192,43 @@ public class HomeController {
         return ResponseEntity.status(201).body(body);
     }
 
+    /** At most this many sub-directories are listed for one directory; the rest are counted. */
+    static final int MAX_LISTED_DIRECTORIES = 500;
+
+    /**
+     * The directories inside {@code path} (the user's home when absent), for the page's folder picker -- a browser
+     * cannot hand a page the absolute path of a directory, so the page asks this machine instead (the user,
+     * 2026-11-06: "the path of the project should be selectable by an element"). Hidden directories come after
+     * the others; only directories are listed, never file contents.
+     */
+    @GetMapping("/home/directories")
+    public ResponseEntity<Map<String, Object>> directories(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String path) {
+        Path dir = path == null || path.isBlank()
+                ? Path.of(System.getProperty("user.home")) : Path.of(path.strip());
+        if (!dir.isAbsolute()) return refuse(400, "the path must be absolute");
+        dir = dir.normalize();
+        if (!Files.isDirectory(dir)) return refuse(404, "no directory " + dir);
+        List<String> names;
+        try (var entries = Files.list(dir)) {
+            names = entries.filter(Files::isDirectory)
+                    .map(p -> p.getFileName().toString())
+                    // Hidden directories are listed too, after the others: code worth importing lives in them
+                    // (the user, 2026-11-06: "the selector doesn't show the dotted directories").
+                    .sorted(java.util.Comparator.comparing((String n) -> n.startsWith("."))
+                            .thenComparing(String.CASE_INSENSITIVE_ORDER))
+                    .toList();
+        } catch (IOException | SecurityException e) {
+            return refuse(403, "the directory cannot be read: " + e.getMessage());
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("path", dir.toString());
+        body.put("parent", dir.getParent() == null ? null : dir.getParent().toString());
+        body.put("directories", names.size() > MAX_LISTED_DIRECTORIES ? names.subList(0, MAX_LISTED_DIRECTORIES) : names);
+        body.put("notListed", Math.max(0, names.size() - MAX_LISTED_DIRECTORIES));
+        return ResponseEntity.ok(body);
+    }
+
     /** The run's own cold read of an adopted project: what its code is, from its own evidence. */
     @GetMapping(value = "/home/run/cold-read", produces = "text/plain")
     public ResponseEntity<String> coldRead() {

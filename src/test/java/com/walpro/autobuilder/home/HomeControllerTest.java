@@ -251,4 +251,28 @@ class HomeControllerTest {
         assertThat(state).containsEntry("state", "IDLE");
         assertThat(java.time.Instant.parse((String) state.get("homeSince"))).isBeforeOrEqualTo(java.time.Instant.now());
     }
+
+    @Test
+    void directories_listsTheSubDirectoriesSorted_hiddenOnesLast_withTheParent() throws Exception {
+        java.nio.file.Files.createDirectories(elsewhere.resolve("beta"));
+        java.nio.file.Files.createDirectories(elsewhere.resolve("Alpha"));
+        java.nio.file.Files.createDirectories(elsewhere.resolve(".hidden"));
+        java.nio.file.Files.writeString(elsewhere.resolve("file.txt"), "not a directory");
+
+        var res = controller(idle()).directories(elsewhere.toString());
+
+        assertThat(res.getStatusCode().value()).isEqualTo(200);
+        assertThat(res.getBody()).containsEntry("path", elsewhere.toString())
+                .containsEntry("parent", elsewhere.getParent().toString())
+                .containsEntry("directories", java.util.List.of("Alpha", "beta", ".hidden"))
+                .containsEntry("notListed", 0);
+    }
+
+    @Test
+    void directories_defaultsToHome_andRefusesRelativeOrMissingPaths() {
+        var c = controller(idle());
+        assertThat(c.directories(null).getBody()).containsEntry("path", System.getProperty("user.home"));
+        assertThat(c.directories("relative/dir").getStatusCode().value()).isEqualTo(400);
+        assertThat(c.directories(elsewhere.resolve("absent").toString()).getStatusCode().value()).isEqualTo(404);
+    }
 }

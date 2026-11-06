@@ -120,6 +120,14 @@
   .menu button:hover:not(:disabled) { background: var(--accent-bg); }
   .menu .hint { display: block; color: var(--dim); font-size: 11px; }
 
+  /* Folder picker: a browser cannot hand the page a directory's absolute path, so this machine lists them. */
+  .pathrow { display: flex; gap: 6px; margin-top: 8px; }
+  .pathrow input { flex: 1; }
+  .dirat { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); word-break: break-all; margin: 4px 0 8px; }
+  .dirlist { max-height: 50vh; overflow: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel-2); padding: 4px; }
+  .dirlist button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 5px 10px; }
+  .dirlist button:hover:not(:disabled) { background: var(--accent-bg); }
+
   /* Dialogs */
   dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 10px;
     padding: 18px 20px; width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
@@ -191,7 +199,8 @@
       <label><input type="radio" name="code-src" value="path" checked> a directory on this machine</label>
       <label><input type="radio" name="code-src" value="project"> a copy of a project here</label>
     </div>
-    <input id="code-path" placeholder="/home/me/code/their-service" autocomplete="off" spellcheck="false" style="margin-top:8px">
+    <div class="pathrow" id="code-path-row"><input id="code-path" placeholder="/home/me/code/their-service" autocomplete="off" spellcheck="false">
+      <button id="code-browse" type="button">Browse...</button></div>
     <select id="code-project" style="margin-top:8px" hidden></select>
     <label for="code-protected">What may not be touched -- optional, one glob per line, relative to the code</label>
     <textarea id="code-protected" placeholder="src/main/**"></textarea>
@@ -225,7 +234,8 @@
     <label><input type="radio" name="ext-src" value="path"> code in a directory on this machine</label>
   </div>
   <select id="ext-project" style="margin-top:8px"></select>
-  <input id="ext-path" placeholder="/home/me/code/their-library" autocomplete="off" spellcheck="false" style="margin-top:8px" hidden>
+  <div class="pathrow" id="ext-path-row" hidden><input id="ext-path" placeholder="/home/me/code/their-library" autocomplete="off" spellcheck="false">
+    <button id="ext-browse" type="button">Browse...</button></div>
   <label for="ext-intent">What to take from it, and how it is used here</label>
   <textarea id="ext-intent"></textarea>
   <div class="foot">
@@ -234,6 +244,15 @@
   </div>
 </dialog>
 
+<dialog id="dlg-dir">
+  <h3>Choose a directory</h3>
+  <div class="dirat" id="dir-at"></div>
+  <div class="dirlist" id="dir-list"></div>
+  <div class="foot">
+    <button data-close>Cancel</button>
+    <button id="dir-use" class="primary">Use this directory</button>
+  </div>
+</dialog>
 <div id="toast" hidden></div>
 
 <script>
@@ -619,12 +638,16 @@ async function stopRun() {
 }
 
 // An adopted project's goal: read what is there first, then say what to achieve.
-let coldRead = null, goalDraft = '';
+let coldRead = null, goalDraft = '', goalSending = false;
 function goalBox() {
   return '<div class="sub"><label style="margin-top:0">What it read in the code</label><pre class="coldread" id="coldread">'
     + esc(coldRead || 'Reading...') + '</pre><label for="goal">Goal -- what to achieve, in prose</label>'
-    + '<textarea id="goal" placeholder="What should change or be added, and how you would tell it is done."></textarea>'
-    + '<div class="row"><button id="setgoal" class="primary">Set goal</button></div></div>';
+    + '<textarea id="goal" placeholder="What should change or be added, and how you would tell it is done."'
+    + (goalSending ? ' readonly' : '') + '></textarea>'
+    + '<div class="row"><button id="setgoal" class="primary"' + (goalSending ? ' disabled' : '') + '>'
+    + (goalSending ? 'Setting the goal...' : 'Set goal') + '</button>'
+    + (goalSending ? '<span class="note" style="margin:0">The model reads the goal first; this can take a minute.</span>' : '')
+    + '</div></div>';
 }
 function wireGoalBox() {
   if (coldRead == null) {
@@ -634,8 +657,12 @@ function wireGoalBox() {
   $('goal').value = goalDraft;
   $('goal').oninput = e => goalDraft = e.target.value;
   $('setgoal').onclick = async () => {
+    if (goalSending) return;
     if (!goalDraft.trim()) { toast(false, 'The goal is empty.'); return; }
-    const r = await post('/home/run/goal', null, goalDraft);
+    // The request waits on a model call: lock the box at once, so a second click cannot send it again.
+    goalSending = true; rerender();
+    let r;
+    try { r = await post('/home/run/goal', null, goalDraft); } finally { goalSending = false; }
     if (r.status === 200 && r.body.ok) { toast(true, 'Goal set; the loop starts on its next cycle.'); goalDraft = ''; coldRead = null; }
     else toast(false, 'Refused: ' + message(r));
     refresh();
@@ -882,7 +909,7 @@ $('new-open').onclick = () => { loadProjects().then(() => chooseKind(kind)); $('
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
 document.querySelectorAll('input[name=code-src]').forEach(r => r.onchange = () => {
   const fromProject = document.querySelector('input[name=code-src]:checked').value === 'project';
-  $('code-path').hidden = fromProject; $('code-project').hidden = !fromProject;
+  $('code-path-row').hidden = fromProject; $('code-project').hidden = !fromProject;
 });
 
 function fillProjectSelect(sel, except) {
@@ -945,7 +972,7 @@ function openExtend(t) {
 }
 function suggestIntent() {
   const fromProject = document.querySelector('input[name=ext-src]:checked').value === 'project';
-  $('ext-project').hidden = !fromProject; $('ext-path').hidden = fromProject;
+  $('ext-project').hidden = !fromProject; $('ext-path-row').hidden = fromProject;
   if ($('ext-intent').dataset.touched) return;
   const n = fromProject ? $('ext-project').value : codeName($('ext-path').value);
   const t = projects.find(x => x.name === n);
@@ -964,6 +991,38 @@ $('ext-go').onclick = async () => {
   $('dlg-extend').close(); toast(true, 'Bringing ' + (input.project || codeName(input.path)) + ' into ' + extending.name + '.');
   refresh();
 };
+
+// ---------- Folder picker ----------
+let dirFor = null, dirAt = null;
+async function showDirectory(path) {
+  const res = await fetch('/home/directories' + (path ? '?path=' + encodeURIComponent(path) : '')).catch(() => null);
+  const b = res ? await res.json().catch(() => null) : null;
+  if (!res || !res.ok || !b) {
+    if (path) return showDirectory('');   // a typed path that is not a directory: start from home instead
+    toast(false, 'The directory could not be read' + (b && b.message ? ': ' + b.message : '.'));
+    return false;
+  }
+  dirAt = b.path;
+  $('dir-at').textContent = b.path;
+  const child = n => (b.path.endsWith('/') ? b.path : b.path + '/') + n;
+  $('dir-list').innerHTML = (b.parent ? '<button data-dir="' + esc(b.parent) + '">.. (up)</button>' : '')
+    + b.directories.map(n => '<button data-dir="' + esc(child(n)) + '">' + esc(n) + '/</button>').join('')
+    + (b.notListed ? '<p class="note">' + b.notListed + ' more not listed.</p>' : '')
+    + (!b.directories.length ? '<p class="note">No directories inside.</p>' : '');
+  document.querySelectorAll('#dir-list [data-dir]').forEach(d => d.onclick = () => showDirectory(d.dataset.dir));
+  return true;
+}
+async function openDirectoryPicker(input) {
+  dirFor = input;
+  if (await showDirectory(input.value.trim()) !== false) $('dlg-dir').showModal();
+}
+$('dir-use').onclick = () => {
+  dirFor.value = dirAt;
+  dirFor.dispatchEvent(new Event('input'));
+  $('dlg-dir').close();
+};
+$('code-browse').onclick = () => openDirectoryPicker($('code-path'));
+$('ext-browse').onclick = () => openDirectoryPicker($('ext-path'));
 
 // ---------- start ----------
 $('profiles').value = recall('home.profiles') || 'dev-auto';

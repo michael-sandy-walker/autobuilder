@@ -18,7 +18,8 @@ metadata:
 - **Field `2026-11-06_16-04-22`: objective-met, smoke 9/10** -- the adapted capability landed in cashbook's structure; the store taken as code was DELETED after the planner retired the import's goal. Detail and the open question (are LoanRepository's rule queries "loan rules"?) on T4-EI.
 - **An OOM at 15:52 (llama-server + Docker VM + Firefox + ChatGPT app) killed Docker/Neo4j and the previous Claude Code session**; that run discarded. Watch MemAvailable beside runs.
 - **Later (same evening):** code committed `8110e131` at the user's word; rerun `2026-11-06_21-59-08` objective-met 9/10 -- planner fix held, but my generated intent lines ("... is not taken on", "source kept to read") became criteria and evolution deleted the store's files to satisfy them. Detail on T4-EI.
-- **NEXT:** the user's word on carrying left-out/reference lines as `rule:` lines (proposed on T4-EI); then rerun.
+- **Night:** the user said yes: obligations fix `3402bde3` (suite 4376/0/16); rerun `2026-11-06_23-24-15` operator-stop 9/10 -- both capabilities stayed; only check 4 (LoanRepository's queries) fails; closure held open by `IntentUse` reading "a working part of its build" as "cashbook must call the repositories". Detail on T4-EI.
+- **NEXT:** the user's word on (a) not asking `IntentUse` for a capability import, (b) whether LoanRepository's two queries are loan rules.
 
 ## 2026-11-06 (Opus 5.5, session 26) -- T4-EH BUILT; THE FIELD RUN'S REAL BLOCKER WAS CONSOLIDATION UNDOING THE MODEL'S CORRECT MOVE
 

@@ -8,6 +8,7 @@ import com.walpro.autobuilder.core.merge.CapabilityCut.Capability;
 import com.walpro.autobuilder.core.merge.CapabilityCut.Choice;
 import com.walpro.autobuilder.core.merge.CapabilityCut.Mode;
 import com.walpro.autobuilder.core.service.FileService;
+import com.walpro.autobuilder.goal.SeedRequirements;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileSystemUtils;
@@ -194,7 +195,8 @@ public class CapabilityImportService {
             Files.createDirectories(to.getParent());
             Files.writeString(to, e.getValue());
         }
-        return new ProjectInputService.Request(s.label(), s.runId(), cut, p.intent(), s.addedBy(), false);
+        return new ProjectInputService.Request(s.label(), s.runId(), cut, p.intent(), s.addedBy(), false,
+                obligations(s, s.choices(), p.dependencies()));
     }
 
     /**
@@ -359,11 +361,55 @@ public class CapabilityImportService {
                 case LEAVE_OUT -> left.add(c.name());
             }
         }
-        if (!left.isEmpty()) sb.append("Left out, not taken on: ").append(String.join(", ", left)).append(".\n");
+        if (!left.isEmpty()) {
+            sb.append("Not taken (nothing is to be done about them; code placed for a capability taken as code stays): ")
+                    .append(String.join(", ", left)).append(".\n");
+        }
         if (!dependencies.isEmpty()) {
             sb.append("The code taken as code relies on: ").append(String.join(", ", dependencies)).append(".\n");
         }
         return sb.toString().strip();
+    }
+
+    /**
+     * The import's obligations, written here rather than split from the intent by a model: each chosen capability's
+     * description is ONE checkable line -- what the operator asked of it here; the rest only guides ({@code rule:},
+     * never blocks closure). Field 2026-11-06 (firestarter-cashbook): with the intent split into criteria, "the Book
+     * resource is not taken on" blocked closure until evolution deleted Book, Member, Loan and the repositories --
+     * the code the store taken as code needs -- and the evaluator ticked it; "the source is kept to read" could never be
+     * confirmed by any code.
+     */
+    static List<String> obligations(Selection s, List<Choice> choices, List<String> dependencies) {
+        List<String> out = new ArrayList<>();
+        List<String> code = new ArrayList<>(), left = new ArrayList<>();
+        boolean reference = false;
+        for (Capability c : s.capabilities()) {
+            Choice choice = choiceOf(s, choices, c.id());
+            if (choice.mode() == Mode.LEAVE_OUT) {
+                left.add(c.name());
+                continue;
+            }
+            out.add(c.name() + ": " + choice.description());
+            if (choice.mode() == Mode.CODE) code.add(c.name());
+            reference |= choice.reference();
+        }
+        if (!code.isEmpty()) {
+            out.add(SeedRequirements.RULE_MARKER + " The code placed for " + String.join(", ", code) + " was chosen by the"
+                    + " operator and stays in this project; make it work here, do not remove it.");
+        }
+        if (!left.isEmpty()) {
+            out.add(SeedRequirements.RULE_MARKER + " Not taken from " + s.label() + ": " + String.join(", ", left) + ". Nothing"
+                    + " is to be done about them -- and code placed for a capability taken as code stays, even where one of"
+                    + " these shares its names.");
+        }
+        if (reference) {
+            out.add(SeedRequirements.RULE_MARKER + " " + s.label() + "'s source is kept read-only beside this project, to read"
+                    + " while adapting; it is not part of this project.");
+        }
+        if (!dependencies.isEmpty()) {
+            out.add(SeedRequirements.RULE_MARKER + " The code taken as code relies on: " + String.join(", ", dependencies) + ".");
+        }
+        return out;
     }
 
     private static Choice choiceOf(Selection s, String capability) {

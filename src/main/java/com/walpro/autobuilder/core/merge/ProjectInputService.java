@@ -45,8 +45,15 @@ public class ProjectInputService {
     /**
      * @param runs this input's module is what the project runs, in a project of modules. T4-EG: every import lands
      *             pending, scripted or not -- keeping it ({@link #keep}) is the one way into the project
+     * @param obligations T4-EI: the intent's obligations as the caller already wrote them -- checkable lines, and
+     *                    {@code rule:} lines that guide without blocking closure; null to have them derived from the
+     *                    intent as for any input
      */
-    public record Request(String label, String runId, Path dir, String intent, String addedBy, boolean runs) {
+    public record Request(String label, String runId, Path dir, String intent, String addedBy, boolean runs,
+                          List<String> obligations) {
+        public Request(String label, String runId, Path dir, String intent, String addedBy, boolean runs) {
+            this(label, runId, dir, intent, addedBy, runs, null);
+        }
     }
 
     /**
@@ -181,7 +188,7 @@ public class ProjectInputService {
         files.writeFile(dir + ProtectedPaths.INPUT_FILE, String.join("\n", landing.protectedLines()) + "\n");
         List<String> intentLines = new ArrayList<>();
         step(r.label(), 1, 0, 0);
-        int obligations = writeObligations(input, landing.obligations(), intentLines);
+        int obligations = writeObligations(input, landing.obligations(), intentLines, r.obligations());
         step(r.label(), 2, 0, 0);
         holdFiles(input, landing, parent);
         step(r.label(), 3, 0, 0);
@@ -564,13 +571,21 @@ public class ProjectInputService {
     }
 
     /** The intent's lines, generated like a text input's, then what the input verified; the operator may edit them. */
-    private int writeObligations(InputEntry input, List<String> verified, List<String> intentLines) throws IOException {
+    private int writeObligations(InputEntry input, List<String> verified, List<String> intentLines, List<String> written)
+            throws IOException {
         String path = goals.purpose().obligationsPath(input);
-        SeedObligationsGenerator g = generator.getIfAvailable();
-        if (g != null) g.ensureFor(input.content(), path);
         List<String> lines = new ArrayList<>();
-        if (files.exists(path)) lines.addAll(SeedObligationsFile.read(files.readFile(path), input.content()).obligations());
-        if (lines.isEmpty()) lines.addAll(SeedRequirements.statedVerifiableIn(input.content()));
+        if (written != null && !written.isEmpty()) {
+            // T4-EI: written by the caller, who knows which of its lines can be checked and which only guide (field
+            // 2026-11-06: a capability import's "left out" line, split into criteria, was satisfied by deleting the
+            // code taken as code).
+            lines.addAll(written);
+        } else {
+            SeedObligationsGenerator g = generator.getIfAvailable();
+            if (g != null) g.ensureFor(input.content(), path);
+            if (files.exists(path)) lines.addAll(SeedObligationsFile.read(files.readFile(path), input.content()).obligations());
+            if (lines.isEmpty()) lines.addAll(SeedRequirements.statedVerifiableIn(input.content()));
+        }
         for (String l : lines) {
             if (!SeedRequirements.isRule(l) && SeedRequirements.gateOf(l) == null) intentLines.add(l);
         }

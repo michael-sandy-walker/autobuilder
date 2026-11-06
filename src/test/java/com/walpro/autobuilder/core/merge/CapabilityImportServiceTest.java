@@ -182,7 +182,7 @@ class CapabilityImportServiceTest {
                 - In-memory store, taken as code (its code is placed in this project): Keep the ledger's records in it.
                 - Typed refusals, adapted -- re-implemented in this project's own structure, none of lending's code for it placed; \
                 lending's source is kept to read while doing it: Refusals of the ledger become typed, with their message.
-                Left out, not taken on: Lending rules.""");
+                Not taken (nothing is to be done about them; code placed for a capability taken as code stays): Lending rules.""");
     }
 
     /**
@@ -257,6 +257,33 @@ class CapabilityImportServiceTest {
         assertThat(base.resolve("meta/inputs/" + r.inputId() + "/capabilities.json")).exists();
         assertThat(source.resolve("output/src/main/java/org/lend/LoanRepository.java")).as("the source is unchanged")
                 .content().contains("countActive");
+    }
+
+    /**
+     * Field 2026-11-06: split into criteria by a model, "the Book resource is not taken on" was met by deleting the code
+     * taken as code, and "the source is kept to read" could never be confirmed. The import writes its obligations: one
+     * checkable line per chosen capability, the rest rules that guide and never block closure.
+     */
+    @Test
+    void theCriteriaAreTheDescriptions_whatIsLeftOutAndTheReferenceOnlyGuide() throws IOException {
+        CapabilityImportService.Selection s = discovered();
+        service.choose(s.id(), List.of(new Choice("c1", Mode.CODE, "Keep the ledger's records in it.", false),
+                new Choice("c3", Mode.ADAPT, "Refusals become typed.", true)));
+
+        ProjectInputService.Request request = service.request(s.id());
+        assertThat(request.obligations()).containsExactly(
+                "In-memory store: Keep the ledger's records in it.",
+                "Typed refusals: Refusals become typed.",
+                "rule: The code placed for In-memory store was chosen by the operator and stays in this project; make it work here, do not remove it.",
+                "rule: Not taken from lending: Lending rules. Nothing is to be done about them -- and code placed for a"
+                        + " capability taken as code stays, even where one of these shares its names.",
+                "rule: lending's source is kept read-only beside this project, to read while adapting; it is not part of this project.");
+
+        ProjectInputService.Report r = inputs.bring(request);
+        JsonNode landing = new ObjectMapper().readTree(files.readFile("meta/inputs/" + r.inputId() + "/landing.json"));
+        List<String> criteria = new java.util.ArrayList<>();
+        landing.path("criteria").forEach(c -> criteria.add(c.asText()));
+        assertThat(criteria).containsExactly("In-memory store: Keep the ledger's records in it.", "Typed refusals: Refusals become typed.");
     }
 
     @Test

@@ -8,3 +8,8 @@ Versions v1..v0 are reconstructed from the git history of `data/firestarter-cash
 
 - reason: created for T4-EI (capability import): firestarter run 2026-11-06_01-27-03 frozen as the source, finished cashbook as the receiver, assignment and two receiver goals in README.md
 - bootstrap digest: `2c3d04de76d8a7b5`
+
+## v2 -- 2026-11-07
+
+- reason: yardstick check 4 narrowed to the loan rules themselves (LoanService and its refusals); LoanRepository's queries are the store's, as the model's cut made them -- v1 named them before any run, which the assignment does not
+- bootstrap digest: `b426864ed71888a8`

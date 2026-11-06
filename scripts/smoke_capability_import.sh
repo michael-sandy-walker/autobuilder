@@ -40,8 +40,11 @@ else
 fi
 
 MAIN="$TREE/src/main/java"
-hits=$(grep -rlE 'class LoanService\b|hasActiveLoanForBook|countActiveLoansForMember' "$MAIN" 2>/dev/null)
-[ -z "$hits" ]; check "no loan-rule declaration in src/main" $? "$hits"
+# The loan rules are LoanService's -- a book once on loan, at most 3 active loans a member, a loan returned once -- and
+# the refusals that say so. LoanRepository's queries (hasActiveLoanForBook, countActiveLoansForMember) are the store's,
+# as the cut made them: v1 of this check named them before any run, which the assignment does not (v2, 2026-11-07).
+hits=$(grep -rlE 'class LoanService\b|already on loan|maximum of 3 active loans|already returned' "$MAIN" 2>/dev/null)
+[ -z "$hits" ]; check "no loan rule in src/main" $? "$hits"
 hits=$(grep -rlE '@RestController|@RestControllerAdvice|GlobalExceptionHandler' "$MAIN" 2>/dev/null)
 [ -z "$hits" ]; check "no web layer in src/main" $? "$hits"
 hits=$(find "$MAIN" -path '*com/example/library/domain/exception/*.java' 2>/dev/null)

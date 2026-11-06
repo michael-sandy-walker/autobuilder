@@ -192,7 +192,10 @@ public class ProjectInputService {
         step(r.label(), 2, 0, 0);
         holdFiles(input, landing, parent);
         step(r.label(), 3, 0, 0);
-        List<String> uses = typesToUse(r, landing.placed());
+        // T4-EI: obligations the caller wrote already say what is required -- a model reading the intent is not asked
+        // which types must be used on top of them (field 2026-11-06_23-24-15: "a working part of its build" was read as
+        // "the project's own code calls the repositories", and closure was refused on what no description asked).
+        List<String> uses = r.obligations() == null ? typesToUse(r, landing.placed()) : List.of();
         files.writeFile(dir + IntentUse.USES_FILE, String.join("\n", uses) + "\n");
         List<String> corrections = compare(input, before, parent);
 

@@ -46,11 +46,13 @@ IllegalArgumentException).
 ## Yardstick (`scripts/smoke_capability_import.sh`, terminating)
 
 Asserts only what the assignment and the two descriptions state: the source is unchanged; the import recorded a
-capability taken as code and one adapted; the code capability's placed files are in the tree; no loan-rule
-declaration (`LoanService`, `hasActiveLoanForBook`, `countActiveLoansForMember`) and no web layer
+capability taken as code and one adapted; the code capability's placed files are in the tree; no loan rule
+(`LoanService` and its refusals "already on loan", "maximum of 3 active loans", "already returned") and no web layer
 (`@RestController`, `@RestControllerAdvice`, `GlobalExceptionHandler`) is in `src/main`; none of firestarter's
 exception classes was placed; a cashbook class extends IllegalArgumentException and the ledger throws it;
-LedgerSpecTest passes; the whole suite passes. Absence checked here is absence of the declarations named -- not proof
+LedgerSpecTest passes; the whole suite passes. `LoanRepository`'s queries are the store's, as the model's cut made them
+(v2; v1 named `hasActiveLoanForBook`/`countActiveLoansForMember` before any run, which the assignment does not -- decided
+2026-11-07, the user leaving it to the overall progress). Absence checked here is absence of the declarations named -- not proof
 that no loan behaviour came along in other words.
 
 ## Running it

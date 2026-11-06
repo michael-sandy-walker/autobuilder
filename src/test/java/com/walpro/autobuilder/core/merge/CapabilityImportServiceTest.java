@@ -286,6 +286,30 @@ class CapabilityImportServiceTest {
         assertThat(criteria).containsExactly("In-memory store: Keep the ledger's records in it.", "Typed refusals: Refusals become typed.");
     }
 
+    /**
+     * Field 2026-11-06_23-24-15: a model read "a working part of its build" as an intent to USE the repositories, and
+     * closure was refused until the receiver's own code called them. With the obligations written, it is not asked.
+     */
+    @Test
+    void aCapabilityImportIsNotAskedWhichTypesMustBeUsed() throws IOException {
+        InputComparison comparison = mock(InputComparison.class);
+        when(comparison.typesToUse(anyString(), anyString(), any())).thenReturn(List.of("LoanRepository"));
+        ProjectInputService asking = new ProjectInputService(goals, files, new AdoptionManifest(files), mock(TestRunGate.class),
+                mock(CriteriaVerificationService.class), noGenerator(), comparison);
+        CapabilityImportService.Selection s = discovered();
+        service.choose(s.id(), List.of(new Choice("c1", Mode.CODE, "A working part of the build.", false)));
+
+        ProjectInputService.Report r = asking.bring(service.request(s.id()));
+
+        assertThat(files.readFile("meta/inputs/" + r.inputId() + IntentUse.USES_FILE).strip()).isEmpty();
+        org.mockito.Mockito.verify(comparison, org.mockito.Mockito.never()).typesToUse(anyString(), anyString(), any());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ObjectProvider<SeedObligationsGenerator> noGenerator() {
+        return mock(ObjectProvider.class);
+    }
+
     @Test
     void cancelledAfterItsImport_itLeavesNothing_theRecordStays() throws IOException {
         CapabilityImportService.Selection s = discovered();

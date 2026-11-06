@@ -721,6 +721,32 @@ class BootGateTest {
     }
 
     @Test
+    void a404_namesTheHandlerThatLiesOutsideTheScan_whenTheSourcesShowOne() throws Exception {
+        // T4-EH: the 2026-11-03 firestarter run spent 75 minutes on "answers 404 -- the mapping is
+        // not reachable" while its controllers sat beside, not below, the application's package.
+        Path src = tempDir.resolve("src/main/java/com/example");
+        Files.createDirectories(src.resolve("app"));
+        Files.createDirectories(src.resolve("web"));
+        Files.writeString(src.resolve("app/App.java"),
+                "package com.example.app;\n@SpringBootApplication\npublic class App {}\n");
+        Files.writeString(src.resolve("web/MissingController.java"), "package com.example.web;\n"
+                + "@RestController\npublic class MissingController {\n"
+                + "    @GetMapping(\"/missing\") public String get() { return \"\"; }\n}\n");
+        long past = System.currentTimeMillis() - 60_000;
+        try (var walk = Files.walk(tempDir.resolve("src"))) {
+            walk.forEach(p -> p.toFile().setLastModified(past));
+        }
+        packagedArtifact();
+
+        Optional<String> blocker = gate(true, probeServerCommand(), "", 30_000)
+                .verifyBootsAndServes("c", SPEC_WITH_ENDPOINTS);
+
+        assertThat(blocker).isPresent();
+        assertThat(blocker.get()).contains("GET /missing").contains("404")
+                .contains("MissingController").contains("com.example.app");
+    }
+
+    @Test
     void servingArtifact_allSpecEndpointsLive_passes_viaPortEnvVarHandoff() throws Exception {
         // Port handed over via environment variable only (the command template carries no {port}),
         // mirroring the production SERVER_PORT config for artifacts whose main() drops its args.

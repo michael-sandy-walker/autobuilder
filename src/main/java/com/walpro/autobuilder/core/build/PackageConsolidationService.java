@@ -36,6 +36,7 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>conflicts whose existing location is the default package (no declaration to rewrite to),</li>
  *   <li>mutation sets that also write the existing path directly (ambiguous intent),</li>
+ *   <li>mutation sets that delete the existing path (an explicit move, not a fragment),</li>
  *   <li>the deferred-mutation restage path (not routed through here),</li>
  *   <li>everything, when {@code autobuilder.evolution.package-consolidation.enabled} is false.</li>
  * </ul>
@@ -72,8 +73,12 @@ public class PackageConsolidationService {
         for (FileMutation m : mutations) {
             if (m != null && m.path() != null && m.content() != null) proposed.put(m.path(), m.content());
         }
+        // T4-EH: writing the new path AND deleting the old one is a move, stated outright -- not
+        // a fragment. The firestarter run of 2026-11-03 moved its application class up out of a
+        // package whose scan missed the controllers three times, each with the old file deleted,
+        // and this rewrite put it back each time.
         List<PackageFragmentationCheck.Conflict> conflicts =
-                packageFragmentationCheck.findAll(proposed, outputPath);
+                packageFragmentationCheck.findAll(proposed, outputPath, outcome.deletedFiles());
         if (conflicts.isEmpty()) return outcome;
 
         Map<String, PackageFragmentationCheck.Conflict> byCandidatePath = new LinkedHashMap<>();

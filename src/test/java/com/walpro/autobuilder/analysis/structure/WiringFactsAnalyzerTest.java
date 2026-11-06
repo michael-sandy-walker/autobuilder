@@ -930,4 +930,125 @@ class WiringFactsAnalyzerTest {
         assertThat(analyzer.statusRiskFacts(files)).noneMatch(f -> f.contains("status mapping") || f.contains("not covered"));
         assertThat(analyzer.analyze(files)).noneMatch(f -> f.contains("status mapping") || f.contains("not covered"));
     }
+
+    // T4-EH: components outside the packages the application scans.
+
+    private static Map<String, String> libraryWithControllersBeside(String rootAnnotation) {
+        return Map.of(
+                "src/main/java/com/example/library/domain/LibraryApplication.java", """
+                        package com.example.library.domain;
+                        %s
+                        public class LibraryApplication {
+                            public static void main(String[] args) {}
+                        }
+                        """.formatted(rootAnnotation),
+                "src/main/java/com/example/library/domain/BookController.java", """
+                        package com.example.library.domain;
+                        @RestController
+                        public class BookController {
+                            @GetMapping("/books") public String all() { return "[]"; }
+                        }
+                        """,
+                "src/main/java/com/example/library/controller/LoanController.java", """
+                        package com.example.library.controller;
+                        @RestController
+                        @RequestMapping("/loans")
+                        public class LoanController {
+                            private final LoanService loans;
+                            public LoanController(LoanService loans) { this.loans = loans; }
+                            @GetMapping public String all() { return "[]"; }
+                        }
+                        """,
+                "src/main/java/com/example/library/controller/MemberController.java", """
+                        package com.example.library.controller;
+                        @RestController
+                        public class MemberController {
+                            @GetMapping("/members") public String all() { return "[]"; }
+                        }
+                        """,
+                "src/main/java/com/example/library/service/LoanService.java", """
+                        package com.example.library.service;
+                        @Service
+                        public class LoanService {}
+                        """,
+                "src/main/java/com/example/library/domain/Loan.java", """
+                        package com.example.library.domain;
+                        public class Loan {}
+                        """);
+    }
+
+    @Test
+    void componentsInASiblingPackage_areNamedWithTheScannedPackageAndBothRemedies() {
+        var reach = analyzer.scanReach(libraryWithControllersBeside("@SpringBootApplication")).orElseThrow();
+
+        assertThat(reach.rootType()).isEqualTo("LibraryApplication");
+        assertThat(reach.scannedPackages()).containsExactly("com.example.library.domain");
+        assertThat(reach.outside()).extracting(WiringFactsAnalyzer.UnscannedComponent::typeName)
+                .containsExactlyInAnyOrder("LoanController", "MemberController", "LoanService");
+        assertThat(reach.outside()).filteredOn(WiringFactsAnalyzer.UnscannedComponent::handlesRequests)
+                .extracting(WiringFactsAnalyzer.UnscannedComponent::typeName)
+                .containsExactlyInAnyOrder("LoanController", "MemberController");
+        assertThat(reach.enclosingPackage()).isEqualTo("com.example.library");
+
+        String fact = WiringFactsAnalyzer.describe(reach);
+        assertThat(fact).contains("LoanController", "MemberController", "com.example.library.domain",
+                "answers 404", "move LibraryApplication up to com.example.library");
+        // Self-describing, framework-free prose: the annotation names come from the code.
+        assertThat(fact).doesNotContain("Spring");
+    }
+
+    @Test
+    void everyComponentUnderTheRoot_producesNoFact() {
+        Map<String, String> files = new java.util.HashMap<>(libraryWithControllersBeside("@SpringBootApplication"));
+        files.keySet().removeIf(k -> k.contains("/controller/") || k.contains("/service/"));
+
+        assertThat(analyzer.scanReach(files)).isEmpty();
+        assertThat(analyzer.unscannedComponentFacts(files)).isEmpty();
+    }
+
+    @Test
+    void anExplicitScanThatCoversTheComponents_producesNoFact() {
+        assertThat(analyzer.scanReach(libraryWithControllersBeside(
+                "@SpringBootApplication(scanBasePackages = \"com.example.library\")"))).isEmpty();
+        assertThat(analyzer.scanReach(libraryWithControllersBeside(
+                "@ComponentScan({\"com.example.library.domain\", \"com.example.library.controller\", \"com.example.library.service\"})")))
+                .isEmpty();
+    }
+
+    @Test
+    void anExplicitScanThatMissesSome_namesOnlyThoseAndOffersNoRootMove() {
+        var reach = analyzer.scanReach(libraryWithControllersBeside(
+                "@SpringBootApplication(scanBasePackageClasses = {LibraryApplication.class, LoanController.class})"))
+                .orElseThrow();
+
+        assertThat(reach.scannedPackages())
+                .containsExactly("com.example.library.domain", "com.example.library.controller");
+        assertThat(reach.outside()).extracting(WiringFactsAnalyzer.UnscannedComponent::typeName)
+                .containsExactly("LoanService");
+        assertThat(reach.enclosingPackage()).isEmpty();
+    }
+
+    @Test
+    void anUnreadableScanAttribute_ortwoRoots_orNoRoot_produceNoFact() {
+        assertThat(analyzer.scanReach(libraryWithControllersBeside(
+                "@SpringBootApplication(scanBasePackages = Packages.ALL)"))).isEmpty();
+        assertThat(analyzer.scanReach(libraryWithControllersBeside(""))).isEmpty();
+
+        Map<String, String> twoRoots = new java.util.HashMap<>(libraryWithControllersBeside("@SpringBootApplication"));
+        twoRoots.put("src/main/java/com/example/other/OtherApplication.java", """
+                package com.example.other;
+                @SpringBootApplication
+                public class OtherApplication {}
+                """);
+        assertThat(analyzer.scanReach(twoRoots)).isEmpty();
+    }
+
+    @Test
+    void aComponentRegisteredExplicitly_isNotReported() {
+        var reach = analyzer.scanReach(libraryWithControllersBeside(
+                "@SpringBootApplication\n@Import({LoanController.class, MemberController.class})")).orElseThrow();
+
+        assertThat(reach.outside()).extracting(WiringFactsAnalyzer.UnscannedComponent::typeName)
+                .containsExactly("LoanService");
+    }
 }

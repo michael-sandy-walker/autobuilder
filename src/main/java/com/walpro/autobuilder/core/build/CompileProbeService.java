@@ -162,7 +162,7 @@ public class CompileProbeService {
             proposedFiles.put(mutation.path(), mutation.content());
         }
         Optional<PackageFragmentationCheck.Conflict> fragmentation =
-                packageFragmentationCheck.check(proposedFiles, outputPath);
+                packageFragmentationCheck.check(proposedFiles, outputPath, deletions);
         if (fragmentation.isPresent()) {
             PackageFragmentationCheck.Conflict c = fragmentation.get();
             String desc = String.format(

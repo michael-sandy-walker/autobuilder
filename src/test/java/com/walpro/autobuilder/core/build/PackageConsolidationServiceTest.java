@@ -69,6 +69,18 @@ class PackageConsolidationServiceTest {
     }
 
     @Test
+    void anExplicitMove_writingTheNewPathAndDeletingTheOld_isLeftAsWritten() {
+        // T4-EH: the 2026-11-03 firestarter run moved its application class up out of a package
+        // whose scan missed the controllers, deleting the old file; this rewrite put it back.
+        EvolutionOutcome outcome = new EvolutionOutcome(
+                List.of(new FileMutation(ROOT + "/model/Loan.java",
+                        "package com.example.demo.model;\npublic class Loan {}")),
+                List.of(ROOT + "/Loan.java"), "summary", "raw");
+
+        assertThat(service.consolidate(outcome, OUTPUT, "cycle-1")).isSameAs(outcome);
+    }
+
+    @Test
     void crossReferences_inSiblingMutations_areRewrittenToExistingPackage() {
         EvolutionOutcome outcome = outcomeOf(
                 new FileMutation(ROOT + "/model/Loan.java",

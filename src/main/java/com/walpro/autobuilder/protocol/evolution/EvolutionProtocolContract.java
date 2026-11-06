@@ -436,6 +436,17 @@ public class EvolutionProtocolContract {
                     + "cause — correct it rather than re-writing the code.\n\n");
         }
 
+        // T4-EH: a component outside the packages the application scans compiles, boots and is
+        // never registered, so its paths answer 404 and nothing in the logs says why. Absent on
+        // a tree whose components are all reachable.
+        List<String> scanReach = wiringAnalyzer.unscannedComponentFacts(input.previousOutput());
+        if (!scanReach.isEmpty()) {
+            prompt.append("COMPONENT DISCOVERY — code the application will never pick up as placed:\n");
+            for (String f : scanReach) prompt.append("- ").append(f).append("\n");
+            prompt.append("To move a file, write it at its new path with the new package declaration and "
+                    + "#Delete its old path in the same response.\n\n");
+        }
+
         // T4-BD: lastCompileErrorsBlock retired; BuildResultPromptBlock above now renders the
         // probe-broken surface (consulting ctx.lastProbeOutcome() when buildOutcome is absent).
 

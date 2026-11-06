@@ -29,6 +29,19 @@ public final class AnnotationVocabularies {
             "Service", "Component", "Repository", "Controller", "RestController",
             "ControllerAdvice", "RestControllerAdvice", "Configuration");
 
+    /**
+     * T4-EH: marks the type from which the container discovers its managed classes. Without a
+     * package attribute the scan covers the marked type's own package and everything below it.
+     */
+    public static final Set<String> SCAN_ROOT = Set.of("SpringBootApplication", "ComponentScan");
+
+    /** The attributes of a {@link #SCAN_ROOT} annotation that name the scanned packages as text. */
+    public static final Set<String> SCAN_PACKAGE_ATTRIBUTES = Set.of("scanBasePackages", "basePackages", "value");
+
+    /** The attributes of a {@link #SCAN_ROOT} annotation that name the scanned packages by a class in each. */
+    public static final Set<String> SCAN_PACKAGE_CLASS_ATTRIBUTES = Set.of(
+            "scanBasePackageClasses", "basePackageClasses");
+
     /** Marks an explicit dependency-injection point (field, setter, or constructor). */
     public static final Set<String> INJECTION_POINT = Set.of("Autowired", "Inject", "Resource");
 

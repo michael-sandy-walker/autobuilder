@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -51,6 +52,17 @@ class PackageFragmentationCheckTest {
         assertThat(c.simpleName()).isEqualTo("BookService");
         assertThat(c.candidatePath()).isEqualTo("src/main/java/com/example/demo/service/BookService.java");
         assertThat(c.existingPath()).isEqualTo("src/main/java/com/example/demo/BookService.java");
+    }
+
+    @Test
+    void check_returnsEmpty_whenTheSetDeletesTheExistingPath_becauseThatIsAMove() throws IOException {
+        // T4-EH: the application class moved up a package, the old file deleted in the same set.
+        writeOutput("src/main/java/com/example/demo/domain/App.java", "package com.example.demo.domain; public class App {}");
+        Map<String, String> proposed = Map.of(
+                "src/main/java/com/example/demo/App.java", "package com.example.demo; public class App {}");
+
+        assertThat(check.check(proposed, "output", List.of("src/main/java/com/example/demo/domain/App.java"))).isEmpty();
+        assertThat(check.check(proposed, "output", List.of())).isPresent();
     }
 
     @Test

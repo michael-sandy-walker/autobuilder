@@ -279,6 +279,204 @@ public class WiringFactsAnalyzer {
                 anomalies.size() == 1 ? "y" : "ies", String.join(" | ", anomalies));
     }
 
+    /**
+     * T4-EH: a managed component the container will never discover, because it sits outside the
+     * packages the application's discovery root scans.
+     *
+     * <p>Field case (the home-screen firestarter run of 2026-11-03, about 75 minutes): the
+     * application class sat in {@code ...library.domain}, the loan and member controllers, services
+     * and repositories in the sibling packages {@code ...library.controller}, {@code .service} and
+     * {@code .repository}. Everything compiled and booted; {@code GET /loans} answered 404, and the
+     * closure probe refused with "the mapping is not reachable in the running application" and
+     * nothing else. No log line names the cause -- an unscanned class is simply never looked at --
+     * so the code is the only authority, and it answers directly.
+     *
+     * <p>Errs toward silence: exactly one discovery root, every scan attribute a literal, and a
+     * component counts as unreachable only when no annotated type registers it some other way
+     * (instantiating it, or naming it by class literal in an annotation).
+     *
+     * @param rootType          the type carrying the discovery-root annotation
+     * @param scannedPackages   the packages scanned, each with everything below it
+     * @param outside           the managed components outside all of them
+     * @param enclosingPackage  the nearest package containing the root and every outside
+     *                          component, or {@code ""} when they share none
+     */
+    public record ScanReach(String rootType, List<String> scannedPackages,
+                            List<UnscannedComponent> outside, String enclosingPackage) {}
+
+    /**
+     * @param typeName        the component outside the scan
+     * @param typePackage     where it sits
+     * @param marker          the annotation that would register it, were it scanned
+     * @param handlesRequests whether it declares request mappings (its paths then answer 404)
+     */
+    public record UnscannedComponent(String typeName, String typePackage, String marker, boolean handlesRequests) {}
+
+    /** The structured form of {@link #unscannedComponentFacts}; empty when the rule has no opinion. */
+    public Optional<ScanReach> scanReach(Map<String, String> outputFiles) {
+        return findScanReach(parseAll(outputFiles));
+    }
+
+    /** The scan-reach fact as prompt prose: one sentence, or none. */
+    public List<String> unscannedComponentFacts(Map<String, String> outputFiles) {
+        List<String> out = scanReach(outputFiles).map(r -> List.of(describe(r))).orElse(List.of());
+        announce("T4-EH", "scan-reach", out);
+        return out;
+    }
+
+    /** Renders a {@link ScanReach} as the sentence both the prompt and the refusal carry. */
+    public static String describe(ScanReach reach) {
+        Map<String, List<String>> byPackage = new LinkedHashMap<>();
+        for (UnscannedComponent c : reach.outside()) {
+            byPackage.computeIfAbsent(c.typePackage(), k -> new ArrayList<>())
+                    .add(c.typeName() + " (@" + c.marker() + ")");
+        }
+        List<String> groups = byPackage.entrySet().stream()
+                .map(e -> String.join(", ", e.getValue()) + " in " + e.getKey())
+                .toList();
+        List<String> handlers = reach.outside().stream()
+                .filter(UnscannedComponent::handlesRequests).map(UnscannedComponent::typeName).toList();
+        String scanned = String.join(", ", reach.scannedPackages());
+        StringBuilder sb = new StringBuilder();
+        sb.append(reach.rootType()).append(" is where the application discovers its components, and it scans ")
+                .append(scanned).append(" and the packages below ")
+                .append(reach.scannedPackages().size() == 1 ? "it" : "them").append(" only. ")
+                .append(String.join("; ", groups))
+                .append(reach.outside().size() == 1 ? " lies" : " lie")
+                .append(" outside that, so ")
+                .append(reach.outside().size() == 1 ? "it is" : "they are")
+                .append(" never registered");
+        if (!handlers.isEmpty()) {
+            sb.append(": every request path declared in ").append(String.join(", ", handlers))
+                    .append(" answers 404 although its code exists");
+        }
+        sb.append(". Move ").append(reach.outside().size() == 1 ? "it" : "them").append(" under ")
+                .append(reach.scannedPackages().get(0));
+        if (!reach.enclosingPackage().isEmpty()) {
+            sb.append(", or move ").append(reach.rootType()).append(" up to ").append(reach.enclosingPackage())
+                    .append(" so its scan contains them");
+        }
+        sb.append(" -- rewriting their code will not change this.");
+        return sb.toString();
+    }
+
+    private Optional<ScanReach> findScanReach(List<CompilationUnit> units) {
+        TypeDeclaration<?> root = null;
+        AnnotationExpr rootMarker = null;
+        String rootPackage = null;
+        for (CompilationUnit cu : units) {
+            for (TypeDeclaration<?> type : cu.getTypes()) {
+                for (AnnotationExpr a : type.getAnnotations()) {
+                    if (!AnnotationVocabularies.SCAN_ROOT.contains(a.getNameAsString())) continue;
+                    // Two roots means two scans whose union this rule does not model.
+                    if (root != null && root != type) return Optional.empty();
+                    root = type;
+                    rootMarker = a;
+                    rootPackage = cu.getPackageDeclaration().map(d -> d.getNameAsString()).orElse("");
+                }
+            }
+        }
+        if (root == null) return Optional.empty();
+
+        Map<String, String> packageByType = new LinkedHashMap<>();
+        for (CompilationUnit cu : units) {
+            String pkg = cu.getPackageDeclaration().map(d -> d.getNameAsString()).orElse("");
+            for (TypeDeclaration<?> type : cu.getTypes()) packageByType.put(type.getNameAsString(), pkg);
+        }
+        Optional<List<String>> scanned = scannedPackages(root, rootPackage, packageByType);
+        if (scanned.isEmpty() || scanned.get().contains("")) return Optional.empty();
+
+        // Other registration routes: an annotated type that builds the component itself, or names
+        // it by class literal in an annotation (an explicit import of a configuration).
+        Set<String> registeredOtherwise = new LinkedHashSet<>();
+        for (CompilationUnit cu : units) {
+            for (TypeDeclaration<?> type : cu.getTypes()) {
+                if (type.getAnnotations().isEmpty()) continue;
+                type.findAll(com.github.javaparser.ast.expr.ObjectCreationExpr.class)
+                        .forEach(o -> registeredOtherwise.add(o.getType().getNameAsString()));
+                for (AnnotationExpr a : type.findAll(AnnotationExpr.class)) {
+                    a.findAll(com.github.javaparser.ast.expr.ClassExpr.class)
+                            .forEach(c -> registeredOtherwise.add(simpleName(c.getType().asString())));
+                }
+            }
+        }
+
+        List<UnscannedComponent> outside = new ArrayList<>();
+        for (CompilationUnit cu : units) {
+            String pkg = cu.getPackageDeclaration().map(d -> d.getNameAsString()).orElse("");
+            if (scanned.get().stream().anyMatch(s -> pkg.equals(s) || pkg.startsWith(s + "."))) continue;
+            for (TypeDeclaration<?> type : cu.getTypes()) {
+                if (registeredOtherwise.contains(type.getNameAsString())) continue;
+                Optional<String> marker = type.getAnnotations().stream().map(AnnotationExpr::getNameAsString)
+                        .filter(AnnotationVocabularies.CONTAINER_MANAGED::contains).findFirst();
+                if (marker.isEmpty()) continue;
+                boolean handles = type.findAll(AnnotationExpr.class).stream().map(AnnotationExpr::getNameAsString)
+                        .anyMatch(n -> AnnotationVocabularies.VERB_MAPPING.containsKey(n)
+                                || AnnotationVocabularies.GENERIC_MAPPING.equals(n));
+                outside.add(new UnscannedComponent(type.getNameAsString(), pkg, marker.get(), handles));
+            }
+        }
+        if (outside.isEmpty()) return Optional.empty();
+
+        String enclosing = rootPackage;
+        for (UnscannedComponent c : outside) enclosing = commonPackage(enclosing, c.typePackage());
+        // Only offered when the root sits in the scan it defines by default; an explicit package
+        // list is a choice the root's position does not change.
+        boolean defaultScan = scanned.get().equals(List.of(rootPackage));
+        return Optional.of(new ScanReach(root.getNameAsString(), scanned.get(), List.copyOf(outside),
+                defaultScan ? enclosing : ""));
+    }
+
+    /**
+     * The packages a discovery-root annotation scans: those it names (as text or by a class in
+     * each), else the root's own. Empty when an attribute is not a literal this rule can read.
+     */
+    private static Optional<List<String>> scannedPackages(TypeDeclaration<?> root, String rootPackage,
+                                                         Map<String, String> packageByType) {
+        Set<String> named = new LinkedHashSet<>();
+        for (AnnotationExpr a : root.getAnnotations()) {
+            if (!AnnotationVocabularies.SCAN_ROOT.contains(a.getNameAsString())) continue;
+            List<com.github.javaparser.ast.expr.MemberValuePair> pairs = new ArrayList<>();
+            if (a.isNormalAnnotationExpr()) pairs.addAll(a.asNormalAnnotationExpr().getPairs());
+            if (a.isSingleMemberAnnotationExpr()) {
+                pairs.add(new com.github.javaparser.ast.expr.MemberValuePair(
+                        "value", a.asSingleMemberAnnotationExpr().getMemberValue()));
+            }
+            for (var pair : pairs) {
+                String attr = pair.getNameAsString();
+                var value = pair.getValue();
+                List<com.github.javaparser.ast.expr.Expression> items = value.isArrayInitializerExpr()
+                        ? value.asArrayInitializerExpr().getValues() : List.of(value);
+                if (AnnotationVocabularies.SCAN_PACKAGE_ATTRIBUTES.contains(attr)) {
+                    for (var item : items) {
+                        if (!item.isStringLiteralExpr()) return Optional.empty();
+                        named.add(item.asStringLiteralExpr().getValue());
+                    }
+                } else if (AnnotationVocabularies.SCAN_PACKAGE_CLASS_ATTRIBUTES.contains(attr)) {
+                    for (var item : items) {
+                        if (!item.isClassExpr()) return Optional.empty();
+                        String pkg = packageByType.get(simpleName(item.asClassExpr().getType().asString()));
+                        if (pkg == null) return Optional.empty();
+                        named.add(pkg);
+                    }
+                }
+            }
+        }
+        return Optional.of(named.isEmpty() ? List.of(rootPackage) : List.copyOf(named));
+    }
+
+    /** The longest dotted prefix two package names share, or {@code ""}. */
+    private static String commonPackage(String a, String b) {
+        String[] x = a.split("\\.");
+        String[] y = b.split("\\.");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < Math.min(x.length, y.length) && x[i].equals(y[i]); i++) {
+            if (sb.length() > 0) sb.append('.');
+            sb.append(x[i]);
+        }
+        return sb.toString();
+    }
+
     private void collectPeerPlacementOutliers(List<CompilationUnit> units, List<String> out) {
         for (PeerPlacementAnomaly f : findPeerPlacementOutliers(units)) {
             out.add(String.format(

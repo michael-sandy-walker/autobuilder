@@ -138,7 +138,7 @@ public final class RunnableJarGuarantee {
     }
 
     /** The project's own {@code .java} sources, keyed by their path relative to the root. */
-    private static Map<String, String> readSources(Path artifactRoot) {
+    static Map<String, String> readSources(Path artifactRoot) {
         Path sourceRoot = artifactRoot.resolve("src");
         if (!Files.isDirectory(sourceRoot)) return Map.of();
         Map<String, String> sources = new java.util.LinkedHashMap<>();

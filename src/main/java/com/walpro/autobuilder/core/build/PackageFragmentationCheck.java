@@ -53,6 +53,23 @@ public class PackageFragmentationCheck {
      * resolve every fragmenting write in a mutation set, not just the first.
      */
     public List<Conflict> findAll(Map<String, String> proposedFiles, String outputPath) {
+        return findAll(proposedFiles, outputPath, List.of());
+    }
+
+    /**
+     * T4-EH: as {@link #check}, for a write set that also deletes files. A path the same set
+     * deletes is not a place the type "already lives" -- writing it elsewhere and deleting it
+     * here is a move, and the tree the set describes holds the type once.
+     */
+    public Optional<Conflict> check(Map<String, String> proposedFiles, String outputPath,
+                                    Collection<String> deletedFiles) {
+        List<Conflict> all = findAll(proposedFiles, outputPath, deletedFiles);
+        return all.isEmpty() ? Optional.empty() : Optional.of(all.get(0));
+    }
+
+    /** As {@link #findAll(Map, String)}, with the set's own deletions taken out of the tree first. */
+    public List<Conflict> findAll(Map<String, String> proposedFiles, String outputPath,
+                                  Collection<String> deletedFiles) {
         if (proposedFiles == null || proposedFiles.isEmpty()) return List.of();
 
         List<String> existing;
@@ -61,6 +78,9 @@ public class PackageFragmentationCheck {
         } catch (IOException e) {
             log.warn("T4-BH: could not scan output tree for fragmentation check: {}", e.getMessage());
             return List.of();
+        }
+        if (deletedFiles != null && !deletedFiles.isEmpty()) {
+            existing = existing.stream().filter(p -> !deletedFiles.contains(p)).toList();
         }
         return findAllAgainst(proposedFiles, existing);
     }

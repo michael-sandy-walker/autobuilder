@@ -3,6 +3,7 @@ package com.walpro.autobuilder.core.build;
 import com.walpro.autobuilder.analysis.structure.Endpoint;
 
 import com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery;
+import com.walpro.autobuilder.analysis.structure.WiringFactsAnalyzer;
 import com.walpro.autobuilder.observability.behaviour.BehaviourLogger;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -1113,6 +1114,17 @@ public class BootGate {
     }
 
     /**
+     * T4-EH: the scan-reach fact for the tree being probed, when some request handler lies
+     * outside the scan -- the one cause of a 404 the sources answer directly. Empty otherwise.
+     */
+    private static Optional<String> unscannedHandlerCause(Path workingDir) {
+        Map<String, String> sources = RunnableJarGuarantee.readSources(ProjectLayout.runnableRoot(workingDir));
+        return new WiringFactsAnalyzer().scanReach(sources)
+                .filter(r -> r.outside().stream().anyMatch(WiringFactsAnalyzer.UnscannedComponent::handlesRequests))
+                .map(WiringFactsAnalyzer::describe);
+    }
+
+    /**
      * Probes the deterministically probeable subset of the spec's endpoint surface: GET and POST,
      * no path variables (an unknown id would 404/behave legitimately), query strings already
      * normalized away. GET: a 404 means the mapping is absent at runtime even if the source
@@ -1126,6 +1138,7 @@ public class BootGate {
                                                 Set<Endpoint> declared, Path workingDir,
                                                 Set<Endpoint> specStatesStatusFor) {
         List<String> failures = new ArrayList<>();
+        boolean scanCauseNamed = false;
         for (Endpoint endpoint : declared) {
             if (failures.size() >= MAX_NAMED_FAILURES) break;
             if (endpoint.path().contains("{}")) continue; // an unknown id would 404/behave legitimately
@@ -1141,7 +1154,18 @@ public class BootGate {
                     HttpResponse<Void> response = client.send(
                             request(port, endpoint.path()), HttpResponse.BodyHandlers.discarding());
                     if (response.statusCode() == 404) {
-                        failures.add(endpoint + " answers 404 — the mapping is not reachable in the running application");
+                        String failure = endpoint + " answers 404 — the mapping is not reachable in the running application";
+                        // T4-EH: the bare 404 left the 2026-11-03 firestarter run 75 minutes on
+                        // controllers that existed but sat outside the application's scan. The
+                        // cause is in the sources, so the refusal names it -- once per sweep.
+                        if (!scanCauseNamed) {
+                            Optional<String> cause = unscannedHandlerCause(workingDir);
+                            if (cause.isPresent()) {
+                                failure += " — " + cause.get();
+                                scanCauseNamed = true;
+                            }
+                        }
+                        failures.add(failure);
                     } else if (response.statusCode() >= 500) {
                         failures.add(endpoint + " answers " + response.statusCode());
                     }

@@ -17,7 +17,8 @@ metadata:
 - **Built, UNCOMMITTED (code commit needs the user's word):** capability stage (`CapabilityCut`, `CapabilityDiscovery` incl. the model cut, `CapabilityImportService`, `ReferenceConsultation`, endpoints, home Extend option + CHOOSING page), cancel restores what an import rewrote (verified gap), planner may not prune a kept import's goal. Toy case `data/firestarter-cashbook` v1 + `scripts/{prepare_capability_run.sh,smoke_capability_import.sh,capability_import.py}`.
 - **Field `2026-11-06_16-04-22`: objective-met, smoke 9/10** -- the adapted capability landed in cashbook's structure; the store taken as code was DELETED after the planner retired the import's goal. Detail and the open question (are LoanRepository's rule queries "loan rules"?) on T4-EI.
 - **An OOM at 15:52 (llama-server + Docker VM + Firefox + ChatGPT app) killed Docker/Neo4j and the previous Claude Code session**; that run discarded. Watch MemAvailable beside runs.
-- **NEXT:** the user's word on committing; then rerun the case on the planner fix (DoD needs it).
+- **Later (same evening):** code committed `8110e131` at the user's word; rerun `2026-11-06_21-59-08` objective-met 9/10 -- planner fix held, but my generated intent lines ("... is not taken on", "source kept to read") became criteria and evolution deleted the store's files to satisfy them. Detail on T4-EI.
+- **NEXT:** the user's word on carrying left-out/reference lines as `rule:` lines (proposed on T4-EI); then rerun.
 
 ## 2026-11-06 (Opus 5.5, session 26) -- T4-EH BUILT; THE FIELD RUN'S REAL BLOCKER WAS CONSOLIDATION UNDOING THE MODEL'S CORRECT MOVE
 

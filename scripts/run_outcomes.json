@@ -17908,7 +17908,39 @@
    "terminal": "operator-stop",
    "total_cycles": "15",
    "toycase": "firestarter-cashbook v1"
+  },
+  "2026-11-07_00-43-19": {
+   "build": "6fa48569",
+   "clauses_closed_vs_control": "0",
+   "cost_readout": "build=45240ms/18 package-gate=6509ms/3 sms-commit=3300ms/5 sms-batch-build=867ms/5 boot-gate=525ms/2 sms-lineage-stamp=45ms/5 sms-cycle-merge=31ms/5 sms-cycle-link=15ms/4",
+   "criteria_authored": "10",
+   "criteria_elaboration": "6",
+   "criteria_executable_count": "0",
+   "criteria_executable_pct": "0",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "1",
+   "median_cycle_seconds": "126",
+   "merges": "3",
+   "peaked_at_cycle": "cycle-1794009186206 (5/6)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-11-07",
+   "repeat_proposals": "0",
+   "repeats_refused": "0",
+   "run_duration_min": "8.7",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 10/10",
+   "smoke_pass": 10,
+   "smoke_preserved": "SMOKE: 10/10",
+   "smoke_strict": "10/10 discounted=none",
+   "smoke_total": 10,
+   "start_cleared_tree": "no",
+   "start_mode": "ADOPT_PROJECT",
+   "start_tree": "LOOP_AUTHORED",
+   "target": "firestarter-cashbook",
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "6",
+   "toycase": "firestarter-cashbook v2"
   }
  },
- "updated": "2026-11-06"
+ "updated": "2026-11-07"
 }

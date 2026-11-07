@@ -200,10 +200,10 @@
 - [x] `T2-EO` — Behavioural-criteria steering does not transfer to a foreign domain — CLOSED 2026-07-25; mechanism shipped + test-covered, field half of the DoD unobtainable (pollbox retired, edge never reached in a real run); watch `t2eo-stagnation-rescue` stays the standing confirmation
 - [n] `T2-AE` — Evaluation LLM score anchoring at 0.85
 - [o] `T2-AS` — Meta-deliberation quality
-- [>] `T2-BB` — Inject live score thresholds into interpretation agent prompt
+- [n] `T2-BB` — Inject live score thresholds into interpretation agent prompt
 - [s] `T2-BP` — Signal saturation
 - [s] `T2-BV` — PLANNING_THROTTLED similarity check rejects re-proposals of GIVEN_UP subgoals, blocking e…
-- [>] `T2-BZ` — Evaluation heuristic and prompt guidance for isolated in-memory state across controllers
+- [s] `T2-BZ` — Evaluation heuristic and prompt guidance for isolated in-memory state across controllers
 - [x] `T2-CI` — Merge-regression guard
 - [>] `T2-CM` — Orphan-aware acceptance bias
 - [>] `T2-CN` — Registration-collision heuristic
@@ -416,7 +416,7 @@
 - [>] `T4-BK` — Partial restage of multi-file deferred mutations
 - [>] `T4-BL` — Package-hierarchy refactor recommendation on fragmentation conflict
 - [>] `T4-BN-2` — Incremental javac probe + test-compile coverage
-- [>] `T4-BQ` — Type-reference closure walker
+- [o] `T4-BQ` — Type-reference closure walker
 - [s] `T4-CO` — Spec-stated status-code binding (SUBSUMED 2026-07-31: verification→T4-DB, steering→T4-DA/T2-EX; residue was the extraction the 07-22 reframe ruled out)
 - [o] `T4-C` — Signal trait/pattern spawning
 - [x] `T4-I` — Cross-cycle behavioral pattern heuristics

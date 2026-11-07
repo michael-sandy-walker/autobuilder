@@ -7,16 +7,20 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 import com.walpro.autobuilder.config.GoalPlannerConfigProperties;
+import com.walpro.autobuilder.core.build.ProtectedPaths;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.graph.goal.GoalGraphService;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -27,6 +31,39 @@ public class GoalPlannerServiceClosureTest {
     @Mock private FileService fileService;
     @Mock private GoalGraphService goalGraphService;
     @Mock private GoalPlannerConfigProperties goalPlannerConfig;
+
+    @Test
+    void closureRequestsPauseWhenItsRequiredTestCannotBeWritten(@TempDir Path project) throws IOException {
+        String pom = "<project/>";
+        Files.createDirectories(project.resolve("output"));
+        Files.writeString(project.resolve("output/pom.xml"), pom);
+        when(fileService.getRootDir()).thenReturn(project);
+        when(fileService.exists(anyString())).thenAnswer(call -> ProtectedPaths.PATH.equals(call.getArgument(0)));
+        when(fileService.readString(ProtectedPaths.PATH)).thenReturn("src/test/**\n");
+        String obligation = "Gadget.describe(part) is covered by a test in the project's own test suite";
+        when(fileService.readFile(SeedObligationsFile.PATH)).thenReturn(SeedObligationsFile.render(
+                obligation, List.of(obligation, "rule: Keep the operator's original test.")));
+        var service = derivedClosureService(obligation, null, null);
+        service.setProtectedPaths(new ProtectedPaths(fileService));
+        var verifier = mock(com.walpro.autobuilder.agent.evaluation.CriteriaVerificationService.class);
+        service.setCriteriaVerificationService(verifier);
+        service.setCurrentCycleContext(com.walpro.autobuilder.core.lifecycle.CycleContextData.builder()
+                .previousOutput(Map.of("pom.xml", pom, "src/test/java/shop/GadgetTest.java", """
+                        package shop;
+                        import org.junit.jupiter.api.Test;
+                        class GadgetTest {
+                            @Test void unrelated() {}
+                        }
+                        """)).build());
+
+        service.autoCompleteRootIfSatisfied();
+
+        assertThat(service.getGoalById("G").getStatus()).isEqualTo(GoalStatus.ACTIVE);
+        assertThat(service.getAllGoals()).hasSize(2);
+        assertThat(service.unanswerableAtClosure()).hasValueSatisfying(reason ->
+                assertThat(reason).contains("protects all Maven test sources", "Gadget.describe"));
+        verifyNoInteractions(verifier);
+    }
 
     @Test
     void promoteCurrentSubGoal_doesNotAutoCloseAncestors_advancesToParentThenNextLeaf() throws IOException {

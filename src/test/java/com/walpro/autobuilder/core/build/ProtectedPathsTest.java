@@ -19,6 +19,19 @@ class ProtectedPathsTest {
 
     private ProtectedPaths paths;
 
+    @Test
+    void wholeTestTreeProtectionRequiresEveryModule() throws Exception {
+        Path output = base.resolve("output");
+        Files.createDirectories(output.resolve("library"));
+        Files.writeString(output.resolve("pom.xml"), "<project><modules><module>library</module></modules></project>");
+        Files.writeString(output.resolve("library/pom.xml"), "<project/>");
+        declare("src/test/**\nlibrary/src/test/java/OriginalSpec.java\n");
+        assertThat(paths.coversMavenTestTrees(output)).isFalse();
+
+        declare("src/test/**\nlibrary/src/test/java/**\n");
+        assertThat(paths.coversMavenTestTrees(output)).isTrue();
+    }
+
     @BeforeEach
     void setUp() {
         paths = new ProtectedPaths(new FileService(base.toString(), new ObjectMapper()));

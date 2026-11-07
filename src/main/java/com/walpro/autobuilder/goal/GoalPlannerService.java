@@ -136,6 +136,10 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.ValueObservationProbe valueObservationProbe;
 
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.build.ProtectedPaths protectedPaths;
+
     /**
      * T4-CQ: writes the seed's obligations file, markers included, when a root goal is set and the
      * target has none -- optional, present only where {@code autobuilder.obligations.generate} is on.
@@ -4920,6 +4924,16 @@ public class GoalPlannerService {
                         com.walpro.autobuilder.core.build.EntryPointAssertions.unmet(
                                 requirements().verifiableObligationsOrSplit(),
                                 output);
+                if (!unasserted.isEmpty() && protectedPaths != null && output.containsKey("pom.xml")
+                        && protectedPaths.coversMavenTestTrees(fileService.getRootDir().resolve("output"))) {
+                    String reason = "closure requires a Java test that calls an entry point and asserts its return value,"
+                            + " but the operator protects all Maven test sources: " + unasserted.values().stream()
+                            .map(com.walpro.autobuilder.core.build.EntryPointAssertions.Finding::describe)
+                            .distinct().limit(5).collect(Collectors.joining("; "));
+                    recordClosureRefusal("T4-CQ", root.getId(), reason, new ArrayList<>(unasserted.keySet()));
+                    unanswerableAtClosure = reason;
+                    return;
+                }
                 // T4-CQ: and where a test already calls the entry point, OBSERVE what it returns, so the
                 // work item carries the value to assert instead of asking the model to guess it.
                 String observedValues = "";

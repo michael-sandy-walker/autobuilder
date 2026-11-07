@@ -77,6 +77,19 @@ public class ProtectedPaths {
         return false;
     }
 
+    /** True only when the policy explicitly protects the entire Java test tree in every Maven module. */
+    public boolean coversMavenTestTrees(Path output) {
+        Path root = output.normalize();
+        if (!java.nio.file.Files.isRegularFile(root.resolve("pom.xml"))) return false;
+        List<String> protectedGlobs = globs();
+        return ProjectLayout.moduleRoots(root).stream().allMatch(module -> {
+            if (!module.startsWith(root)) return false;
+            String prefix = root.equals(module) ? "" : root.relativize(module).toString().replace('\\', '/') + "/";
+            return protectedGlobs.contains(prefix + "src/test/**")
+                    || protectedGlobs.contains(prefix + "src/test/java/**");
+        });
+    }
+
     /** Refused writes not yet told to the model, oldest first; drained by {@link #promptBlock()}. */
     private final java.util.Set<String> unreportedRefusals = new java.util.LinkedHashSet<>();
 

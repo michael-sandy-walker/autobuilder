@@ -1,0 +1,5 @@
+# T4-DG: the yardstick this target is scored by. One line: <script> [mode]
+# mode is `serving` (default) or `terminating` for an artifact that runs and exits.
+# preflight reads this when PREFLIGHT_SMOKE is not set, so a target carries its own
+# yardstick instead of the caller remembering which one to pass.
+scripts/smoke23.sh serving

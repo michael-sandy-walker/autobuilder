@@ -1,0 +1,38 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 39420378faa4fb0afccb8db99084ee5f660c97aae4ab97cfa8bb54b1d7e3d54a
+# body-sha256: bc63c3940c8dd19014c4f2d0bd8331c8f55f6d91210f0044d109cd44076f65e6
+POST /books creates a book with title required and max 120 chars
+POST /books requires isbn to match \d{13}
+GET /books lists all books
+GET /books/{id} returns the single book
+GET /books/{id} returns 404 if the book is absent
+POST /members creates a member with name required
+POST /members requires email
+POST /members returns 409 if email is duplicate
+GET /members/{id} returns the single member
+GET /members/{id} returns 404 if the member is absent
+POST /loans lends a book with body containing bookId and memberId
+POST /loans returns 404 if bookId is not found
+POST /loans returns 404 if memberId is not found
+POST /loans returns 409 if the book is already on loan
+POST /loans returns 422 if a member holds more than 3 active loans
+POST /loans/{id}/return marks the loan as returned
+POST /loans/{id}/return returns 404 if the loan is absent
+POST /loans/{id}/return returns 409 if the loan is already returned
+GET /loans?memberId={id} lists all loans for a member including active and returned
+All data is stored in in-memory collections
+Invalid input returns HTTP 400 with JSON body {"message": "<reason>"}
+Business-rule violations return the specified status codes with JSON body {"message": "<reason>"}
+POST /books returns HTTP 201 with the created object as the body
+POST /members returns HTTP 201 with the created object as the body
+POST /loans returns HTTP 201 with the created object as the body
+GET /books returns HTTP 200
+GET /books/{id} returns HTTP 200
+GET /members/{id} returns HTTP 200
+GET /loans?memberId={id} returns HTTP 200
+POST /loans/{id}/return returns HTTP 200

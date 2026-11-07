@@ -48,3 +48,10 @@ metadata:
    them, or when a design decision is genuinely theirs and the alternatives truly compete (rule 2 still holds for
    non-trivial capabilities -- but described in prose, not as a lettered menu by default).
 
+
+**2026-11-07, read the area's ticket before proposing a redesign.** The user said the capability-transfer menu might
+need a better design; I proposed unifying whole-project and capability imports ("whole = a preset"). That contradicted
+the user's own decision recorded on T4-EI (2026-11-05: two separate things; capability selection first, conflicts
+after), and the user had to restate it. **How to apply:** when the user opens a design question in an area, grep its
+tickets for dated user decisions first and start from them; if the user's concern is not yet concrete, ask what feels
+off instead of proposing.

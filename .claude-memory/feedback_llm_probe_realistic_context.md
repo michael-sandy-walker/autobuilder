@@ -14,3 +14,9 @@ When you build a synthetic context to probe how the local model responds to a pr
 **How to apply:** before asserting a model "gap" from a synthetic prompt, (1) pull real instances of that prompt shape from the backup corpus (`[USR]` → `[LLM RESPONSE]` pairs) and read the ground-truth responses; (2) make the synthetic fixture's contradicting/corroborating signals match that real distribution; (3) keep the A/B (change present vs absent) as the load-bearing assertion — it stays valid even when the absolute expectation is mis-set. Ties to [[feedback-calibrate-not-flip]] and [[feedback-replay-over-batches]]. Related: [[project-t4ap-prompt-audit]] (the compaction work these probes validate).
 
 **2026-11-01, the request's settings count too, not only its context.** An offline replay of a landing question passed 3 of 3 and failed live, because the replay omitted the run's `reasoning-effort: none` (same prompt: `none` NONE 4/4, omitted or `low` the right answer 4/4). A replay sends what `LLMClient` sends: model, temperature, reasoning effort, token cap. Compare one logged live answer with the replay's before calling a replay passed.
+
+**2026-11-07, do not assume how the model behaves -- try it.** I planned a fair-case probe as 1 call at temperature 0
+plus 4 at 0.7, "because five calls at 0 would repeat one answer". The user asked whether that was proven; it was not.
+Run at the run's own setting, it WAS true here (five byte-identical answers, qwen3.8 local) -- but as a measurement,
+not a premise. A probe runs at the run's settings; a claim about the model's behaviour is checked before it shapes an
+instrument.

@@ -46,3 +46,6 @@ two drivers launched runs on one target, and three runs were wasted. Then a laun
 full `ps -eo pid,ppid,args` tree, not a filtered one. A prev/ directory a driver moves state into must not already exist:
 `mv` into an existing one fails, the prepare step refuses, and the run boots on the leftover tree (a one-cycle false
 GOAL_FULFILLED); drivers now refuse an existing prev dir and stop on a failed mv.
+
+**2026-11-07: hit AGAIN** (`until ! pgrep -f "preflight.sh live"` in a waiter and in a monitor, both matched themselves
+and outlived their run). The anchored form that worked: `ps -eo args | grep -q "^/bin/bash scripts/preflight[.]sh live"`.

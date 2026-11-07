@@ -13,8 +13,8 @@ Restamp a line the day you re-check it against its file.
 - Build `mvn clean install`, test `mvn test -Dtest=C#m`; targets `data/<name>/`, runs pick by `PREFLIGHT_TARGET=x`; goal stack `meta/GoalStack.json`; profiles `test`, `dev-local`, `dev-auto`, `fast`
 - **`.claude-memory/` IS the loading memory** — checkout/branch/cherry-pick touching it mutates live memory; commit first. Tiers T1 correctness .. T6 harness
 ## Roadmap
-- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-04)
-- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-05)
+- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-07)
+- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-07)
 - `tier_definitions.md` — tier meanings. (reviewed 2026-09-08)
 ## Meta / Process (YOU+ME work, not the product)
 - `meta_process.md` — how YOU+ME divide/sequence/staff work; "Model" = which Claude runs a session. (reviewed 2026-10-20)
@@ -65,7 +65,7 @@ False completions and diagnosis lenses:
 - `project_local_first_constraint.md`: local execution is HARD; no hosted-model upgrade. (reviewed 2026-07-09)
 - `project_meta_concrete_target_hint_idea.md`: historical; only if reviving a non-LLM concrete-target hint. (reviewed 2026-07-09)
 Operations:
-- `project_run_lifecycle_runbook.md`: start/stop/monitor runs, watcher traps, `early_stop.sh`, `bundle.py`, versioned toy cases. (reviewed 2026-11-05)
+- `project_run_lifecycle_runbook.md`: start/stop/monitor runs, watcher traps, `early_stop.sh`, `bundle.py`, versioned toy cases; another agent may run in parallel. (reviewed 2026-11-07)
 - `project_log_and_backup_conventions.md` (+ superseded `project_tests_rotate_live_logs.md`): current run = unsuffixed `logs/behaviour.ndjson`, concatenated pretty JSON; tests use a scratch `FILE_BASE_PATH`. (reviewed 2026-09-08)
 ## Feedback
 How to work:
@@ -83,7 +83,7 @@ How to work:
 - `feedback_never_edit_a_running_script.md`: never edit preflight.sh or its inputs mid-run (git ops count). (reviewed 2026-09-24)
 - `feedback_no_heavy_mvn_beside_a_live_run.md`: no suite/tests/graph queries beside a live run; pgrep the driver first. (reviewed 2026-11-03)
 - `feedback_side_tests_must_not_share_lineage.md`: a scratch copy must not carry `meta/run-identity.json` -- it writes onto the real project in the shared graph. (reviewed 2026-11-03)
-- `feedback_options_before_building_and_stop_weak_batches.md`: real options before building; stop weak batches; prose, recommend, no lettered menu. (reviewed 2026-10-22)
+- `feedback_options_before_building_and_stop_weak_batches.md`: real options before building; stop weak batches; prose, recommend, no lettered menu; read the area's ticket decisions before proposing a redesign. (reviewed 2026-11-07)
 - `feedback_flag_ceremony_cost_early.md`: say so BEFORE process costs more than the task. (reviewed 2026-09-08)
 - `feedback_sonnet_for_batch_tickets.md`: mechanical tickets to a Sonnet subagent; design/validation stay here. (reviewed 2026-07-14)
 - `feedback_roadmap_is_the_queue.md`: work comes from the roadmap ONLY. (reviewed 2026-09-10)
@@ -103,7 +103,7 @@ Evidence discipline:
 - `feedback_replay_over_batches.md`: validate by deterministic replay; a DoD names its instrument. (reviewed 2026-10-20)
 - `feedback_measure_before_widening_a_working_rule.md`: a gap in a run that still closes is to measure, not widen. (reviewed 2026-10-20)
 - `feedback_short_field_run_after_context_change.md`: short live run after any cycle-context/persisted-record change. (reviewed 2026-07-30)
-- `feedback_llm_probe_realistic_context.md`: replays use real contexts and the run's request settings. (reviewed 2026-11-01)
+- `feedback_llm_probe_realistic_context.md`: replays use real contexts and the run's request settings; claims about model behaviour are measured, not assumed. (reviewed 2026-11-07)
 - `feedback_runs_are_variant_by_design.md`: keep cross-run resemblances family-level. (reviewed 2026-07-09)
 - `feedback_stabilize_before_tuning_signals.md`: stabilize before signal redesign. (reviewed 2026-07-09)
 Reasoning and correction:
@@ -128,7 +128,7 @@ Code and design constraints:
 - `feedback_string_consumption_path.md`: no string-scraping for CODE control flow; prose relayed to prompts is fine. (reviewed 2026-07-09)
 Watchers:
 - `feedback_batch_watcher_alarms_on_the_environment.md`: alarm on Neo4j down and <2 GB free. (reviewed 2026-10-11)
-- `feedback_monitor_every_terminal.md`: monitors match EVERY terminal state; pgrep must not match itself. (reviewed 2026-10-26)
+- `feedback_monitor_every_terminal.md`: monitors match EVERY terminal state; pgrep must not match itself (hit again 2026-11-07; anchored ps pattern inside). (reviewed 2026-11-07)
 - `feedback_escalate_unrecoverable_stagnation.md`: detect periodic failure early; same decision while nothing moves = grind. (reviewed 2026-10-19)
 - `feedback_waiter_fires_on_loop_terminal.md`: waiters fire on the LOOP's terminal line. (reviewed 2026-09-24)
 - `feedback_fix_first_when_a_finding_changes_the_measurement.md`: stop and fix first; no batch from uncommitted code. (reviewed 2026-09-30)

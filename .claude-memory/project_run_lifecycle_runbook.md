@@ -81,3 +81,9 @@ See [[project-log-and-backup-conventions]] for which log files to read and [[pro
 
 **2026-11-05: check how a toy case was last launched BEFORE launching it.** Twice in two days I started an ADOPTED case in `NEW_PROJECT` (rung1 on 11-04, cashbook on 11-04), which clears its tree and measures nothing, although the procedure is above. The guard that works: `cat ~/.autobuilder/run-archive/<newest run of that target>/extra_flags.txt` -- an adopted case shows `--autobuilder.start.mode=ADOPT_PROJECT`. Adopted today: cashbook, rung1, every `*-withheld`, ladder cases. Also: `post_adopted_goal.sh` now waits for THIS run's log (it read the previous run's before rotation and posted the goal into nothing; fixed `0b4e816e`), so it may be launched before or after preflight.
 
+
+**2026-11-07: another agent may run the loop in parallel.** Codex (via the fakechat channel) ran T4-EJ's field runs while
+this session was building the case, and archived them under `/tmp/t4ej-*/archive/<run>` instead of
+`~/.autobuilder/run-archive` (copied over at the user's word, byte-compared). Before launching, list `ps -eo pid,args`
+for a live preflight from ANY agent and check `data/<t>/` for state you did not leave; after a handoff, look for run
+archives outside the run archive and for builds marked `-dirty` (uncommitted code under test).

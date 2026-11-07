@@ -11,11 +11,11 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-07 (Opus 5.5, session 28) -- T4-EJ: REFERENCE USE MEASURED ON A NEW PAIR, 3/3 vs 0/2; CLOSE AWAITS THE USER -- START HERE
+## 2026-11-07 (Opus 5.5, session 28) -- T4-EJ CLOSED: REFERENCE USE MEASURED ON A NEW PAIR, 3/3 vs 0/2 -- START HERE
 
 - **New toy pair agreed with the user:** `labelmaker` (built BY THE LOOP from its seed, run `2026-11-07_12-25-17` GOAL_FULFILLED 11/11) frozen code-only as the source of `labelmaker-pantry` (pantry hand-written; withheld label spec; yardstick `scripts/smoke_capability_reference.sh`). Fair-case probe `scripts/t4ej_fair_case_probe.py`: 0/5 without the reference; at temperature 0 all five answers byte-identical (measured at the user's prompting -- do not assume temperature behaviour, try it).
 - **Codex ran v1 (5 runs, inconclusive) and v2 (2 ref + 1 ctl) in parallel** and committed `a930013b` (closure pauses when it would demand a test all of `src/test/**` forbids) + `a079dbe4` (v2 fixture). Its archives are in `/tmp/t4ej-*`, not the run archive. I verified them, reviewed the guard, suite 4389/0/0/16, and ran ref `19-09-14` (10/10, asked, 4/4 withheld) + ctl `19-25-44` (6/10, 1/4). Detail on T4-EJ.
-- **Pending with the user:** close T4-EJ (my recommendation: close, keep the offer); whether to copy Codex's `/tmp` archives into `~/.autobuilder/run-archive`; what feels off in the capability-transfer menu (the user's point; I first proposed unifying the imports, which contradicted the 2026-11-05 decision on T4-EI -- withdrawn; nothing filed).
+- **T4-EJ CLOSED at the user's word, offer kept; Codex's archives copied into `~/.autobuilder/run-archive`.** Still open with the user: what feels off in the capability-transfer menu (the user is still looking into it -- nothing to act on until they say; I first proposed unifying the imports, which contradicted the 2026-11-05 decision on T4-EI -- withdrawn; nothing filed).
 - **Trap hit again:** `pgrep -f "preflight.sh live"` inside a wait loop matches the loop itself; use `ps -eo args | grep "^/bin/bash scripts/preflight[.]sh live"`. Nothing is running.
 
 ## 2026-11-06 (Opus 5.5, session 27) -- T4-EI SLICE 1 BUILT AND RUN; THE PLANNER RETIRED THE IMPORT'S GOAL

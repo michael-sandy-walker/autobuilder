@@ -20,7 +20,7 @@ metadata:
 - **Later (same evening):** code committed `8110e131` at the user's word; rerun `2026-11-06_21-59-08` objective-met 9/10 -- planner fix held, but my generated intent lines ("... is not taken on", "source kept to read") became criteria and evolution deleted the store's files to satisfy them. Detail on T4-EI.
 - **Night:** the user said yes: obligations fix `3402bde3` (suite 4376/0/16); rerun `2026-11-06_23-24-15` operator-stop 9/10 -- both capabilities stayed; only check 4 (LoanRepository's queries) fails; closure held open by `IntentUse` reading "a working part of its build" as "cashbook must call the repositories". Detail on T4-EI.
 - **2026-11-07 00:43:** the user left (a)/(b) to me; both decided, committed `6fa48569`; run `2026-11-07_00-43-19` **GOAL_FULFILLED 10/10**, root closed in ~11 min, both capabilities in the tree. DoD met on n=1 (adapted elements traceable via the goal only; the reference never asked). Nothing is running.
-- **NEXT:** decide with the user whether T4-EI closes on n=1 or wants repeats / a browser pass of the page; reference use is unexercised.
+- **T4-EI CLOSED** at the user's word on n=1; reference use filed as **T4-EJ**. Next: the live queue (`scripts/next_work.py`).
 
 ## 2026-11-06 (Opus 5.5, session 26) -- T4-EH BUILT; THE FIELD RUN'S REAL BLOCKER WAS CONSOLIDATION UNDOING THE MODEL'S CORRECT MOVE
 

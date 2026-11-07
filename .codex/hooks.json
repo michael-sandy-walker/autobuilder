@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/charset_guard.py\" --hook",
+            "timeout": 15,
+            "statusMessage": "charset guard"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/home/anugeshtu/IdeaProjects/autobuilder/.codex/hooks/session-start.sh'",
+            "timeout": 900,
+            "statusMessage": "starting docker, neo4j and building autobuilder"
+          }
+        ]
+      }
+    ]
+  }
+}

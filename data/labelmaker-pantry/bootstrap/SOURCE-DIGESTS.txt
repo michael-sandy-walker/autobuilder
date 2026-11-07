@@ -1,4 +1,4 @@
-694b4feb0172c082549409bcb4fe277b5323f7abb51e1b5ebde8d19b96a77f7e  receiver/meta/GoalStack.json
+45f99641072ef7ac263be19ab5830d91151257e415375f887ae0783f753c8ce5  receiver/meta/GoalStack.json
 5402d68a30add7de1f279eaa03891ad9d4e5e246f8becaa6d0054a04c9debb30  receiver/output/pom.xml
 a12733df38d5be3d12f2c0ad5d2df9dda90f797bf3d1d54fa27e4b3c7153b32e  receiver/output/README.md
 36e9d9b9724530f56c80442aadacf306d82e053e099e52e36b568652e623f92e  receiver/output/src/main/java/org/pantry/store/Box.java

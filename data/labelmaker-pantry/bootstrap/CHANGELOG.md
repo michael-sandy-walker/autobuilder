@@ -16,3 +16,8 @@ prompt layout, pantry's files and the description, NO reference offer; k=5 at te
 All five answers byte-identical (sha 422ce03f47d9 -- temperature 0 repeats itself here, measured n=5); each compiles
 and fails 3 of 4 withheld tests (the one passing, noBoxNoLabel, needs no rule). The model invents a label
 "<postcode>-<id>" and never names labelmaker. FAIR: the description alone does not yield the codes.
+
+## v2 -- 2026-11-07
+
+- reason: Protect the original pantry spec and permit separate tests for imported behavior
+- bootstrap digest: `11d563fbae2d470c`

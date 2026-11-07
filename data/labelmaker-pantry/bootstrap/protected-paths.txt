@@ -1,3 +1,3 @@
 # T4-CQ: paths under output/ the loop may not write, one glob per line.
-# The tests are the operator's: the specification. The loop writes the code.
-src/test/**
+# Keep the operator's original spec. The loop may add its own tests separately.
+src/test/java/org/pantry/store/PantrySpecTest.java

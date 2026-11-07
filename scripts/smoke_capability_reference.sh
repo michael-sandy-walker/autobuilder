@@ -32,7 +32,8 @@ asked=$(cat "$LOGS/autobuilder.log" 2>/dev/null | grep -cE 'T4-EI: evolution ask
 
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/orig"; cp -a "$B/receiver/output/." "$WORK/orig/"
-diff -rq "$WORK/orig/src/test" "$TREE/src/test" > /dev/null 2>&1; check "the receiver's specification (src/test) is unmodified" $?
+spec_path=src/test/java/org/pantry/store/PantrySpecTest.java
+cmp -s "$WORK/orig/$spec_path" "$TREE/$spec_path"; check "the receiver's PantrySpecTest is unmodified" $?
 
 mkdir -p "$WORK/t"; cp -a "$TREE/." "$WORK/t/"
 rm -rf "$WORK/t/target"

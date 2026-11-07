@@ -1,0 +1,37 @@
+  A new project, adopted as it stands. Its tree holds only its build file (pom.xml), a README, and the
+  operator's specification under src/test/java; nothing exists under src/main/java yet. In its own words,
+  from its README:
+
+    "labelmaker -- Shipping-label codes for parcels: a zone from the postcode, a running number, and a check
+    character."
+
+  It is a library, in package org.labelmaker.label, with no dependencies beyond the JDK.
+
+  - Zone is an enum of seven zones, in this order: NORTH, EAST, SOUTH, WEST, HARBOR, VALLEY, SUMMIT.
+    Zone.of(String postcode) takes a postcode of exactly five digits '0'-'9' (anything else, null included,
+    raises IllegalArgumentException), adds its five digits, and returns the zone at position (sum mod 7) in
+    that order: a digit sum of 0, 7 or 14 is NORTH, 1 is EAST, 6 is SUMMIT.
+  - A label code reads ZZ-NNNNN-C: ZZ is the first two letters of the zone's name (NO, EA, SO, WE, HA, VA, SU),
+    NNNNN the running number zero-padded to five digits, C the check character.
+  - Labeler.checkChar(String body) is a static method returning the check character (a char) of a body of seven
+    characters: the two zone letters followed by the five digits, without the dashes. Each character has a
+    value -- a digit its own value 0-9, a letter A-Z the values 10-35 -- and is multiplied by a weight; the
+    weights, from the first character on, repeat 7, 3, 9 (7, 3, 9, 7, 3, 9, 7). The sum of these products,
+    mod 19, is a position in the 19-letter alphabet "ABCDEFGHJKLMNPRTVWX" (position 0 is A): the letter there
+    is the check character. For example the body NO00001 sums to 240, 240 mod 19 is 12, and the letter at 12
+    is N, so its code is NO-00001-N.
+  - Labeler is a class with a no-argument constructor. next(String postcode) returns the next label code for
+    that postcode; running numbers count from 1 per Labeler, across all postcodes. A postcode Zone.of refuses
+    raises IllegalArgumentException and uses up no number.
+  - Labeler.isValid(String code) is a static method: true only when the code reads ZZ-NNNNN-C with ZZ one of
+    the seven zone letter pairs, NNNNN five digits and C the check character of ZZNNNNN; false otherwise,
+    null included.
+
+  The specification is LabelerSpecTest in src/test/java: its tests say exactly what the library must return,
+  and they fail until the code provides it.
+
+  OBJECTIVE: every test in LabelerSpecTest passes, and the whole suite passes.
+
+  The classes to change are Zone and Labeler -- neither exists yet: create them under src/main/java in package
+  org.labelmaker.label. DO NOT modify anything under src/test: the specification is the operator's, and if one
+  of its tests fails, the code is what is wrong.

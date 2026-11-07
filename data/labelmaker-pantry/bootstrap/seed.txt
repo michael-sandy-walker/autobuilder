@@ -1,0 +1,28 @@
+  A new project, adopted as it stands. Its tree holds only its build file (pom.xml), a README, and the
+  operator's specification under src/test/java; nothing exists under src/main/java yet. In its own words,
+  from its README:
+
+    "pantry -- A home inventory of storage boxes: what each box holds and the postcode of the place it is kept."
+
+  It is a library, in package org.pantry.store, with no dependencies beyond the JDK.
+
+  - Box is a record of an id (int), its contents (String) and a postcode (String). A box needs an id of at
+    least 1, contents that are not null or blank, and a postcode of exactly five digits, else it raises
+    IllegalArgumentException; its contents are kept stripped of surrounding whitespace.
+  - Pantry is a class with a no-argument constructor; it starts empty.
+  - add(String contents, String postcode) adds a box and returns it; ids count from 1 and are never reused,
+    even after a removal.
+  - find(int id) returns the box with that id as an Optional, empty when there is none.
+  - remove(int id) removes the box with that id and returns true, or returns false when there was none.
+  - boxes() returns every box in the order added, as a List that cannot be modified.
+  - search(String word) returns the boxes whose contents contain the word, ignoring case, in the order added;
+    an empty list for a null or blank word.
+
+  The specification is PantrySpecTest in src/test/java: its tests say exactly what the pantry must return,
+  and they fail until the code provides it.
+
+  OBJECTIVE: every test in PantrySpecTest passes, and the whole suite passes.
+
+  The classes to change are Box and Pantry -- neither exists yet: create them under src/main/java in package
+  org.pantry.store. DO NOT modify anything under src/test: the specification is the operator's, and if one
+  of its tests fails, the code is what is wrong.

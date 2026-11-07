@@ -1,0 +1,19 @@
+{
+  "currentGoalId": "goal-f0976a0b-3eb4-45db-b69b-e8a55d54cd4d",
+  "currentSubGoalId": null,
+  "goalTree": {
+    "id": "goal-f0976a0b-3eb4-45db-b69b-e8a55d54cd4d",
+    "description": "  A new project, adopted as it stands. Its tree holds only its build file (pom.xml), a README, and the\n  operator's specification under src/test/java; nothing exists under src/main/java yet. In its own words,\n  from its README:\n\n    \"pantry -- A home inventory of storage boxes: what each box holds and the postcode of the place it is kept.\"\n\n  It is a library, in package org.pantry.store, with no dependencies beyond the JDK.\n\n  - Box is a record of an id (int), its contents (String) and a postcode (String). A box needs an id of at\n    least 1, contents that are not null or blank, and a postcode of exactly five digits, else it raises\n    IllegalArgumentException; its contents are kept stripped of surrounding whitespace.\n  - Pantry is a class with a no-argument constructor; it starts empty.\n  - add(String contents, String postcode) adds a box and returns it; ids count from 1 and are never reused,\n    even after a removal.\n  - find(int id) returns the box with that id as an Optional, empty when there is none.\n  - remove(int id) removes the box with that id and returns true, or returns false when there was none.\n  - boxes() returns every box in the order added, as a List that cannot be modified.\n  - search(String word) returns the boxes whose contents contain the word, ignoring case, in the order added;\n    an empty list for a null or blank word.\n\n  The specification is PantrySpecTest in src/test/java: its tests say exactly what the pantry must return,\n  and they fail until the code provides it.\n\n  OBJECTIVE: every test in PantrySpecTest passes, and the whole suite passes.\n\n  The classes to change are Box and Pantry -- neither exists yet: create them under src/main/java in package\n  org.pantry.store. DO NOT modify anything under src/test: the specification is the operator's, and if one\n  of its tests fails, the code is what is wrong.\n",
+    "role": "system",
+    "type": "GOAL",
+    "status": "COMPLETED",
+    "created": 1794040000.0,
+    "completed": 1794040000.0,
+    "resolution": "root goal satisfied: written by hand and frozen finished (T4-EJ toy case receiver)",
+    "metadata": {
+      "plannedOnce": true
+    },
+    "expectedArtifacts": [],
+    "subGoals": []
+  }
+}

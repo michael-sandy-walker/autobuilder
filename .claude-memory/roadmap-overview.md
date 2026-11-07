@@ -32,10 +32,10 @@
 - [x] `T1-FS` — Every score read is unscoped: the evaluation prompt carries 9,216 scores from 71 runs (~60% of the context window) and 259 files that do not exist; manufactures the "severely fragmented" diagnosis. Regression from T1-D 2026-07-26 — CLOSED 2026-08-23: 6 Neo4j ITs + field-proven (block 269 paths/17,205 tok -> 2 paths/34 tok, 0 phantom); baseline re-measure handed to T6-L
 - [x] `T1-FR` — The model is told which MEMBERS to add but never which TYPES to create; missing types go to the injector and are stubbed silently (2346 diagnostics vs 905 member ones)
 - [x] `T1-D` — Reset no longer wipes the graph — lineages survive as history (SHIPPED 2026-07-26; `purgeAll()` kept as a deliberate wipe)
-- [>] `T1-BL` — T2-BM veto must use criteria progress gate
-- [>] `T1-BM` — `SubGoalFulfillmentHeuristic`
+- [o] `T1-BL` — T2-BM veto must use criteria progress gate
+- [o] `T1-BM` — `SubGoalFulfillmentHeuristic`
 - [>] `T1-CK` — SUBGOAL_EXHAUSTED with partial criteria met should trigger graduation rather than GIVEN_UP
-- [>] `T1-CO` — Split and demoted
+- [s] `T1-CO` — Split and demoted
 - [x] `T1-FQ` — The T4-BB missing-member steering block never matched `location: variable v of type T` — 89% of the real diagnostic shape (806/905) silently skipped
 - [x] `T1-FP` — `LLMClient` read timeout fixed per attempt — escalate it across retries so slow generations complete instead of breaker-pausing
 - [x] `T1-FO` — `Neo4jDeferredMutationGraphService.ensureSchema()` mixes schema DDL + data DML in one tra…
@@ -199,16 +199,16 @@
 - [x] `T2-EP` — Compact state encoding for remaining raw-payload prompt surfaces (all 3 surfaces shipped)
 - [x] `T2-EO` — Behavioural-criteria steering does not transfer to a foreign domain — CLOSED 2026-07-25; mechanism shipped + test-covered, field half of the DoD unobtainable (pollbox retired, edge never reached in a real run); watch `t2eo-stagnation-rescue` stays the standing confirmation
 - [n] `T2-AE` — Evaluation LLM score anchoring at 0.85
-- [>] `T2-AS` — Meta-deliberation quality
+- [o] `T2-AS` — Meta-deliberation quality
 - [>] `T2-BB` — Inject live score thresholds into interpretation agent prompt
-- [>] `T2-BP` — Signal saturation
-- [>] `T2-BV` — PLANNING_THROTTLED similarity check rejects re-proposals of GIVEN_UP subgoals, blocking e…
+- [s] `T2-BP` — Signal saturation
+- [s] `T2-BV` — PLANNING_THROTTLED similarity check rejects re-proposals of GIVEN_UP subgoals, blocking e…
 - [>] `T2-BZ` — Evaluation heuristic and prompt guidance for isolated in-memory state across controllers
 - [x] `T2-CI` — Merge-regression guard
 - [>] `T2-CM` — Orphan-aware acceptance bias
 - [>] `T2-CN` — Registration-collision heuristic
 - [>] `T2-CP` — Per-cycle structural audit driver
-- [>] `T2-DP` — Root auto-completes at first-wave ratio while a later-wave feature is 0% built
+- [s] `T2-DP` — Root auto-completes at first-wave ratio while a later-wave feature is 0% built
 - [x] `T2-D` — "Possibly complete" propagation
 - [x] `T2-G` — Conditionalize meta deliberation
 - [x] `T2-J` — Planner pruning pressure
@@ -317,8 +317,8 @@
 - [x] `T3-BY` — A run killed from outside ships its LAST state, not its BEST — BUILT 2026-08-22 loop-side (`preserve.interval-cycles: 10`, 6 tests); field DoD open
 - [x] `T3-BX` — Validation layer is decorative (`@Valid` everywhere, zero constraints) → bad input 500s instead of 400 (closed 2026-09-23: shape absent in 114 trees)
 - [x] `T3-BW` — Peer-consistency odd-one-out rule in `WiringFactsAnalyzer` — SHIPPED 2026-07-27; vocabulary-free, verified on the real run output, reaches the evolution prompt
-- [>] `T3-B` — Activate `GoalEntity.expectedArtifacts`
-- [>] `T3-BM` — Stateless LLM criteria verification on repeated no-diff cycles
+- [s] `T3-B` — Activate `GoalEntity.expectedArtifacts`
+- [s] `T3-BM` — Stateless LLM criteria verification on repeated no-diff cycles
 - [>] `T3-BS` — Output-structure summary in evolution prompt
 - [x] `T3-A` — Implement `#SubGoalRemove`
 - [x] `T3-C` — Implement divergent evolution prompt mode
@@ -410,7 +410,7 @@
 - [s] `T4-CN` — Cross-graph node-compatibility model (cross-run/seed) -- SUBSUMED by T4-EC 2026-10-20
 - [x] `T4-BA` — Package-fragmentation detection
 - [x] `T4-BP` — Positive-measurements gate for `#NoDiff`→FULFILLED promotion
-- [>] `T4-AQ` — Stub-body detection and automatic follow-up injection
+- [s] `T4-AQ` — Stub-body detection and automatic follow-up injection
 - [>] `T4-AV` — LLM coherence reviewer
 - [>] `T4-AW` — Output reviewer SPI
 - [>] `T4-BK` — Partial restage of multi-file deferred mutations
@@ -418,7 +418,7 @@
 - [>] `T4-BN-2` — Incremental javac probe + test-compile coverage
 - [>] `T4-BQ` — Type-reference closure walker
 - [s] `T4-CO` — Spec-stated status-code binding (SUBSUMED 2026-07-31: verification→T4-DB, steering→T4-DA/T2-EX; residue was the extraction the 07-22 reframe ruled out)
-- [>] `T4-C` — Signal trait/pattern spawning
+- [o] `T4-C` — Signal trait/pattern spawning
 - [x] `T4-I` — Cross-cycle behavioral pattern heuristics
 - [n] `T4-J` — Tuning parameter store
 - [x] `T4-AI` — Meta steps and deliberation
@@ -495,9 +495,9 @@
 - [ ] `T5-BI` — Narrate what the loop SAID (model prose) instead of event templates **Measured 2026-09-20 from the user's question: the data is NOT truncated** (descriptions to 2,115 chars, criteria complete) — both caps are on the SPEECH path (`cropForSpeech` ~240, boundary-aware; `TtsController.MAX_CHARS` 600, blunt). **The cap is not the problem:** `announceNode` speaks `detail.description`, so a work item's 240 chars go on the templated prefix and the criteria fall off the end. Speaking the criteria is the fix, not a bigger cap **2026-10-28 scope restated by the user: redesign the whole way Autobuilder outputs prose, including which outputs exist; filed DoD superseded**
 - [s] `T5-C` — SMS Phase 2 **SUBSUMED 2026-09-30** (stale-plumbing review).
 - [>] `T5-L` — Security hardening for non-local / multi-tenant deployment posture **DEFERRED 2026-09-30** (stale-plumbing review).
-- [>] `T5-O` — Replace Maven-specific `summariseStderr` with classifier output
-- [>] `T5-U` — Consolidate Maven `[ERROR]` line filtering into a shared utility
-- [>] `T5-V` — Store probe `BuildOutcome` on `CycleContextData`; unify pre- and post-merge build prompt…
+- [s] `T5-O` — Replace Maven-specific `summariseStderr` with classifier output
+- [s] `T5-U` — Consolidate Maven `[ERROR]` line filtering into a shared utility
+- [s] `T5-V` — Store probe `BuildOutcome` on `CycleContextData`; unify pre- and post-merge build prompt…
 - [s] `T5-W` — Migrate skeleton resolver + symbol extractor (extractor half DELETED as dead code 2026-07-26; resolver half owned by T4-AN-7)
 - [>] `T5-AA` — Cross-cycle aggregation of `REFUSED_UNKNOWN` author-error shapes
 - [>] `T5-AB` — Telemetry-driven `mutation.deferred.ttlCycles` tuning

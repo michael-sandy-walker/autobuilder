@@ -69,6 +69,11 @@ public class GoalPlannerService {
     @Autowired(required = false)
     private CoverageRetrospectiveService coverageRetrospectiveService;
 
+    /** T5-BO: tells the live goal view the tree changed ({@link GoalTreePersistedEvent}); absent in plain unit tests. */
+    @Setter
+    @Autowired(required = false)
+    private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
+
     /**
      * T4-DT: the same exercisability question the probe asks, used here only to give a refused
      * closure's work item a done-when the probe can re-check.
@@ -503,6 +508,7 @@ public class GoalPlannerService {
     public void saveGoalMetadata(GoalEntity goal) {
         if (goal == null) return;
         goalGraphService.save(goal);
+        publishTreePersisted();   // T5-BO: criteria met, merge count, description -- the view shows them all
     }
 
     /** Returns an integer counter stored in goal metadata, defaulting to 0 if absent. */
@@ -2808,6 +2814,17 @@ public class GoalPlannerService {
 
         } catch (IOException e) {
             log.error("Failed to persist goal stack", e);
+        }
+        publishTreePersisted();
+    }
+
+    /** T5-BO: best-effort -- a view that cannot be told must never fail the write it would be told about. */
+    private void publishTreePersisted() {
+        if (applicationEventPublisher == null) return;
+        try {
+            applicationEventPublisher.publishEvent(new GoalTreePersistedEvent(currentCycleContext));
+        } catch (RuntimeException e) {
+            log.debug("T5-BO: goal tree change not relayed to the live view: {}", e.getMessage());
         }
     }
 

@@ -105,8 +105,20 @@ public class GoalStateEventPublisher {
      * next cycle boundary.
      */
     public void publishTreeChanged(CycleContextData context) {
+        if (emitters.isEmpty()) return;   // nobody watching: skip building the snapshot
         GoalStateEvent event = snapshotEvent(GoalStateEvent.KIND_TREE_CHANGED, context);
         broadcast(EVENT_TREE_CHANGED, event);
+    }
+
+    /**
+     * T5-BO: every durable change to the goal tree, not only the explorer's own edits -- the root goal
+     * set by request on an adopted project, the planner's new subgoals, a promotion. Without it the
+     * view waited for the next cycle end, and a root set before the first cycle showed nothing for
+     * minutes. Without a cycle (a goal set by request) the signal strengths are empty, as they are then.
+     */
+    @org.springframework.context.event.EventListener
+    public void onGoalTreePersisted(com.walpro.autobuilder.goal.GoalTreePersistedEvent event) {
+        publishTreeChanged(event.context());
     }
 
     // -----------------------------------------------------------------------------------

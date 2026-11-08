@@ -523,6 +523,7 @@
   <div class="mc-row"><span class="k">mode</span><span class="v mode" id="mc-mode">—</span></div>
   <div class="mc-row"><span class="k">subgoal</span><span class="v sub" id="mc-subgoal">—</span></div>
   <div class="mc-row"><span class="k">criteria</span><span class="v" id="mc-criteria" title="">—</span></div>
+  <div class="mc-row"><span class="k">file</span><span class="v" id="mc-file" title="">—</span></div>
   <div class="mc-row"><span class="k">last agent</span><span class="v" id="mc-agent">—</span></div>
   <div class="mc-row"><span class="k">goals</span><span class="v" id="mc-goals">—</span></div>
   <div class="mc-row"><span class="k">runtime</span><span class="v" id="mc-runtime">—</span></div>
@@ -948,7 +949,47 @@ function labelFor(n) {
 }
 
 // ------ build graph data from flat snapshots ------
+// T5-BO: say what changed in the goal tree -- a new subgoal, one completed, given up or replaced.
+// Read from the snapshot diff, where the goal texts are, not from the behaviour events, which carry
+// ids only. The first snapshot after a page load is the tree as it stands, not news, so it is silent.
+// One utterance per snapshot: a replanning that supersedes three subgoals is one sentence, not three.
+const STATUS_SAID = { COMPLETED: 'completed', GIVEN_UP: 'given up', SUBSUMED: 'replaced', ACTIVE: 'reopened' };
+function openingOf(text) {
+  // the goal's headline (speakable.js); a stale cached speakable.js without it falls back to the text
+  if (window.Speakable && typeof window.Speakable.headline === 'function') return window.Speakable.headline(text);
+  return String(text || '').replace(/\s+/g, ' ').trim();
+}
+function narrateTreeChanges(goals) {
+  if (!state.sawFirstSnapshot || !TTS.isEnabled()) return;
+  const added = [], changed = {};
+  for (const g of goals) {
+    if (!g || (g.type === 'GOAL' && !g.parentId)) continue;   // the root: said once as "The goal", closed by "Goal fulfilled"
+    const before = state.nodesById.get(g.id);
+    if (!before) { added.push(g); continue; }
+    if (before.status && g.status && before.status !== g.status && STATUS_SAID[g.status]) {
+      (changed[g.status] = changed[g.status] || []).push(g);
+    }
+  }
+  const parts = [];
+  // Each new subgoal by name, up to three ("Add EditHunks.apply" and "Add EditHunks.isEdit" are
+  // different work; "the first" of them told the operator half of it), then a count.
+  if (added.length === 1) parts.push('New subgoal: ' + openingOf(added[0].description) + '.');
+  else if (added.length > 1) {
+    const named = added.slice(0, 3).map(g => openingOf(g.description));
+    const rest = added.length - named.length;
+    parts.push(added.length + ' new subgoals: ' + named.join('; ') + (rest > 0 ? '; and ' + rest + ' more' : '') + '.');
+  }
+  for (const [status, gs] of Object.entries(changed)) {
+    const word = STATUS_SAID[status];
+    parts.push(gs.length === 1
+      ? word.charAt(0).toUpperCase() + word.slice(1) + ': ' + openingOf(gs[0].description) + '.'
+      : gs.length + ' subgoals ' + word + '.');
+  }
+  if (parts.length) TTS.speak(parts.join(' '), { priority: 'high', queue: true });
+}
+
 function mergeSnapshot(goals) {
+  narrateTreeChanges(goals);   // before the merge below overwrites the statuses it compares
   state.treeVersion = (state.treeVersion || 0) + 1;
   // Preserve existing node objects (so positions / velocities survive).
   const incoming = new Set();
@@ -1074,7 +1115,7 @@ const TTS = (function () {
   // behind the front voice at depth; while one ambient utterance plays, further ambient
   // utterances are dropped (one background voice, not a chorus).
   const layers = {
-    front:   { source: null, playing: false, message: null, next: null },
+    front:   { source: null, playing: false, message: null, next: null, queue: [] },
     ambient: { source: null, playing: false, message: null, next: null },
   };
   const pending = new Map(); // AbortController per sentence in flight, so cancel() aborts them
@@ -1161,7 +1202,14 @@ const TTS = (function () {
     layer.message = null;
     layer.next = null;
   }
+  const FRONT_QUEUE_MAX = 4;
+  function enqueueFront(message) {
+    const q = layers.front.queue;
+    q.push(message);
+    while (q.length > FRONT_QUEUE_MAX) q.shift();   // the oldest goes: what is happening now matters most
+  }
   function cancel() {
+    layers.front.queue = [];
     pending.forEach(ac => { try { ac.abort(); } catch (e) {} });
     pending.clear();
     stopLayer(layers.front);
@@ -1213,22 +1261,28 @@ const TTS = (function () {
     lastSpoken = clean; lastSpokenAt = now;
 
     // T5-BF: priority maps onto a voice layer — high speaks up front, low on the ambient layer at
-    // depth (dropped only when the AMBIENT voice itself is mid-message). On the front layer a click
-    // on a node interrupts, because the operator just asked for it; a narrated message (o.queue)
-    // waits for the one being spoken to finish, and the newest waiting message wins.
+    // depth. On the front layer a click on a node interrupts, because the operator just asked for
+    // it; a narrated message (o.queue) waits for the one being spoken to finish, and the newest
+    // waiting message wins. T5-BO: the ambient layer waits the same way. It used to DROP a line
+    // that arrived while it was speaking, and a merge lands ~0.3 s after the build check, so
+    // "Merged ..." was swallowed at every merge of 2026-11-08_15-30-09. One waiting slot, newest
+    // wins: nothing piles up behind a burst, and the last thing that happened is still said.
     const o = opts || {};
     const layer = o.priority === 'high' ? layers.front : layers.ambient;
-    if (layer === layers.ambient && layer.playing) return;
 
     ensureCtx();
     // A suspended context (the browser's autoplay rule after every load) does not play, and a source
     // started on it never ends -- so its layer stayed "playing" and every later utterance was dropped
     // as "mid-utterance". That is the voice going mute after a reload until a tab switch resumed the
     // context. Never start while suspended; ask for the gesture that unlocks it instead.
-    if (ctx.state !== 'running') { needGesture(); return; }
-
     const message = { chunks: chunksOf(clean), o, index: 0, ahead: null };
-    if (layer === layers.front && o.queue && layer.playing) { layer.next = message; return; }
+    // T5-BO: a narrated main-voice line that arrives before the click (the goal, said as the page
+    // opens) is held, newest wins, and said once the voice is unlocked instead of being lost.
+    if (ctx.state !== 'running') { if (layer === layers.front && o.queue) heldFront = message; needGesture(); return; }
+    // T5-BO: the front voice keeps a short FIFO -- new goals, status changes, edits and merges can
+    // arrive within a second of each other, and a single newest-wins slot said only the last one.
+    if (layer.playing && layer === layers.front && o.queue) { enqueueFront(message); return; }
+    if (layer.playing && layer === layers.ambient) { layer.next = message; return; }
     stopLayer(layer);
     start(layer, message);
   }
@@ -1276,7 +1330,7 @@ const TTS = (function () {
   function finish(layer, message) {
     if (layer.message !== message) return;
     layer.message = null; layer.playing = false;
-    const next = layer.next; layer.next = null;
+    const next = layer === layers.front ? layer.queue.shift() : layer.next; layer.next = null;
     if (next && enabled && ctx.state === 'running') start(layer, next);
   }
   function announceCycle(payload) {
@@ -1304,6 +1358,7 @@ const TTS = (function () {
   // --autoplay-policy=no-user-gesture-required), and then this banner never appears.
   let gestureHinted = false;
   let banner = null;
+  let heldFront = null;
   function showBanner() {
     if (banner || typeof document === 'undefined' || !document.body) return;
     banner = document.createElement('div');
@@ -1327,7 +1382,14 @@ const TTS = (function () {
   function unlock() {
     if (!ctx) return;
     if (ctx.state === 'running') { hideBanner(); return; }
-    ctx.resume().then(() => { if (ctx.state === 'running') { gestureHinted = false; hideBanner(); } }).catch(() => {});
+    ctx.resume().then(() => {
+      if (ctx.state !== 'running') return;
+      gestureHinted = false; hideBanner();
+      const held = heldFront; heldFront = null;
+      if (held && enabled) {
+        if (layers.front.playing) enqueueFront(held); else start(layers.front, held);
+      }
+    }).catch(() => {});
   }
   ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
       document.addEventListener(ev, () => { if (enabled) { ensureCtx(); unlock(); } }, { capture: true }));
@@ -1368,6 +1430,19 @@ function setConn(s) {
   el.className = 'pill ' + s;
   el.textContent = s;
 }
+// T5-BO: the run's goal, said when the page first sees its root -- at page open, or the moment an
+// adopted project is given one. "After starting I just hear 'cycle 1'" (2026-11-08): nothing said what
+// the run was for. The opening sentences only; the whole seed is pages long.
+function announceRootGoal(goals) {
+  if (!Array.isArray(goals)) return;
+  const root = goals.find(g => g && g.type === 'GOAL' && !g.parentId);
+  if (!root || root.id === state.announcedRootId) return;
+  state.announcedRootId = root.id;
+  if (!TTS.isEnabled()) return;
+  const text = String(root.description || '').replace(/\s+/g, ' ').trim();
+  const opening = (text.match(/^(?:[^.!?]*[.!?](?:\s|$)){1,2}/) || [text])[0].trim();
+  if (opening) TTS.speak('The goal. ' + opening, { priority: 'high', queue: true });
+}
 function handleEvent(payload) {
   if (payload.cycleName) state.cycleName = payload.cycleName;
   if (payload.cycleResultState) state.cycleResultState = payload.cycleResultState;
@@ -1378,6 +1453,7 @@ function handleEvent(payload) {
   noteVisit(state.currentSubGoalId);
   state.signals = payload.signals || {};
   if (payload.goals) mergeSnapshot(payload.goals);
+  announceRootGoal(payload.goals);
   // T5-BF: goal-status tally for the mission-control HUD (the goal stream is the
   // authoritative tree source; the behaviour stream does not carry tree state).
   if (payload.goals && window.MissionControl && window.MissionControl.setGoalCounts) {
@@ -1404,7 +1480,15 @@ function handleEvent(payload) {
   // T5-BF: subgoal-switch narration moved to MissionControl's cycle_start handler (the
   // behaviour stream knows the new subgoal as the cycle BEGINS, not at snapshot time).
   if (TTS.isEnabled() && state.sseHelloSeen) {
-    if (payload.cycleResultState) TTS.announceCycle(payload);
+    // T5-BO: only a real cycle end. Tree changes now arrive mid-cycle carrying the cycle's context,
+    // and announcing from them said "Cycle no merge, continue." 0.2 s before "Merged ..." of the
+    // same cycle (trace 2026-11-08 17:05:13), talking over the merge on the second voice.
+    if (payload.cycleResultState && payload.kind === 'CYCLE_END') TTS.announceCycle(payload);
+  }
+  // T5-BO: a page opened on a run that has already reached its goal says so, after the goal itself --
+  // the live "Goal fulfilled" is never replayed, so a reload after it heard nothing.
+  if (!state.sseHelloSeen && payload.cycleResultState === 'GOAL_FULFILLED' && TTS.isEnabled()) {
+    TTS.speak('This run has fulfilled its goal.', { priority: 'high', queue: true });
   }
   if (!state.sseHelloSeen) state.sseHelloSeen = true;
 }
@@ -3093,6 +3177,12 @@ function crop(s, n) {
   // Per verbosity, which events speak and what they say — with content from the payload, so the
   // audio tells the run's story rather than announcing event names. priority:'low' by default so
   // graph node/cycle narration still cuts through; the terminal moment speaks at 'high'.
+  // A speakable.js older than this page (a stale cache) has no fileNames: fall back to the names
+  // rather than throw, which the stream listener swallows -- and the line is silently never said.
+  function spokenFiles(files) {
+    if (window.Speakable && typeof window.Speakable.fileNames === 'function') return window.Speakable.fileNames(files, 2);
+    return fileList(files, 2);
+  }
   function narrationText(env) {
     const p = env.payload || {};
     const chatty = verbosity === 'chatty';
@@ -3100,9 +3190,10 @@ function crop(s, n) {
       case 'rewind_performed':
         return 'Rewound to an earlier cycle' + (p.trigger === 'operator' ? ' on request.' : '.');
       case 'mutation_merged': {
+        // T5-BO: the file's name, at every verbosity -- "Merged 1 file" told the operator nothing.
+        const named = spokenFiles(p.files);
         const n = (p.files && p.files.length) || 0;
-        return 'Merged ' + n + (n === 1 ? ' file' : ' files') +
-          (chatty && n ? ': ' + fileList(p.files, 3) : '') + '.';
+        return named ? 'Merged ' + named + '.' : 'Merged ' + n + (n === 1 ? ' file.' : ' files.');
       }
       case 'mutation_rejected': return 'Rejected: ' + (p.reason || '');
       case 'grind_detected':
@@ -3131,7 +3222,10 @@ function crop(s, n) {
       case 'recurring_defect_dominant':
         return 'Recurring defect: ' + (p.errorKind || p.missingToken || '') + '.';
       case 'cycle_end':
-        return p.resultState === 'GOAL_FULFILLED' ? 'Goal fulfilled.' : null;
+        if (p.resultState !== 'GOAL_FULFILLED') return null;
+        { const runMs = runElapsedMs(env);
+          const min = runMs != null ? Math.round(runMs / 60000) : null;
+          return min ? 'Goal fulfilled after ' + min + (min === 1 ? ' minute.' : ' minutes.') : 'Goal fulfilled.'; }
       case 'mutation_injected':
         // the loop's own reaction to a compile failure — part of the story at every verbosity
         return 'Injected ' + String(p.rule || p.kind || 'fix').replace(/[-_]/g, ' ') +
@@ -3152,8 +3246,10 @@ function crop(s, n) {
         return chatty ? ('Cycle ' + (cycleOrdinal || '') + '.') : null;
       }
       case 'mutation_proposed': {
-        const n = (p.files && p.files.length) || 0;
-        return chatty ? ('Proposing ' + n + (n === 1 ? ' file.' : ' files.')) : null;
+        // T5-BO: what the loop is editing right now, said at every verbosity (it was a chatty-only
+        // count, so no file was ever named aloud).
+        const named = spokenFiles(p.files);
+        return named ? 'Editing ' + named + '.' : null;
       }
       case 'mutation_scored':
         return chatty ? ('Scored ' + fmtScore(p.llmScore) + ', ' +
@@ -3177,6 +3273,9 @@ function crop(s, n) {
       default: return null;
     }
   }
+  // T5-BO: what the loop is doing NOW -- the file it edits, the file it merged, a rewind -- is said
+  // on the front voice, queued behind the sentence in progress, never on the ambient layer.
+  const FRONT_EVENTS = new Set(['mutation_proposed', 'mutation_merged', 'rewind_performed']);
   function maybeNarrate(env, spokeModeSwitch) {
     // NOTE: TTS is a top-level const in this script, NOT a window property — checking
     // window.TTS silenced every narration on T4-AR's first live outing (T5-BF).
@@ -3195,7 +3294,7 @@ function crop(s, n) {
     // layer and lost the race against the cycle-end narration nearly every time (heard as
     // "the ghost shows but the narrator never says it"). Switches are rare, so the front
     // voice does not flood — and the ambient voice keeps talking underneath.
-    if (env.event === 'cycle_start' && subgoalSwitched) {
+    if ((env.event === 'cycle_start' && subgoalSwitched) || FRONT_EVENTS.has(env.event)) {
       TTS.speak(text, { priority: 'high', queue: true });
       return;
     }
@@ -3205,6 +3304,19 @@ function crop(s, n) {
     while (narrationTimes.length && now - narrationTimes[0] > 2000) narrationTimes.shift();
     const rate = narrationTimes.length >= 3 ? 1.4 : 1.0;
     TTS.speak(text, { priority: 'low', rate });
+  }
+
+  function setFileHud(files, how) {
+    const el = $('mc-file'); if (!el) return;
+    if (!files || !files.length) { el.textContent = '—'; el.title = ''; el.className = 'v'; return; }
+    el.textContent = fileList(files, 2) + ' · ' + how;
+    el.title = files.join('\n');
+    el.className = how === 'merged' ? 'v pos' : 'v';
+  }
+  function markFileHud(how) {
+    const el = $('mc-file'); if (!el || el.textContent === '—') return;
+    el.textContent = el.textContent.replace(/ · [a-z ]+$/, '') + ' · ' + how;
+    el.className = 'v neg';
   }
 
   function setSubgoalHud(desc) {
@@ -3242,6 +3354,12 @@ function crop(s, n) {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     const text = h > 0 ? (h + 'h ' + m + 'm') : (m + 'm ' + String(sec).padStart(2, '0') + 's');
     hudSet('mc-runtime', running ? text : text + ' (ended)');
+  }
+  /** Run length at this event: session start to the event's own timestamp (null before a start is known). */
+  function runElapsedMs(env) {
+    if (sessionStartMs == null) return null;
+    const t = env && env.timestamp ? Date.parse(env.timestamp) : NaN;
+    return Math.max(0, (Number.isNaN(t) ? Date.now() : t) - sessionStartMs);
   }
   function noteSessionStart(iso) {
     if (sessionStartMs != null || !iso) return;
@@ -3316,6 +3434,12 @@ function crop(s, n) {
       if (p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));
       if (p.sessionBuildCount != null) hudSet('mc-builds', String(p.sessionBuildCount));
     }
+    // T5-BO: the file being worked on stays on the HUD until the next change, not 2.6 s in a ghost.
+    if (env.event === 'mutation_proposed' && p.files && p.files.length) setFileHud(p.files, 'editing');
+    else if (env.event === 'mutation_merged' && p.files && p.files.length) setFileHud(p.files, 'merged');
+    else if (env.event === 'mutation_rejected') markFileHud('rejected');
+    else if (env.event === 'merge_rolled_back') markFileHud('rolled back');
+    else if (env.event === 'rewind_performed') setFileHud(null);
     if (env.event === 'mutation_merged') { counters.merge++; $('mc-c-merge').textContent = counters.merge; }
     if (env.event === 'mutation_rejected') { counters.reject++; $('mc-c-reject').textContent = counters.reject; }
     if (env.event === 'llm_call') { counters.llm++; $('mc-c-llm').textContent = counters.llm; }
@@ -3333,11 +3457,15 @@ function crop(s, n) {
       hudSet('mc-mode', p.mode, 'mode');
     } else if (env.event === 'cycle_end' && p.resultState === 'GOAL_FULFILLED') {
       // T5-BF: the run SUCCEEDED — previously this rendered as a generic chip and nothing else.
+      // T5-BO: the run's own length first -- "18 builds, 5m 56s" read as the run's time, and it is
+      // only the time spent building (2026-11-08: 5m 56s of builds in an 18m 02s run).
+      const runMs = runElapsedMs(env);
       ghost = { title: 'Goal fulfilled', dot: '#4ade80', sticky: true,
         html: 'Cycle <b>' + (cycleOrdinal || '?') + '</b>' +
+          (runMs != null ? '<span class="arrow">·</span>run <b>' + esc(fmtMs(runMs)) + '</b>' : '') +
           (p.buildOutcome ? '<span class="arrow">·</span>build ' + esc(p.buildOutcome) : '') +
           (p.sessionBuildCount ? '<span class="arrow">·</span><b>' + p.sessionBuildCount +
-            '</b> builds, ' + esc(fmtMs(p.sessionBuildMs)) : '') };
+            '</b> builds taking ' + esc(fmtMs(p.sessionBuildMs)) : '') };
     } else if (env.event === 'cycle_start' && subgoalSwitched) {
       ghost = { title: 'Now working on', dot: '#c4b5fd', html: esc(crop(lastSubGoal, 180)) };
     } else if (env.event === 'build_fix_attempt' && repairedAfter > 0) {
@@ -3385,6 +3513,7 @@ function crop(s, n) {
     counters.merge = 0; counters.reject = 0; counters.llm = 0;
     ['mc-cycle', 'mc-mode', 'mc-subgoal', 'mc-criteria', 'mc-agent', 'mc-goals', 'mc-runtime',
      'mc-builds', 'mc-buildms', 'mc-tokens'].forEach(id => hudSet(id, '—'));
+    setFileHud(null);
     if (window.resetGraphForNewRun) window.resetGraphForNewRun();
   }
 

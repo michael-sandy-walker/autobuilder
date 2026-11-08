@@ -422,6 +422,15 @@ spring:
   jackson:
     deserialization:
       fail-on-unknown-properties: false
+  # T5-BO: the pages and their scripts change with every build, and without a Cache-Control header
+  # the browser guessed them fresh and kept an older graph.html / speakable.js across a rebuild
+  # (2026-11-08: a new narration line never spoken, because the page saying it was not the one
+  # loaded). no-cache = revalidate on every load; an unchanged file costs a 304, not a download.
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          no-cache: true
 server:
   port: 8081
 

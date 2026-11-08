@@ -111,10 +111,6 @@ class SignalReadoutEquivalenceTest {
             combined.putIfAbsent(BasicSignals.STEERING_SUPPRESS,
                     Signal.of(BasicSignals.STEERING_SUPPRESS, 1.0, 0.0, "operator"));
         }
-        if (ctx.restageSuppressed()) {
-            combined.putIfAbsent(BasicSignals.RESTAGE_SUPPRESS,
-                    Signal.of(BasicSignals.RESTAGE_SUPPRESS, 1.0, 0.0, "operator"));
-        }
         for (ChannelRequest r : ctx.requests().open().values()) {
             Map<String, Object> meta = r.meta() != null ? new LinkedHashMap<>(r.meta()) : new LinkedHashMap<>();
             if (r.validForCycles() != null) meta.put("validForCycles", r.validForCycles());

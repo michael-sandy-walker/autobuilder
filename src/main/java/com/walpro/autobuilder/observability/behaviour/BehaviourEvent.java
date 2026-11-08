@@ -581,55 +581,6 @@ public sealed interface BehaviourEvent {
         public String event() { return "build_fix_attempt"; }
     }
 
-    // ---------------------------------------------------------------------------------
-    // T4-BE: deferred-mutation ledger lifecycle
-    // ---------------------------------------------------------------------------------
-
-    /** Compile probe rejected the mutation; the rejection was fully explained by extractable
-     * blockers so the mutation was deferred (rather than discarded) for potential re-stage. */
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    record DeferredMutationRecorded(
-            Instant timestamp,
-            String cycleId,
-            String deferredId,
-            int blockerCount,
-            int touchedFileCount,
-            String intentSubgoalId,
-            Double llmScore,
-            Double heuristicScore
-    ) implements BehaviourEvent {
-        public String event() { return "deferred_mutation_recorded"; }
-    }
-
-    /** A merge cleared the last open blocker on the deferred mutation. State → READY_TO_RESTAGE. */
-    record DeferredMutationReady(
-            Instant timestamp,
-            String cycleId,
-            String deferredId,
-            int clearedFingerprintCount
-    ) implements BehaviourEvent {
-        public String event() { return "deferred_mutation_ready"; }
-    }
-
-    /** Deferred mutation was re-staged this cycle; standard eval/merge path took over. */
-    record DeferredMutationRestaged(
-            Instant timestamp,
-            String cycleId,
-            String deferredId
-    ) implements BehaviourEvent {
-        public String event() { return "deferred_mutation_restaged"; }
-    }
-
-    /** Deferred mutation hit a terminal DROP state (drift, reprobe failure, intent closed). */
-    record DeferredMutationDropped(
-            Instant timestamp,
-            String cycleId,
-            String deferredId,
-            String reason
-    ) implements BehaviourEvent {
-        public String event() { return "deferred_mutation_dropped"; }
-    }
-
     /**
      * T5-BO: an agent's answer was thrown away because it did not match its protocol, even after
      * the one format retry. Emitted so the operator and the watches can see it: the ninth adopted
@@ -775,29 +726,6 @@ public sealed interface BehaviourEvent {
             java.util.List<String> detail
     ) implements BehaviourEvent {
         public String event() { return "diagnosis_request"; }
-    }
-
-    /** TTL or LRU cap evicted the deferred mutation. */
-    record DeferredMutationEvicted(
-            Instant timestamp,
-            String cycleId,
-            String deferredId,
-            String reason
-    ) implements BehaviourEvent {
-        public String event() { return "deferred_mutation_evicted"; }
-    }
-
-    /** Engine actively promoted a deferred mutation's intent subgoal into active scope
-     * (completion-bias re-focus) so the restage could fire. */
-    record DeferredRestageScopePromoted(
-            Instant timestamp,
-            String cycleId,
-            String fromSubGoalId,
-            String toSubGoalId,
-            String candidateId,
-            String reason
-    ) implements BehaviourEvent {
-        public String event() { return "deferred_restage_scope_promoted"; }
     }
 
     /**

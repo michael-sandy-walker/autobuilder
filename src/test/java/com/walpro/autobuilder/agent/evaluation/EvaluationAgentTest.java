@@ -875,6 +875,59 @@ class EvaluationAgentTest {
         assertThat(result.criteriaAssessments()).isNotNull();
     }
 
+    /**
+     * T5-BU: the T4-BE deferral ledger is deleted, so a mutation blocked only by a member a later
+     * merge could declare -- the shape that motivated T4-BE (run 2026-05-23, Loan.setReturned) --
+     * is rejected like any other compile failure. What must survive is the feedback: the probe
+     * outcome stays on the context and the next evolution prompt still names the missing member.
+     */
+    @Test
+    void execute_T5BU_compileBlockedMutation_isRejected_andTheMissingMemberReachesTheNextEvolutionPrompt() {
+        String stderr = String.join("\n",
+                "[ERROR] /src/main/java/org/sample/LoanService.java:[14,13] cannot find symbol",
+                "[ERROR]   symbol:   method setReturned(boolean)",
+                "[ERROR]   location: variable loan of type org.sample.Loan");
+        when(compileProbeService.probe(any())).thenReturn(
+                new CompileProbeService.ProbeResult(
+                        new BuildOutcome(BuildResult.COMPILE_ERROR, stderr, 1500L, "mvn compile", "cycle-1-probe"),
+                        null));
+        EvaluationOutcome probeRejected = new EvaluationOutcome(
+                0.0, MutationAcceptanceState.REJECTED, GoalProgressState.NOT_EVALUATED, "Compile probe failed", null);
+        when(problemDetector.detectAndUpdate(any(), any(), any())).thenReturn(ProblemContext.empty());
+        when(heuristicNegotiator.negotiate(any(), any(), anyList()))
+                .thenReturn(new NegotiationResult(probeRejected, List.of(), List.of()));
+        InterpretationResult interp = mock(InterpretationResult.class);
+        when(interp.success()).thenReturn(false);
+        when(interp.mutationState()).thenReturn(MutationAcceptanceState.REJECTED);
+        when(interp.goalProgress()).thenReturn(GoalProgressState.NOT_EVALUATED);
+        when(evaluationInterpreter.interpret(any(), any(), anyBoolean())).thenReturn(interp);
+
+        Map<String, String> previous = Map.of(
+                "src/main/java/org/sample/Loan.java",
+                "package org.sample;\npublic class Loan { private boolean returned; }\n");
+        EvaluationAgent agent = newAgent(List.of());
+        CycleContextData ctx = CycleContextData.builder()
+                .cycleName("cycle-1")
+                .projectDiff(new ProjectDiffResult(null, Map.of("src/main/java/org/sample/LoanService.java", "x"), Set.of()))
+                .previousOutput(previous)
+                .evolutionOutcome(new EvolutionOutcome(
+                        List.of(new FileMutation("src/main/java/org/sample/LoanService.java",
+                                "package org.sample;\nclass LoanService { void close(Loan loan) { loan.setReturned(true); } }\n")),
+                        List.of(), "summary", "raw"))
+                .currentSubGoalId("sg-1")
+                .build();
+
+        CycleContextData result = agent.execute(ctx);
+
+        assertThat(result.mutationState()).isEqualTo(MutationAcceptanceState.REJECTED);
+        verify(evaluationAdapter, never()).evaluate(any());
+        assertThat(result.lastProbeOutcome()).isNotNull();
+        assertThat(result.lastProbeOutcome().stderrTail()).contains("setReturned(boolean)");
+        String block = com.walpro.autobuilder.protocol.evolution.MissingMemberPromptBlock.render(result);
+        assertThat(block).as("the next evolution prompt names the missing member").isNotNull()
+                .contains("setReturned").contains("Loan.java");
+    }
+
     // --- T1-FI: steered test-only probe failure (files kept on disk) ----------
 
     private CompileProbeService.ProbeResult steeredProbeResult(com.walpro.autobuilder.core.merge.MergeRollbackPoint rollbackPoint) {

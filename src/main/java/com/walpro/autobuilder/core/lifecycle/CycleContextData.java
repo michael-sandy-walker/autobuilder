@@ -374,10 +374,9 @@ public record CycleContextData(
         // written with the halting mechanism's reason; REST resume paths clear it.
         String pausedReason,
 
-        // T4-BZ-5: operator switches (formerly the emitter-less STEERING_SUPPRESS /
-        // RESTAGE_SUPPRESS signals, settable only via REST). Plain booleans.
-        boolean steeringSuppressed,
-        boolean restageSuppressed
+        // T4-BZ-5: operator switch (formerly the emitter-less STEERING_SUPPRESS signal,
+        // settable only via REST). A plain boolean. (T5-BU: RESTAGE_SUPPRESS went with the restage.)
+        boolean steeringSuppressed
 
 ) {
     public CycleContextData {

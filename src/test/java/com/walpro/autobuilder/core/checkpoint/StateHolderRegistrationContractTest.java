@@ -140,8 +140,7 @@ class StateHolderRegistrationContractTest {
                 "com.walpro.autobuilder.core.build.RecurringDefectTracker",
                 "com.walpro.autobuilder.core.build.inject.FixAttemptLedger",
                 "com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker",
-                "com.walpro.autobuilder.core.mutation.RejectedProposalLedger",
-                "com.walpro.autobuilder.core.mutation.DeferredMutationLedger");
+                "com.walpro.autobuilder.core.mutation.RejectedProposalLedger");
         for (String name : named) {
             Class<?> c = load(name);
             StateHolder holder = c.getAnnotation(StateHolder.class);

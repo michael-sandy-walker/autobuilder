@@ -1831,26 +1831,6 @@ public class GoalPlannerService {
         return currentSubGoalId;
     }
 
-    /** T4-BE: true when {@code goalId} resolves to a goal that is ACTIVE in the tree. Used by
-     * the deferred-mutation restage scheduler to decide whether a candidate's intent is still
-     * pursuable (and thus restage-eligible). */
-    public boolean isInActiveScope(String goalId) {
-        if (goalId == null || goalId.isBlank()) return false;
-        GoalEntity g = goalMap.get(goalId);
-        return g != null && g.getStatus() == GoalStatus.ACTIVE;
-    }
-
-    /** T4-BE: same shape as {@link #setCurrentSubGoal} but lets the caller record the prior
-     * pointer for a behaviour event (completion-bias re-focus emits
-     * {@code deferred_restage_scope_promoted} with from/to). Returns the prior subgoal id
-     * (may be null). Preconditions: goal must be ACTIVE and of type SUBGOAL — same as
-     * {@link #setCurrentSubGoal}. */
-    public String focusOnSubGoal(String goalId) {
-        String prior = this.currentSubGoalId;
-        setCurrentSubGoal(goalId);
-        return prior;
-    }
-
     public List<GoalEntity> getRemainingGoals() {
         return goalMap.values().stream()
                 .filter(g -> g.getStatus() == GoalStatus.ACTIVE && g.getType() == GoalType.SUBGOAL)

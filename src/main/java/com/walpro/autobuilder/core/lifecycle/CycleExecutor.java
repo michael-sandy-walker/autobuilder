@@ -84,13 +84,6 @@ public class CycleExecutor implements CheckpointableState {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.BuildCostTracker buildCostTracker;
 
-    /** T4-BE: optional deferred-mutation restage scheduler — fires at cycle_start before
-     * the standard engine runs. Optional so unit tests that construct CycleExecutor without
-     * the mutation services keep working. */
-    @Setter
-    @Autowired(required = false)
-    private com.walpro.autobuilder.core.mutation.DeferredRestageScheduler deferredRestageScheduler;
-
     /** T4-BO: optional signal-lifetime observability tracker (measure before tuning — see
      *  project_t4bo_design_note.md). Optional for the same reason as the other collaborators
      *  above: {@code CycleExecutorGoalLoopTest} constructs this class manually. */
@@ -210,19 +203,6 @@ public class CycleExecutor implements CheckpointableState {
             }
             emitCycleEnd(context, "criteria_banked_early_exit");
             return context;
-        }
-
-        // T4-BE: cycle_start hook — check the deferred-mutation ledger for READY candidates
-        // whose preconditions pass (in scope, OR out-of-scope but above completion-bias
-        // threshold + outside cooldown + drift-clean). When a candidate is staged, the
-        // returned context carries the mutation's files as evolutionOutcome + ROLE_EVALUATION
-        // signal so the engine's signal-driven loop routes through the standard eval/merge path.
-        if (deferredRestageScheduler != null) {
-            try {
-                context = deferredRestageScheduler.scheduleIfReady(context);
-            } catch (Exception e) {
-                log.warn("T4-BE: cycle_start restage scheduler failed: {}", e.getMessage());
-            }
         }
 
         context = adaptiveExecutionEngine.runCycle(context);

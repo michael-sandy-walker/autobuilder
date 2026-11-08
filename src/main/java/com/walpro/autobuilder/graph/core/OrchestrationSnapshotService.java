@@ -5,9 +5,6 @@ import com.walpro.autobuilder.graph.HistorySpan;
 import com.walpro.autobuilder.graph.HistoryUse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.walpro.autobuilder.core.mutation.DeferredMutationLedger;
-import com.walpro.autobuilder.goal.GoalEntity;
-import com.walpro.autobuilder.goal.GoalPlannerService;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -40,16 +37,6 @@ public class OrchestrationSnapshotService {
     @Setter
     @Autowired(required = false)
     private com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
-
-    /** T4-BE: optional — surfaces deferred-mutation summary into the snapshot when present. */
-    @Setter
-    @Autowired(required = false)
-    private DeferredMutationLedger deferredMutationLedger;
-
-    /** T4-BE: optional — resolves intent subgoal descriptions for ready candidates. */
-    @Setter
-    @Autowired(required = false)
-    private GoalPlannerService goalPlannerService;
 
     @HistoryRead(span = HistorySpan.KEY_OWNER, use = HistoryUse.BINDING,
             note = "Anchors on the goal's newest attempt, which on a resumed run can be a previous run's. The one deciding caller (AutobuilderService's fingerprint-repeat promotion) checks attemptRunId and acts only on this run's evidence.")
@@ -268,35 +255,7 @@ public class OrchestrationSnapshotService {
         return snapshot
                 .withRecurringCriticalHeuristics(warnings)
                 .withCriteriaProgress(criteriaProgress)
-                .withSubGoalResolution(subGoalResolution)
-                .withDeferredMutations(buildDeferredMutationsSummary());
-    }
-
-    /**
-     * T4-BE: assemble a thin view of the deferred-mutation ledger for the meta-deliberation
-     * snapshot. When the ledger or planner is not wired (unit tests), returns an empty summary.
-     */
-    private OrchestrationSnapshot.DeferredMutationsSummary buildDeferredMutationsSummary() {
-        if (deferredMutationLedger == null) return OrchestrationSnapshot.DeferredMutationsSummary.empty();
-        DeferredMutationLedger.Summary s = deferredMutationLedger.summarize();
-        List<OrchestrationSnapshot.ReadyCandidate> ready = new ArrayList<>(s.readyCandidates().size());
-        for (DeferredMutationLedger.ReadyEntry e : s.readyCandidates()) {
-            String desc = null;
-            if (goalPlannerService != null && e.intentSubgoalId() != null) {
-                try {
-                    GoalEntity g = goalPlannerService.getGoalById(e.intentSubgoalId());
-                    if (g != null) desc = g.getDescription();
-                } catch (Exception ignored) {}
-            }
-            ready.add(new OrchestrationSnapshot.ReadyCandidate(
-                    e.id(),
-                    e.intentSubgoalId(),
-                    desc,
-                    e.combinedScore(),
-                    e.touchedFileCount()
-            ));
-        }
-        return new OrchestrationSnapshot.DeferredMutationsSummary(s.openCount(), s.readyCount(), ready);
+                .withSubGoalResolution(subGoalResolution);
     }
 
     /**

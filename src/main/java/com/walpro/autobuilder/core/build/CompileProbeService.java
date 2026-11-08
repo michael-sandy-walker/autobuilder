@@ -152,8 +152,8 @@ public class CompileProbeService {
 
         // T4-BH: single write-time gate for the "no two .java files declare the same top-level
         // simple name under different packages" invariant. Runs BEFORE we write any file —
-        // covers the normal evolution path (called from EvaluationAgent) and the deferred-mutation
-        // re-stage path (called from DeferredMutationRestager) transitively. A conflict short-
+        // covers the normal evolution path (called from EvaluationAgent) and MergeAgent's T1-EH
+        // re-probe transitively. A conflict short-
         // circuits with FRAGMENTATION_REJECTED; no build runs, no rollback point is needed
         // because the working tree is unchanged.
         Map<String, String> proposedFiles = new LinkedHashMap<>();

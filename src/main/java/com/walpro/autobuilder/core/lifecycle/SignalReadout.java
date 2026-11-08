@@ -48,7 +48,7 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
             BasicSignals.EVOLUTION_OCCURRED, BasicSignals.EVOLUTION_FINGERPRINT_CHANGED);
 
     private static final Set<SignalType> TOGGLES = Set.of(
-            BasicSignals.SYSTEM_PAUSED, BasicSignals.STEERING_SUPPRESS, BasicSignals.RESTAGE_SUPPRESS);
+            BasicSignals.SYSTEM_PAUSED, BasicSignals.STEERING_SUPPRESS);
 
     public static SignalReadout of(CycleContextData ctx) {
         if (ctx == null) {
@@ -133,9 +133,6 @@ public record SignalReadout(String cycleId, List<Entry> entries, Map<SignalType,
         }
         if (ctx.steeringSuppressed()) {
             out.add(Signal.of(BasicSignals.STEERING_SUPPRESS, 1.0, 0.0, "operator"));
-        }
-        if (ctx.restageSuppressed()) {
-            out.add(Signal.of(BasicSignals.RESTAGE_SUPPRESS, 1.0, 0.0, "operator"));
         }
         return out;
     }

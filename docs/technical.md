@@ -48,7 +48,7 @@ Packages, by responsibility:
 | `goal` | the goal tree, the specification's obligations, coverage, closure |
 | `core.build` | everything that builds, runs or reads the target's code: probes, gates, guards, structural questions |
 | `core.build.inject` | deterministic compile fixes (section 6) |
-| `core.mutation` | rejected-proposal memory and the deferred-mutation ledger |
+| `core.mutation` | rejected-proposal memory and the classification of compile blockers |
 | `core.stuck` | the stuck layer: one home for "the loop is not getting anywhere" |
 | `core.investigate` | questions an agent asks of its own run: the run's logs and the project's files as they are now |
 | `core.checkpoint`, `core.merge`, `core.persistence`, `core.retention` | snapshots, rollback, rewind, branches, lineage merges, end-of-run state, pruning |
@@ -242,8 +242,8 @@ A change passes these checks, cheapest first; each can stop it.
 4. **The compile probe** (`CompileProbeService`). The change is written to `output/` and the target's build command
    runs (`autobuilder.build.*`; `JavacDirectProbe` compiles in-process instead when configured). A change that
    does not compile is rolled back and rejected before any model judges it -- after the deterministic repairs of
-   section 6 have had their one attempt. A rejection fully explained by members a later change could supply is
-   kept in the deferred-mutation ledger (section 6) instead of being lost.
+   section 6 have had their one attempt. The rejection's diagnostics are classified (section 6) and carried into
+   the next evolution prompt.
 5. **Evaluation** (`EvaluationAgent`). The model scores the change against the subgoal's criteria, shown the
    project's own test run of exactly these files when the operator declared the suite an authority
    (`EvaluationTestEvidence`, `DeclaredTestSuite`).
@@ -316,13 +316,12 @@ which published version to write; `WellKnownPackageRegistry` and the model looku
 (`LlmSymbolImportLookupService`, memoised in `SymbolImportCache`) answer only when discovery abstains.
 `BuildToolProbe` runs the build tool's own diagnostics instead of letting the model guess versions.
 
-**The deferred-mutation ledger** (`core.mutation`). A candidate the compile probe rejected only because members or
-types it uses do not exist yet is not thrown away: `BlockerExtractor` classifies each diagnostic
-(`DiagnosticClass`: deferrable, or an author error), the candidate is stored in the graph with `BLOCKED_BY`
-edges to what it needs (`DeferredMutation`, `MutationBlocker`), and after every merge
-`BlockerClearanceDetector` checks whether the merged code now declares those. A candidate whose blockers have all
-cleared is re-staged at a later cycle start (`DeferredRestageScheduler`, `DeferredMutationRestager`): re-probed,
-and dropped if the files it touches drifted in the meantime.
+**Compile blockers** (`core.mutation`). When the compile probe rejects a candidate, `BlockerExtractor` classifies
+each diagnostic (`DiagnosticClass`: a member or type that does not exist yet, or an author error; `MutationBlocker`
+is the structured form) and emits `blocker_extraction_outcome`; the author errors go onto the cycle context and the
+next evolution prompt renders them as PREVIOUS COMPILE ERRORS, beside the blocks that read the probe outcome itself
+(missing member, missing type). The candidate itself is rejected. (A ledger that kept such candidates and re-staged
+them once a later merge declared what they needed was deleted in T5-BU: in 581 runs it never re-staged one.)
 
 **Tree repairs** (`StructuralTreeRepair`), applied at any moment the tree can be wrong, not only after a merge: a
 type supplied to a constructor but registered nowhere gets the registration its peers carry
@@ -571,7 +570,7 @@ All model calls go through `LLMClient` (`client` package), one chokepoint:
 
 Neo4j (`spring.data.neo4j.*`) holds the orchestration history: each agent's actions and their artifacts, goals,
 evolution attempts, evaluation results with every heuristic's opinion and every criterion's result, merges,
-deferred mutations and their blockers, checkpoints, stuck outcomes, terminal-agent exchanges. Every node carries
+checkpoints, stuck outcomes, terminal-agent exchanges. Every node carries
 `runId` and `lineageId`. Reads that span runs are declared with `@HistoryRead` (how far back they read, and whether
 the answer may decide anything alone); a contract test fails the build for an undeclared read.
 `OrchestrationSnapshotService` renders a structured snapshot of recent graph state; `DiagnosticScanService` scans

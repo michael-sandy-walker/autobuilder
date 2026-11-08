@@ -2,12 +2,12 @@ package com.walpro.autobuilder.core.mutation;
 
 /**
  * T4-BE: structured fingerprint of a single compile dependency that caused a probe to reject
- * a mutation. Pairs with {@link BlockerExtractor} (extraction from probe stderr) and the
- * graph-backed deferred-mutation ledger (persistence + clearance detection).
+ * a mutation, extracted by {@link BlockerExtractor} from probe stderr. (T5-BU: the deferral
+ * ledger that persisted these and re-staged the mutation once a later merge declared them is
+ * deleted -- it never restaged in 581 runs; the extraction and its outcome event stay.)
  *
- * <p>The fingerprint shape is the minimum the {@link BlockerClearanceDetector} needs to ask
- * "did a later merge declare this?" — receiver type for the lookup, member name +
- * normalised argument-type list to disambiguate overloads. T1-ET adds two package-level
+ * <p>Fingerprint shape: receiver type, member name + normalised argument-type list to
+ * disambiguate overloads. T1-ET adds two package-level
  * kinds: MISSING_PACKAGE (no registry replacement known — straight pom dep would suffice if
  * a later merge supplies one) and PACKAGE_REWRITE (registry-known deprecated-prefix → modern
  * prefix migration; signature carries the {@code groupId:artifactId:version} of the modern

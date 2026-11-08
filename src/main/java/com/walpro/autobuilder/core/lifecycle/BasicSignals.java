@@ -67,12 +67,6 @@ public final class BasicSignals {
     // prompt's signal render. Source carries "<errorKind>|<identity>|streak=<n>".
     public static final SignalType BUILD_FIX_LOCUS_STUCK = SignalType.of("BUILD_FIX_LOCUS_STUCK");
 
-    // T4-BE / T4-J: operator switch — no code emitter. Settable only via
-    // PUT /autobuilder/signals/{name}; while present, DeferredRestageScheduler skips firing
-    // ready candidates. Absence is the default green light. (Originally a meta-agent opt-out;
-    // the meta lane was deleted 2026-07-09, the REST path is the surviving intended setter.)
-    public static final SignalType RESTAGE_SUPPRESS = SignalType.of("RESTAGE_SUPPRESS");
-
     // T2-DT / T4-J: operator switch — no code emitter. Settable only via
     // PUT /autobuilder/signals/{name}; while present, CompileDiagnosticPromptBlock suppresses
     // the compile-diagnostic steering block and emits evolution_steering_suppressed.

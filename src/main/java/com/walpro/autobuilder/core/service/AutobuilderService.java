@@ -562,7 +562,7 @@ public class AutobuilderService implements CheckpointableState {
     }
 
     /**
-     * T4-BZ-5: operator switches (formerly REST-injected STEERING_SUPPRESS/RESTAGE_SUPPRESS).
+     * T4-BZ-5: operator switch (formerly the REST-injected STEERING_SUPPRESS signal).
      */
     public void setOperatorSwitch(SignalType type, boolean on) {
         lock.lock();
@@ -573,8 +573,6 @@ public class AutobuilderService implements CheckpointableState {
             }
             if (BasicSignals.STEERING_SUPPRESS.equals(type)) {
                 context = context.withSteeringSuppressed(on);
-            } else if (BasicSignals.RESTAGE_SUPPRESS.equals(type)) {
-                context = context.withRestageSuppressed(on);
             }
             log.info("setOperatorSwitch: {} = {}", type.name(), on);
         } finally {
@@ -605,9 +603,8 @@ public class AutobuilderService implements CheckpointableState {
             // T4-BZ-5: toggles clear their carriers too.
             if (BasicSignals.SYSTEM_PAUSED.equals(type)) {
                 context = context.withPausedReason(null);
-            } else if (BasicSignals.STEERING_SUPPRESS.equals(type) || BasicSignals.RESTAGE_SUPPRESS.equals(type)) {
-                context = context.withSteeringSuppressed(BasicSignals.STEERING_SUPPRESS.equals(type) ? false : context.steeringSuppressed())
-                                 .withRestageSuppressed(BasicSignals.RESTAGE_SUPPRESS.equals(type) ? false : context.restageSuppressed());
+            } else if (BasicSignals.STEERING_SUPPRESS.equals(type)) {
+                context = context.withSteeringSuppressed(false);
             }
             log.info("removeSignal: {} removed", type);
         } finally {

@@ -10,7 +10,6 @@ import com.walpro.autobuilder.core.build.BuildResult;
 import com.walpro.autobuilder.core.build.CompileProbeService;
 import com.walpro.autobuilder.core.lifecycle.CycleContextData;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
-import com.walpro.autobuilder.core.mutation.DeferredMutationLedger;
 import com.walpro.autobuilder.core.persistence.MutationSnapshotService;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.goal.GoalPlannerService;
@@ -34,17 +33,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * T4-BF tests 7 / 8 / 9: per-rejection {@code blocker_extraction_outcome} event emission
- * through {@link EvaluationAgent#tryDeferRejectedMutation}. Each ticket-specified
+ * through {@link EvaluationAgent#recordCompileDiagnostics}. Each ticket-specified
  * {@code Outcome.Result} variant is stubbed by feeding a tailored stderr fixture; the
  * test then asserts exactly one event per call with matching payload fields.
  *
- * <p>The {@link DeferredMutationLedger} is mocked but its calls are not asserted —
- * deferral persistence is covered by {@code Cycle1779492075276ReplayTest}; this suite is
- * exclusively about the observability surface.
+ * <p>T5-BU: the T4-BE deferral ledger these rejections once fed is deleted; this suite covers
+ * the observability surface and the author errors threaded onto the context.
  */
 @ExtendWith(MockitoExtension.class)
 class EvaluationAgentBlockerExtractionOutcomeTest {
@@ -62,7 +59,6 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
     @Mock private MergeRollbackService mergeRollbackService;
     @Mock private FileService fileService;
     @Mock private BehaviourLogger behaviourLogger;
-    @Mock private DeferredMutationLedger deferredMutationLedger;
 
     private EvaluationAgent agent;
 
@@ -84,7 +80,6 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 fileService
         );
         agent.setBehaviourLogger(behaviourLogger);
-        agent.setDeferredMutationLedger(deferredMutationLedger);
     }
 
     private CycleContextData ctxWithOneMutation() {
@@ -116,7 +111,7 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 [ERROR]   location: class Loan
                 """;
 
-        agent.tryDeferRejectedMutation(ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+        agent.recordCompileDiagnostics(ctxWithOneMutation(), probeWithStderr(stderr));
 
         verify(behaviourLogger, times(1)).blockerExtractionOutcome(
                 eq("cycle-X"), eq("attempt-X"), eq("sg-X"),
@@ -138,7 +133,7 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 [ERROR] /B.java:[20,5] non-static method getBookById(Long) cannot be referenced from a static context
                 """;
 
-        agent.tryDeferRejectedMutation(ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+        agent.recordCompileDiagnostics(ctxWithOneMutation(), probeWithStderr(stderr));
 
         verify(behaviourLogger, times(1)).blockerExtractionOutcome(
                 eq("cycle-X"), eq("attempt-X"), eq("sg-X"),
@@ -149,8 +144,6 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 anyList(),
                 isNull()
         );
-        // No deferral persisted when the result is not DEFERRED.
-        verifyNoInteractions(deferredMutationLedger);
     }
 
     @Test
@@ -161,7 +154,7 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 [ERROR] /B.java:[20,5] this is some entirely novel diagnostic shape the classifier doesn't know
                 """;
 
-        agent.tryDeferRejectedMutation(ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+        agent.recordCompileDiagnostics(ctxWithOneMutation(), probeWithStderr(stderr));
 
         ArgumentCaptor<String> firstUnknownCaptor = ArgumentCaptor.forClass(String.class);
         verify(behaviourLogger, times(1)).blockerExtractionOutcome(
@@ -175,7 +168,6 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
         );
         assertThat(firstUnknownCaptor.getValue())
                 .contains("this is some entirely novel diagnostic shape the classifier doesn't know");
-        verifyNoInteractions(deferredMutationLedger);
     }
 
     @Test
@@ -186,7 +178,7 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 [ERROR] For more information about the errors and possible solutions, please read the following articles:
                 """;
 
-        agent.tryDeferRejectedMutation(ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+        agent.recordCompileDiagnostics(ctxWithOneMutation(), probeWithStderr(stderr));
 
         verify(behaviourLogger, times(1)).blockerExtractionOutcome(
                 eq("cycle-X"), eq("attempt-X"), eq("sg-X"),
@@ -197,7 +189,6 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 anyList(),
                 isNull()
         );
-        verifyNoInteractions(deferredMutationLedger);
     }
 
     // ---------------------------------------------------------------------------------
@@ -212,7 +203,7 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 [ERROR] /C.java:[3,3] incompatible types: double cannot be converted to Float
                 """;
 
-        agent.tryDeferRejectedMutation(ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+        agent.recordCompileDiagnostics(ctxWithOneMutation(), probeWithStderr(stderr));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<String>> shapesCaptor = ArgumentCaptor.forClass(List.class);
@@ -238,7 +229,7 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 [ERROR] /A.java:[10,1] cannot find symbol
                 [ERROR]   symbol:   class LoanNotFoundException
                 """;
-        agent.tryDeferRejectedMutation(ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+        agent.recordCompileDiagnostics(ctxWithOneMutation(), probeWithStderr(stderr));
         verify(behaviourLogger).blockerExtractionOutcome(
                 anyString(), anyString(), anyString(),
                 eq("DEFERRED"),
@@ -250,7 +241,7 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
     @Test
     void firstUnknownLine_absentOnRefusedAuthorError() {
         String stderr = "[ERROR] /A.java:[1,1] incompatible types: int cannot be converted to String\n";
-        agent.tryDeferRejectedMutation(ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+        agent.recordCompileDiagnostics(ctxWithOneMutation(), probeWithStderr(stderr));
         verify(behaviourLogger).blockerExtractionOutcome(
                 anyString(), anyString(), anyString(),
                 eq("REFUSED_AUTHOR_ERROR"),
@@ -262,7 +253,7 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
     @Test
     void firstUnknownLine_absentOnNoDeferrable() {
         String stderr = "[ERROR] -> [Help 1]\n";
-        agent.tryDeferRejectedMutation(ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+        agent.recordCompileDiagnostics(ctxWithOneMutation(), probeWithStderr(stderr));
         verify(behaviourLogger).blockerExtractionOutcome(
                 anyString(), anyString(), anyString(),
                 eq("NO_DEFERRABLE"),
@@ -282,8 +273,8 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 [ERROR] /C.java:[30,9] incompatible types: int cannot be converted to String
                 """;
 
-        CycleContextData result = agent.tryDeferRejectedMutation(
-                ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+        CycleContextData result = agent.recordCompileDiagnostics(
+                ctxWithOneMutation(), probeWithStderr(stderr));
 
         assertThat(result.lastAuthorErrors()).isNotNull();
         assertThat(result.lastAuthorErrors().diagnostics()).hasSize(2);
@@ -302,8 +293,8 @@ class EvaluationAgentBlockerExtractionOutcomeTest {
                 [ERROR]   location: class Loan
                 """;
 
-        CycleContextData result = agent.tryDeferRejectedMutation(
-                ctxWithOneMutation(), probeWithStderr(stderr), 0.5);
+        CycleContextData result = agent.recordCompileDiagnostics(
+                ctxWithOneMutation(), probeWithStderr(stderr));
 
         assertThat(result.lastAuthorErrors()).isNull();
     }

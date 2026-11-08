@@ -7,7 +7,7 @@ default in the code, and the value `application.yml` sets when it sets one (prof
 What a key does is the first sentence of the comment on the field that reads it, so it is written once, in
 the code.
 
-118 keys.
+113 keys.
 
 ## `autobuilder.bootstrap`
 
@@ -148,15 +148,6 @@ the code.
 |---|---|---|---|---|
 | `autobuilder.memory.sms.async` | Whether each cycle is written to the graph's memory on a background thread instead of inside the cycle. | `true` |  | `SmsCycleIngestor` |
 
-## `autobuilder.mutation`
-
-| Key | What it does | Default in code | application.yml | Read by |
-|---|---|---|---|---|
-| `autobuilder.mutation.deferred.maxOpen` | The most deferred mutations kept waiting for a later restage. | `20` |  | `DeferredRestageScheduler` |
-| `autobuilder.mutation.deferred.refocusCooldownCycles` | Cycles to wait after a refocus before another deferred mutation may pull the loop to its subgoal. | `3` |  | `DeferredRestageScheduler` |
-| `autobuilder.mutation.deferred.refocusThreshold` | The combined score above which a deferred mutation for another subgoal may refocus the loop onto it. | `0.6` |  | `DeferredRestageScheduler` |
-| `autobuilder.mutation.deferred.ttlCycles` | Cycles a deferred mutation is kept before it expires. | `50` |  | `DeferredRestageScheduler` |
-
 ## `autobuilder.parser`
 
 | Key | What it does | Default in code | application.yml | Read by |
@@ -257,7 +248,7 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `file.base-path` | The target directory: its bootstrap/, output/, meta/ and logs/ (see the functional documentation). | (empty) | `${FILE_BASE_PATH:}` | `AutobuilderController`, `BootGate`, `BrokenTestQuarantine`, `CompileProbeService`, `DeferredMutationRestager`, `FileService`, `FileWatcherService`, `LogConsultation`, `MergeAgent`, `PackageGate`, `RetentionPolicy`, `TargetCatalog`, `TestRunGate`, `ValueObservationProbe` |
+| `file.base-path` | The target directory: its bootstrap/, output/, meta/ and logs/ (see the functional documentation). | (empty) | `${FILE_BASE_PATH:}` | `AutobuilderController`, `BehaviourHistory`, `BootGate`, `BrokenTestQuarantine`, `CompileProbeService`, `FileService`, `FileWatcherService`, `LogConsultation`, `MergeAgent`, `PackageGate`, `RetentionPolicy`, `TargetCatalog`, `TestRunGate`, `ValueObservationProbe` |
 
 ## `llm.api`
 

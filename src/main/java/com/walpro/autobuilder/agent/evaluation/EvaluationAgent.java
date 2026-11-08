@@ -22,7 +22,6 @@ import com.walpro.autobuilder.core.merge.MergeRollbackPoint;
 import com.walpro.autobuilder.core.merge.MergeRollbackService;
 import com.walpro.autobuilder.core.merge.PackageFragmentationReport;
 import com.walpro.autobuilder.core.mutation.BlockerExtractor;
-import com.walpro.autobuilder.core.mutation.DeferredMutationLedger;
 import com.walpro.autobuilder.core.service.FileService;
 import com.walpro.autobuilder.core.lifecycle.BasicSignals;
 import com.walpro.autobuilder.core.lifecycle.ChannelRequest;
@@ -89,11 +88,6 @@ public class EvaluationAgent implements ExecutionAgent {
     @Setter
     @Autowired(required = false)
     private CompileFixInjectionRegistrar compileFixInjectionRegistrar;
-
-    /** T4-BE: optional deferred-mutation ledger — wired in production, null in unit tests. */
-    @Setter
-    @Autowired(required = false)
-    private DeferredMutationLedger deferredMutationLedger;
 
     /** T2-EY: run-level record of standing rejections — wired in production, null in unit tests. */
     @Setter
@@ -366,14 +360,10 @@ public class EvaluationAgent implements ExecutionAgent {
                     GoalProgressState.NOT_EVALUATED,
                     "Compile probe failed — see ctx.lastProbeOutcome() stderrTail.", null);
             context = context.withCriteriaAssessments(List.of());
-            // T4-BE: when the rejection is fully attributable to extractable blockers, persist
-            // the mutation to the deferred-mutation ledger so a later merge that resolves the
-            // blockers can re-stage it instead of letting the implementation work die with
-            // the rollback. Partial / unexplained stderr → skip; never defer something we
-            // can't reason about.
-            // T2-DT: same call also threads structured author-error diagnostics onto context
-            // so the next cycle's evolution prompt can render the PREVIOUS COMPILE ERRORS block.
-            context = tryDeferRejectedMutation(context, probeResult, scoring.globalScore());
+            // T2-DT: thread structured author-error diagnostics onto context so the next cycle's
+            // evolution prompt can render the PREVIOUS COMPILE ERRORS block. (T5-BU: the T4-BE
+            // deferral of the rejected mutation is deleted -- it never restaged in 581 runs.)
+            context = recordCompileDiagnostics(context, probeResult);
         } else if (probeResult != null && probeResult.outcome().result() == BuildResult.FRAGMENTATION_REJECTED) {
             // T4-BH: probe-time package-fragmentation rejection — REJECT without LLM evaluation
             // and without deferring to the ledger (the fragmentation is structural; deferring
@@ -679,19 +669,16 @@ public class EvaluationAgent implements ExecutionAgent {
     }
 
     /**
-     * T4-BE / T4-BF: extract a structured {@link BlockerExtractor.Outcome} from the probe
-     * stderr and persist the rejected mutation to the deferred-mutation ledger when the
-     * result is {@code DEFERRED}. Every call emits one {@code blocker_extraction_outcome}
-     * behaviour event regardless of the outcome — that's the canonical post-hoc surface
-     * for "why didn't this rejection make it into the ledger?". Best-effort: failure to
-     * defer must never block the rejection itself.
+     * T4-BF / T2-DT: extract a structured {@link BlockerExtractor.Outcome} from the probe stderr
+     * of a rejected mutation and carry what the next prompts need: the classified author errors
+     * and the build tool's own diagnostic. Every call emits one {@code blocker_extraction_outcome}
+     * behaviour event, whatever the outcome.
      */
     // T4-BF: package-private for direct unit-testing of the four Outcome.Result paths.
     // T2-DT: returns the updated context so the caller can thread Outcome.authorErrors onto
     // the cycle. Always returns a context (input unchanged on early exits).
-    CycleContextData tryDeferRejectedMutation(CycleContextData context,
-                                              CompileProbeService.ProbeResult probeResult,
-                                              Double heuristicScore) {
+    CycleContextData recordCompileDiagnostics(CycleContextData context,
+                                              CompileProbeService.ProbeResult probeResult) {
         if (probeResult == null || probeResult.outcome() == null) return context;
         String stderr = probeResult.outcome().stderrTail();
         if (stderr == null || stderr.isBlank()) return context;
@@ -724,23 +711,6 @@ public class EvaluationAgent implements ExecutionAgent {
             }
         }
 
-        if (outcome.result() != BlockerExtractor.Outcome.Result.DEFERRED) return context;
-        if (deferredMutationLedger == null) return context;
-        if (context.evolutionOutcome() == null
-                || context.evolutionOutcome().addedOrChangedFiles() == null
-                || context.evolutionOutcome().addedOrChangedFiles().isEmpty()) return context;
-
-        try {
-            deferredMutationLedger.defer(
-                    context,
-                    context.evolutionOutcome().addedOrChangedFiles(),
-                    outcome.blockers(),
-                    null,                  // LLM score — no LLM call on compile-probe rejection
-                    heuristicScore
-            );
-        } catch (Exception e) {
-            log.warn("T4-BE: deferral failed for cycle={}: {}", context.cycleName(), e.getMessage());
-        }
         return context;
     }
 

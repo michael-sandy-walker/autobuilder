@@ -18291,7 +18291,40 @@
    "terminal": "objective-met",
    "total_cycles": "19",
    "toycase": "labelmaker-pantry v2"
+  },
+  "2026-11-08_10-33-08": {
+   "build": "739569a3-dirty",
+   "clauses_closed_vs_control": "0",
+   "cost_readout": "build=180356ms/19 package-gate=16880ms/2 sms-commit=8848ms/7 sms-batch-build=4963ms/7 boot-gate=566ms/2 sms-lineage-stamp=426ms/7 sms-cycle-merge=284ms/7 sms-cycle-link=218ms/6",
+   "criteria_authored": "29",
+   "criteria_elaboration": "1",
+   "criteria_executable_count": "0",
+   "criteria_executable_pct": "0",
+   "criteria_ungroundable_input": "0",
+   "drift_tail_cycles": "3",
+   "median_cycle_seconds": "172",
+   "merges": "4",
+   "peaked_at_cycle": "cycle-1794131565441 (5/8)",
+   "preserved_source": "loop-preserved",
+   "recorded": "2026-11-08",
+   "repeat_proposals": "0",
+   "repeats_refused": "0",
+   "run_duration_min": "14.1",
+   "score_delta": "+0",
+   "smoke": "SMOKE: 9/11",
+   "smoke_failed_checks": "6,11",
+   "smoke_pass": 9,
+   "smoke_preserved": "SMOKE: 9/11",
+   "smoke_strict": "9/11 discounted=none",
+   "smoke_total": 11,
+   "start_cleared_tree": "no",
+   "start_mode": "ADOPT_PROJECT",
+   "start_tree": "FOREIGN",
+   "target": "edit-hunks-withheld",
+   "terminal": "GOAL_FULFILLED",
+   "total_cycles": "8",
+   "toycase": "edit-hunks-withheld v2"
   }
  },
- "updated": "2026-11-07"
+ "updated": "2026-11-08"
 }

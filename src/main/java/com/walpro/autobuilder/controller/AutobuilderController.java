@@ -824,13 +824,19 @@ public class AutobuilderController {
         // Through the service, not straight to the RewindService: the restore is only half of a
         // rewind. The carried cycle context has to be settled too, or the next tick re-processes
         // the result of the cycle that was just backed out of and pauses the loop again.
-        var outcome = autobuilderService.rewindAsOperator(target, mode);
-        if (outcome.isEmpty()) {
-            return ResponseEntity.status(409).body(Map.of("ok", false, "message",
-                    "A cycle is running — could not take the control-loop lock. Retry, or "
-                            + "POST /autobuilder/pause first."));
+        // T4-EL: a cycle in progress no longer refuses the request -- it is queued and performed at
+        // the next cycle boundary, which the rewind_performed event then reports.
+        var request = autobuilderService.requestOperatorRewind(target, mode);
+        if (request.queued()) {
+            return ResponseEntity.accepted().body(Map.of("ok", true, "queued", true, "toCycleId", target,
+                    "message", "A cycle is running; the rewind to " + target
+                            + " is queued and happens when it ends."));
         }
-        var result = outcome.get();
+        if (request.result() == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("ok", false, "message", "Checkpointing is not enabled."));
+        }
+        var result = request.result();
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("ok", result.performed());
         body.put("toCycleId", result.toCycleId());

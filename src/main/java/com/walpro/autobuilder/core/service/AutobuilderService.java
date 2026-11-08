@@ -150,6 +150,26 @@ public class AutobuilderService implements CheckpointableState {
     private final ReentrantLock lock = new ReentrantLock();
 
     /**
+     * T4-EL: an operator rewind that arrived while a cycle held the lock, performed at the start of
+     * the next tick. A second request before then replaces the first: the operator's latest choice
+     * of where to go back to is the one that counts.
+     */
+    private final java.util.concurrent.atomic.AtomicReference<QueuedRewind> queuedOperatorRewind =
+            new java.util.concurrent.atomic.AtomicReference<>();
+
+    private record QueuedRewind(String toCycleId, com.walpro.autobuilder.core.checkpoint.CacheMode mode) {
+    }
+
+    /**
+     * T4-EL: what became of an operator's rewind request -- performed at once ({@code result} set),
+     * queued for the next cycle boundary ({@code queued}), or not possible here (neither: no
+     * checkpointing in this context).
+     */
+    public record OperatorRewindRequest(com.walpro.autobuilder.core.checkpoint.RewindService.Result result,
+                                        boolean queued) {
+    }
+
+    /**
      * Executed context (bootstrap or normal cycle).
      * May be {@code null} before the first successful run.
      */
@@ -985,6 +1005,11 @@ public class AutobuilderService implements CheckpointableState {
         // nothing to work towards, and the planner's fallback would invent goals that do not exist.
         if (startRefused || awaitingGoal || importPending()) return;
 
+        // T4-EL: a rewind the operator asked for while the previous cycle ran. Done here, at the
+        // boundary, under the lock this tick already holds -- and then the tick ends, so the next one
+        // starts from the restored state exactly as an immediate operator rewind would leave it.
+        if (performQueuedOperatorRewind()) return;
+
         // T1-FL: a breaker-caused pause is a suspension, not a terminal. The breaker's timed
         // open (T1-FD) already encodes when the next attempt is allowed; once its cooldown
         // elapses the pause episode is over — otherwise the self-recovering breaker is frozen
@@ -1746,6 +1771,42 @@ public class AutobuilderService implements CheckpointableState {
             }
             return result;
         });
+    }
+
+    /**
+     * T4-EL: the operator's rewind as the endpoint asks for it. Performed at once when the loop is
+     * between cycles (idle, paused, or the brief gap between ticks); otherwise QUEUED and performed
+     * at the start of the next tick. Before this, a request made while a cycle ran was refused, and
+     * in a run whose ticks follow each other within a millisecond (the {@code fast} profile every
+     * preflight run uses) that was every request: a 3-second retry loop failed for four minutes, and
+     * the refusal's advice -- pause first -- ends a preflight run as an operator stop (2026-11-08).
+     */
+    public OperatorRewindRequest requestOperatorRewind(String toCycleId,
+                                                       com.walpro.autobuilder.core.checkpoint.CacheMode mode) {
+        if (rewindService == null) return new OperatorRewindRequest(null, false);
+        var now = rewindAsOperator(toCycleId, mode);
+        if (now.isPresent()) return new OperatorRewindRequest(now.get(), false);
+        QueuedRewind previous = queuedOperatorRewind.getAndSet(new QueuedRewind(toCycleId, mode));
+        log.info("T4-EL: operator rewind to {} queued for the next cycle boundary{}", toCycleId,
+                previous == null ? "" : " (replaces the queued rewind to " + previous.toCycleId() + ")");
+        return new OperatorRewindRequest(null, true);
+    }
+
+    /** T4-EL: performs a queued operator rewind, if any; true when the loop was moved back. Caller holds the lock. */
+    private boolean performQueuedOperatorRewind() {
+        QueuedRewind queued = queuedOperatorRewind.getAndSet(null);
+        if (queued == null || rewindService == null) return false;
+        String at = context != null && context.cycleName() != null ? context.cycleName() : queued.toCycleId();
+        var result = rewindService.rewindTo(queued.toCycleId(), queued.mode(), "operator", at);
+        if (!result.performed()) {
+            log.warn("T4-EL: the queued operator rewind to {} was refused at the boundary: {}",
+                    queued.toCycleId(), result.refusedBecause());
+            return false;
+        }
+        settleAfterRewind(context, result.carriedContext(), true);
+        log.warn("T4-EL: queued operator rewind performed at the cycle boundary -- back to {} from {}",
+                queued.toCycleId(), at);
+        return true;
     }
 
     /**

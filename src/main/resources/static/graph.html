@@ -961,6 +961,10 @@ function openingOf(text) {
 }
 function narrateTreeChanges(goals) {
   if (!state.sawFirstSnapshot || !TTS.isEnabled()) return;
+  // T4-EL: a rewind restores goal statuses in one go. Those changes ARE the rewind, which says so
+  // itself; narrated, they filled the front queue and pushed "Rewound to ..." out of it (2026-11-08:
+  // the ghost showed, nothing was heard).
+  if (state.quietTreeUntil && Date.now() < state.quietTreeUntil) return;
   const added = [], changed = {};
   for (const g of goals) {
     if (!g || (g.type === 'GOAL' && !g.parentId)) continue;   // the root: said once as "The goal", closed by "Goal fulfilled"
@@ -2270,6 +2274,12 @@ async function doRewind() {
       out.innerHTML = `<span class="bad">Refused: ${escapeHtml(d.refusedBecause || d.message || ('HTTP ' + res.status))}</span>`;
       return;
     }
+    // T4-EL: a cycle was running, so the rewind waits for its end; the rewind_performed event
+    // (ghost + voice) reports it when it happens.
+    if (d.queued) {
+      out.innerHTML = `<span class="warn">Queued: ${escapeHtml(d.message || ('rewind to ' + d.toCycleId))}</span>`;
+      return;
+    }
     // The failures list is shown whenever it is non-empty — a rewind that restored less than it
     // claims has to say so here, not only in the log.
     const failures = (d.failures || []);
@@ -2358,6 +2368,10 @@ async function stepTo(direction) {
     if (!res.ok || d.ok === false) {
       showStepHint('<span style="color:#fca5a5">Refused: '
           + escapeHtml(d.refusedBecause || d.message || ('HTTP ' + res.status)) + '</span>', 9000);
+    } else if (d.queued) {
+      // T4-EL: performed when the running cycle ends; the rewind ghost and voice say when.
+      showStepHint('<span style="color:#fcd34d">Queued</span> — ' + escapeHtml(d.message || ''), 9000);
+      toast('Rewind queued for the end of this cycle', 'ok');
     } else {
       const failures = d.failures || [];
       showStepHint('<span style="color:#86efac">At ' + escapeHtml(d.toCycleId) + '</span> — '
@@ -3421,6 +3435,7 @@ function crop(s, n) {
     addChip(env);
     // HUD updates
     if (env.event === 'rewind_performed') {
+      state.quietTreeUntil = Date.now() + 8000;   // the restored statuses are the rewind, not news
       // Everything the HUD says about "now" described the path just backed out of. The cycle row
       // names the point the loop stands at until the next cycle_start advances it; subgoal and mode
       // are re-read from the loop rather than left showing the abandoned path's.

@@ -413,7 +413,7 @@
 - [s] `T4-AQ` — Stub-body detection and automatic follow-up injection
 - [>] `T4-AV` — LLM coherence reviewer
 - [>] `T4-AW` — Output reviewer SPI
-- [>] `T4-BK` — Partial restage of multi-file deferred mutations
+- [o] `T4-BK` — Partial restage of multi-file deferred mutations
 - [>] `T4-BL` — Package-hierarchy refactor recommendation on fragmentation conflict
 - [>] `T4-BN-2` — Incremental javac probe + test-compile coverage
 - [o] `T4-BQ` — Type-reference closure walker
@@ -489,7 +489,7 @@
 
 - [x] `T5-BS` -- an elaborate documentation, one TECHNICAL and one FUNCTIONAL, that a newcomer can work from; an existence check keeps them true; where they live and who the functional one is for are the user's to decide. Filed 2026-10-01; CLOSED 2026-10-03 after the user's read-through (configuration reference now described from code comments).
 - [x] `T5-BT` -- the measured system is the default system: 31 A/B-or-just-in-case switches removed with their behaviour kept on, preflight's five launch flags and admission cap 6 made defaults, the inner fix chain bounded by repeated writes. Filed and CLOSED 2026-10-04.
-- [~] `T5-BU` -- the deferred-mutation restage (T4-BE) never restaged anything (0 in 581 runs; 85 cleared, 85 dropped for drift) -- delete it, keep the blocker diagnostics; filed 2026-11-08
+- [x] `T5-BU` -- the deferred-mutation restage (T4-BE) never restaged anything (0 in 581 runs; 85 cleared, 85 dropped for drift) -- delete it, keep the blocker diagnostics; filed and CLOSED 2026-11-08 (`7cb7b406`)
 - [x] `T5-BR` — make Autobuilder modular enough that a ticket's change lands in a small extractable closure; measured by scripts/module_closures.py (baseline 17% of lines in small Spring-free closures; 145 of 478 classes with a closure > 50). Filed 2026-09-25. CLOSED 2026-09-26 (18%; first extraction = the T3-CB rule home, run as criterion-status)
 - [x] `T5-BQ` — Mission-control goals field showed only active/done; subsumed (where most status changes land) was hover-only. Now shown when non-zero. CLOSED 2026-09-23
 - [x] `T5-BH` — Disposition pass on `analysis/pattern/` (keep/recalibrate/delete per rule); gated on T6-D, now unblocked
@@ -501,7 +501,7 @@
 - [s] `T5-V` — Store probe `BuildOutcome` on `CycleContextData`; unify pre- and post-merge build prompt…
 - [s] `T5-W` — Migrate skeleton resolver + symbol extractor (extractor half DELETED as dead code 2026-07-26; resolver half owned by T4-AN-7)
 - [>] `T5-AA` — Cross-cycle aggregation of `REFUSED_UNKNOWN` author-error shapes
-- [>] `T5-AB` — Telemetry-driven `mutation.deferred.ttlCycles` tuning
+- [o] `T5-AB` — Telemetry-driven `mutation.deferred.ttlCycles` tuning
 - [x] `T5-A` — Fix `GraphQueryService` attempt ID lookup + diagnostic coverage
 - [x] `T5-D` — Persist scope assessments to Neo4j
 - [x] `T5-E` — Expose last scope assessment explicitly in OrchestrationSnapshot

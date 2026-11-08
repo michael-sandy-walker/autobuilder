@@ -87,3 +87,5 @@ this session was building the case, and archived them under `/tmp/t4ej-*/archive
 `~/.autobuilder/run-archive` (copied over at the user's word, byte-compared). Before launching, list `ps -eo pid,args`
 for a live preflight from ANY agent and check `data/<t>/` for state you did not leave; after a handoff, look for run
 archives outside the run archive and for builds marked `-dirty` (uncommitted code under test).
+
+**2026-11-08 -- `post_adopted_goal.sh` started AFTER the adoption line waits for the log's NEXT write.** It only accepts a log newer than its own start (the guard against posting into the previous run's log), so begun once `T4-CQ: adopted` and `Started AutobuilderApplication` are already written, it sat until an unrelated SSE line touched the log -- 10 minutes of a 30-minute cap (edit-hunks-withheld `2026-11-08_10-33-08`). Start it right after launching preflight, before the JVM writes those lines.

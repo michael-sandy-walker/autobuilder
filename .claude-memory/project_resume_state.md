@@ -11,7 +11,15 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-07 (Opus 5.5, session 28) -- T4-EJ CLOSED: REFERENCE USE MEASURED ON A NEW PAIR, 3/3 vs 0/2 -- START HERE
+## 2026-11-07/08 (Opus 5.5, session 29) -- T4-EK FILED; DEFERRED-LIST SWEEP (18 CLOSED); T5-BU: THE RESTAGE DELETED -- START HERE
+
+- **T4-EK filed** (user): a project the loop did not build becomes first-class -- seed, goals, criteria, history reverse-engineered (criteria must pass on the tree AND fail on it gutted; measured against stripped loop-built projects). **The user parked it** ("wait with T4-EK for now") to work older tickets first.
+- **Deferred-list premise sweep:** 14 closed whose bodies already said superseded/obsolete (`3dd20644`), then T2-BZ [s] (layer D never built; 0 of 407 archived artifacts carry its defect), T4-BQ [o], T2-BB [n], structural stack's re-entry written down (`a6343210`). Deferred 40 -> 21 after T5-BU.
+- **T5-BU built and closed (`7cb7b406`):** the T4-BE restage never restaged in 581 runs (85 cleared, 85 dropped for drift; the ledger hashed the proposed content -- 5 false drops, 28 real). Suite 4340/0/0/16; field edit-hunks-withheld `2026-11-08_10-33-08` GOAL_FULFILLED 9/11 (known failing set {6,11}); no compile rejection occurred in it, so the DoD's field clause rests on the incident-shape test (stated on the ticket). T4-BK, T5-AB [o].
+- **Still open with the user from the sweep:** `GoalEntity.expectedArtifacts` is a dead field (T3-B residue, code change); T1-CK needs a measured re-entry or a decline; T4-DE's two 2026-09-30 notes contradict each other; T4-EJ's later notes sit under T4-CF in roadmap.md (~6895-6905) -- move on the user's word.
+- `data/edit-hunks-withheld` holds today's run; the previous state is in `~/.autobuilder/edit-hunks-withheld-after-2026-11-04_16-12-13`. Nothing is running.
+
+## 2026-11-07 (Opus 5.5, session 28) -- T4-EJ CLOSED: REFERENCE USE MEASURED ON A NEW PAIR, 3/3 vs 0/2
 
 - **New toy pair agreed with the user:** `labelmaker` (built BY THE LOOP from its seed, run `2026-11-07_12-25-17` GOAL_FULFILLED 11/11) frozen code-only as the source of `labelmaker-pantry` (pantry hand-written; withheld label spec; yardstick `scripts/smoke_capability_reference.sh`). Fair-case probe `scripts/t4ej_fair_case_probe.py`: 0/5 without the reference; at temperature 0 all five answers byte-identical (measured at the user's prompting -- do not assume temperature behaviour, try it).
 - **Codex ran v1 (5 runs, inconclusive) and v2 (2 ref + 1 ctl) in parallel** and committed `a930013b` (closure pauses when it would demand a test all of `src/test/**` forbids) + `a079dbe4` (v2 fixture). Its archives are in `/tmp/t4ej-*`, not the run archive. I verified them, reviewed the guard, suite 4389/0/0/16, and ran ref `19-09-14` (10/10, asked, 4/4 withheld) + ctl `19-25-44` (6/10, 1/4). Detail on T4-EJ.

@@ -13,15 +13,15 @@ Restamp a line the day you re-check it against its file.
 - Build `mvn clean install`, test `mvn test -Dtest=C#m`; targets `data/<name>/`, runs pick by `PREFLIGHT_TARGET=x`; goal stack `meta/GoalStack.json`; profiles `test`, `dev-local`, `dev-auto`, `fast`
 - **`.claude-memory/` IS the loading memory** — checkout/branch/cherry-pick touching it mutates live memory; commit first. Tiers T1 correctness .. T6 harness
 ## Roadmap
-- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-07)
-- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-07)
+- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-08)
+- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-08)
 - `tier_definitions.md` — tier meanings. (reviewed 2026-09-08)
 ## Meta / Process (YOU+ME work, not the product)
 - `meta_process.md` — how YOU+ME divide/sequence/staff work; "Model" = which Claude runs a session. (reviewed 2026-10-20)
 ## Project insights
 Direction and orientation:
 - `project_session_agenda.md`: 2026-08-23 REORDER section is live; S1-S6 reasoning only; never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state; only the NEWEST block has the entry marker. Read before quoting run numbers. (reviewed 2026-11-07)
+- `project_resume_state.md`: latest session/run state; only the NEWEST block has the entry marker. Read before quoting run numbers. (reviewed 2026-11-08)
 - `project_wave2_structure.md`: wave 2 layers; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: goal = a loop with a self-model it consults before acting; "substrate or patch?". (reviewed 2026-09-08)
 - `project_living_project_vision.md`: a project keeps taking inputs (seed = first); OFFSPRING code+graph become knowledge. Before input/merge/import work. (reviewed 2026-10-30)
@@ -65,7 +65,7 @@ False completions and diagnosis lenses:
 - `project_local_first_constraint.md`: local execution is HARD; no hosted-model upgrade. (reviewed 2026-07-09)
 - `project_meta_concrete_target_hint_idea.md`: historical; only if reviving a non-LLM concrete-target hint. (reviewed 2026-07-09)
 Operations:
-- `project_run_lifecycle_runbook.md`: start/stop/monitor runs, watcher traps, `early_stop.sh`, `bundle.py`, versioned toy cases; another agent may run in parallel. (reviewed 2026-11-07)
+- `project_run_lifecycle_runbook.md`: start/stop/monitor runs, watcher traps, `early_stop.sh`, `bundle.py`, versioned toy cases; another agent may run in parallel. (reviewed 2026-11-08)
 - `project_log_and_backup_conventions.md` (+ superseded `project_tests_rotate_live_logs.md`): current run = unsuffixed `logs/behaviour.ndjson`, concatenated pretty JSON; tests use a scratch `FILE_BASE_PATH`. (reviewed 2026-09-08)
 ## Feedback
 How to work:

@@ -34,7 +34,7 @@
 - [x] `T1-D` — Reset no longer wipes the graph — lineages survive as history (SHIPPED 2026-07-26; `purgeAll()` kept as a deliberate wipe)
 - [o] `T1-BL` — T2-BM veto must use criteria progress gate
 - [o] `T1-BM` — `SubGoalFulfillmentHeuristic`
-- [>] `T1-CK` — SUBGOAL_EXHAUSTED with partial criteria met should trigger graduation rather than GIVEN_UP
+- [s] `T1-CK` — SUBGOAL_EXHAUSTED with partial criteria met should trigger graduation rather than GIVEN_UP (subsumed 2026-11-08: T4-BP residue path, T2-EI retry budget, T2-EJ divide)
 - [s] `T1-CO` — Split and demoted
 - [x] `T1-FQ` — The T4-BB missing-member steering block never matched `location: variable v of type T` — 89% of the real diagnostic shape (806/905) silently skipped
 - [x] `T1-FP` — `LLMClient` read timeout fixed per attempt — escalate it across retries so slow generations complete instead of breaker-pausing

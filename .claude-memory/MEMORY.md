@@ -100,6 +100,7 @@ Evidence discipline:
 - `feedback_verify_diff_is_substantive.md`: prove which input now yields different output. (reviewed 2026-09-08)
 - `feedback_verify_at_decision_timestamp.md`: diagnose against state AT decision time. (reviewed 2026-07-09)
 - `feedback_activity_not_progress.md`: a mechanism firing is not helping; check the outcome. (reviewed 2026-07-09)
+- `feedback_check_a_mechanisms_last_event.md`: count a mechanism's FINAL-step event over the archive; a test mocking that step proves wiring only (T4-BE: 0 restages in 581 runs). (reviewed 2026-11-08)
 - `feedback_replay_over_batches.md`: validate by deterministic replay; a DoD names its instrument. (reviewed 2026-10-20)
 - `feedback_measure_before_widening_a_working_rule.md`: a gap in a run that still closes is to measure, not widen. (reviewed 2026-10-20)
 - `feedback_short_field_run_after_context_change.md`: short live run after any cycle-context/persisted-record change. (reviewed 2026-07-30)

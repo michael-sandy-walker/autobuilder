@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-07/08 (Opus 5.5, session 29) -- T4-EK FILED; DEFERRED-LIST SWEEP (18 CLOSED); T5-BU: THE RESTAGE DELETED -- START HERE
+## 2026-11-08 (Opus 5.5, session 30) -- T5-BO LISTENED TO WITH THE USER: FILES, GOALS AND THE LIVE TREE NOW SPOKEN AND DRAWN; REWIND CLAUSE BLOCKED BY NEW T4-EL -- START HERE
+
+- **T5-BO:** five edit-hunks-withheld runs (`2026-11-08_15-30-09` .. `_17-19-37`; 9/11, 9/11, 11/11, 11/11 objective-met, GOAL_FULFILLED) with the user listening in Brave; findings and fixes appended to the ticket. Narration now names the file being edited and merged, says the goal, new subgoals (by headline) and status changes, and the run length at fulfilment; the goal tree reaches the page on every save (`GoalTreePersistedEvent`), not only at cycle end; static files carry `Cache-Control: no-cache`. Suite 4344/0/0/16, `scripts/test_speakable.py` 21. **The code is NOT committed** -- awaiting the user's word; the subgoal headline rule is checked offline only.
+- **T4-EL filed:** an operator rewind cannot take the lock in a preflight run (`fast` profile, 1 ms between cycles; pausing ends the run). T5-BO stays open on its rewind clause alone.
+- Session-29 loose ends (`expectedArtifacts`, T1-CK, T4-DE, T4-EJ notes) were closed in `565d3d03`/`ec46b734`. Measured, not causes: Firefox's slow clicks are Firefox-only (endpoints <= 168 ms; one tab). Speech takes 2-9 s per line under load.
+- `data/edit-hunks-withheld` holds the last run; earlier states in `~/.autobuilder/edit-hunks-withheld-after-2026-11-08_*`. Nothing is running.
+
+## 2026-11-07/08 (Opus 5.5, session 29) -- T4-EK FILED; DEFERRED-LIST SWEEP (18 CLOSED); T5-BU: THE RESTAGE DELETED
 
 - **T4-EK filed** (user): a project the loop did not build becomes first-class -- seed, goals, criteria, history reverse-engineered (criteria must pass on the tree AND fail on it gutted; measured against stripped loop-built projects). **The user parked it** ("wait with T4-EK for now") to work older tickets first.
 - **Deferred-list premise sweep:** 14 closed whose bodies already said superseded/obsolete (`3dd20644`), then T2-BZ [s] (layer D never built; 0 of 407 archived artifacts carry its defect), T4-BQ [o], T2-BB [n], structural stack's re-entry written down (`a6343210`). Deferred 40 -> 21 after T5-BU.

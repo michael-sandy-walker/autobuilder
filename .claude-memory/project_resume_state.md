@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-09 (Opus 5.5, session 31) -- T5-BI INVENTORIED, BECAME T4-EM; THE NARRATOR BUILT, REPLAYED, FIELD-RUN AND CLOSED -- START HERE
+## 2026-11-09 (Opus 5.5, session 32) -- T4-EK SLICE (A) BUILT AND RUN: CRITERIA RECALL 22/23 ON STRIPPED FIRESTARTER; CODE UNCOMMITTED -- START HERE
+
+- **Agreed with the user** (ticket, committed `70610d95`): firestarter (not labelmaker), gutting by STUBBING method bodies, comparison rule stated before the run (yardstick recall >= 12/23).
+- **Built, UNCOMMITTED (code commit needs the user's word):** `CapabilityStub`, `ClaimProposer`, `ReverseEngineeringService`, `POST /autobuilder/reverse-engineering`, `BootGate.serve/Served`; `scripts/t4ek_compare.py`. Suite 4374/0/0/17.
+- **Runs** (held ASK run context on a scratch host, ~4.5 min each): run 1 20/23 after fixing two defects of mine (compare predicate, 6-request cap); run 2 22/23, only title>120 missed (model repetition loop, both runs). 0 not-held claims in 104. Accounts in `~/.autobuilder/t4ek-slice-a/`.
+- **Finding to discuss:** the cut is horizontal (layers) while the seed is vertical (resources); every claim crosses 2-4 capabilities, so the gutted check never dropped a claim and cannot check attribution. Checkpoint clause not exercisable (no served pre-Loans snapshot). Three open questions on the ticket. Nothing is running.
+
+## 2026-11-09 (Opus 5.5, session 31) -- T5-BI INVENTORIED, BECAME T4-EM; THE NARRATOR BUILT, REPLAYED, FIELD-RUN AND CLOSED
 
 - **Inventory** (claude.ai/artifact/QAJhasGF8q8g2CgqjJrvZ2, with the design options): about 240 spoken lines over six runs, all template; about 127 model-written reasons never reached a person. T5-BI became **T4-EM** at the user's word; the user chose a narrator over its OWN model channel (`llm.narrator.*`, never inherited from `llm.api.*`, same `qwen3.8` today), narrator alone first, the listener line in each answer later.
 - **Built `f66273a0`:** `NarratorChannel`, `CycleRecord` + `CycleNarrator`, `cycle_narrated`, the evaluator's and planner's own words in the stream, the page speaks the telling and silences the templates it covers. Suite 4364/0/0/17.

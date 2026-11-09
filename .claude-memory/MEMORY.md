@@ -79,6 +79,7 @@ How to work:
 - `feedback_operator_reviews_ports.md`: a ported loop-built solution gets a user review packet first. (reviewed 2026-09-27)
 - `feedback_process_apart_from_product.md`: how we work lives in meta_process.md + process/, never src/ or tickets. (reviewed 2026-09-27)
 - `feedback_tickets_direct_loop_as_toy_cases.md`: implement tickets directly; loop measured on VERSIONED toy cases. (reviewed 2026-09-27)
+- `feedback_design_for_the_class_not_the_case.md`: enumerate abstract kinds, one pipeline + adapters; toy cases only measure; offer name SETS. (reviewed 2026-11-09)
 - `feedback_local_means_no_call_cost.md`: token cost is free; wall-clock, context and memory are not. (reviewed 2026-09-27)
 - `feedback_never_edit_a_running_script.md`: never edit preflight.sh or its inputs mid-run (git ops count). (reviewed 2026-09-24)
 - `feedback_no_heavy_mvn_beside_a_live_run.md`: no suite/tests/graph queries beside a live run; pgrep the driver first. (reviewed 2026-11-03)

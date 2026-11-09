@@ -17,6 +17,7 @@ metadata:
 - **T4-EL closed:** an operator rewind during a cycle is queued and performed at the next tick (202 instead of 409). Field `2026-11-08_17-55-39`: one request, performed at the boundary, run continued to GOAL_FULFILLED 9/11. The rewind's pop-up was seen; its voice line was NOT heard -- probable cause (tree-change lines pushing it out of the front queue) quieted for 8 s after a rewind, not yet heard. Suite 4349/0/0/16.
 - Measured, not causes: Firefox's slow clicks are Firefox-only; speech takes 2-9 s per line under load.
 - `data/edit-hunks-withheld` holds the last run; earlier states in `~/.autobuilder/edit-hunks-withheld-after-2026-11-08_*`. Nothing is running.
+- **Next, agreed with the user: T5-BI, starting with the inventory its 2026-10-28 note asks for** -- every prose output put in front of a person (spoken lines, ghosts, HUD fields, toasts, end report, operator-facing messages), how often each fired in today's six runs, template or the model's own words; a short document for the user, no code change. Then design options with the user, then the DoD. Postponed to a fresh session at the user's word.
 
 ## 2026-11-07/08 (Opus 5.5, session 29) -- T4-EK FILED; DEFERRED-LIST SWEEP (18 CLOSED); T5-BU: THE RESTAGE DELETED
 

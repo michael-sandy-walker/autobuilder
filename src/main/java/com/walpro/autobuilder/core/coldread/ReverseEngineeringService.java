@@ -2,7 +2,7 @@ package com.walpro.autobuilder.core.coldread;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-Yeimport com.walpro.autobuilder.core.coldread.ClaimProposer.Claim;
+import com.walpro.autobuilder.core.coldread.ClaimProposer.Claim;
 import com.walpro.autobuilder.core.coldread.entry.EntryAdapter;
 import com.walpro.autobuilder.core.coldread.entry.EntryKind;
 import com.walpro.autobuilder.core.coldread.entry.EntryPoint;

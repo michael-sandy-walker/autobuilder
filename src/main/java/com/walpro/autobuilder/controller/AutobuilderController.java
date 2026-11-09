@@ -435,6 +435,51 @@ public class AutobuilderController {
         }
     }
 
+    /** T4-EK: reverse engineering, optional -- the run context has it, a slimmer one may not. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.coldread.ReverseEngineeringService reverseEngineeringService;
+
+    /** A tree to reverse-engineer; the work (copies, variants, the account) goes under {@code work}, else beside the project. */
+    public record ReverseEngineering(String dir, String work) {
+    }
+
+    /**
+     * T4-EK slice (a): what a tree the loop did not build can be shown to do -- capabilities, and claims kept only when
+     * the running tree bears them out and the tree without their capability does not. Reads a copy; slow (one build and
+     * start per capability).
+     */
+    @PostMapping("/reverse-engineering")
+    public ResponseEntity<?> reverseEngineer(@RequestBody ReverseEngineering r) {
+        if (reverseEngineeringService == null) return ResponseEntity.status(503).body(Map.of("error", "reverse engineering is not enabled in this context"));
+        if (r.dir() == null) return ResponseEntity.badRequest().body(Map.of("error", "reverse engineering needs a dir"));
+        java.nio.file.Path work = r.work() != null ? java.nio.file.Path.of(r.work())
+                : java.nio.file.Path.of(fileBasePath, "meta", "reverse-engineering");
+        try {
+            return ResponseEntity.ok(reverseEngineeringService.reverseEngineer(java.nio.file.Path.of(r.dir()), work));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.coldread.ReverseEngineeringJob reverseEngineeringJob;
+
+    /** T4-EK: reverse engineering of this run's own project, as a job; 409 while one runs. Follow it with GET. */
+    @PostMapping("/reverse-engineering/job")
+    public ResponseEntity<?> startReverseEngineering() {
+        if (reverseEngineeringJob == null) return ResponseEntity.status(503).body(Map.of("error", "reverse engineering is not enabled in this context"));
+        if (!reverseEngineeringJob.start()) return ResponseEntity.status(409).body(Map.of("error", "reverse engineering is already running"));
+        return ResponseEntity.accepted().body(reverseEngineeringJob.state());
+    }
+
+    @GetMapping("/reverse-engineering/job")
+    public ResponseEntity<?> reverseEngineeringState() {
+        if (reverseEngineeringJob == null) return ResponseEntity.status(503).body(Map.of("error", "reverse engineering is not enabled in this context"));
+        return ResponseEntity.ok(reverseEngineeringJob.state());
+    }
+
     /** T4-EI: a capability import dropped before its import; the project was never touched. */
     @PostMapping("/capability-imports/{id}/cancel")
     public ResponseEntity<?> cancelCapabilityImport(@PathVariable String id) {

@@ -1090,6 +1090,98 @@ public class BootGate {
     }
 
     /** Polls the root path until the process answers HTTP (any status), dies, or the deadline passes. */
+    /**
+     * T4-EK: the packaged artifact of {@code workingDir} started and kept serving, for a caller with request sequences
+     * of its own to send -- the same launch, readiness and sequence semantics as the gate, none of its judgement.
+     * Empty when there is no packaged artifact, no port, or the artifact does not become ready to serve HTTP; the
+     * process is destroyed then, and by {@link Served#close()} otherwise.
+     */
+    public Optional<Served> serve(Path workingDir) {
+        Path dir = workingDir.toAbsolutePath().normalize();
+        Optional<Path> artifact = findPackagedArtifact(dir);
+        if (artifact.isEmpty()) return Optional.empty();
+        int port;
+        try (ServerSocket socket = new ServerSocket(0)) {
+            port = socket.getLocalPort();
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+        List<String> command = buildCommand(artifact.get(), port);
+        if (command.isEmpty()) return Optional.empty();
+        String prefix = coldReadService == null ? "" : coldReadService.servedPrefix(dir).orElse("");
+        Process process = null;
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command)
+                    .directory(artifact.get().getParent().getParent().toFile())
+                    .redirectErrorStream(true);
+            if (portEnvVar != null && !portEnvVar.isBlank()) {
+                pb.environment().put(portEnvVar.trim(), String.valueOf(port));
+            }
+            process = pb.start();
+            Deque<String> tail = new ArrayDeque<>();
+            drainerThread(process.getInputStream(), tail).start();
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofMillis(Math.min(requestTimeoutMs, 1000))).build();
+            if (!awaitHttpReadiness(process, client, port)) {
+                log.info("T4-EK: {} did not become ready to serve -- {}", artifact.get(), String.join(" | ",
+                        new ArrayList<>(tail).subList(Math.max(0, tail.size() - 5), tail.size())));
+                process.destroyForcibly();
+                return Optional.empty();
+            }
+            return Optional.of(new Served(process, client, port, prefix, requestTimeoutMs));
+        } catch (IOException e) {
+            if (process != null) process.destroyForcibly();
+            return Optional.empty();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (process != null) process.destroyForcibly();
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * T4-EK: a started artifact. {@link #send} runs one sequence as the gate runs a criterion's probe -- the last
+     * request is the asserted one, {@code $N.field} refers to an earlier response, a refused setup request means
+     * nothing was observed.
+     */
+    public static final class Served implements AutoCloseable {
+        private final Process process;
+        private final HttpClient client;
+        private final int port;
+        private final String prefix;
+        private final long requestTimeoutMs;
+
+        Served(Process process, HttpClient client, int port, String prefix, long requestTimeoutMs) {
+            this.process = process;
+            this.client = client;
+            this.port = port;
+            this.prefix = prefix;
+            this.requestTimeoutMs = requestTimeoutMs;
+        }
+
+        /** The final status and body, or why nothing was observed ({@code unobserved} names the reason). */
+        public record Response(Integer status, String body, String unobserved) {
+            public boolean observed() { return status != null; }
+        }
+
+        public Response send(List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
+            if (!process.isAlive()) return new Response(null, null, "PROCESS_EXITED");
+            SequenceOutcome o = executeSequence(client, r -> probeRequest(port, prefix, requestTimeoutMs, r), sequence);
+            return new Response(o.status(), o.body(), o.abstain() == null ? null : o.abstain().name());
+        }
+
+        @Override
+        public void close() {
+            process.destroy();
+            try {
+                if (!process.waitFor(10, TimeUnit.SECONDS)) process.destroyForcibly();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                process.destroyForcibly();
+            }
+        }
+    }
+
     private boolean awaitHttpReadiness(Process process, HttpClient client, int port) throws InterruptedException {
         long deadline = System.currentTimeMillis() + readinessTimeoutMs;
         while (System.currentTimeMillis() < deadline && process.isAlive()) {
@@ -1396,8 +1488,10 @@ public class BootGate {
     static final int MAX_MODEL_FALLBACKS_PER_SWEEP = 5;
 
     /** The final status, or the reason there is none. Exactly one field is set. */
-    record SequenceOutcome(Integer status, Unobserved abstain) {
+    record SequenceOutcome(Integer status, Unobserved abstain, String body) {
+        SequenceOutcome(Integer status, Unobserved abstain) { this(status, abstain, null); }
         static SequenceOutcome observed(int status) { return new SequenceOutcome(status, null); }
+        static SequenceOutcome observed(int status, String body) { return new SequenceOutcome(status, null, body); }
         static SequenceOutcome none(Unobserved why) { return new SequenceOutcome(null, why); }
         boolean isObserved() { return status != null; }
     }
@@ -1408,6 +1502,13 @@ public class BootGate {
      */
     private SequenceOutcome executeSequence(HttpClient client, int port,
                                             List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
+        return executeSequence(client, r -> probeRequest(port, r), sequence);
+    }
+
+    /** As above, with the request built by {@code toRequest}: one sequence semantics for the gate and for {@link Served}. */
+    private static SequenceOutcome executeSequence(HttpClient client,
+                                                   java.util.function.Function<CriterionProbeSynthesizer.ProbeRequest, HttpRequest> toRequest,
+                                                   List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
         int status = -1;
         List<String> bodies = new ArrayList<>();
         for (int i = 0; i < sequence.size(); i++) {
@@ -1424,7 +1525,7 @@ public class BootGate {
             }
             try {
                 HttpResponse<String> response = client.send(
-                        probeRequest(port, resolved.get()), HttpResponse.BodyHandlers.ofString());
+                        toRequest.apply(resolved.get()), HttpResponse.BodyHandlers.ofString());
                 status = response.statusCode();
                 bodies.add(response.body());
                 // A SETUP request that was refused means the state the asserted request needs was
@@ -1447,7 +1548,8 @@ public class BootGate {
                 return SequenceOutcome.none(Unobserved.TRANSPORT);
             }
         }
-        return status < 0 ? SequenceOutcome.none(Unobserved.TRANSPORT) : SequenceOutcome.observed(status);
+        return status < 0 ? SequenceOutcome.none(Unobserved.TRANSPORT)
+                : SequenceOutcome.observed(status, bodies.get(bodies.size() - 1));
     }
 
     /** {@code $N.field} → that field of response N (1-based). Empty when any reference is unresolvable. */
@@ -1562,15 +1664,23 @@ public class BootGate {
 
     /** A declared path as the artifact serves it: under its configured prefix, never twice. */
     String served(String path) {
-        String prefix = servedPrefix;
+        return served(path, servedPrefix);
+    }
+
+    static String served(String path, String prefix) {
         if (prefix == null || prefix.isEmpty() || path == null) return path;
         if (path.equals(prefix) || path.startsWith(prefix + "/") || path.startsWith(prefix + "?")) return path;
         return prefix + (path.startsWith("/") ? path : "/" + path);
     }
 
     private HttpRequest probeRequest(int port, CriterionProbeSynthesizer.ProbeRequest r) {
+        return probeRequest(port, servedPrefix, requestTimeoutMs, r);
+    }
+
+    private static HttpRequest probeRequest(int port, String prefix, long requestTimeoutMs,
+                                            CriterionProbeSynthesizer.ProbeRequest r) {
         HttpRequest.Builder builder = HttpRequest
-                .newBuilder(URI.create("http://127.0.0.1:" + port + served(r.path())))
+                .newBuilder(URI.create("http://127.0.0.1:" + port + served(r.path(), prefix)))
                 .timeout(Duration.ofMillis(requestTimeoutMs));
         if (r.body() == null || r.body().isBlank()) {
             builder.method(r.method(), HttpRequest.BodyPublishers.noBody());

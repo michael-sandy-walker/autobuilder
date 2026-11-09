@@ -191,6 +191,53 @@ public class EndpointSurfaceQuery {
         return builtInOutput(sources);
     }
 
+    /** One request handler: the route, the type that declares it (nested name, and with its package) and the method. */
+    public record Handler(Endpoint endpoint, String type, String qualifiedType, String method) {
+    }
+
+    /**
+     * T4-EK: the served surface with the method that handles each route -- what a feature of a project the loop did
+     * not build can be taken out by. Empty under the same rule as {@link #servedByCode}: a mapping path that is not a
+     * literal makes the list a lower bound.
+     */
+    public Optional<List<Handler>> handlersByCode(Map<String, String> sources) {
+        List<Handler> out = new ArrayList<>();
+        for (Map.Entry<String, String> e : sources.entrySet()) {
+            if (e.getKey() == null || !JAVA_FILE.matcher(e.getKey()).matches()) continue;
+            if (e.getValue() == null || e.getValue().isBlank()) continue;
+            try {
+                Optional<CompilationUnit> cu = com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(e.getValue()).getResult();
+                if (cu.isPresent() && !collectBuiltEndpoints(cu.get(), (endpoint, type, md) -> out.add(new Handler(endpoint,
+                        nestedName(type), qualified(type), md.getNameAsString())))) {
+                    return Optional.empty();
+                }
+            } catch (RuntimeException ex) {
+                log.debug("T4-EK: skipping unparseable {}: {}", e.getKey(), ex.getMessage());
+            }
+        }
+        return Optional.of(out);
+    }
+
+    private interface HandlerSink {
+        void found(Endpoint endpoint, TypeDeclaration<?> type, MethodDeclaration method);
+    }
+
+    private static String nestedName(TypeDeclaration<?> t) {
+        String name = t.getNameAsString();
+        com.github.javaparser.ast.Node n = t.getParentNode().orElse(null);
+        while (n instanceof TypeDeclaration<?> outer) {
+            name = outer.getNameAsString() + "." + name;
+            n = outer.getParentNode().orElse(null);
+        }
+        return name;
+    }
+
+    private static String qualified(TypeDeclaration<?> t) {
+        String pkg = t.findCompilationUnit().flatMap(CompilationUnit::getPackageDeclaration)
+                .map(p -> p.getNameAsString()).orElse("");
+        return pkg.isEmpty() ? nestedName(t) : pkg + "." + nestedName(t);
+    }
+
     Optional<Set<Endpoint>> builtInOutput(Map<String, String> outputFiles) {
         Set<Endpoint> built = new LinkedHashSet<>();
         for (Map.Entry<String, String> e : outputFiles.entrySet()) {
@@ -198,7 +245,7 @@ public class EndpointSurfaceQuery {
             if (e.getValue() == null || e.getValue().isBlank()) continue;
             try {
                 Optional<CompilationUnit> cu = com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(e.getValue()).getResult();
-                if (cu.isPresent() && !collectBuiltEndpoints(cu.get(), built)) {
+                if (cu.isPresent() && !collectBuiltEndpoints(cu.get(), (endpoint, type, md) -> built.add(endpoint))) {
                     return Optional.empty();
                 }
             } catch (RuntimeException ex) {
@@ -209,7 +256,7 @@ public class EndpointSurfaceQuery {
     }
 
     /** Returns false when any mapping path in the unit could not be grounded to a literal. */
-    private boolean collectBuiltEndpoints(CompilationUnit cu, Set<Endpoint> out) {
+    private boolean collectBuiltEndpoints(CompilationUnit cu, HandlerSink out) {
         for (TypeDeclaration<?> type : cu.findAll(TypeDeclaration.class)) {
             List<String> prefixes = new ArrayList<>();
             for (AnnotationExpr a : type.getAnnotations()) {
@@ -236,7 +283,7 @@ public class EndpointSurfaceQuery {
                             if (full != null) {
                                 // A generic mapping's verb attribute is not parsed — claim all
                                 // verbs so an unusual-but-valid mapping never reads as missing.
-                                out.add(new Endpoint(generic ? ANY_VERB : verb, full));
+                                out.found(new Endpoint(generic ? ANY_VERB : verb, full), type, md);
                             }
                         }
                     }

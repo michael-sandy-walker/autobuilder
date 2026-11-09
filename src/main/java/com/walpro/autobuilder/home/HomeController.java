@@ -235,6 +235,18 @@ public class HomeController {
         return relayed(run.get("/autobuilder/cold-read"));
     }
 
+    /** T4-EK: reverse-engineers the open project's code in its run (a job, minutes); read-only, the project is not touched. */
+    @PostMapping(value = "/home/run/reverse-engineering", produces = "application/json")
+    public ResponseEntity<String> reverseEngineer() {
+        return relayed(run.postJson("/autobuilder/reverse-engineering/job", "", Duration.ofMinutes(2)));
+    }
+
+    /** T4-EK: where the reverse engineering is, and its account once done. */
+    @GetMapping(value = "/home/run/reverse-engineering", produces = "application/json")
+    public ResponseEntity<String> reverseEngineering() {
+        return relayed(run.get("/autobuilder/reverse-engineering/job"));
+    }
+
     /**
      * Gives the running adopted project its goal, through the run's own endpoint -- which writes it byte for byte
      * to {@code bootstrap/seed.txt} and refuses when the run already has one.

@@ -272,7 +272,7 @@ public final class ProjectMerge {
     }
 
     /** Every regular file under {@code root} except build output, path relative to it. */
-    static Map<String, String> files(Path root) throws IOException {
+    public static Map<String, String> files(Path root) throws IOException {
         Map<String, String> out = new TreeMap<>();
         if (!Files.isDirectory(root)) return out;
         try (Stream<Path> w = Files.walk(root)) {

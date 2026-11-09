@@ -59,6 +59,10 @@
   .ENDED .dot { background: var(--accent); } .FAILED .dot { background: var(--bad); }
   .links { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; }
   .sub { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 12px; }
+  .feat { margin-top: 10px; }
+  ul.claims { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; }
+  ul.claims li { margin: 2px 0; }
+  details { margin-top: 10px; font-size: 12.5px; } details summary { cursor: pointer; color: var(--muted); }
   pre.coldread { background: var(--panel-2); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px;
     max-height: 320px; overflow: auto; white-space: pre-wrap; font-size: 12px; color: var(--muted); margin: 0; }
   table.inputs { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -342,6 +346,12 @@ async function refresh() {
       imports = Array.isArray(all) ? all : [];
       pending = imports.filter(i => i.pending);
     } else { conflicts = []; pending = []; imports = []; }
+    // T4-EK: reverse engineering is offered while the project is open and its loop has not begun.
+    rev = null;
+    if (run.runPort && run.state === 'RUNNING' && run.notBegun) {
+      const rr = await fetch('/home/run/reverse-engineering').catch(() => null);
+      rev = rr && rr.ok ? await rr.json().catch(() => null) : null;
+    }
   } catch (e) {
     $('now').className = 'now FAILED';
     $('now').innerHTML = '<div class="title"><span class="dot"></span><b>Cannot reach Autobuilder</b></div>';
@@ -482,6 +492,10 @@ function renderNow() {
         + '" target="_blank" rel="noopener">' + label + '</a>').join('') + '</div>' : '';
   let title, why = '', actions = '';
   const ended = run.state === 'ENDED', waiting = run.waitingForGoal, held = run.notBegun && !waiting;
+  // T4-EK: read-only, offered while nothing runs; the project is not touched.
+  const reverse = (waiting || held) && !jobBusy() && rev && rev.phase !== 'running'
+    ? '<button data-do="reverse" title="Find what this code does and which claims about it the running code bears out. '
+      + 'Read-only; takes a few minutes.">Reverse-engineer</button>' : '';
   if (run.state === 'IDLE') {
     title = 'Nothing is running'; why = 'Start a project from the list, or create one with + New project.';
   } else if (run.state === 'STARTING') {
@@ -494,7 +508,7 @@ function renderNow() {
     actions = jobBusy() ? '' : '<button data-do="close" class="primary">Close</button>';
   } else if (waiting) {
     title = p + ' -- waiting for a goal'; why = 'Autobuilder read the code. Say what it should achieve.';
-    actions = '<button data-do="close">Close</button>';
+    actions = reverse + (revRunning() ? '' : '<button data-do="close">Close</button>');
   } else if (held) {
     title = p + ' -- held';
     why = jobBusy() ? 'Projects are being brought in; nothing runs until you keep or cancel what came in.'
@@ -502,7 +516,7 @@ function renderNow() {
         : conflicts.length ? 'Decide the conflicts below, then continue it.' : 'Its loop has not begun.';
     actions = jobBusy() && job.phase !== 'DECIDING' ? ''
         : (!jobBusy() && !pending.length && !conflicts.length ? '<button data-do="continue" class="primary">Continue ' + esc(p) + '</button>' : '')
-          + '<button data-do="close">Close</button>';
+          + reverse + (revRunning() ? '' : '<button data-do="close">Close</button>');
   } else if (run.stopping) {
     title = 'Stopping ' + p; why = 'It halts after its current cycle, which can take a few minutes.';
   } else {
@@ -514,6 +528,7 @@ function renderNow() {
     + (why ? '<div class="why">' + esc(why) + '</div>' : '') + links
     + (actions ? '<div class="row">' + actions + '</div>' : '')
     + (live ? liveHtml() : '')
+    + (rev && rev.phase !== 'idle' && (waiting || held) ? revBox() : '')
     + (waiting ? goalBox() : '') + (job ? jobBox() : '')
     + (run.runPort && !(job && job.phase === 'DECIDING') && !(job && job.phase === 'BRINGING_IN') && showImports() ? importsHtml() : '')
     + (conflicts.length && !(job && job.phase === 'DECIDING') ? '<div class="sub"><div class="title"><b>Waiting for your decision</b>'
@@ -534,7 +549,7 @@ function renderNow() {
       if (box.scrollTop + box.clientHeight >= box.scrollHeight - 24) loadOlder();
     };
   }
-  el.querySelectorAll('[data-do]').forEach(b => b.onclick = () => ({ close: closeRun, stop: stopRun, continue: continueHeld })[b.dataset.do]());
+  el.querySelectorAll('[data-do]').forEach(b => b.onclick = () => ({ close: closeRun, stop: stopRun, continue: continueHeld, reverse: startReverse })[b.dataset.do]());
   el.querySelectorAll('[data-keep]').forEach(b => b.onclick = () => keepImport(b.dataset.keep));
   el.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => cancelImport(b.dataset.cancel, b.dataset.label));
   if (waiting) wireGoalBox();
@@ -650,6 +665,51 @@ async function stopRun() {
   const r = await post('/home/stop');
   if (r.status !== 202) toast(false, 'Not stopped: ' + message(r));
   refresh();
+}
+
+// T4-EK: what the code does, reverse-engineered -- features from its served surface, claims the running code earned.
+let rev = null;
+// Closing the project would end its run under the job: not offered until the job is done.
+const revRunning = () => !!(rev && rev.phase === 'running');
+async function startReverse() {
+  const r = await post('/home/run/reverse-engineering');
+  if (r.status !== 202) toast(false, 'Not started: ' + message(r));
+  refresh();
+}
+const NOT_KEPT = { 'not-held': 'the running code answers otherwise', 'not-anchored': 'answered without the feature\'s code too',
+  unowned: 'reaches no route the code declares', unjudged: 'could not be checked' };
+function revBox() {
+  const head = t => '<div class="sub"><div class="title"><b>Reverse-engineering</b>' + t + '</div>';
+  if (rev.phase === 'running') {
+    const mins = rev.since ? Math.max(0, Math.round((Date.now() - Date.parse(rev.since)) / 60000)) : 0;
+    return head('<span class="badge">running</span>') + '<div class="why">' + esc(rev.stage || '') + ' -- '
+      + mins + ' min so far; it usually takes 5 to 8.</div></div>';
+  }
+  if (rev.phase === 'failed') return head('<span class="badge">stopped</span>') + '<div class="why">' + esc(rev.error || '') + '</div></div>';
+  const a = rev.account, claims = a.claims || [];
+  const verdict = j => j.byFeature ? j.byFeature.verdict : j.verdict;
+  const byId = Object.fromEntries(claims.map(j => [j.claim.id, j]));
+  const capName = Object.fromEntries((a.capabilities || []).map(c => [c.id, c.name]));
+  const kept = claims.filter(j => verdict(j) === 'anchored');
+  let html = head('<span class="badge">' + kept.length + ' of ' + claims.length + ' claims kept</span>')
+    + '<div class="why">A claim is kept when the running code answers it as stated, and no longer does with its '
+    + 'feature\'s code taken out. Nothing in the project changed; the account is kept in ' + esc(rev.kept || '') + '.</div>';
+  for (const f of a.features || []) {
+    html += '<div class="feat"><div><b>' + esc(f.name) + '</b> <span class="note">' + esc(f.routes.join(', ')) + '</span></div>'
+      + '<div class="side">depends on: ' + esc(f.dependsOn.length ? f.dependsOn.join(', ') : 'nothing')
+      + ' &middot; made of: ' + esc(f.madeOf.map(c => capName[c] || c).join('; ') || '-') + '</div><ul class="claims">'
+      + f.claims.map(id => byId[id]).filter(Boolean)
+          .map(j => '<li>' + esc(j.claim.text) + '</li>').join('') + '</ul></div>';
+  }
+  const dropped = claims.filter(j => verdict(j) !== 'anchored');
+  if (dropped.length) {
+    html += '<details><summary>Not kept (' + dropped.length + ')</summary><ul class="claims">'
+      + dropped.map(j => '<li>' + esc(j.claim.text) + ' <span class="note">-- ' + esc(NOT_KEPT[verdict(j)] || verdict(j))
+        + '</span></li>').join('') + '</ul></details>';
+  }
+  html += '<details><summary>How the code is built (' + (a.capabilities || []).length + ' parts)</summary><ul class="claims">'
+    + (a.capabilities || []).map(c => '<li><b>' + esc(c.name) + '</b> -- ' + esc(c.summary) + '</li>').join('') + '</ul></details>';
+  return html + '</div>';
 }
 
 // An adopted project's goal: read what is there first, then say what to achieve.

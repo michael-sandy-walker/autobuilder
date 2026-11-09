@@ -406,6 +406,19 @@ llm:
         #model: deepseek-coder-v2:16b
         #model: glm-4.7-flash
         #model: glm-4.7-tuned
+    # T4-EM: the narrator's channel, configured on its own and never inherited from llm.api above:
+    # switching the loop to a hosted API leaves the narrator here. Same url and model as the loop =
+    # one loaded copy of the model serves both (the request sends nothing that makes the server load
+    # it differently). Its failures open its own circuit breaker and never pause the loop.
+    narrator:
+        enabled: true
+        url: http://localhost:11434/v1/chat/completions
+        key: local-only-no-key
+        model: qwen3.8
+        reasoning-effort: none
+        read-timeout-ms: 120000
+        context-window-tokens: 32768
+        response-reserve-tokens: 512
 spring:
   data:
     neo4j:
@@ -448,6 +461,9 @@ autobuilder:
     enabled: false
   scheduler:
     enabled: false
+llm:
+  narrator:
+    enabled: false   # T4-EM: no narrator in tests -- it would call a model
 
 ---
 # ============================================

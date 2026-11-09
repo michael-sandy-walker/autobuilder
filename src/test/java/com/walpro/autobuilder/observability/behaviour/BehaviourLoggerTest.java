@@ -171,7 +171,8 @@ class BehaviourLoggerTest {
         JsonNode env = capturedAsJson();
         assertEnvelope(env, "cycle-7", "mutation_scored");
         assertThat(env.get("payload").fieldNames()).toIterable().containsExactlyInAnyOrder(
-                "mutationId", "llmScore", "llmState", "criteriaAssessments");
+                "mutationId", "llmScore", "llmState", "criteriaAssessments", "message");
+        assertThat(env.get("payload").get("message").isNull()).isTrue(); // T4-EM: no evaluator words given
         assertThat(env.get("payload").get("llmScore").asDouble()).isEqualTo(0.78);
         assertThat(env.get("payload").get("llmState").asText()).isEqualTo("ACCEPTED");
     }

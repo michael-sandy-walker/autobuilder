@@ -37,3 +37,7 @@ spring:
   config:
     activate:
       on-profile: test
+# T4-EM: no narrator in tests -- it would call a model.
+llm:
+  narrator:
+    enabled: false

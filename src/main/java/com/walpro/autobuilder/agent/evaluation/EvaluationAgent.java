@@ -418,7 +418,8 @@ public class EvaluationAgent implements ExecutionAgent {
                     context.lastEvolutionFingerprint(),
                     rawOutcome.score(),
                     rawOutcome.mutationState() != null ? rawOutcome.mutationState().name() : null,
-                    context.criteriaAssessments() != null ? context.criteriaAssessments() : List.of()
+                    context.criteriaAssessments() != null ? context.criteriaAssessments() : List.of(),
+                    evaluatorWritten != null ? evaluatorWritten.feedbackMessage() : null
             );
         }
 

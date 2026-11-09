@@ -75,6 +75,22 @@ public class BehaviourLogger {
         this.publisher = publisher;
     }
 
+    /**
+     * T4-EM: in-process readers of the stream (the narrator), handed each envelope as it is written. A listener
+     * runs on the emitting thread, so it must only take the envelope and return; one that throws is logged and
+     * the stream carries on.
+     */
+    private final List<java.util.function.Consumer<Map<String, Object>>> listeners =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public void addListener(java.util.function.Consumer<Map<String, Object>> listener) {
+        if (listener != null) listeners.add(listener);
+    }
+
+    public void cycleNarrated(String cycleId, String text, long durationMs, String model) {
+        emit(new BehaviourEvent.CycleNarrated(Instant.now(), cycleId, text, durationMs, model));
+    }
+
     public void emit(BehaviourEvent event) {
         if (event == null) return;
         try {
@@ -84,6 +100,13 @@ public class BehaviourLogger {
             BEHAVIOUR.info(line);
             if (publisher != null) {
                 publisher.publish(event.event(), envelope);
+            }
+            for (java.util.function.Consumer<Map<String, Object>> listener : listeners) {
+                try {
+                    listener.accept(envelope);
+                } catch (RuntimeException e) {
+                    log.warn("BehaviourLogger listener failed on event={}: {}", event.event(), e.getMessage());
+                }
             }
         } catch (Exception e) {
             log.warn("BehaviourLogger emit failed for event={} cycleId={}: {}",
@@ -254,8 +277,13 @@ public class BehaviourLogger {
 
     public void mutationScored(String cycleId, String mutationId, Double llmScore, String llmState,
                                List<String> criteriaAssessments) {
+        mutationScored(cycleId, mutationId, llmScore, llmState, criteriaAssessments, null);
+    }
+
+    public void mutationScored(String cycleId, String mutationId, Double llmScore, String llmState,
+                               List<String> criteriaAssessments, String message) {
         emit(new BehaviourEvent.MutationScored(Instant.now(), cycleId, mutationId, llmScore, llmState,
-                criteriaAssessments));
+                criteriaAssessments, message));
     }
 
     public void heuristicResult(String cycleId, String mutationId, String heuristic, Double score,
@@ -589,7 +617,11 @@ public class BehaviourLogger {
 
     /** T5-I: one planner wave finished applying its proposals. */
     public void planningRun(String cycleId, String goalId, String trigger, int injected, int deduped) {
-        emit(new BehaviourEvent.PlanningRun(Instant.now(), cycleId, goalId, trigger, injected, deduped));
+        planningRun(cycleId, goalId, trigger, injected, deduped, null);
+    }
+
+    public void planningRun(String cycleId, String goalId, String trigger, int injected, int deduped, String rationale) {
+        emit(new BehaviourEvent.PlanningRun(Instant.now(), cycleId, goalId, trigger, injected, deduped, rationale));
     }
 
     /** T5-I: a pattern detector fired (emitted on firing only, never on quiet evaluation). */

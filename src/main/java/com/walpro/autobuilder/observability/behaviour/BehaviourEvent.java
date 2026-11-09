@@ -152,7 +152,10 @@ public sealed interface BehaviourEvent {
             String mutationId,
             Double llmScore,
             String llmState,
-            List<String> criteriaAssessments
+            List<String> criteriaAssessments,
+            // T4-EM: the evaluator's own one-paragraph verdict ("Message:"), for the narrator; null when the
+            // outcome was a stand-in (unchanged fingerprint, compile-probe short-circuit), not the evaluator's words
+            String message
     ) implements BehaviourEvent {
         public String event() { return "mutation_scored"; }
     }
@@ -1005,9 +1008,26 @@ public sealed interface BehaviourEvent {
             String goalId,
             String trigger,
             int injected,
-            int deduped
+            int deduped,
+            // T4-EM: why the planner did what it did, in its own words (PlanRationale, else Message); null when absent
+            String rationale
     ) implements BehaviourEvent {
         public String event() { return "planning_run"; }
+    }
+
+    /**
+     * T4-EM: one cycle told for a person listening, written by the narrator model from that cycle's own
+     * events. {@code model} names the narrator channel's model, which is configured apart from the loop's.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record CycleNarrated(
+            Instant timestamp,
+            String cycleId,
+            String text,
+            long durationMs,
+            String model
+    ) implements BehaviourEvent {
+        public String event() { return "cycle_narrated"; }
     }
 
     /**

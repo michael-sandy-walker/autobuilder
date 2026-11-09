@@ -479,10 +479,17 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
         // T5-I: one wave applied — tallies for the promotion-time re-plan callback.
         if (behaviourLogger != null) {
             behaviourLogger.planningRun(ctx != null ? ctx.cycleName() : null, parentGoalId,
-                    "promotion-replan", injected, sanitized.size() - injected);
+                    "promotion-replan", injected, sanitized.size() - injected, plannerReason(outcome));
         }
 
         return injected; // 0 if all proposals were deduped (T1-BK); >0 if some were injected
+    }
+
+    /** T4-EM: the planner's own reason for this wave, for the narrator -- its rationale, else its message. */
+    static String plannerReason(PlannerOutcome outcome) {
+        if (outcome == null) return null;
+        if (outcome.planRationale() != null && !outcome.planRationale().isBlank()) return outcome.planRationale().trim();
+        return outcome.message() == null || outcome.message().isBlank() ? null : outcome.message().trim();
     }
 
     /**
@@ -808,7 +815,7 @@ public class PlannerAgent implements ExecutionAgent, CheckpointableState {
         // T5-I: one wave applied — tallies for the in-cycle planning pass.
         if (behaviourLogger != null && (injected > 0 || !skipped.isEmpty())) {
             behaviourLogger.planningRun(cycleName, rationaleParentId, "cycle-planning",
-                    injected, skipped.size());
+                    injected, skipped.size(), plannerReason(outcome));
         }
 
         return new InjectionResult(skipped, injected, reactivated, proposalMatches);

@@ -107,6 +107,36 @@ public class LLMClient {
 
     private OutputBounds outputBounds;
 
+    /**
+     * T4-EM: a client for a channel of its own -- configured from its own settings, never from {@code llm.api.*},
+     * with its own circuit breaker so its failures cannot pause the loop. Not a Spring bean: built by the owner of
+     * the channel ({@link NarratorChannel}), so no {@code @Value} of the loop's channel is injected into it. One
+     * attempt per call: a narration that fails is skipped, not retried behind the loop's calls.
+     */
+    static LLMClient forChannel(LlmCircuitBreaker breaker, String url, String key, String model, int readTimeoutMs,
+                                String reasoningEffort, int contextWindowTokens, int responseReserveTokens) {
+        LLMClient client = new LLMClient(breaker);
+        client.apiUrl = url;
+        client.apiKey = key == null || key.isBlank() ? "local-only-no-key" : key;
+        client.model = model;
+        client.readTimeoutMs = readTimeoutMs;
+        client.reasoningEffort = reasoningEffort;
+        client.readTimeoutEscalationFactor = 1.0;
+        client.readTimeoutMaxMs = 0;
+        client.retryMaxAttempts = 1;
+        client.retryDelayMs = 0;
+        client.contextWindowTokens = contextWindowTokens;
+        client.responseReserveTokens = responseReserveTokens;
+        client.outputBoundsEnabled = true;
+        client.init();
+        return client;
+    }
+
+    /** The model name this client sends. */
+    public String model() {
+        return model;
+    }
+
     @PostConstruct
     void init() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();

@@ -1129,11 +1129,12 @@ public class DerivedTests implements DerivedTestAuthority {
     }
 
     /** The loop's own build executor and test command, run in a spike's tree; reports read as the test gate reads them. */
-    static final class BuildBench implements Bench {
+    public static final class BuildBench implements Bench {
         private final BuildExecutor builds;
         private final String command;
 
-        BuildBench(BuildExecutor builds, String command) {
+        /** T4-EK: also runs reverse engineering's library-style claims, on a tree of its own. */
+        public BuildBench(BuildExecutor builds, String command) {
             this.builds = builds;
             this.command = command;
         }

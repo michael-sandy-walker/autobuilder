@@ -676,8 +676,13 @@ async function startReverse() {
   if (r.status !== 202) toast(false, 'Not started: ' + message(r));
   refresh();
 }
+// The three ways a project is used (T4-EK), each shown with what it means.
+const KIND_MEANS = {
+  'library-style': 'exercised inside the same process, by a test that calls it',
+  'service-style': 'started and kept running, exercised by requests it answers',
+  'command-style': 'started with arguments and input, runs to its end, exercised by its exit status, output and files' };
 const NOT_KEPT = { 'not-held': 'the running code answers otherwise', 'not-anchored': 'answered without the feature\'s code too',
-  unowned: 'reaches no route the code declares', unjudged: 'could not be checked' };
+  unowned: 'reaches none of its ways in', unjudged: 'could not be checked' };
 function revBox() {
   const head = t => '<div class="sub"><div class="title"><b>Reverse-engineering</b>' + t + '</div>';
   if (rev.phase === 'running') {
@@ -693,9 +698,11 @@ function revBox() {
   const kept = claims.filter(j => verdict(j) === 'anchored');
   let html = head('<span class="badge">' + kept.length + ' of ' + claims.length + ' claims kept</span>')
     + '<div class="why">A claim is kept when the running code answers it as stated, and no longer does with its '
-    + 'feature\'s code taken out. Nothing in the project changed; the account is kept in ' + esc(rev.kept || '') + '.</div>';
+    + 'feature\'s code taken out. Nothing in the project changed; the account is kept in ' + esc(rev.kept || '') + '.</div>'
+    + '<div class="why">' + (a.kind ? 'Used ' + esc(a.kind) + ': ' + esc(KIND_MEANS[a.kind] || '') + '.'
+        : 'No way into this project was found, so nothing could be exercised.') + '</div>';
   for (const f of a.features || []) {
-    html += '<div class="feat"><div><b>' + esc(f.name) + '</b> <span class="note">' + esc(f.routes.join(', ')) + '</span></div>'
+    html += '<div class="feat"><div><b>' + esc(f.name) + '</b> <span class="note">' + esc(f.entryPoints.join(', ')) + '</span></div>'
       + '<div class="side">depends on: ' + esc(f.dependsOn.length ? f.dependsOn.join(', ') : 'nothing')
       + ' &middot; made of: ' + esc(f.madeOf.map(c => capName[c] || c).join('; ') || '-') + '</div><ul class="claims">'
       + f.claims.map(id => byId[id]).filter(Boolean)

@@ -62,4 +62,12 @@ class CapabilityStubTest {
         assertThat(r.stubbed()).isEmpty();
         assertThat(r.methods()).isEmpty();
     }
+
+    @Test
+    void aProgramEntryNamedByItsOwnIdIsTakenOut() {
+        var inventory = CapabilityCut.inventory(source);
+        CapabilityStub.Result r = CapabilityStub.stub(source, List.of("App.main"), inventory);
+        assertThat(r.methods()).containsExactly("App.main");
+        assertThat(r.stubbed().get("src/main/java/p/App.java")).doesNotContain("System.out.println(\"up\")");
+    }
 }

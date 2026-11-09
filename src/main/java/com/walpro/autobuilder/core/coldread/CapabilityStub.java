@@ -28,7 +28,8 @@ import java.util.Set;
  * <p>Kept, because without them nothing starts at all and the variant would again prove nothing: constructors (the
  * framework builds the objects through them), the program's entry point, and methods that declare the objects the
  * framework assembles ({@code @Bean}). A type's id stubs every method of that type; a member's id stubs only the
- * methods of that name (overloads share an id). Field ids stub nothing.
+ * methods of that name (overloads share an id). Field ids stub nothing. The entry point is kept only when its TYPE is
+ * named: named by its own id, it is what is being taken out (T4-EK: a command-style program's feature is its entry).
  */
 public final class CapabilityStub {
 
@@ -69,7 +70,7 @@ public final class CapabilityStub {
                     if (!names(t, typeId)) continue;
                     for (MethodDeclaration m : t.getMethods()) {
                         if (member != null && !m.getNameAsString().equals(member)) continue;
-                        if (!stubbable(m)) continue;
+                        if (!stubbable(m, member != null)) continue;
                         String body = m.getBody().map(BlockStmt::toString).orElse("");
                         if (body.contains("taken out to check a claim")) continue;
                         m.setBody(new BlockStmt().addStatement(com.github.javaparser.StaticJavaParser.parseStatement(STUB)));
@@ -83,9 +84,10 @@ public final class CapabilityStub {
         return new Result(out, methods);
     }
 
-    private static boolean stubbable(MethodDeclaration m) {
+    /** {@code named}: the member was named by its own id -- then even a program's entry is taken out (a command's feature). */
+    private static boolean stubbable(MethodDeclaration m, boolean named) {
         if (m.getBody().isEmpty()) return false;
-        if (m.isStatic() && m.getNameAsString().equals("main")) return false;
+        if (!named && m.isStatic() && m.getNameAsString().equals("main")) return false;
         return m.getAnnotations().stream().noneMatch(a -> KEEP_ANNOTATED.contains(a.getNameAsString()));
     }
 

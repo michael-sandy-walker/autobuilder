@@ -49,12 +49,17 @@ def code(j):
 
 
 def rows(text):
-    """(physical start line, fields) per row, with quotes and embedded newlines read as RFC 4180 does."""
-    reader = csv.reader(io.StringIO(text))
+    """(physical start line, fields) per row, with quotes and embedded newlines read as RFC 4180 does. Strict: a quote
+    never closed is no row at all (a first version accepted it, so a file cut off inside a quote counted as a row
+    spanning lines; fixed before scoring)."""
+    reader = csv.reader(io.StringIO(text), strict=True)
     result, start = [], 1
-    for fields in reader:
-        result.append((start, fields))
-        start = reader.line_num + 1
+    try:
+        for fields in reader:
+            result.append((start, fields))
+            start = reader.line_num + 1
+    except csv.Error:
+        return []
     return result
 
 
@@ -63,7 +68,24 @@ def quoted_comma(text):
 
 
 def quoted_newline(text):
-    return text is not None and re.search(r'"[^"]*\n[^"]*"', text) is not None
+    """A field holding a line break -- read by the CSV rules, not by a pattern across fields (a first version matched
+    from one field's closing quote over the line break to the next field's opening quote; fixed before scoring)."""
+    return text is not None and any('\n' in f for _, fields in rows(text) for f in fields)
+
+
+def raw_fields(line):
+    """The fields of one physical line as written, quotes kept, split on commas outside quotes."""
+    out, cur, quoted = [], '', False
+    for c in line:
+        if c == '"':
+            quoted = not quoted
+        if c == ',' and not quoted:
+            out.append(cur)
+            cur = ''
+        else:
+            cur += c
+    out.append(cur)
+    return out
 
 
 def malformed(text):
@@ -83,12 +105,16 @@ def column_after_quoted(j):
     r = rows(text)
     if not r or args[2] not in r[0][1]:
         return False
+    # A field BEFORE the asked column is quoted in some data row (a first version looked for a quote anywhere on the
+    # line, so asking for the quoted column itself counted; fixed before scoring).
     wanted = r[0][1].index(args[2])
     raw_lines = text.split('\n')
-    for line, fields in r[1:]:
-        for i, _ in enumerate(fields):
-            if i < wanted and line - 1 < len(raw_lines) and '"' in raw_lines[line - 1]:
-                return True
+    for line, _ in r[1:]:
+        if line - 1 >= len(raw_lines):
+            continue
+        raw = raw_fields(raw_lines[line - 1])
+        if any(f.strip().startswith('"') for f in raw[:wanted]):
+            return True
     return False
 
 

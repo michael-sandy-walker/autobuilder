@@ -2,17 +2,18 @@ package com.walpro.autobuilder.core.coldread;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.walpro.autobuilder.core.build.BootGate;
-import com.walpro.autobuilder.core.build.BuildExecutor;
-import com.walpro.autobuilder.core.build.BuildOutcome;
-import com.walpro.autobuilder.core.coldread.ClaimProposer.Claim;
+Yeimport com.walpro.autobuilder.core.coldread.ClaimProposer.Claim;
+import com.walpro.autobuilder.core.coldread.entry.EntryAdapter;
+import com.walpro.autobuilder.core.coldread.entry.EntryKind;
+import com.walpro.autobuilder.core.coldread.entry.EntryPoint;
+import com.walpro.autobuilder.core.coldread.entry.LibraryStyleAdapter;
+import com.walpro.autobuilder.core.coldread.entry.ProgramAdapter;
 import com.walpro.autobuilder.core.merge.CapabilityCut;
 import com.walpro.autobuilder.core.merge.CapabilityCut.Capability;
 import com.walpro.autobuilder.core.merge.CapabilityCut.Declaration;
 import com.walpro.autobuilder.core.merge.CapabilityDiscovery;
 import com.walpro.autobuilder.core.merge.ProjectMerge;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -22,28 +23,36 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.stream.Stream;
 
 /**
- * T4-EK slice (a): what a project the loop did not build can be shown to do -- code, then evidence, then capabilities,
- * then claims that must be EARNED.
+ * T4-EK: what a project the loop did not build can be shown to do -- code, then evidence, then capabilities, then claims
+ * that must be EARNED. One pipeline for every kind of project; how a project is exercised is an adapter's business: it
+ * is STARTED when it has a program entry ({@link ProgramAdapter}: service-style when its code declares routes,
+ * command-style otherwise), and CALLED when it has none ({@link LibraryStyleAdapter}, library-style).
  *
  * <p><b>The circularity this guards against.</b> A loop that writes a project's specification and then grades the
  * project against it always scores well: both sides come from the same guess. So the model only proposes here, and the
- * running application decides. A claim survives when the application as it is answers its last request with the status
- * it states, and the application with the claim's capability taken out ({@link CapabilityStub}: its methods throw, the
- * tree still builds and starts) does not. A claim the gutted tree also bears out asserts nothing about that capability,
- * and is dropped however true it is.
+ * project decides. A claim is kept when the project as it is bears it out and the project with one of its FEATURES taken
+ * out ({@link CapabilityStub}: the feature's ways in throw, the tree still builds) does not. A claim no gutted tree
+ * refutes asserts nothing about the project, and is dropped however true it is.
  *
- * <p>Every claim is also run against every OTHER capability's gutted tree. That costs nothing extra (each variant is
- * started once and every claim is sent to it) and reports what one capability needs of another, or a claim filed
- * under the wrong one.
+ * <p><b>Features</b> are the types that declare the ways in -- one rule for every kind (a route's controller, a program's
+ * main class, a library's public types). <b>Which feature a claim belongs to is OBSERVED, never read from the claim:</b>
+ * every claim is exercised on every feature's gutted tree; the features whose removal breaks it are its broken-by set;
+ * its own feature is the most specific of them (the one whose removal breaks the fewest claims overall), and the others
+ * are what it depends on. Every claim is also exercised on every capability's gutted tree (the layer cut the model
+ * proposes): the code a feature is made of.
  *
- * <p>Nothing in the project is touched: the tree is copied, and every variant is built and started in the copy. The
- * account is written beside the copy, as JSON, for a person to compare against what the project really is.
+ * <p>Nothing in the project is touched: the tree is copied, and every variant is built and exercised in the copy. The
+ * account is written beside the copy, as JSON.
  */
 @Slf4j
 @Service
@@ -52,43 +61,54 @@ public class ReverseEngineeringService {
     private static final Set<String> NOT_COPIED = Set.of("target", ".git", ".idea", "build", "out", "node_modules");
 
     private final ColdReadService coldReadService;
-    private final com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery surface =
-            new com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery();
     private final CapabilityDiscovery discovery;
     private final ClaimProposer proposer;
-    private final BuildExecutor buildExecutor;
-    private final BootGate bootGate;
-    private final String packageCommand;
+    private final EntryAdapter started;
+    private final EntryAdapter called;
     private final ObjectMapper json = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     public ReverseEngineeringService(ColdReadService coldReadService, CapabilityDiscovery discovery, ClaimProposer proposer,
-                                     BuildExecutor buildExecutor, BootGate bootGate,
-                                     // The command that packages a variant, the package gate's own.
-                                     @Value("${autobuilder.build.package-gate.command:mvn package -DskipTests}") String packageCommand) {
+                                     ProgramAdapter started, LibraryStyleAdapter called) {
         this.coldReadService = coldReadService;
         this.discovery = discovery;
         this.proposer = proposer;
-        this.buildExecutor = buildExecutor;
-        this.bootGate = bootGate;
-        this.packageCommand = packageCommand;
+        this.started = started;
+        this.called = called;
     }
 
     /**
      * One variant: the tree as it is ({@code capability} null), with one capability taken out ({@code c1}, ...), or
-     * with one feature's request handlers taken out ({@code feature:<name>}).
+     * with one way in taken out ({@code entry:<Type.method>}).
+     *
+     * @param ran whether its claims could be exercised at all -- a tree that did not build or start says nothing
      */
-    public record Variant(String capability, List<String> stubbedMethods, boolean built, boolean served, String why) {
+    public record Variant(String capability, List<String> stubbedMethods, boolean built, boolean ran, String why) {
     }
 
-    /** What one claim got from one variant: the status, or why nothing was observed. */
-    public record Observation(String variant, Integer status, String unobserved, String body) {
+    /**
+     * What one claim got from one variant.
+     *
+     * @param status     the kind's own answer: an HTTP status, an exit status, 0 for a test that passed
+     * @param unobserved why there is no answer, when there is none
+     * @param held       whether the claim held there, as its kind judges it
+     */
+    public record Observation(String variant, Integer status, String unobserved, String body, boolean held) {
+
+        public static String tail(String s) {
+            if (s == null) return null;
+            return s.length() <= 600 ? s : s.substring(s.length() - 600);
+        }
+
+        public static String clip(String s) {
+            if (s == null) return null;
+            return s.length() <= 300 ? s : s.substring(0, 300);
+        }
     }
 
     /**
      * @param verdict    {@code anchored}: holds on the tree and not with its capability taken out; {@code not-held}: the
      *                   tree as it is does not bear it out; {@code not-anchored}: it also holds with its capability taken
-     *                   out; {@code unjudged}: a variant it needed did not build or start, or its capability had
-     *                   nothing to take out
+     *                   out; {@code unjudged}: a variant it needed did not run, or its capability had nothing to take out
      * @param alsoNeeds  the other capabilities whose removal also breaks it (a dependency, or the wrong attribution)
      */
     public record JudgedClaim(Claim claim, String verdict, List<String> alsoNeeds, List<Observation> observations,
@@ -101,31 +121,39 @@ public class ReverseEngineeringService {
     /**
      * The same claim judged by FEATURE, which is what decides whether it is kept.
      *
-     * @param feature   the feature its last request goes to, or null when that request reaches no declared route
-     * @param verdict   {@code anchored}: holds, and not with its feature's handlers taken out; {@code not-anchored}: holds
-     *                  without them too (the framework answers it, not the project); {@code not-held}; {@code unowned}:
-     *                  its last request reaches no declared route; {@code unjudged}: a variant it needed did not serve
-     * @param dependsOn the other features whose handlers taken out also break it -- its setup goes through them
+     * @param feature   its own feature -- of the features whose removal breaks it, the most specific; null when none
+     * @param verdict   {@code anchored}: holds, and some feature's removal breaks it; {@code not-anchored}: holds with any
+     *                  one feature taken out (the platform answers it, not the project); {@code not-held};
+     *                  {@code unjudged}: the tree as it is, or every feature variant, could not be exercised
+     * @param dependsOn the other features whose ways in, taken out, also break it -- what it goes through
+     * @param entry     its own way in (the implementing method), from which its feature follows; null when none
      */
-    public record FeatureVerdict(String feature, String verdict, List<String> dependsOn) {
+    public record FeatureVerdict(String feature, String verdict, List<String> dependsOn, String entry) {
+        public FeatureVerdict(String feature, String verdict, List<String> dependsOn) {
+            this(feature, verdict, dependsOn, null);
+        }
     }
 
     /**
-     * What the project does, cut the way a person would name it: one feature per resource its served surface offers.
+     * One feature: a type that declares entry points.
      *
-     * @param routes    the routes it serves, as "VERB /path"
-     * @param handlers  the methods that handle them -- what its variant takes out
-     * @param dependsOn the features its kept claims were OBSERVED to need: their setup failed without them
-     * @param madeOf    the capabilities (the layer cut) whose removal breaks its kept claims: the code it is made of
-     * @param claims    its kept claims, by id
+     * @param kind            how it is used, as a person reads it ("service-style", ...)
+     * @param entryPoints     its ways in, as a person reads them
+     * @param implementations the methods that implement them -- what its variant takes out
+     * @param dependsOn       the features its kept claims were OBSERVED to need
+     * @param madeOf          the capabilities (the layer cut) whose removal breaks its kept claims: the code it is made of
+     * @param claims          its kept claims, by id
      */
-    public record Feature(String name, List<String> routes, List<String> handlers, List<String> dependsOn,
-                          List<String> madeOf, List<String> claims) {
+    public record Feature(String name, String kind, List<String> entryPoints, List<String> implementations,
+                          List<String> dependsOn, List<String> madeOf, List<String> claims) {
     }
 
-    public record Account(String source, String copy, ColdRead coldRead, List<Feature> features, List<Capability> capabilities,
-                          List<String> unknownDeclarations, List<ClaimProposer.Proposal> proposals, List<Variant> variants,
-                          List<JudgedClaim> claims, Map<String, Integer> verdicts, long durationMs) {
+    /**
+     * @param kind how the project is used ("service-style", ...), or null when no way in was found
+     */
+    public record Account(String source, String copy, ColdRead coldRead, String kind, List<Feature> features,
+                          List<Capability> capabilities, List<String> unknownDeclarations, List<ClaimProposer.Proposal> proposals,
+                          List<Variant> variants, List<JudgedClaim> claims, Map<String, Integer> verdicts, long durationMs) {
     }
 
     public Account reverseEngineer(Path source, Path workRoot) throws IOException {
@@ -145,164 +173,181 @@ public class ReverseEngineeringService {
         Map<String, Declaration> inventory = CapabilityCut.inventory(files);
         if (inventory.isEmpty()) throw new IllegalArgumentException(source + " declares nothing under src/main/java");
 
+        // Started when it has a program entry, called when it has none.
+        EntryAdapter adapter = started;
+        List<EntryPoint> points = started.find(files, coldRead);
+        if (points.isEmpty()) {
+            adapter = called;
+            points = called.find(files, coldRead);
+        }
+        if (points.isEmpty()) adapter = null;
+        Map<String, List<EntryPoint>> byFeature = featuresOf(points);
+        Map<EntryKind, ClaimProposer.Way> offered = new LinkedHashMap<>();
+        for (EntryPoint e : points) {
+            EntryAdapter a = adapter;
+            offered.computeIfAbsent(e.kind(), k -> new ClaimProposer.Way(new ArrayList<>(), a.exerciseForm(k))).points().add(e);
+        }
+        String kind = offered.isEmpty() ? null : offered.keySet().iterator().next().label();
+        log.warn("T4-EK: {} -- {} way(s) in, {} feature(s): {}", kind == null ? "no way in" : kind, points.size(),
+                byFeature.size(), byFeature.keySet());
+
         progress.accept("Finding its capabilities (the model reads the code)");
         CapabilityDiscovery.Found found = discovery.discover(original, files, null);
         List<Capability> capabilities = found.capabilities();
         log.warn("T4-EK: {} capabilities in {}", capabilities.size(), source);
 
-        List<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Handler> handlers =
-                surface.handlersByCode(files).orElse(List.of());
-        Map<String, List<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Handler>> byFeature = featuresOf(handlers);
-        log.warn("T4-EK: {} feature(s) on the served surface: {}", byFeature.size(), byFeature.keySet());
-
         List<ClaimProposer.Proposal> proposals = new ArrayList<>();
         List<Claim> claims = new ArrayList<>();
-        for (Capability c : capabilities) {
-            progress.accept("Proposing claims for " + c.name() + " (" + (proposals.size() + 1) + " of " + capabilities.size() + ")");
-            ClaimProposer.Proposal p = proposer.propose(original, files, inventory, c, capabilities, coldRead, claims.size() + 1);
-            proposals.add(p);
-            claims.addAll(p.claims());
+        if (adapter != null) {
+            for (Capability c : capabilities) {
+                progress.accept("Proposing claims for " + c.name() + " (" + (proposals.size() + 1) + " of " + capabilities.size() + ")");
+                ClaimProposer.Proposal p = proposer.propose(original, files, inventory, c, capabilities, coldRead, offered,
+                        claims.size() + 1);
+                proposals.add(p);
+                claims.addAll(p.claims());
+            }
         }
 
         List<Variant> variants = new ArrayList<>();
         Map<String, Map<String, Observation>> seen = new LinkedHashMap<>();   // claim id -> variant -> observation
         claims.forEach(k -> seen.put(k.id(), new LinkedHashMap<>()));
-        int total = 1 + capabilities.size() + byFeature.size(), n = 1;
-        progress.accept("Checking " + claims.size() + " claims against the code as it is (1 of " + total + ")");
-        variants.add(runVariant("as-is", original, List.of(), claims, seen));
-        for (Capability c : capabilities) {
-            progress.accept("Checking them without " + c.name() + " (" + (++n) + " of " + total + ")");
-            Path dir = work.resolve("without-" + c.id());
-            copy(original, dir);
-            CapabilityStub.Result stub = CapabilityStub.stub(files, c.declarations(), inventory);
-            for (Map.Entry<String, String> e : stub.stubbed().entrySet()) {
-                Files.writeString(dir.resolve(e.getKey()), e.getValue());
-            }
-            variants.add(runVariant(c.id(), dir, stub.methods(), claims, seen));
+        // One variant per way in (its implementing method), not per feature: the "most specific" rule below holds for
+        // single ways in -- what depends on B breaks wherever B is taken out, so B breaks at least as many claims -- and
+        // NOT for a type that groups unrelated methods (labelmaker, 2026-11-09: Zone, small, was read as depending on
+        // Labeler, large, because a claim of next was broken by both and Zone broke fewer claims in all).
+        Map<String, String> typeOfEntry = new TreeMap<>();
+        for (EntryPoint e : points) {
+            String id = e.memberId(inventory);
+            if (id != null) typeOfEntry.putIfAbsent(id, e.type());
         }
-        for (var f : byFeature.entrySet()) {
-            progress.accept("Checking them without the " + f.getKey() + " feature (" + (++n) + " of " + total + ")");
-            String name = "feature:" + f.getKey();
-            Path dir = work.resolve("without-feature-" + f.getKey().replaceAll("[^A-Za-z0-9_-]", "_"));
-            copy(original, dir);
-            List<String> ids = f.getValue().stream().map(h -> handlerId(h, inventory)).filter(java.util.Objects::nonNull).toList();
-            CapabilityStub.Result stub = CapabilityStub.stub(files, ids, inventory);
-            for (Map.Entry<String, String> e : stub.stubbed().entrySet()) {
-                Files.writeString(dir.resolve(e.getKey()), e.getValue());
+        if (adapter != null) {
+            int total = 1 + capabilities.size() + typeOfEntry.size(), n = 1;
+            progress.accept("Checking " + claims.size() + " claims against the code as it is (1 of " + total + ")");
+            variants.add(runVariant(adapter, "as-is", original, List.of(), claims, seen));
+            for (Capability c : capabilities) {
+                progress.accept("Checking them without " + c.name() + " (" + (++n) + " of " + total + ")");
+                variants.add(stubbedVariant(adapter, c.id(), work.resolve("without-" + c.id()), original, files, inventory,
+                        c.declarations(), claims, seen));
             }
-            variants.add(runVariant(name, dir, stub.methods(), claims, seen));
+            for (String id : typeOfEntry.keySet()) {
+                progress.accept("Checking them without " + id + " (" + (++n) + " of " + total + ")");
+                variants.add(stubbedVariant(adapter, "entry:" + id,
+                        work.resolve("without-entry-" + id.replaceAll("[^A-Za-z0-9_-]", "_")), original, files,
+                        inventory, List.of(id), claims, seen));
+            }
         }
 
         Map<String, Variant> byName = new LinkedHashMap<>();
         variants.forEach(v -> byName.put(v.capability() == null ? "as-is" : v.capability(), v));
         List<JudgedClaim> judged = new ArrayList<>();
         Map<String, Integer> verdicts = new LinkedHashMap<>();
-        String contextPath = coldRead.runtime() == null ? null : coldRead.runtime().contextPath();
+        Map<String, FeatureVerdict> byClaim = attribute(claims, seen, byName, typeOfEntry);
         for (Claim k : claims) {
             JudgedClaim layer = judge(k, seen.get(k.id()), byName, capabilities);
-            String feature = featureOf(k, byFeature.keySet(), contextPath);
-            FeatureVerdict fv = judgeFeature(k, feature, seen.get(k.id()), byName, byFeature.keySet());
-            JudgedClaim j = new JudgedClaim(k, layer.verdict(), layer.alsoNeeds(), layer.observations(), fv);
-            judged.add(j);
+            FeatureVerdict fv = byClaim.get(k.id());
+            judged.add(new JudgedClaim(k, layer.verdict(), layer.alsoNeeds(), layer.observations(), fv));
             verdicts.merge(fv.verdict(), 1, Integer::sum);
         }
         List<Feature> features = summarise(byFeature, judged);
-        Account account = new Account(source.toString(), work.toString(), coldRead, features, capabilities, found.unknown(),
-                proposals, variants, judged, verdicts, System.currentTimeMillis() - t0);
+        Account account = new Account(source.toString(), work.toString(), coldRead, kind, features, capabilities,
+                found.unknown(), proposals, variants, judged, verdicts, System.currentTimeMillis() - t0);
         json.writeValue(work.resolve("account.json").toFile(), account);
         log.warn("T4-EK: account of {} written to {} -- {} ({} ms)", source, work, verdicts, account.durationMs());
         return account;
     }
 
-    /** One claim's verdict from what every variant answered it; {@code variants} by name, {@code "as-is"} included. */
+    /** One claim's verdict by capability; {@code variants} by name, {@code "as-is"} included. */
     static JudgedClaim judge(Claim k, Map<String, Observation> obs, Map<String, Variant> variants, List<Capability> capabilities) {
         Observation asIs = obs.get("as-is");
         Variant own = variants.get(k.capability());
         String verdict;
-        if (!variants.get("as-is").served()) {
+        if (!variants.get("as-is").ran()) {
             verdict = "unjudged";
-        } else if (!holds(asIs, k)) {
+        } else if (!holds(asIs)) {
             verdict = "not-held";
-        } else if (own == null || !own.served() || own.stubbedMethods().isEmpty()) {
-            // A capability with nothing to take out (an entry point, kept so the tree starts) leaves the tree as it is:
-            // every claim would "hold without it", which says nothing about the claim.
+        } else if (own == null || !own.ran() || own.stubbedMethods().isEmpty()) {
+            // A capability with nothing to take out leaves the tree as it is: every claim would "hold without it".
             verdict = "unjudged";
         } else {
-            verdict = holds(obs.get(k.capability()), k) ? "not-anchored" : "anchored";
+            verdict = holds(obs.get(k.capability())) ? "not-anchored" : "anchored";
         }
         List<String> alsoNeeds = new ArrayList<>();
-        if (holds(asIs, k)) {
+        if (holds(asIs)) {
             for (Capability other : capabilities) {
                 Variant v = variants.get(other.id());
-                if (other.id().equals(k.capability()) || v == null || !v.served()) continue;
-                if (!holds(obs.get(other.id()), k)) alsoNeeds.add(other.id());
+                if (other.id().equals(k.capability()) || v == null || !v.ran()) continue;
+                if (!holds(obs.get(other.id()))) alsoNeeds.add(other.id());
             }
         }
         return new JudgedClaim(k, verdict, alsoNeeds, List.copyOf(obs.values()));
     }
 
-    /**
-     * The served surface grouped by resource: the first segment of each route's path ("/" for the root). A person names
-     * an application's parts this way, and so does its specification; nothing here asks the model.
-     */
-    static Map<String, List<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Handler>> featuresOf(
-            List<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Handler> handlers) {
-        Map<String, List<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Handler>> out = new java.util.TreeMap<>();
-        for (var h : handlers) out.computeIfAbsent(firstSegment(h.endpoint().path()), k -> new ArrayList<>()).add(h);
+    /** Entry points grouped by the type that declares their implementation: a feature per type, one rule for every kind. */
+    static Map<String, List<EntryPoint>> featuresOf(List<EntryPoint> points) {
+        Map<String, List<EntryPoint>> out = new TreeMap<>();
+        for (EntryPoint e : points) out.computeIfAbsent(e.type(), k -> new ArrayList<>()).add(e);
         return out;
     }
 
-    static String firstSegment(String path) {
-        if (path == null) return "/";
-        String p = path.split("\\?", 2)[0];
-        for (String seg : p.split("/")) {
-            if (!seg.isBlank()) return seg;
+    /**
+     * Every claim judged by feature, from what the way-in variants answered it -- nothing is read from the claim.
+     * A held claim's broken-by set is the ways in whose removal breaks it; empty, it asserts nothing about the project
+     * (not-anchored). Its own way in is the member of that set whose removal breaks the FEWEST held claims overall:
+     * whatever depends on a way in breaks wherever that way in is taken out, so the depended-on one breaks at least as
+     * many claims and the dependent is the more specific. Ties go to the first by name. Its feature is the type of its
+     * own way in; the types of the others in the set (its own excepted) are what it depends on.
+     *
+     * @param typeOfEntry each way in that has a variant (its member id), and the type -- the feature -- that declares it
+     */
+    static Map<String, FeatureVerdict> attribute(List<Claim> claims, Map<String, Map<String, Observation>> seen,
+                                                 Map<String, Variant> variants, Map<String, String> typeOfEntry) {
+        Variant asIsVariant = variants.get("as-is");
+        boolean asIsRan = asIsVariant != null && asIsVariant.ran();
+        List<String> judging = typeOfEntry.keySet().stream().filter(id -> {
+            Variant v = variants.get("entry:" + id);
+            return v != null && v.ran() && !v.stubbedMethods().isEmpty();
+        }).toList();
+        Map<String, List<String>> brokenBy = new LinkedHashMap<>();
+        Map<String, Integer> breaks = new TreeMap<>();
+        for (Claim k : claims) {
+            Map<String, Observation> obs = seen.get(k.id());
+            if (!asIsRan || !holds(obs.get("as-is"))) continue;
+            List<String> set = new ArrayList<>();
+            for (String id : judging) {
+                if (!holds(obs.get("entry:" + id))) {
+                    set.add(id);
+                    breaks.merge(id, 1, Integer::sum);
+                }
+            }
+            brokenBy.put(k.id(), set);
         }
-        return "/";
-    }
-
-    /** The feature a claim's LAST request goes to, the context path the application serves under taken off; or null. */
-    static String featureOf(Claim k, Set<String> features, String contextPath) {
-        String path = k.sequence().get(k.sequence().size() - 1).path();
-        if (contextPath != null && !contextPath.isBlank() && !contextPath.equals("/") && path.startsWith(contextPath)) {
-            path = path.substring(contextPath.length());
-        }
-        String seg = firstSegment(path);
-        return features.contains(seg) ? seg : null;
-    }
-
-    /** One claim judged by feature; {@code variants} by name, {@code "as-is"} and {@code "feature:<name>"} included. */
-    static FeatureVerdict judgeFeature(Claim k, String feature, Map<String, Observation> obs, Map<String, Variant> variants,
-                                       Set<String> features) {
-        Observation asIs = obs.get("as-is");
-        Variant own = feature == null ? null : variants.get("feature:" + feature);
-        String verdict;
-        if (!variants.get("as-is").served()) verdict = "unjudged";
-        else if (!holds(asIs, k)) verdict = "not-held";
-        else if (feature == null) verdict = "unowned";
-        else if (own == null || !own.served() || own.stubbedMethods().isEmpty()) verdict = "unjudged";
-        else verdict = holds(obs.get("feature:" + feature), k) ? "not-anchored" : "anchored";
-        List<String> dependsOn = new ArrayList<>();
-        if (holds(asIs, k)) {
-            for (String other : features) {
-                Variant v = variants.get("feature:" + other);
-                if (other.equals(feature) || v == null || !v.served()) continue;
-                if (!holds(obs.get("feature:" + other), k)) dependsOn.add(other);
+        Map<String, FeatureVerdict> out = new LinkedHashMap<>();
+        for (Claim k : claims) {
+            List<String> set = brokenBy.get(k.id());
+            if (!asIsRan) out.put(k.id(), new FeatureVerdict(null, "unjudged", List.of()));
+            else if (set == null) out.put(k.id(), new FeatureVerdict(null, "not-held", List.of()));
+            else if (judging.isEmpty()) out.put(k.id(), new FeatureVerdict(null, "unjudged", List.of()));
+            else if (set.isEmpty()) out.put(k.id(), new FeatureVerdict(null, "not-anchored", List.of()));
+            else {
+                String own = set.stream().min(java.util.Comparator.comparing((String id) -> breaks.get(id))
+                        .thenComparing(id -> id)).orElseThrow();
+                String feature = typeOfEntry.get(own);
+                List<String> dependsOn = set.stream().map(typeOfEntry::get).filter(t -> !t.equals(feature)).distinct().toList();
+                out.put(k.id(), new FeatureVerdict(feature, "anchored", dependsOn, own));
             }
         }
-        return new FeatureVerdict(feature, verdict, dependsOn);
+        return out;
     }
 
-    static List<Feature> summarise(Map<String, List<com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Handler>> byFeature,
-                                   List<JudgedClaim> judged) {
+    static List<Feature> summarise(Map<String, List<EntryPoint>> byFeature, List<JudgedClaim> judged) {
         List<Feature> out = new ArrayList<>();
         for (var f : byFeature.entrySet()) {
-            java.util.Set<String> routes = new java.util.LinkedHashSet<>(), methods = new java.util.LinkedHashSet<>();
-            f.getValue().forEach(h -> {
-                routes.add(h.endpoint().toString());
-                methods.add(h.type() + "." + h.method());
+            Set<String> labels = new LinkedHashSet<>(), methods = new LinkedHashSet<>();
+            f.getValue().forEach(e -> {
+                labels.add(e.label());
+                methods.add(e.type() + "." + e.method());
             });
-            java.util.Set<String> dependsOn = new java.util.TreeSet<>(), madeOf = new java.util.TreeSet<>();
+            Set<String> dependsOn = new TreeSet<>(), madeOf = new TreeSet<>();
             List<String> kept = new ArrayList<>();
             for (JudgedClaim j : judged) {
                 if (j.byFeature() == null || !f.getKey().equals(j.byFeature().feature())
@@ -312,45 +357,34 @@ public class ReverseEngineeringService {
                 if (j.verdict().equals("anchored")) madeOf.add(j.claim().capability());
                 madeOf.addAll(j.alsoNeeds());
             }
-            out.add(new Feature(f.getKey(), List.copyOf(routes), List.copyOf(methods), List.copyOf(dependsOn),
-                    List.copyOf(madeOf), kept));
+            String kind = f.getValue().isEmpty() ? null : f.getValue().get(0).kind().label();
+            out.add(new Feature(f.getKey(), kind, List.copyOf(labels), List.copyOf(methods),
+                    List.copyOf(dependsOn), List.copyOf(madeOf), kept));
         }
         return out;
     }
 
-    /** A handler's id in the inventory: by its nested type name when that is how the inventory names it, else qualified. */
-    private static String handlerId(com.walpro.autobuilder.analysis.structure.EndpointSurfaceQuery.Handler h,
-                                    Map<String, Declaration> inventory) {
-        String simple = h.type() + "." + h.method(), qualified = h.qualifiedType() + "." + h.method();
-        if (inventory.containsKey(simple)) return simple;
-        return inventory.containsKey(qualified) ? qualified : null;
+    /** Held = observed, and as the claim's kind judges it. A sequence that could not be completed bears nothing out. */
+    static boolean holds(Observation o) {
+        return o != null && o.held();
     }
 
-    /** Holds = observed, and the status the claim states. A sequence that could not be completed bears nothing out. */
-    static boolean holds(Observation o, Claim k) {
-        return o != null && o.status() != null && o.status() == k.expected();
+    private Variant stubbedVariant(EntryAdapter adapter, String name, Path dir, Path original, Map<String, String> files,
+                                   Map<String, Declaration> inventory, List<String> ids, List<Claim> claims,
+                                   Map<String, Map<String, Observation>> seen) throws IOException {
+        copy(original, dir);
+        CapabilityStub.Result stub = CapabilityStub.stub(files, ids, inventory);
+        for (Map.Entry<String, String> e : stub.stubbed().entrySet()) {
+            Files.writeString(dir.resolve(e.getKey()), e.getValue());
+        }
+        return runVariant(adapter, name, dir, stub.methods(), claims, seen);
     }
 
-    private Variant runVariant(String name, Path dir, List<String> stubbed, List<Claim> claims,
-                               Map<String, Map<String, Observation>> seen) {
+    private static Variant runVariant(EntryAdapter adapter, String name, Path dir, List<String> stubbed, List<Claim> claims,
+                                      Map<String, Map<String, Observation>> seen) {
         String capability = name.equals("as-is") ? null : name;
-        BuildOutcome build = buildExecutor.executeIn(dir.toString(), "reverse-engineering", packageCommand);
-        if (build.failed()) {
-            log.warn("T4-EK: variant {} did not build -- {}", name, tail(build.stderrTail()));
-            return new Variant(capability, stubbed, false, false, tail(build.stderrTail()));
-        }
-        var served = bootGate.serve(dir);
-        if (served.isEmpty()) {
-            log.warn("T4-EK: variant {} built but did not serve", name);
-            return new Variant(capability, stubbed, true, false, "built, but did not start serving");
-        }
-        try (BootGate.Served app = served.get()) {
-            for (Claim k : claims) {
-                BootGate.Served.Response r = app.send(k.sequence());
-                seen.get(k.id()).put(name, new Observation(name, r.status(), r.unobserved(), clip(r.body())));
-            }
-        }
-        return new Variant(capability, stubbed, true, true, null);
+        EntryAdapter.Ran ran = adapter.exercise(dir, name, claims, seen);
+        return new Variant(capability, stubbed, ran.built(), ran.ran(), ran.why());
     }
 
     private static void copy(Path from, Path to) throws IOException {
@@ -363,15 +397,5 @@ public class ReverseEngineeringService {
                 else Files.copy(p, target);
             }
         }
-    }
-
-    private static String tail(String s) {
-        if (s == null) return null;
-        return s.length() <= 600 ? s : s.substring(s.length() - 600);
-    }
-
-    private static String clip(String s) {
-        if (s == null) return null;
-        return s.length() <= 300 ? s : s.substring(0, 300);
     }
 }

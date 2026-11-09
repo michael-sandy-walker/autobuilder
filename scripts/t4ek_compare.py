@@ -105,7 +105,7 @@ def main():
         print(f"  {c['id']} {c['name']} -- {c['summary']}\n      {', '.join(c['declarations'])}")
     print('\nVARIANTS:')
     for v in acc['variants']:
-        print(f"  {v['capability'] or 'as-is'}: built={v['built']} served={v['served']} stubbed={len(v['stubbedMethods'])}"
+        print(f"  {v['capability'] or 'as-is'}: built={v['built']} ran={v.get('ran', v.get('served'))} stubbed={len(v['stubbedMethods'])}"
               + (f" why={v['why'][:120]}" if v.get('why') else ''))
     def kept(j):
         return j['byFeature']['verdict'] if j.get('byFeature') else j['verdict']
@@ -113,7 +113,7 @@ def main():
         print('\nFEATURES (from the served surface):')
         for f in acc['features']:
             print(f"  {f['name']}: {len(f['claims'])} kept claim(s); depends on {f['dependsOn'] or 'nothing'}; "
-                  f"made of {f['madeOf']}\n      routes: {', '.join(f['routes'])}")
+                  f"made of {f['madeOf']}\n      entry points: {', '.join(f.get('entryPoints') or f.get('routes') or [])}")
     anchored = [j for j in claims if kept(j) == 'anchored']
     held = [j for j in claims if kept(j) in ('anchored', 'not-anchored')]
     print('\nCHECKS (anchored claims asserting it | held-but-not-anchored ones, for information):')

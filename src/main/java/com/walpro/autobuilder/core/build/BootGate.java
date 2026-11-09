@@ -1090,6 +1090,64 @@ public class BootGate {
     }
 
     /** Polls the root path until the process answers HTTP (any status), dies, or the deadline passes. */
+    /** T4-EK: how a run that was started to its end ended: its exit status and output, or why there is none. */
+    public record Ended(Integer exit, String output, String unobserved) {
+    }
+
+    static final int MAX_RUN_OUTPUT_CHARS = 64_000;
+
+    /**
+     * T4-EK: the packaged artifact of {@code workingDir} run once to its end with {@code args}, in {@code cwd}, with no
+     * input -- the same launch command the gate uses. Empty when there is no packaged artifact; a run that does not end
+     * within {@code timeoutMs} is destroyed and has no exit status.
+     */
+    public Optional<Ended> runToEnd(Path workingDir, List<String> args, Path cwd, long timeoutMs) {
+        Optional<Path> artifact = findPackagedArtifact(workingDir.toAbsolutePath().normalize());
+        if (artifact.isEmpty()) return Optional.empty();
+        List<String> command = new ArrayList<>(buildCommand(artifact.get(), 0));
+        if (command.isEmpty()) return Optional.empty();
+        command.addAll(args);
+        Process process = null;
+        try {
+            process = new ProcessBuilder(command).directory(cwd.toFile()).redirectErrorStream(true).start();
+            process.getOutputStream().close();
+            StringBuilder out = new StringBuilder();
+            InputStream in = process.getInputStream();
+            Thread reader = new Thread(() -> {
+                try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = r.readLine()) != null) {
+                        synchronized (out) {
+                            if (out.length() < MAX_RUN_OUTPUT_CHARS) out.append(line).append('\n');
+                        }
+                    }
+                } catch (IOException ignored) {
+                    // the process ended or was destroyed
+                }
+            });
+            reader.setDaemon(true);
+            reader.start();
+            if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
+                process.destroyForcibly();
+                reader.join(1000);
+                synchronized (out) {
+                    return Optional.of(new Ended(null, out.toString(), "TIMEOUT"));
+                }
+            }
+            reader.join(2000);
+            synchronized (out) {
+                return Optional.of(new Ended(process.exitValue(), out.toString(), null));
+            }
+        } catch (IOException e) {
+            if (process != null) process.destroyForcibly();
+            return Optional.of(new Ended(null, null, "NOT_STARTED"));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (process != null) process.destroyForcibly();
+            return Optional.of(new Ended(null, null, "INTERRUPTED"));
+        }
+    }
+
     /**
      * T4-EK: the packaged artifact of {@code workingDir} started and kept serving, for a caller with request sequences
      * of its own to send -- the same launch, readiness and sequence semantics as the gate, none of its judgement.

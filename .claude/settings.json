@@ -25,5 +25,8 @@
         ]
       }
     ]
+  },
+  "env": {
+    "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "true"
   }
 }

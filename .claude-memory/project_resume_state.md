@@ -11,7 +11,14 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-08 (Opus 5.5, session 30) -- T5-BO CLOSED AFTER FIVE LISTENING RUNS WITH THE USER; T4-EL FILED, BUILT AND FIELD-CHECKED (OPERATOR REWIND QUEUED FOR THE NEXT BOUNDARY) -- START HERE
+## 2026-11-09 (Opus 5.5, session 31) -- T5-BI INVENTORIED, BECAME T4-EM; THE NARRATOR BUILT, REPLAYED AND FIELD-RUN -- START HERE
+
+- **Inventory** (claude.ai/artifact/QAJhasGF8q8g2CgqjJrvZ2, with the design options): about 240 spoken lines over six runs, all template; about 127 model-written reasons never reached a person. T5-BI became **T4-EM** at the user's word; the user chose a narrator over its OWN model channel (`llm.narrator.*`, never inherited from `llm.api.*`, same `qwen3.8` today), narrator alone first, the listener line in each answer later.
+- **Built `f66273a0`:** `NarratorChannel`, `CycleRecord` + `CycleNarrator`, `cycle_narrated`, the evaluator's and planner's own words in the stream, the page speaks the telling and silences the templates it covers. Suite 4364/0/0/17.
+- **Offline replay** (six 2026-11-08 runs, 38 cycles): 8 -> 3 -> 0 tellings stating what their record does not, over three passes. **Field** `2026-11-09_10-55-10` (field143): GOAL_FULFILLED 11/11, 8 of 8 tellings grounded, narrator ~16 s of a 20-min run, loop calls not slower.
+- **Next:** the user's verdict by ear closes or reopens DoD (4); then the listener line in each answer (slice 2) if the user wants it. `data/edit-hunks-withheld` holds field143; the previous state is in `~/.autobuilder/edit-hunks-withheld-after-2026-11-08_17-55-39`. Nothing is running.
+
+## 2026-11-08 (Opus 5.5, session 30) -- T5-BO CLOSED AFTER FIVE LISTENING RUNS WITH THE USER; T4-EL FILED, BUILT AND FIELD-CHECKED (OPERATOR REWIND QUEUED FOR THE NEXT BOUNDARY)
 
 - **T5-BO closed:** six edit-hunks-withheld runs (`2026-11-08_15-30-09` .. `_17-55-39`) with the user listening in Brave; findings on the ticket. Narration names the file being edited and merged, says the goal, new subgoals by headline, status changes and the run length at fulfilment; the goal tree reaches the page on every save (`GoalTreePersistedEvent`); static files carry `Cache-Control: no-cache`. Code `d80a3b60`.
 - **T4-EL closed:** an operator rewind during a cycle is queued and performed at the next tick (202 instead of 409). Field `2026-11-08_17-55-39`: one request, performed at the boundary, run continued to GOAL_FULFILLED 9/11. The rewind's pop-up was seen; its voice line was NOT heard -- probable cause (tree-change lines pushing it out of the front queue) quieted for 8 s after a rewind, not yet heard. Suite 4349/0/0/16.

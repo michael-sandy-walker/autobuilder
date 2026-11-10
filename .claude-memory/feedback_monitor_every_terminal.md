@@ -49,3 +49,5 @@ GOAL_FULFILLED); drivers now refuse an existing prev dir and stop on a failed mv
 
 **2026-11-07: hit AGAIN** (`until ! pgrep -f "preflight.sh live"` in a waiter and in a monitor, both matched themselves
 and outlived their run). The anchored form that worked: `ps -eo args | grep -q "^/bin/bash scripts/preflight[.]sh live"`.
+
+**2026-11-10/11 (session 33), two more:** (1) a watcher whose status loop was piped through `uniq` stayed SILENT for its whole 30 minutes -- `uniq` emits a line only when a DIFFERENT one follows, so a steady state is never printed; emit the first line unconditionally or drop `uniq`. (2) `pkill -f "t4en_drive.py"` killed the calling shell itself (exit 144), the runbook's self-match trap again; kill by an anchored `ps -eo pid,args | awk '$2 ~ /java$/ && /pattern/'` instead.

@@ -20,3 +20,5 @@ plus 4 at 0.7, "because five calls at 0 would repeat one answer". The user asked
 Run at the run's own setting, it WAS true here (five byte-identical answers, qwen3.8 local) -- but as a measurement,
 not a premise. A probe runs at the run's settings; a claim about the model's behaviour is checked before it shapes an
 instrument.
+
+**2026-11-11 (T1-GK), replay through the REAL code path.** To measure a prompt change, a throwaway test (not `*Test`, deleted after) loaded a saved account JSON, built the client with `LLMClient.forChannel(...)` and the run's settings (`qwen3.8`, `reasoning-effort: none`), and called the component itself (`SeedComposer.compose`) -- no reimplemented prompt. The baseline reproduced the field output byte for byte, which is the check that the replay is faithful. At temperature 0, N replays of one input are ONE sample: vary the INPUT (other saved accounts) for n, not the repeat count.

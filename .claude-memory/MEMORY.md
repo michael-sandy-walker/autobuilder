@@ -13,15 +13,15 @@ Restamp a line the day you re-check it against its file.
 - Build `mvn clean install`, test `mvn test -Dtest=C#m`; targets `data/<name>/`, runs pick by `PREFLIGHT_TARGET=x`; goal stack `meta/GoalStack.json`; profiles `test`, `dev-local`, `dev-auto`, `fast`
 - **`.claude-memory/` IS the loading memory** — checkout/branch/cherry-pick touching it mutates live memory; commit first. Tiers T1 correctness .. T6 harness
 ## Roadmap
-- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-10)
-- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-10)
+- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-11)
+- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-11)
 - `tier_definitions.md` — tier meanings. (reviewed 2026-09-08)
 ## Meta / Process (YOU+ME work, not the product)
 - `meta_process.md` — how YOU+ME divide/sequence/staff work; "Model" = which Claude runs a session. (reviewed 2026-10-20)
 ## Project insights
 Direction and orientation:
 - `project_session_agenda.md`: 2026-08-23 REORDER section is live; S1-S6 reasoning only; never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state; only the NEWEST block has the entry marker. Read before quoting run numbers. (reviewed 2026-11-10)
+- `project_resume_state.md`: latest session/run state; only the NEWEST block has the entry marker. Read before quoting run numbers. (reviewed 2026-11-11)
 - `project_wave2_structure.md`: wave 2 layers; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: goal = a loop with a self-model it consults before acting; "substrate or patch?". (reviewed 2026-09-08)
 - `project_living_project_vision.md`: a project keeps taking inputs (seed = first); OFFSPRING code+graph become knowledge. Before input/merge/import work. (reviewed 2026-10-30)
@@ -108,7 +108,7 @@ Evidence discipline:
 - `feedback_replay_over_batches.md`: validate by deterministic replay; a DoD names its instrument. (reviewed 2026-10-20)
 - `feedback_measure_before_widening_a_working_rule.md`: a gap in a run that still closes is to measure, not widen. (reviewed 2026-10-20)
 - `feedback_short_field_run_after_context_change.md`: short live run after any cycle-context/persisted-record change. (reviewed 2026-07-30)
-- `feedback_llm_probe_realistic_context.md`: replays use real contexts and the run's request settings; claims about model behaviour are measured, not assumed. (reviewed 2026-11-07)
+- `feedback_llm_probe_realistic_context.md`: replays use real contexts, the run's settings and the real code path; temperature 0 = one sample per input. (reviewed 2026-11-11)
 - `feedback_runs_are_variant_by_design.md`: keep cross-run resemblances family-level. (reviewed 2026-07-09)
 - `feedback_stabilize_before_tuning_signals.md`: stabilize before signal redesign. (reviewed 2026-07-09)
 Reasoning and correction:
@@ -133,7 +133,7 @@ Code and design constraints:
 - `feedback_string_consumption_path.md`: no string-scraping for CODE control flow; prose relayed to prompts is fine. (reviewed 2026-07-09)
 Watchers:
 - `feedback_batch_watcher_alarms_on_the_environment.md`: alarm on Neo4j down and <2 GB free. (reviewed 2026-10-11)
-- `feedback_monitor_every_terminal.md`: monitors match EVERY terminal state; pgrep must not match itself (hit again 2026-11-07; anchored ps pattern inside). (reviewed 2026-11-07)
+- `feedback_monitor_every_terminal.md`: monitors match EVERY terminal state; pgrep/pkill must not match itself; never pipe a status loop through `uniq` (silent). (reviewed 2026-11-11)
 - `feedback_escalate_unrecoverable_stagnation.md`: detect periodic failure early; same decision while nothing moves = grind. (reviewed 2026-10-19)
 - `feedback_waiter_fires_on_loop_terminal.md`: waiters fire on the LOOP's terminal line. (reviewed 2026-09-24)
 - `feedback_fix_first_when_a_finding_changes_the_measurement.md`: stop and fix first; no batch from uncommitted code. (reviewed 2026-09-30)

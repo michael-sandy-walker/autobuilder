@@ -838,7 +838,7 @@ function wireServicesBox() {
         const eq = l.indexOf('='); if (eq > 0) env[l.slice(0, eq).trim()] = l.slice(eq + 1).trim(); });
       return { name: d.name, image: String(d.image || '').trim(), hostPort: d.hostPort, containerPort: parseInt(d.containerPort, 10) || 0,
         env, initDir: d.initDir, initScripts: d.initScripts, initScript: d.initScript || null, source: d.source,
-        evidence: d.evidence, failure: d.failure };
+        evidence: d.evidence, failure: d.failure, revisedBecause: d.revisedBecause || null };
     });
     svcSending = true; rerender();
     let r;
@@ -853,7 +853,9 @@ function wireServicesBox() {
 }
 function servicesLine() {
   const d = svc.recorded, list = (d.services || []).map(s => s.name + ' (' + s.image + ' at port ' + s.hostPort + ')').join(', ');
-  return '<div class="sub"><div class="why">' + (d.yes ? 'Started fresh for each start of this project: ' + esc(list) + '.'
+  const changed = (d.services || []).filter(s => s.revisedBecause)
+    .map(s => '<br><span class="note">' + esc(s.name) + ' was changed under your yes: ' + esc(s.revisedBecause) + '</span>').join('');
+  return '<div class="sub"><div class="why">' + (d.yes ? 'Started fresh for each start of this project: ' + esc(list) + '.' + changed
       : 'You said no to starting ' + esc(list || 'its services') + '; nothing is started for it.')
     + ' <a href="#" id="svcwithdraw" class="note" style="margin:0">withdraw</a></div></div>';
 }

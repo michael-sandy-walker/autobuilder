@@ -301,24 +301,54 @@ public class ReverseEngineeringService {
         throw new com.walpro.autobuilder.core.services.ServicesNeeded(proposals);
     }
 
+    /** How many times a yes whose container did not come up is changed from its own words before it is asked again. */
+    static final int MAX_REVISIONS = 2;
+
     /**
      * T4-EN: what the operator said yes to, started once on its own before anything else: a service that does not come
-     * up would fail every one of the program starts that follow. When it does not, the question is asked again with
-     * what its container said (and the model's reading of it), so the operator can change the answer.
+     * up would fail every one of the program starts that follow. When it does not, the model reads what its container
+     * said; a revision that changes only its environment (the same image, ports and setup script -- what the yes was
+     * given to) is recorded as the yes, with what changed and why, and tried again; anything else, or a service still
+     * not up after {@link #MAX_REVISIONS}, is asked again with the container's words.
      */
     private void tryRecorded(Path tree, com.walpro.autobuilder.core.services.ProjectServices.Decision yes,
                              java.util.function.Consumer<String> progress) {
         progress.accept("Starting the services you said yes to, once, to see that they come up");
-        try (var started = serviceContainers.startFresh(tree)) {
-            if (!started.failed()) return;
-            log.warn("T4-EN: what the operator said yes to did not come up -- {}", started.why());
-            progress.accept("Reading what the service said");
+        var decision = yes;
+        for (int round = 0; ; round++) {
             List<com.walpro.autobuilder.core.services.ServiceProposal> again = new ArrayList<>();
-            for (var p : yes.services()) {
-                again.add(p.equals(started.failedOn()) ? serviceNeeds.revise(p, started.said(), started.why()) : p);
+            try (var started = serviceContainers.startFresh(tree)) {
+                if (!started.failed()) return;
+                log.warn("T4-EN: what the operator said yes to did not come up -- {}", started.why());
+                progress.accept("Reading what the service said");
+                com.walpro.autobuilder.core.services.ServiceProposal revisedOne = null;
+                for (var p : decision.services()) {
+                    if (!p.equals(started.failedOn())) {
+                        again.add(p);
+                        continue;
+                    }
+                    var revised = serviceNeeds.revise(p, started.said(), started.why());
+                    if (round < MAX_REVISIONS && p.sameButEnvironment(revised)) {
+                        revised = new com.walpro.autobuilder.core.services.ServiceProposal(revised.name(), revised.image(),
+                                revised.hostPort(), revised.containerPort(), revised.env(), revised.initDir(),
+                                revised.initScripts(), revised.initScript(), revised.source(), revised.evidence(),
+                                p.failure(), revised.environmentChangeFrom(p) + " -- after it said: " + clip(started.said()));
+                        revisedOne = revised;
+                    }
+                    again.add(revised);
+                }
+                if (revisedOne == null) throw new com.walpro.autobuilder.core.services.ServicesNeeded(again);
+                decision = new com.walpro.autobuilder.core.services.ProjectServices.Decision(true, again, java.time.Instant.now());
+                projectServices.record(decision);
+                log.warn("T4-EN: {} changed under the same yes -- {}", revisedOne.name(), revisedOne.revisedBecause());
+                progress.accept("Trying " + revisedOne.name() + " again with its environment changed from what it said");
             }
-            throw new com.walpro.autobuilder.core.services.ServicesNeeded(again);
         }
+    }
+
+    private static String clip(String s) {
+        if (s == null) return "";
+        return s.length() <= 400 ? s : "..." + s.substring(s.length() - 400);
     }
 
     /** One claim's verdict by capability; {@code variants} by name, {@code "as-is"} included. */

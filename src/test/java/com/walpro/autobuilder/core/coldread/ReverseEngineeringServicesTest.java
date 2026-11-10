@@ -75,28 +75,75 @@ class ReverseEngineeringServicesTest {
         verify(program, never()).startFailure(any());
     }
 
-    @Test
-    void aYesThatDoesNotComeUpIsAskedAgainWithWhatItSaid() {
-        ServiceProposal yes = new ServiceProposal("mysql", "mysql:8", 3306, 3306, Map.of("MYSQL_ROOT_PASSWORD", ""), null,
-                List.of(), null, "model", List.of("a:1: db.password="), "link failure");
-        recorded.record(new ProjectServices.Decision(true, List.of(yes), Instant.now()));
+    private static final String MYSQL_SAID = "You need to specify one of the following: MYSQL_ROOT_PASSWORD, MYSQL_ALLOW_EMPTY_PASSWORD";
+
+    private com.walpro.autobuilder.core.services.ServiceContainers containersFailing(int failures, List<Integer> starts) {
         var containers = mock(com.walpro.autobuilder.core.services.ServiceContainers.class);
-        var failed = mock(com.walpro.autobuilder.core.services.ServiceContainers.Started.class);
-        when(failed.failed()).thenReturn(true);
-        when(failed.failedOn()).thenReturn(yes);
-        when(failed.said()).thenReturn("You need to specify MYSQL_ALLOW_EMPTY_PASSWORD");
-        when(failed.why()).thenReturn("mysql (mysql:8) stopped while starting");
-        when(containers.startFresh(any())).thenReturn(failed);
-        service.setServiceContainers(containers);
+        when(containers.startFresh(any())).thenAnswer(inv -> {
+            starts.add(1);
+            var s = mock(com.walpro.autobuilder.core.services.ServiceContainers.Started.class);
+            if (starts.size() <= failures) {
+                when(s.failed()).thenReturn(true);
+                when(s.failedOn()).thenReturn(recorded.toStart().get(0));
+                when(s.said()).thenReturn(MYSQL_SAID);
+                when(s.why()).thenReturn("mysql (mysql:8) stopped while starting");
+            }
+            return s;
+        });
+        return containers;
+    }
+
+    private void recordYes(Map<String, String> env) {
+        recorded.record(new ProjectServices.Decision(true, List.of(new ServiceProposal("mysql", "mysql:8", 3306, 3306, env,
+                "/docker-entrypoint-initdb.d", List.of(), null, "model", List.of("a:1: db.password="), "link failure")), Instant.now()));
+    }
+
+    @Test
+    void aYesWhoseContainerSaysWhatItNeedsIsChangedUnderTheSameYesAndShown() {
+        recordYes(Map.of("MYSQL_ROOT_PASSWORD", ""));
+        List<Integer> starts = new java.util.ArrayList<>();
+        service.setServiceContainers(containersFailing(1, starts));
+        // As the model answered in the field (2026-11-10): the revision leaves out the image's script directory.
         service.setServiceNeeds(new ServiceNeeds(prompt -> "IMAGE: mysql:8\nCONTAINER_PORT: 3306\nENV: MYSQL_ALLOW_EMPTY_PASSWORD=yes",
+                port -> false));
+        assertThatThrownBy(() -> service.reverseEngineer(source, work)).hasMessage("went on to the model work");
+        assertThat(starts).hasSize(2);
+        assertThat(recorded.toStart().get(0).initDir()).isEqualTo("/docker-entrypoint-initdb.d");
+        ServiceProposal now = recorded.toStart().get(0);
+        assertThat(now.env()).containsEntry("MYSQL_ALLOW_EMPTY_PASSWORD", "yes").doesNotContainKey("MYSQL_ROOT_PASSWORD");
+        assertThat(now.revisedBecause()).contains("MYSQL_ROOT_PASSWORD removed").contains("MYSQL_ALLOW_EMPTY_PASSWORD=yes added")
+                .contains("after it said: You need to specify");
+    }
+
+    @Test
+    void aRevisionThatChangesTheImageIsAskedNotTried() {
+        recordYes(Map.of("MYSQL_ROOT_PASSWORD", ""));
+        List<Integer> starts = new java.util.ArrayList<>();
+        service.setServiceContainers(containersFailing(9, starts));
+        service.setServiceNeeds(new ServiceNeeds(prompt -> "IMAGE: mariadb:11\nCONTAINER_PORT: 3306\nENV: MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=yes",
                 port -> false));
         assertThatThrownBy(() -> service.reverseEngineer(source, work))
                 .isInstanceOfSatisfying(ServicesNeeded.class, n -> assertThat(n.proposals()).singleElement().satisfies(p -> {
-                    assertThat(p.env()).containsEntry("MYSQL_ALLOW_EMPTY_PASSWORD", "yes");
+                    assertThat(p.image()).isEqualTo("mariadb:11");
                     assertThat(p.failure()).contains("stopped while starting");
                 }));
+        assertThat(starts).hasSize(1);
+        assertThat(recorded.toStart().get(0).image()).as("the yes is not changed").isEqualTo("mysql:8");
         verify(discovery, never()).discover(any(), any(), any());
-        verify(failed).close();
+    }
+
+    @Test
+    void aYesThatStillDoesNotComeUpIsAskedAgainAfterItsRevisions() {
+        recordYes(Map.of("MYSQL_ROOT_PASSWORD", ""));
+        List<Integer> starts = new java.util.ArrayList<>();
+        service.setServiceContainers(containersFailing(99, starts));
+        String[] answers = {"ENV: MYSQL_ALLOW_EMPTY_PASSWORD=yes", "ENV: MYSQL_RANDOM_ROOT_PASSWORD=yes", "ENV: MYSQL_ROOT_PASSWORD=x"};
+        int[] n = {0};
+        service.setServiceNeeds(new ServiceNeeds(prompt -> "IMAGE: mysql:8\nCONTAINER_PORT: 3306\n" + answers[Math.min(n[0]++, 2)]
+                + "\nINIT_DIR: /docker-entrypoint-initdb.d", port -> false));
+        assertThatThrownBy(() -> service.reverseEngineer(source, work)).isInstanceOf(ServicesNeeded.class);
+        assertThat(starts).hasSize(ReverseEngineeringService.MAX_REVISIONS + 1);
+        verify(discovery, never()).discover(any(), any(), any());
     }
 
     @Test

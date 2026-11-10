@@ -134,9 +134,11 @@ public class ServiceNeeds {
                 + "\n\nAnswer again, in the same form, so that it comes up and the project's lines still work unchanged.";
         ServiceProposal revised = parse(model.apply(prompt), a, p.evidence(), p.initScripts(), why);
         if (revised == null) return failed;
+        // The directory is the image's: a revision of the same image that leaves it out has not changed it.
+        String initDir = revised.initDir() == null && revised.image().equals(p.image()) ? p.initDir() : revised.initDir();
         return new ServiceProposal(p.name(), revised.image(), p.hostPort(), revised.containerPort(), revised.env(),
-                revised.initDir(), revised.initDir() == null ? List.of() : p.initScripts(),
-                revised.initDir() == null ? null : p.initScript(), "model", p.evidence(), why);
+                initDir, initDir == null ? List.of() : p.initScripts(), initDir == null ? null : p.initScript(), "model",
+                p.evidence(), why);
     }
 
     // ---- the project's own compose file ----

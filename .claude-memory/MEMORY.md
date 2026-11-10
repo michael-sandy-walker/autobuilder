@@ -13,15 +13,15 @@ Restamp a line the day you re-check it against its file.
 - Build `mvn clean install`, test `mvn test -Dtest=C#m`; targets `data/<name>/`, runs pick by `PREFLIGHT_TARGET=x`; goal stack `meta/GoalStack.json`; profiles `test`, `dev-local`, `dev-auto`, `fast`
 - **`.claude-memory/` IS the loading memory** — checkout/branch/cherry-pick touching it mutates live memory; commit first. Tiers T1 correctness .. T6 harness
 ## Roadmap
-- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-08)
-- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-09)
+- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-10)
+- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-10)
 - `tier_definitions.md` — tier meanings. (reviewed 2026-09-08)
 ## Meta / Process (YOU+ME work, not the product)
 - `meta_process.md` — how YOU+ME divide/sequence/staff work; "Model" = which Claude runs a session. (reviewed 2026-10-20)
 ## Project insights
 Direction and orientation:
 - `project_session_agenda.md`: 2026-08-23 REORDER section is live; S1-S6 reasoning only; never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state; only the NEWEST block has the entry marker. Read before quoting run numbers. (reviewed 2026-11-09)
+- `project_resume_state.md`: latest session/run state; only the NEWEST block has the entry marker. Read before quoting run numbers. (reviewed 2026-11-10)
 - `project_wave2_structure.md`: wave 2 layers; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: goal = a loop with a self-model it consults before acting; "substrate or patch?". (reviewed 2026-09-08)
 - `project_living_project_vision.md`: a project keeps taking inputs (seed = first); OFFSPRING code+graph become knowledge. Before input/merge/import work. (reviewed 2026-10-30)
@@ -81,6 +81,7 @@ How to work:
 - `feedback_process_apart_from_product.md`: how we work lives in meta_process.md + process/, never src/ or tickets. (reviewed 2026-09-27)
 - `feedback_tickets_direct_loop_as_toy_cases.md`: implement tickets directly; loop measured on VERSIONED toy cases. (reviewed 2026-09-27)
 - `feedback_design_for_the_class_not_the_case.md`: enumerate abstract kinds, one pipeline + adapters; toy cases only measure; offer name SETS. (reviewed 2026-11-09)
+- `feedback_when_a_guard_needs_a_guard_simplify.md`: a guard for a guard = propose the simpler cut (mostly deletion); twice in T4-EK. (reviewed 2026-11-10)
 - `feedback_local_means_no_call_cost.md`: token cost is free; wall-clock, context and memory are not. (reviewed 2026-09-27)
 - `feedback_never_edit_a_running_script.md`: never edit preflight.sh or its inputs mid-run (git ops count). (reviewed 2026-09-24)
 - `feedback_no_heavy_mvn_beside_a_live_run.md`: no suite/tests/graph queries beside a live run; pgrep the driver first. (reviewed 2026-11-03)

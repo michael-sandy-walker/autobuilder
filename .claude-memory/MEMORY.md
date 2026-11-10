@@ -77,6 +77,7 @@ How to work:
 - `feedback_commit_the_run_ledger.md`: commit `scripts/run_outcomes.json` with the session's work. (reviewed 2026-10-31)
 - `feedback_compile_right_before_a_code_commit.md`: compile the exact tree in the commit command; files can change between suite and commit (`2fcbf2c6`). (reviewed 2026-11-09)
 - `feedback_no_branch_ops.md`: no merge/rebase/reset/branch -d/push without 'do it'. (reviewed 2026-09-08)
+- `feedback_reverse_engineering_adds_context.md`: reverse engineering ADDS context (seed, graph, criteria); never corrects code/README/config. (reviewed 2026-11-10)
 - `feedback_operator_reviews_ports.md`: a ported loop-built solution gets a user review packet first. (reviewed 2026-09-27)
 - `feedback_process_apart_from_product.md`: how we work lives in meta_process.md + process/, never src/ or tickets. (reviewed 2026-09-27)
 - `feedback_tickets_direct_loop_as_toy_cases.md`: implement tickets directly; loop measured on VERSIONED toy cases. (reviewed 2026-09-27)

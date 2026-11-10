@@ -168,6 +168,7 @@ public class ReverseEngineeringConfirmation {
             switch (l.kind()) {
                 case SeedComposer.Line.HEADER -> sb.append('\n').append(l.text()).append(":\n");
                 case SeedComposer.Line.QUOTE -> sb.append(l.text()).append('\n');
+                case SeedComposer.Line.PURPOSE -> sb.append("What it is: ").append(l.text()).append('\n');
                 default -> sb.append("- ").append(l.text()).append('\n');
             }
         }

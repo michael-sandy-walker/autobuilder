@@ -41,15 +41,23 @@ public class ReverseEngineeringJob {
      * @param seed    the seed composed from the account, for the operator to confirm ({@code phase} {@code done}), or the
      *                one confirmed ({@code confirmed})
      * @param refused the lines of the composition that were refused, with why
+     * @param offered  T1-GK: what the README says the project does that no claim shows, for the operator to add or not
      * @param services T4-EN: with {@code phase} {@code needs-services}, what the project needs started to run at all --
      *                 for the operator to say yes (edited or not) or no to
      */
     public record State(String phase, String stage, Instant since, ReverseEngineeringService.Account account, String error,
                         String kept, String seed, java.util.List<String> refused,
-                        java.util.List<com.walpro.autobuilder.core.services.ServiceProposal> services) {
+                        java.util.List<com.walpro.autobuilder.core.services.ServiceProposal> services,
+                        java.util.List<SeedComposer.Offered> offered) {
         public State(String phase, String stage, Instant since, ReverseEngineeringService.Account account, String error,
                      String kept, String seed, java.util.List<String> refused) {
-            this(phase, stage, since, account, error, kept, seed, refused, null);
+            this(phase, stage, since, account, error, kept, seed, refused, null, null);
+        }
+
+        public State(String phase, String stage, Instant since, ReverseEngineeringService.Account account, String error,
+                     String kept, String seed, java.util.List<String> refused,
+                     java.util.List<com.walpro.autobuilder.core.services.ServiceProposal> services) {
+            this(phase, stage, since, account, error, kept, seed, refused, services, null);
         }
     }
 
@@ -63,7 +71,7 @@ public class ReverseEngineeringJob {
             throw new IllegalStateException("there is no reverse-engineered account waiting to be confirmed");
         }
         ReverseEngineeringConfirmation.Made made = confirmation.confirm(s.account(), seed);
-        state = new State("confirmed", null, s.since(), s.account(), null, s.kept(), seed, s.refused());
+        state = new State("confirmed", null, s.since(), s.account(), null, s.kept(), seed, s.refused(), null, s.offered());
         return made;
     }
 
@@ -95,7 +103,8 @@ public class ReverseEngineeringJob {
                 state = new State("running", "Writing the seed from what was found (the model writes, every line cites claims)",
                         since, null, null, null, null, null);
                 SeedComposer.Composed composed = seedComposer.compose(account);
-                state = new State("done", null, since, account, null, kept.toString(), composed.text(), composed.refused());
+                state = new State("done", null, since, account, null, kept.toString(), composed.text(), composed.refused(),
+                        null, composed.offered());
             } catch (com.walpro.autobuilder.core.services.ServicesNeeded n) {
                 log.warn("T4-EN: reverse engineering waits for the operator -- {}", n.getMessage());
                 state = new State("needs-services", null, since, null, null, null, null, null, n.proposals());

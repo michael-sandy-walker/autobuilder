@@ -29,9 +29,11 @@ import java.util.regex.Pattern;
  * claim supports would be the loop specifying the project it then grades itself against. What the project says about
  * itself (its README) is not part of it, quoted or paraphrased: nothing checked it (T1-GK).
  *
- * <p>The text this returns is what the operator sees and edits: feature headers ({@code Name:}) and cited lines
- * ({@code - ... [k3, k7]}). {@link #lines} reads it back -- an operator's own quoted ({@code > ...}) or uncited lines
- * included, which are theirs to add.
+ * <p>The text this returns is what the operator sees and edits: at most one line on what the project is, in its
+ * README's words ({@code What it is: ... [r1, r3]}, its README lines cited and checked to exist; never a criterion),
+ * feature headers ({@code Name:}) and cited lines ({@code - ... [k3, k7]}), whose wording may use the README's terms.
+ * What the README says the project does that no claim shows is OFFERED beside it ({@link Offered}), not written into
+ * it. {@link #lines} reads it back -- an operator's own quoted ({@code > ...}) or uncited lines included, theirs to add.
  */
 @Slf4j
 @Component
@@ -40,6 +42,13 @@ public class SeedComposer {
     private static final Pattern CITED = Pattern.compile("^\\s*-\\s*(.+?)\\s*\\[\\s*(k\\d+(?:\\s*,\\s*k\\d+)*)\\s*]\\s*$");
     /** A feature header; the model sometimes adds the kind it was shown ("Main (command-style):"). */
     private static final Pattern HEADER = Pattern.compile("^\\s*([A-Za-z_$][\\w.$]*)\\s*(?:\\([^)]*\\))?\\s*:\\s*$");
+
+    /** T1-GK: what the project is, in the README's words, citing the README lines it comes from. */
+    private static final Pattern WHAT = Pattern.compile("^\\s*What it is\\s*:\\s*(.+?)\\s*\\[\\s*(r\\d+(?:\\s*,\\s*r\\d+)*)\\s*]\\s*$",
+            Pattern.CASE_INSENSITIVE);
+    /** T1-GK: a line of the README-only section -- something it says that no claim shows. */
+    private static final Pattern README_CITED = Pattern.compile("^\\s*-\\s*(.+?)\\s*\\[\\s*(r\\d+(?:\\s*,\\s*r\\d+)*)\\s*]\\s*$");
+    static final String NOT_SHOWN = "Not shown by any claim:";
 
     private final LLMClient llmClient;
 
@@ -52,11 +61,27 @@ public class SeedComposer {
      * (which, from the operator, is a requirement nothing has earned yet).
      */
     public record Line(String kind, String text, String feature, List<String> cites) {
-        public static final String HEADER = "header", QUOTE = "quote", CITED = "cited", UNCITED = "uncited";
+        public static final String HEADER = "header", QUOTE = "quote", CITED = "cited", UNCITED = "uncited",
+                PURPOSE = "purpose";
     }
 
-    /** The composed seed, and the lines the model wrote that were refused (with why). */
-    public record Composed(String text, List<String> refused) {
+    /**
+     * T1-GK: something the README says the project does that no kept claim shows -- offered to the operator, never put
+     * in the seed by the composer. Ticked, it joins the seed as the operator's own line: open work the loop checks.
+     *
+     * @param readme the README lines it comes from (r1 = the first line of the README's prose)
+     */
+    public record Offered(String text, List<String> readme) {
+    }
+
+    /**
+     * The composed seed, the lines the model wrote that were refused (with why), and what the README says that no
+     * claim shows (offered, not in the seed).
+     */
+    public record Composed(String text, List<String> refused, List<Offered> offered) {
+        public Composed(String text, List<String> refused) {
+            this(text, refused, List.of());
+        }
     }
 
     public Composed compose(Account account) {
@@ -72,10 +97,10 @@ public class SeedComposer {
         Composed first = check(answer, kept, account);
         if (first.refused().isEmpty()) return first;
         conversation.add(new Message("assistant", answer));
-        conversation.add(new Message("user", "These lines cite no kept claim, or a claim id that is not listed, and "
+        conversation.add(new Message("user", "These lines cite no kept claim, or an id that is not listed, and "
                 + "cannot stay:\n" + String.join("\n", first.refused())
-                + "\n\nWrite the whole specification again in the same form; every line must end with the ids of "
-                + "claims listed above that show it."));
+                + "\n\nWrite the whole specification again in the same form; every feature line must end with the ids of "
+                + "claims listed above that show it, and every line taken from the README with the r-ids of its lines."));
         String again = ask(conversation);
         Composed second = again == null ? first : check(again, kept, account);
         log.warn("T4-EK: seed composed -- {} line(s) refused after a second ask", second.refused().size());
@@ -108,6 +133,28 @@ public class SeedComposer {
                 - ...
 
                 """);
+        List<String> readme = account.coldRead() == null ? List.of() : account.coldRead().prose();
+        if (!readme.isEmpty()) {
+            sb.append("""
+                    The project's README is below, its lines numbered r1, r2, ... Nobody checked what it says; use it so:
+                    - Where its words name what a claim shows (its terms, its roles, its names for things), use them in \
+                    that line -- the line still ends with the ids of the claims that show it.
+                    - Before the first feature, write ONE line saying what the project is and who uses it for what, in \
+                    the README's words -- shortened to that, without what it is built with -- ending with the r-ids of the \
+                    README lines it comes from; only if the README says it:
+                      What it is: <one sentence> [r1, r3]
+                    - After the last feature, under the heading "Not shown by any claim:", list what the README says a \
+                    PERSON can do with the project, or what it does for them, that no claim above shows -- one line each, \
+                    ending with its r-ids. What it is BUILT with is not something it does: leave out every line about a \
+                    framework, library, language, database, view technology, architecture, layering or configuration, \
+                    and how to install, build, run, test or deploy it, its CI, licence and badges. Leave the heading out \
+                    when there is nothing.
+
+                    README:
+                    """);
+            for (int i = 0; i < readme.size(); i++) sb.append('r').append(i + 1).append(": ").append(readme.get(i)).append('\n');
+            sb.append('\n');
+        }
         for (Feature f : ordered(account.features())) {
             sb.append("FEATURE ").append(f.name());
             if (f.kind() != null) sb.append(" (").append(f.kind()).append(")");
@@ -173,10 +220,36 @@ public class SeedComposer {
      */
     static Composed check(String answer, Set<String> kept, Account account) {
         StringBuilder text = new StringBuilder();
+        String what = null;
         List<String> refused = new ArrayList<>();
+        List<Offered> offered = new ArrayList<>();
+        int readmeLines = account.coldRead() == null ? 0 : account.coldRead().prose().size();
+        boolean notShown = false;
         for (String raw : answer.split("\\R")) {
             String l = raw.strip();
             if (l.isEmpty() || l.startsWith("```")) continue;
+            Matcher w = WHAT.matcher(l);
+            if (w.matches()) {
+                List<String> bad = outside(ids(w.group(2)), readmeLines);
+                if (!bad.isEmpty()) refused.add(l + "  -- cites " + String.join(", ", bad) + ", not a README line");
+                else if (what == null) what = "What it is: " + w.group(1).strip() + " [" + String.join(", ", ids(w.group(2))) + "]";
+                continue;
+            }
+            if (l.equalsIgnoreCase(NOT_SHOWN)) {
+                notShown = true;
+                continue;
+            }
+            if (notShown) {
+                Matcher r = README_CITED.matcher(l);
+                if (!r.matches()) {
+                    refused.add(l + "  -- cites no README line");
+                    continue;
+                }
+                List<String> bad = outside(ids(r.group(2)), readmeLines);
+                if (!bad.isEmpty()) refused.add(l + "  -- cites " + String.join(", ", bad) + ", not a README line");
+                else offered.add(new Offered(r.group(1).strip(), ids(r.group(2))));
+                continue;
+            }
             if (HEADER.matcher(l).matches()) {
                 text.append('\n').append(l).append('\n');
                 continue;
@@ -194,7 +267,16 @@ public class SeedComposer {
             }
             text.append("- ").append(m.group(1).strip()).append(" [").append(String.join(", ", cites)).append("]\n");
         }
-        return new Composed(text.toString().strip() + "\n", refused);
+        String body = text.toString().strip();
+        return new Composed((what == null ? "" : what + "\n\n") + body + "\n", refused, offered);
+    }
+
+    /** The r-ids that name no line of a README of {@code lines} lines. */
+    private static List<String> outside(List<String> rIds, int lines) {
+        return rIds.stream().filter(r -> {
+            int n = Integer.parseInt(r.substring(1));
+            return n < 1 || n > lines;
+        }).toList();
     }
 
     /** A seed text read back line by line, as the operator confirmed it. */
@@ -208,6 +290,13 @@ public class SeedComposer {
             if (h.matches() && features.contains(h.group(1))) {
                 feature = h.group(1);
                 out.add(new Line(Line.HEADER, h.group(1), feature, List.of()));
+                continue;
+            }
+            Matcher w = WHAT.matcher(l);
+            if (w.matches() || l.regionMatches(true, 0, "What it is:", 0, "What it is:".length())) {
+                // The project's purpose in its README's words: context for the seed, never a criterion or open work.
+                String t = w.matches() ? w.group(1).strip() : l.substring("What it is:".length()).strip();
+                out.add(new Line(Line.PURPOSE, t, null, List.of()));
                 continue;
             }
             if (l.startsWith(">") || l.equalsIgnoreCase("In its own words:")) {

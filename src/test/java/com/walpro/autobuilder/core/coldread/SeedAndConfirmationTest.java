@@ -70,6 +70,66 @@ class SeedAndConfirmationTest {
         assertThat(composed.refused().get(1)).contains("k4, not a kept claim");
     }
 
+    /** The same account with a README of three lines of prose. */
+    private Account withReadme() {
+        return new Account("src", "copy", new ColdRead("r", null, null,
+                List.of("# books", "A small library for a reading club: members borrow books.", "Members can reserve a book."),
+                List.of(), true, List.of(), List.of(), List.of(), List.of()),
+                account.kind(), account.features(), account.capabilities(), account.unknownDeclarations(), account.proposals(),
+                account.variants(), account.claims(), account.verdicts(), account.durationMs());
+    }
+
+    @Test
+    void theReadmeIsGivenToTheComposerNumberedAndItsWordsAreCitedByLine() {
+        String prompt = SeedComposer.prompt(withReadme());
+        assertThat(prompt).contains("r1: # books", "r2: A small library for a reading club", "r3: Members can reserve a book.")
+                .contains("What it is:").contains(SeedComposer.NOT_SHOWN);
+        Account noReadme = new Account("src", "copy", new ColdRead("r", null, null, List.of(), List.of(), true, List.of(),
+                List.of(), List.of(), List.of()), account.kind(), account.features(), account.capabilities(),
+                account.unknownDeclarations(), account.proposals(), account.variants(), account.claims(), account.verdicts(),
+                account.durationMs());
+        assertThat(SeedComposer.prompt(noReadme)).as("no README, no README instructions").doesNotContain("What it is:");
+    }
+
+    @Test
+    void whatItIsComesFromTheReadmeAndWhatNoClaimShowsIsOfferedNotWritten() {
+        String answer = """
+                What it is: A small library for a reading club, where members borrow books [r1, r2]
+                Books:
+                - GET /books lists the club's books [k1]
+                Loans:
+                - GET /loans answers [k3]
+                Not shown by any claim:
+                - Members can reserve a book [r3]
+                - Members get reminders [r9]
+                - Books are rated
+                """;
+        var composed = SeedComposer.check(answer, SeedComposer.keptIds(account), withReadme());
+        assertThat(composed.text()).startsWith("What it is: A small library for a reading club, where members borrow books [r1, r2]\n\nBooks:")
+                .doesNotContain("reserve", "reminders", "rated");
+        assertThat(composed.offered()).containsExactly(new SeedComposer.Offered("Members can reserve a book", List.of("r3")));
+        assertThat(composed.refused()).anyMatch(r -> r.contains("r9, not a README line"))
+                .anyMatch(r -> r.contains("Books are rated") && r.contains("cites no README line"));
+    }
+
+    @Test
+    void whatItIsIsNeitherACriterionNorOpenWorkAndATickedOfferIsTheOperatorsOwnLine() {
+        String confirmed = """
+                What it is: A small library for a reading club [r1, r2]
+
+                Books:
+                - GET /books lists the books [k1]
+                - Members can reserve a book
+                """;
+        var lines = SeedComposer.lines(confirmed, Set.of("Books", "Loans"));
+        assertThat(lines).extracting(SeedComposer.Line::kind).containsExactly("purpose", "header", "cited", "uncited");
+        assertThat(lines.get(0).text()).isEqualTo("A small library for a reading club");
+        assertThat(lines.get(0).cites()).isEmpty();
+        assertThat(ReverseEngineeringConfirmation.seedText(lines))
+                .startsWith("What it is: A small library for a reading club\n\nBooks:")
+                .doesNotContain("[r1");
+    }
+
     @Test
     void aConfirmedSeedIsReadBackAsHeadersQuotesCitedLinesAndTheOperatorsOwnLines() {
         String confirmed = """

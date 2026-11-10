@@ -140,6 +140,19 @@ public class ProgramAdapter implements EntryAdapter {
         return new Ran(true, true, null);
     }
 
+    /**
+     * T4-EN: the tree built and started once, to see whether it starts at all: null when it served, else why not -- in
+     * its own words when it said why.
+     */
+    public String startFailure(Path dir) {
+        BuildOutcome build = buildExecutor.executeIn(dir.toString(), "reverse-engineering", packageCommand);
+        if (build.failed()) return null;   // not a question of services: the variants say so themselves
+        BootGate.ServeAttempt attempt = bootGate.serveOrWhy(dir);
+        if (attempt.served().isEmpty()) return attempt.why();
+        attempt.served().get().close();
+        return null;
+    }
+
     /** Every type that declares {@code public static void main(String[])} under the main sources. */
     static List<EntryPoint> programs(Map<String, String> files) {
         List<EntryPoint> out = new ArrayList<>();

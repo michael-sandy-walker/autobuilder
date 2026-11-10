@@ -65,6 +65,18 @@ public class ReverseEngineeringService {
     private final ClaimProposer proposer;
     private final EntryAdapter started;
     private final EntryAdapter called;
+    private final ProgramAdapter program;
+
+    /** T4-EN: what services a project that does not start needs, and what the operator said about them. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.services.ServiceNeeds serviceNeeds;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.services.ProjectServices projectServices;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private com.walpro.autobuilder.core.services.ServiceContainers serviceContainers;
     private final ObjectMapper json = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     public ReverseEngineeringService(ColdReadService coldReadService, CapabilityDiscovery discovery, ClaimProposer proposer,
@@ -74,6 +86,7 @@ public class ReverseEngineeringService {
         this.proposer = proposer;
         this.started = started;
         this.called = called;
+        this.program = started;
     }
 
     /**
@@ -191,6 +204,10 @@ public class ReverseEngineeringService {
         log.warn("T4-EK: {} -- {} way(s) in, {} feature(s): {}", kind == null ? "no way in" : kind, points.size(),
                 byFeature.size(), byFeature.keySet());
 
+        if (adapter == started && points.stream().anyMatch(e -> e.kind() == EntryKind.SERVICE_STYLE)) {
+            askForServices(original, progress);
+        }
+
         progress.accept("Finding its capabilities (the model reads the code)");
         CapabilityDiscovery.Found found = discovery.discover(original, files, null);
         List<Capability> capabilities = found.capabilities();
@@ -254,6 +271,54 @@ public class ReverseEngineeringService {
         json.writeValue(work.resolve("account.json").toFile(), account);
         log.warn("T4-EK: account of {} written to {} -- {} ({} ms)", source, work, verdicts, account.durationMs());
         return account;
+    }
+
+    /**
+     * T4-EN: before minutes of model work on a project that cannot start -- when nothing has been said about its
+     * services yet, its configuration names an address on this machine that does not answer, and a start fails, the
+     * job stops and asks ({@link com.walpro.autobuilder.core.services.ServicesNeeded}). A recorded answer, either way,
+     * is not asked again: a yes is started before every program start by the boot gate, a no starts nothing.
+     */
+    private void askForServices(Path tree, java.util.function.Consumer<String> progress) {
+        if (serviceNeeds == null || projectServices == null) return;
+        var recorded = projectServices.recorded();
+        if (recorded.isPresent()) {
+            if (recorded.get().yes() && serviceContainers != null) tryRecorded(tree, recorded.get(), progress);
+            return;
+        }
+        var missing = serviceNeeds.unanswered(tree);
+        if (missing.isEmpty()) return;
+        progress.accept("Trying to start it once (its configuration names a service at port " + missing.get(0).port()
+                + ", where nothing answers)");
+        String why = program.startFailure(tree);
+        if (why == null) return;
+        progress.accept("Finding what it needs to start");
+        var proposals = serviceNeeds.propose(tree, missing, why);
+        if (proposals.isEmpty()) {
+            log.warn("T4-EN: {} did not start ({}) and no service could be proposed", tree, why);
+            return;
+        }
+        throw new com.walpro.autobuilder.core.services.ServicesNeeded(proposals);
+    }
+
+    /**
+     * T4-EN: what the operator said yes to, started once on its own before anything else: a service that does not come
+     * up would fail every one of the program starts that follow. When it does not, the question is asked again with
+     * what its container said (and the model's reading of it), so the operator can change the answer.
+     */
+    private void tryRecorded(Path tree, com.walpro.autobuilder.core.services.ProjectServices.Decision yes,
+                             java.util.function.Consumer<String> progress) {
+        progress.accept("Starting the services you said yes to, once, to see that they come up");
+        try (var started = serviceContainers.startFresh(tree)) {
+            if (!started.failed()) return;
+            log.warn("T4-EN: what the operator said yes to did not come up -- {}", started.why());
+            progress.accept("Reading what the service said");
+            List<com.walpro.autobuilder.core.services.ServiceProposal> again = new ArrayList<>();
+            for (var p : yes.services()) {
+                again.add(p.equals(started.failedOn()) ? serviceNeeds.revise(p, started.said(), started.why()) : p);
+            }
+            throw new com.walpro.autobuilder.core.services.ServicesNeeded(again);
+        }
     }
 
     /** One claim's verdict by capability; {@code variants} by name, {@code "as-is"} included. */

@@ -7,7 +7,7 @@ default in the code, and the value `application.yml` sets when it sets one (prof
 What a key does is the first sentence of the comment on the field that reads it, so it is written once, in
 the code.
 
-113 keys.
+124 keys.
 
 ## `autobuilder.bootstrap`
 
@@ -45,7 +45,7 @@ the code.
 | `autobuilder.build.include-test-compile` | Also compile `src/test/java` each probe. | `true` | `false` | `JavacDirectProbe` |
 | `autobuilder.build.output-directories` | `toolName -> generated-output directory names` (root-segment match). | `new LinkedHashMap<>()` |  | `BuildToolProbeProperties` |
 | `autobuilder.build.package-gate.application-packaging-markers` | Build-file markers (comma-separated) that make a project an application whose packaging must also produce a runnable artifact. | `spring-boot-maven-plugin` | `spring-boot-maven-plugin` | `PackageGate` |
-| `autobuilder.build.package-gate.command` | The command that packages the target project at the completion edge. | `mvn package -DskipTests` | `mvn package -DskipTests` | `PackageGate` |
+| `autobuilder.build.package-gate.command` | The command that packages a variant, the package gate's own. | `mvn package -DskipTests` | `mvn package -DskipTests` | `PackageGate`, `ProgramAdapter` |
 | `autobuilder.build.package-gate.enabled` | Whether the completion edge requires the project to package. | `true` | `true` | `PackageGate` |
 | `autobuilder.build.resource-directories` | `toolName -> resource directory markers` (path-segment prefix match). | `new LinkedHashMap<>()` |  | `BuildToolProbeProperties` |
 | `autobuilder.build.self-check.interval-cycles` | Cycles between observations. | `4` |  | `BehaviouralSelfCheck` |
@@ -58,7 +58,7 @@ the code.
 | `autobuilder.build.symbol-import.cache-path` | Where the cache of symbol-to-import resolutions is kept, relative to the target directory. | `cache/symbol-imports.json` |  | `SymbolImportCache` |
 | `autobuilder.build.symbol-import.pom-path` | The build file whose dependencies symbol-to-import resolution reads, relative to the target directory. | `output/pom.xml` |  | `SymbolImportCache` |
 | `autobuilder.build.test-directories` | `toolName -> test directory markers` (path-segment prefix match). | `new LinkedHashMap<>()` |  | `BuildToolProbeProperties` |
-| `autobuilder.build.test-gate.command` | The command that runs the target project's tests. | `mvn test` | `mvn test` | `DerivedTests`, `TestRunGate` |
+| `autobuilder.build.test-gate.command` | The command that runs the project's tests (the test gate's own). | `mvn test` | `mvn test` | `DerivedTests`, `LibraryStyleAdapter`, `TestRunGate` |
 | `autobuilder.build.test-gate.enabled` | Whether the project's own tests are run (after a merge and at the completion edge). | `true` | `true` | `TestRunGate` |
 | `autobuilder.build.test-scope-command` | Build command used when the staged mutation ITSELF touches test sources. | `mvn test-compile` | `mvn test-compile` | `CompileProbeService` |
 | `autobuilder.build.timeout-ms` | The longest one build command may run before it is stopped. | `120000` | `120000` | `BuildExecutor` |
@@ -180,6 +180,13 @@ the code.
 | `autobuilder.retention.schedule-initial-delay-ms` | Time from startup to the first retention pass. | `60 * 60 * 1000L` | `3600000` | `RetentionConfigProperties` |
 | `autobuilder.retention.snapshots` | Retention limits for the snapshots directory (active days, size in MB, cycles; 0 means no limit). | `new DirectoryLimits(14, 0, 1000)` |  | `RetentionConfigProperties` |
 
+## `autobuilder.reverse-engineering`
+
+| Key | What it does | Default in code | application.yml | Read by |
+|---|---|---|---|---|
+| `autobuilder.reverse-engineering.command.run-timeout-ms` | How long one command-style run may take before it is stopped and counts as not observed. | `15000` |  | `ProgramAdapter` |
+| `autobuilder.reverse-engineering.library.marker` | What the build file must declare for the claim template to run. | `junit-jupiter` |  | `LibraryStyleAdapter` |
+
 ## `autobuilder.rewind`
 
 | Key | What it does | Default in code | application.yml | Read by |
@@ -206,6 +213,12 @@ the code.
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
 | `autobuilder.service.reset-on-start` | Whether startup resets the target when the start mode discards the tree: the lineage is severed, meta/ cleaned and the root goal re-seeded (the graph keeps earlier runs as history). | `false` | `true` | `AutobuilderConfigProperties` |
+
+## `autobuilder.services`
+
+| Key | What it does | Default in code | application.yml | Read by |
+|---|---|---|---|---|
+| `autobuilder.services.ready-timeout-ms` | How long a started service has to answer on its port (the first start also pulls the image). | `300000` |  | `ServiceContainers` |
 
 ## `autobuilder.start`
 
@@ -248,7 +261,7 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `file.base-path` | The target directory: its bootstrap/, output/, meta/ and logs/ (see the functional documentation). | (empty) | `${FILE_BASE_PATH:}` | `AutobuilderController`, `BehaviourHistory`, `BootGate`, `BrokenTestQuarantine`, `CompileProbeService`, `FileService`, `FileWatcherService`, `LogConsultation`, `MergeAgent`, `PackageGate`, `RetentionPolicy`, `TargetCatalog`, `TestRunGate`, `ValueObservationProbe` |
+| `file.base-path` | The target directory: its bootstrap/, output/, meta/ and logs/ (see the functional documentation). | (empty) | `${FILE_BASE_PATH:}` | `AutobuilderController`, `BehaviourHistory`, `BootGate`, `BrokenTestQuarantine`, `CompileProbeService`, `CriterionExercises`, `FileService`, `FileWatcherService`, `LogConsultation`, `MergeAgent`, `PackageGate`, `ProjectServices`, `RetentionPolicy`, `ReverseEngineeringConfirmation`, `ReverseEngineeringJob`, `TargetCatalog`, `TestRunGate`, `ValueObservationProbe` |
 
 ## `llm.api`
 
@@ -266,3 +279,16 @@ the code.
 | `llm.api.retry.delay-ms` | The wait before retrying a failed model request. | `5000` | `5000` | `LLMClient` |
 | `llm.api.retry.max-attempts` | How many times a failed model request is tried. | `3` | `3` | `LLMClient` |
 | `llm.api.url` | The model endpoint (OpenAI-compatible chat completions). | (required) | `http://localhost:11434/v1/chat/completions` | `LLMClient` |
+
+## `llm.narrator`
+
+| Key | What it does | Default in code | application.yml | Read by |
+|---|---|---|---|---|
+| `llm.narrator.context-window-tokens` | (not described) | `32768` | `32768` | `NarratorChannel` |
+| `llm.narrator.enabled` | (not described) | `false` | `true` | `NarratorChannel` |
+| `llm.narrator.key` | (not described) | (empty) | `local-only-no-key` | `NarratorChannel` |
+| `llm.narrator.model` | (not described) | `qwen3.8` | `qwen3.8` | `NarratorChannel` |
+| `llm.narrator.read-timeout-ms` | (not described) | `120000` | `120000` | `NarratorChannel` |
+| `llm.narrator.reasoning-effort` | (not described) | `none` | `none` | `NarratorChannel` |
+| `llm.narrator.response-reserve-tokens` | (not described) | `512` | `512` | `NarratorChannel` |
+| `llm.narrator.url` | (not described) | `http://localhost:11434/v1/chat/completions` | `http://localhost:11434/v1/chat/completions` | `NarratorChannel` |

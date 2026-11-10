@@ -351,7 +351,11 @@ async function refresh() {
     if (run.runPort && run.state === 'RUNNING' && run.notBegun) {
       const rr = await fetch('/home/run/reverse-engineering').catch(() => null);
       rev = rr && rr.ok ? await rr.json().catch(() => null) : null;
-    }
+      // T4-EN: what was said about the services this project needs.
+      const sr = await fetch('/home/run/services').catch(() => null);
+      svc = sr && sr.ok ? await sr.json().catch(() => null) : null;
+    } else { svc = null; }
+    if (!rev || rev.phase !== 'needs-services') svcDraft = null;
   } catch (e) {
     $('now').className = 'now FAILED';
     $('now').innerHTML = '<div class="title"><span class="dot"></span><b>Cannot reach Autobuilder</b></div>';
@@ -493,7 +497,7 @@ function renderNow() {
   let title, why = '', actions = '';
   const ended = run.state === 'ENDED', waiting = run.waitingForGoal, held = run.notBegun && !waiting;
   // T4-EK: read-only, offered while nothing runs; the project is not touched.
-  const reverse = (waiting || held) && !jobBusy() && rev && rev.phase !== 'running'
+  const reverse = (waiting || held) && !jobBusy() && rev && rev.phase !== 'running' && rev.phase !== 'needs-services'
     ? '<button data-do="reverse" title="Find what this code does and which claims about it the running code bears out. '
       + 'Read-only; takes a few minutes.">Reverse-engineer</button>' : '';
   if (run.state === 'IDLE') {
@@ -528,7 +532,9 @@ function renderNow() {
     + (why ? '<div class="why">' + esc(why) + '</div>' : '') + links
     + (actions ? '<div class="row">' + actions + '</div>' : '')
     + (live ? liveHtml() : '')
-    + (rev && rev.phase !== 'idle' && (waiting || held) ? revBox() : '')
+    + (rev && rev.phase === 'needs-services' && (waiting || held) ? servicesBox()
+       : rev && rev.phase !== 'idle' && (waiting || held) ? revBox() : '')
+    + ((waiting || held) && svc && svc.recorded ? servicesLine() : '')
     + (waiting && showGoalBox() ? goalBox() : '') + (job ? jobBox() : '')
     + (run.runPort && !(job && job.phase === 'DECIDING') && !(job && job.phase === 'BRINGING_IN') && showImports() ? importsHtml() : '')
     + (conflicts.length && !(job && job.phase === 'DECIDING') ? '<div class="sub"><div class="title"><b>Waiting for your decision</b>'
@@ -555,6 +561,7 @@ function renderNow() {
   if (waiting && showGoalBox()) wireGoalBox();
   if ($('owngoal')) $('owngoal').onclick = e => { e.preventDefault(); ownGoal = true; rerender(); };
   wireSeedBox();
+  wireServicesBox();
   if (job) wireJobBox();
   if (conflicts.length) wireConflicts();
   if (focused && $(focused)) $(focused).focus();
@@ -780,6 +787,84 @@ function revBox() {
     + (a.capabilities || []).map(c => '<li><b>' + esc(c.name) + '</b> -- ' + esc(c.summary) + '</li>').join('') + '</ul></details>';
   return html + '</div>';
 }
+
+// T4-EN: a project that needs a service to run (a database, a broker): what to start for it, for the operator to say
+// yes (edited or not) or no to. Nothing starts without the yes; it is kept for this project, so it is asked once.
+let svc = null, svcDraft = null, svcSending = false;
+function servicesBox() {
+  if (svcDraft == null) svcDraft = (rev.services || []).map(s => Object.assign({}, s,
+    { envText: Object.entries(s.env || {}).map(([k, v]) => k + '=' + v).join('\n') }));
+  const first = (rev.services || [])[0] || {};
+  let html = '<div class="sub"><div class="title"><b>Reverse-engineering</b><span class="badge">needs a service</span></div>'
+    + '<div class="why" style="color:var(--bad)"><b>The project could not be started.</b> It says: ' + esc(first.failure || '') + '</div>'
+    + (svc && svc.recorded && svc.recorded.yes
+      ? '<div class="why"><b>What you said yes to did not come up</b> (its own words are above). Here it is again'
+        + (svcDraft.some(d => d.source === 'model') ? ', read once more by the model with what it said' : '')
+        + ' -- change it, or say no.</div>' : '')
+    + '<div class="why">It reaches ' + (svcDraft.length > 1 ? 'these services' : 'this service') + ' on this machine and nothing '
+    + 'answers there. Start ' + (svcDraft.length > 1 ? 'them' : 'it') + ' as a container for it? A fresh one is created for '
+    + 'each start of the project and removed after it, so no start sees another\'s data. Your answer is kept for this '
+    + 'project; the loop\'s own start-up checks use it too.</div>';
+  svcDraft.forEach((d, i) => {
+    html += '<div class="feat"><div><b>' + esc(d.name) + '</b> <span class="note">'
+      + (d.source === 'compose' ? 'from the project\'s own compose file' : 'read by the model from the project\'s own lines below -- check it')
+      + '</span></div>'
+      + '<label for="svc-' + i + '-image">Image</label><input id="svc-' + i + '-image" data-svc="' + i + '" data-field="image">'
+      + '<div class="note">Reached at localhost:' + esc(String(d.hostPort)) + ', the address the project is configured with.</div>'
+      + '<label for="svc-' + i + '-cport">Port inside the container</label><input id="svc-' + i + '-cport" data-svc="' + i + '" data-field="containerPort">'
+      + '<label for="svc-' + i + '-env">Its environment, one NAME=value per line</label><textarea id="svc-' + i + '-env" data-svc="' + i + '" data-field="envText"></textarea>'
+      + (d.initDir && (d.initScripts || []).length ? '<label for="svc-' + i + '-init">Fill it first with a script the project ships</label>'
+          + '<select id="svc-' + i + '-init" data-svc="' + i + '" data-field="initScript"><option value="">no -- start it empty</option>'
+          + d.initScripts.map(f => '<option value="' + esc(f) + '">' + esc(f) + '</option>').join('') + '</select>' : '')
+      + '<details><summary>The lines this rests on (' + (d.evidence || []).length + ')</summary><pre class="coldread">'
+      + esc((d.evidence || []).join('\n')) + '</pre></details></div>';
+  });
+  return html + '<div class="row"><button id="svcyes" class="primary"' + (svcSending ? ' disabled' : '') + '>'
+    + (svcSending ? 'Starting...' : 'Start ' + (svcDraft.length > 1 ? 'them' : 'it') + ' and try again') + '</button>'
+    + '<button id="svcno"' + (svcSending ? ' disabled' : '') + '>No</button></div></div>';
+}
+function wireServicesBox() {
+  if (!$('svcyes') || !svcDraft) return;
+  document.querySelectorAll('[data-svc]').forEach(el => {
+    const d = svcDraft[+el.dataset.svc], f = el.dataset.field;
+    el.value = d[f] == null ? '' : String(d[f]);
+    el.oninput = el.onchange = e => d[f] = e.target.value;
+  });
+  const send = async answer => {
+    if (svcSending) return;
+    const services = svcDraft.map(d => {
+      const env = {};
+      String(d.envText || '').split('\n').map(l => l.trim()).filter(Boolean).forEach(l => {
+        const eq = l.indexOf('='); if (eq > 0) env[l.slice(0, eq).trim()] = l.slice(eq + 1).trim(); });
+      return { name: d.name, image: String(d.image || '').trim(), hostPort: d.hostPort, containerPort: parseInt(d.containerPort, 10) || 0,
+        env, initDir: d.initDir, initScripts: d.initScripts, initScript: d.initScript || null, source: d.source,
+        evidence: d.evidence, failure: d.failure };
+    });
+    svcSending = true; rerender();
+    let r;
+    try { r = await post('/home/run/services', { answer, services }); } finally { svcSending = false; }
+    if (r.status !== 200) toast(false, 'Not recorded: ' + message(r));
+    else toast(true, answer === 'yes' ? 'Recorded. Reverse engineering starts again with it.'
+      : 'Recorded: nothing will be started. Reverse-engineer again to check what can be checked without it.');
+    refresh();
+  };
+  $('svcyes').onclick = () => send('yes');
+  $('svcno').onclick = () => send('no');
+}
+function servicesLine() {
+  const d = svc.recorded, list = (d.services || []).map(s => s.name + ' (' + s.image + ' at port ' + s.hostPort + ')').join(', ');
+  return '<div class="sub"><div class="why">' + (d.yes ? 'Started fresh for each start of this project: ' + esc(list) + '.'
+      : 'You said no to starting ' + esc(list || 'its services') + '; nothing is started for it.')
+    + ' <a href="#" id="svcwithdraw" class="note" style="margin:0">withdraw</a></div></div>';
+}
+document.addEventListener('click', async e => {
+  if (!e.target || e.target.id !== 'svcwithdraw') return;
+  e.preventDefault();
+  const r = await post('/home/run/services', { answer: 'withdraw' });
+  toast(r.status === 200, r.status === 200 ? 'Withdrawn: nothing is started for this project, and it is asked again when needed.'
+    : 'Not withdrawn: ' + message(r));
+  refresh();
+});
 
 // An adopted project's goal: read what is there first, then say what to achieve.
 let coldRead = null, goalDraft = '', goalSending = false;

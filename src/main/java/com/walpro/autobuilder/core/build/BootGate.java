@@ -108,6 +108,19 @@ public class BootGate {
     @Autowired(required = false)
     private CriterionProbeSynthesizer criterionProbeSynthesizer;
 
+    /**
+     * T4-EN: the services the operator said yes to, created fresh before each program start and removed after it.
+     * Absent, or nothing said yes to, a start is exactly as before.
+     */
+    @Setter
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.services.ServiceContainers serviceContainers;
+
+    private com.walpro.autobuilder.core.services.ServiceContainers.Started startServices(Path tree) {
+        return serviceContainers == null ? com.walpro.autobuilder.core.services.ServiceContainers.Started.none()
+                : serviceContainers.startFresh(tree);
+    }
+
     /** T4-EK: exercises stored with reverse-engineered criteria; run as stored, before any synthesis. */
     @Setter
     @Autowired(required = false)
@@ -405,6 +418,12 @@ public class BootGate {
         if (command.isEmpty()) {
             return Optional.empty();
         }
+        var services = startServices(artifact.getParent().getParent());
+        if (services.failed()) {
+            // The environment, not the artifact: abstain, as for a port that could not be allocated.
+            log.warn("T4-EN: the services the project needs could not be started ({}) -- abstaining", services.why());
+            return Optional.empty();
+        }
         Process process = null;
         try {
             ProcessBuilder pb = new ProcessBuilder(command)
@@ -633,6 +652,7 @@ public class BootGate {
                     Thread.currentThread().interrupt();
                 }
             }
+            services.close();
         }
     }
 
@@ -1173,8 +1193,10 @@ public class BootGate {
         List<String> command = new ArrayList<>(buildCommand(artifact, 0));
         if (command.isEmpty()) return Optional.empty();
         command.addAll(args);
+        var services = startServices(artifact.getParent().getParent());
+        if (services.failed()) return Optional.of(new Ended(null, services.why(), "SERVICES_NOT_STARTED"));
         Process process = null;
-        try {
+        try (services) {
             ProcessBuilder pb = new ProcessBuilder(command).directory(cwd.toFile()).redirectErrorStream(true);
             pb.environment().keySet().removeAll(INHERITED_JVM_OPTION_VARS);
             process = pb.start();
@@ -1244,6 +1266,8 @@ public class BootGate {
         List<String> command = buildCommand(artifact.get(), port);
         if (command.isEmpty()) return new ServeAttempt(Optional.empty(), "no command to start it with");
         String prefix = coldReadService == null ? "" : coldReadService.servedPrefix(dir).orElse("");
+        var services = startServices(artifact.get().getParent().getParent());
+        if (services.failed()) return new ServeAttempt(Optional.empty(), "the services it needs could not be started: " + services.why());
         Process process = null;
         try {
             ProcessBuilder pb = new ProcessBuilder(command)
@@ -1263,15 +1287,18 @@ public class BootGate {
                 String why = (exited ? "it stopped while starting: " : "it did not become ready to serve: ")
                         + startFailure(new ArrayList<>(tail));
                 log.info("T4-EK: {} -- {}", artifact.get(), why);
+                services.close();
                 return new ServeAttempt(Optional.empty(), why);
             }
-            return new ServeAttempt(Optional.of(new Served(process, client, port, prefix, requestTimeoutMs)), null);
+            return new ServeAttempt(Optional.of(new Served(process, client, port, prefix, requestTimeoutMs, services)), null);
         } catch (IOException e) {
             if (process != null) process.destroyForcibly();
+            services.close();
             return new ServeAttempt(Optional.empty(), "it could not be started: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             if (process != null) process.destroyForcibly();
+            services.close();
             return new ServeAttempt(Optional.empty(), "interrupted while starting");
         }
     }
@@ -1304,8 +1331,14 @@ public class BootGate {
         private final int port;
         private final String prefix;
         private final long requestTimeoutMs;
+        private final AutoCloseable services;
 
         Served(Process process, HttpClient client, int port, String prefix, long requestTimeoutMs) {
+            this(process, client, port, prefix, requestTimeoutMs, () -> { });
+        }
+
+        Served(Process process, HttpClient client, int port, String prefix, long requestTimeoutMs, AutoCloseable services) {
+            this.services = services;
             this.process = process;
             this.client = client;
             this.port = port;
@@ -1332,6 +1365,11 @@ public class BootGate {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 process.destroyForcibly();
+            }
+            try {
+                services.close();
+            } catch (Exception e) {
+                log.warn("T4-EN: the services of a start could not be removed -- {}", e.getMessage());
             }
         }
     }

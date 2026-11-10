@@ -41,9 +41,16 @@ public class ReverseEngineeringJob {
      * @param seed    the seed composed from the account, for the operator to confirm ({@code phase} {@code done}), or the
      *                one confirmed ({@code confirmed})
      * @param refused the lines of the composition that were refused, with why
+     * @param services T4-EN: with {@code phase} {@code needs-services}, what the project needs started to run at all --
+     *                 for the operator to say yes (edited or not) or no to
      */
     public record State(String phase, String stage, Instant since, ReverseEngineeringService.Account account, String error,
-                        String kept, String seed, java.util.List<String> refused) {
+                        String kept, String seed, java.util.List<String> refused,
+                        java.util.List<com.walpro.autobuilder.core.services.ServiceProposal> services) {
+        public State(String phase, String stage, Instant since, ReverseEngineeringService.Account account, String error,
+                     String kept, String seed, java.util.List<String> refused) {
+            this(phase, stage, since, account, error, kept, seed, refused, null);
+        }
     }
 
     /**
@@ -58,6 +65,11 @@ public class ReverseEngineeringJob {
         ReverseEngineeringConfirmation.Made made = confirmation.confirm(s.account(), seed);
         state = new State("confirmed", null, s.since(), s.account(), null, s.kept(), seed, s.refused());
         return made;
+    }
+
+    /** T4-EN: the operator answered the services question; the job no longer waits on it. */
+    public synchronized void servicesAnswered() {
+        if ("needs-services".equals(state.phase())) state = new State("idle", null, null, null, null, null, null, null);
     }
 
     public State state() {
@@ -84,6 +96,9 @@ public class ReverseEngineeringJob {
                         since, null, null, null, null, null);
                 SeedComposer.Composed composed = seedComposer.compose(account);
                 state = new State("done", null, since, account, null, kept.toString(), composed.text(), composed.refused());
+            } catch (com.walpro.autobuilder.core.services.ServicesNeeded n) {
+                log.warn("T4-EN: reverse engineering waits for the operator -- {}", n.getMessage());
+                state = new State("needs-services", null, since, null, null, null, null, null, n.proposals());
             } catch (Exception | Error e) {
                 log.warn("T4-EK: reverse engineering failed", e);
                 state = new State("failed", null, since, null, e.getMessage() == null ? e.toString() : e.getMessage(), null,

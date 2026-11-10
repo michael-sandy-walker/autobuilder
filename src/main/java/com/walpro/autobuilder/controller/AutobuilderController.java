@@ -504,6 +504,64 @@ public class AutobuilderController {
         return ResponseEntity.ok(reverseEngineeringJob.state());
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.services.ProjectServices projectServices;
+
+    /**
+     * T4-EN: the operator's answer about the services the project needs -- {@code yes} with the services as they left
+     * them, {@code no}, or {@code withdraw} (forget the answer; nothing is started any more).
+     */
+    public record ServicesAnswer(String answer, List<com.walpro.autobuilder.core.services.ServiceProposal> services) {
+    }
+
+    /** T4-EN: what was said about this project's services, if anything. */
+    @GetMapping("/services")
+    public ResponseEntity<?> services() {
+        if (projectServices == null) return ResponseEntity.status(503).body(Map.of("error", "services are not enabled in this context"));
+        return ResponseEntity.ok(java.util.Collections.singletonMap("recorded", projectServices.recorded().orElse(null)));
+    }
+
+    /**
+     * T4-EN: records the answer. A yes while reverse engineering waits on it starts the job again at once -- the services
+     * are then created fresh before each program start; a no leaves it to the operator to run it again without them.
+     */
+    @PostMapping("/services")
+    public ResponseEntity<?> answerServices(@RequestBody ServicesAnswer a) {
+        if (projectServices == null) return ResponseEntity.status(503).body(Map.of("error", "services are not enabled in this context"));
+        String answer = a.answer() == null ? "" : a.answer();
+        switch (answer) {
+            case "withdraw" -> {
+                projectServices.withdraw();
+                return ResponseEntity.ok(Map.of("recorded", "nothing"));
+            }
+            case "no" -> {
+                projectServices.record(new com.walpro.autobuilder.core.services.ProjectServices.Decision(false,
+                        a.services(), java.time.Instant.now()));
+                if (reverseEngineeringJob != null) reverseEngineeringJob.servicesAnswered();
+                return ResponseEntity.ok(Map.of("recorded", "no"));
+            }
+            case "yes" -> {
+                if (a.services() == null || a.services().isEmpty()) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "a yes needs the services to start"));
+                }
+                for (var s : a.services()) {
+                    String invalid = s.invalid();
+                    if (invalid != null) return ResponseEntity.badRequest().body(Map.of("error", s.name() + ": " + invalid));
+                }
+                projectServices.record(new com.walpro.autobuilder.core.services.ProjectServices.Decision(true,
+                        a.services(), java.time.Instant.now()));
+                if (reverseEngineeringJob != null && "needs-services".equals(reverseEngineeringJob.state().phase())) {
+                    reverseEngineeringJob.servicesAnswered();
+                    reverseEngineeringJob.start();
+                }
+                return ResponseEntity.ok(Map.of("recorded", "yes"));
+            }
+            default -> {
+                return ResponseEntity.badRequest().body(Map.of("error", "the answer is yes, no or withdraw"));
+            }
+        }
+    }
+
     /** T4-EI: a capability import dropped before its import; the project was never touched. */
     @PostMapping("/capability-imports/{id}/cancel")
     public ResponseEntity<?> cancelCapabilityImport(@PathVariable String id) {

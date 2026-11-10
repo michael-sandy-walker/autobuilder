@@ -248,6 +248,19 @@ public class HomeController {
         return relayed(run.postText("/autobuilder/reverse-engineering/confirm", seed, Duration.ofMinutes(15)));
     }
 
+    /** T4-EN: the operator's answer about the services the open project needs (yes, no, withdraw). */
+    @PostMapping(value = "/home/run/services", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<String> answerServices(@RequestBody String answer) {
+        // A yes may start the reverse engineering again at once; the answer itself is quick.
+        return relayed(run.postJson("/autobuilder/services", answer, Duration.ofMinutes(2)));
+    }
+
+    /** T4-EN: what was said about the open project's services. */
+    @GetMapping(value = "/home/run/services", produces = "application/json")
+    public ResponseEntity<String> services() {
+        return relayed(run.get("/autobuilder/services"));
+    }
+
     /** T4-EK: where the reverse engineering is, and its account once done. */
     @GetMapping(value = "/home/run/reverse-engineering", produces = "application/json")
     public ResponseEntity<String> reverseEngineering() {

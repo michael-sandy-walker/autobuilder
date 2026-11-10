@@ -259,7 +259,25 @@ curl -X POST -H 'Content-Type: application/json' -d '{"project": "base", "profil
 curl -X POST http://localhost:8080/home/integrate/release  # let the loop work once nothing is open
 curl -X POST http://localhost:8080/home/stop             # stop the running loop after its current cycle
 curl -X POST http://localhost:8080/home/return           # close a run that has ended or not begun (409 while it runs)
+curl http://localhost:8080/home/run/services             # what was said about the services the project needs
+curl -X POST -H 'Content-Type: application/json' -d '{"answer": "yes", "services": [...]}' \
+     http://localhost:8080/home/run/services             # or "no", or "withdraw" (the services as proposed, edited)
 ```
+
+**A project that needs a service to run** (a database, a message broker) cannot be started on its own. When
+reverse engineering finds that the project's configuration names an address on this machine where nothing
+answers, it starts the project once; if that fails, it stops and asks before any model work. The proposal comes
+from the project's own compose file when it has one, taken as written; otherwise the model writes it from the
+project's own lines (its configuration, README and build file) and what it printed when it failed -- the page
+shows those lines beside it. You can edit the image, the port inside the container and its environment, and tick
+a setup script the project ships (unticked by default). The port is always the one the project is configured
+with; when something else already uses it, nothing is started and the reason is said.
+
+Nothing is started without your yes. The answer is kept in the project (`meta/services.json`) and used by every
+later start of it -- reverse engineering's and the loop's own start-up checks -- so it is asked once. A fresh
+container (`autobuilder-<project>-<service>`, needs Docker) is created before each start of the project and
+removed after it, so no start sees data another left; the first start pulls the image, which can take minutes
+(`autobuilder.services.ready-timeout-ms`). "withdraw" forgets the answer.
 
 ### 4.2 From the command line
 

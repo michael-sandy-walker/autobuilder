@@ -1,0 +1,14 @@
+# Obligations derived from bootstrap/seed.txt, one per line.
+# Edit freely: a hand-edited file is kept, and reported as yours.
+# Prefix a line with 'rule:' when it says HOW the work is done rather than something the
+# result can be checked for: it still guides the work, but never blocks completion.
+# Prefix a line with 'gate: tests' when the project's own test suite answers it: closure then
+# takes the test run's verdict instead of asking a model to read the source.
+# seed-sha256: 62dff443761db219672148f650735173d68e91af03a447f41363db68cb549d80
+# body-sha256: 2cf66ddf718622401b6a1d11fbad1910c55d94521ac254555d4e2cd989095924
+GET /register returns the registration page with HTTP 200
+GET /login returns the login page with HTTP 200
+GET /login?error=true returns HTTP 200
+GET /login?error=true page body contains the message "Please enter correct email and password"
+GET /login without the error parameter returns HTTP 200
+GET /login without the error parameter page body does not contain "Please enter correct email and password"

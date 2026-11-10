@@ -11,11 +11,12 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-10 (Opus 5.5, session 33) -- T4-EN BUILT AND FIELD-CHECKED: A PROJECT THAT NEEDS A SERVICE IS STARTED WITH ONE (THE OPERATOR'S YES); CODE COMMITTED 83a35b17 -- START HERE
+## 2026-11-10 (Opus 5.5, session 33) -- T4-EN BUILT AND FIELD-CHECKED: A PROJECT THAT NEEDS A SERVICE IS STARTED WITH ONE (THE OPERATOR'S YES); CLOSED; NEXT T1-GK THEN T4-EO -- START HERE
 
 - **Design note + DoD on the ticket (`d31aace0`); the user agreed all three recommendations** (fresh container per program start; setup script offered unticked; a taken port said, nothing started).
 - **Built, committed `83a35b17` at the user's word:** `core/services/` (ServiceNeeds, ServiceProposal, ProjectServices, ServiceContainers, ServicesNeeded), BootGate hook, reverse engineering asks before the model work, endpoints + home page question, docs. Tests +22. Toy case script `scripts/prepare_t4en_compose_case.sh` v1.
 - **Field:** e-commerce-project 0 unjudged (was 109/109), 34/35 variants -- after TWO yeses (the model's first proposal `MYSQL_ROOT_PASSWORD=""` was refused by the image; fixed: a stopped container is given up at once, and a yes that does not come up is asked again with the container's words + model revision). Compose copy: `mariadb:11.4` from the compose file, no model; the loop's boot gate reused the yes (OK). Detail on T4-EN. Side findings for T4-EK (raw README HTML in the seed; claims cannot log in). `data/e-commerce-compose` is a scratch copy (untracked). Suite on the final tree 4423/0/0/17. Nothing is running; 0 containers left.
+- **Later the same session:** T1-GK and T4-EO filed (`67818a56`); compose case bootstrap committed (`868a8ddc`); a yes whose container does not come up is now corrected under that yes from the container's words (`03c93b33`, e-commerce replay: no question asked); suite 4425/0/0/17. **T4-EN CLOSED.** Order agreed with the user: T1-GK, T4-EO, e-commerce end to end, then T4-EK (c). T1-GK started.
 
 ## 2026-11-09/10 (Opus 5.5, session 32) -- T4-EK SLICES (A), (A2), (B) BUILT AND COMMITTED: A FOREIGN TREE BECOMES A FIRST-CLASS PROJECT ON ALL THREE KINDS; NEXT T4-EN IN A FRESH SESSION
 

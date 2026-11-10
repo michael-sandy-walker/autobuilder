@@ -765,7 +765,7 @@ function revBox() {
     if (seedDraft == null) seedDraft = rev.seed;
     const cited = claims.filter(j => verdict(j) === 'anchored');
     html += '<div class="sub" style="margin-top:12px"><label for="seed" style="margin-top:0">This project\'s seed, written '
-      + 'from what was found</label><div class="why">Each line ends with the claims it rests on. Edit freely; a line you '
+      + 'from what was found</label><div class="why">Each line ends with the claims it rests on; the README is not part of it. Edit freely; a line you '
       + 'add without claims becomes open work the loop checks next. Confirming makes this the project\'s first input '
       + 'and its goal tree; the loop then closes it by running every criterion again.</div>'
       + '<textarea id="seed" class="tall"' + (seedSending ? ' readonly' : '') + '></textarea>'
@@ -775,6 +775,9 @@ function revBox() {
       + (seedSending ? 'Confirming... (each part is run once more)' : 'Confirm as this project\'s seed') + '</button>'
       + (ownGoal ? '' : ' <a href="#" id="owngoal" class="note" style="margin:0">or write a goal yourself instead</a>')
       + '</div>'
+      + ((a.coldRead && (a.coldRead.prose || []).length) ? '<details><summary>What its README says <span class="note">-- '
+          + 'context, not part of the seed: nothing checked it</span></summary><pre class="coldread">'
+          + esc(a.coldRead.prose.join('\n')) + '</pre></details>' : '')
       + '<details><summary>The claims it cites (' + cited.length + ')</summary><ul class="claims">'
       + cited.map(j => '<li><b>' + esc(j.claim.id) + '</b> ' + esc(j.claim.text) + '</li>').join('') + '</ul></details></div>';
   }

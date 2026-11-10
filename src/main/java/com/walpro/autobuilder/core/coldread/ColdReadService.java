@@ -91,7 +91,9 @@ public class ColdReadService {
         List<String> tests = readTests(java);
 
         if (prose.isEmpty()) {
-            uncertainties.add("the project says nothing about itself in words: no README or equivalent was found");
+            uncertainties.add(hasReadme(text)
+                    ? "the project says nothing about itself in words: its README holds only markup (images, links, tags)"
+                    : "the project says nothing about itself in words: no README or equivalent was found");
         }
         if (tests.isEmpty()) {
             uncertainties.add("no tests were found, so nothing here states the intended behaviour except the code itself");
@@ -264,16 +266,14 @@ public class ColdReadService {
     }
 
     /** Quoted, never summarised: what the project says about itself is evidence, not raw material. */
+    private static boolean hasReadme(Map<String, String> text) {
+        return text.keySet().stream().anyMatch(k -> k.toLowerCase().endsWith("readme.md") || k.equalsIgnoreCase("README"));
+    }
+
     private List<String> readProse(Map<String, String> text) {
         for (Map.Entry<String, String> e : text.entrySet()) {
             if (!e.getKey().toLowerCase().endsWith("readme.md") && !e.getKey().equalsIgnoreCase("README")) continue;
-            List<String> lines = new ArrayList<>();
-            for (String line : e.getValue().split("\\R")) {
-                if (line.isBlank()) continue;
-                lines.add(line.strip());
-                if (lines.size() >= MAX_PROSE_LINES) break;
-            }
-            return lines;
+            return ReadmeProse.of(e.getValue(), MAX_PROSE_LINES);   // T1-GK: its words, not its markup
         }
         return List.of();
     }

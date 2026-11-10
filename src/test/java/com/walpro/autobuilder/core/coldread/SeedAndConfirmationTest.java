@@ -48,7 +48,7 @@ class SeedAndConfirmationTest {
     }
 
     @Test
-    void aComposedLineMustCiteAKeptClaimAndTheProjectsProseIsQuotedNotComposed() {
+    void aComposedLineMustCiteAKeptClaimAndTheProjectsReadmeIsNotPartOfTheSeed() {
         String answer = """
                 Books:
                 - GET /books lists the books [k1]
@@ -59,9 +59,12 @@ class SeedAndConfirmationTest {
                 - GET /loans answers [k3]
                 """;
         var composed = SeedComposer.check(answer, SeedComposer.keptIds(account), account);
-        assertThat(composed.text()).startsWith("In its own words:\n> books -- a small library")
+        assertThat(composed.text()).startsWith("Books:")
                 .contains("- GET /books lists the books [k1]", "- GET /loans answers [k3]")
-                .doesNotContain("stored forever", "lends a book");
+                .doesNotContain("stored forever", "lends a book", "In its own words", "a small library");
+        // Every line of a composed seed is a feature header or rests on a kept claim (T1-GK).
+        assertThat(SeedComposer.lines(composed.text(), Set.of("Books", "Loans")))
+                .extracting(SeedComposer.Line::kind).containsOnly("header", "cited");
         assertThat(composed.refused()).hasSize(2);
         assertThat(composed.refused().get(0)).contains("cites no claim");
         assertThat(composed.refused().get(1)).contains("k4, not a kept claim");

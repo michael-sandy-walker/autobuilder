@@ -27,10 +27,11 @@ import java.util.regex.Pattern;
  * ways in, what it was observed to need, and its kept claims. Every line it writes ends with the ids of the claims it
  * rests on, and a line that cites none, or cites one that is not a kept claim, is refused here, by rule: a seed line no
  * claim supports would be the loop specifying the project it then grades itself against. What the project says about
- * itself is quoted above the lines, as it stands; the model does not paraphrase it.
+ * itself (its README) is not part of it, quoted or paraphrased: nothing checked it (T1-GK).
  *
- * <p>The text this returns is what the operator sees and edits: feature headers ({@code Name:}), quoted prose
- * ({@code > ...}), cited lines ({@code - ... [k3, k7]}). {@link #lines} reads it back.
+ * <p>The text this returns is what the operator sees and edits: feature headers ({@code Name:}) and cited lines
+ * ({@code - ... [k3, k7]}). {@link #lines} reads it back -- an operator's own quoted ({@code > ...}) or uncited lines
+ * included, which are theirs to add.
  */
 @Slf4j
 @Component
@@ -163,14 +164,15 @@ public class SeedComposer {
         return out;
     }
 
-    /** The model's answer checked line by line; the text returned holds the project's quoted prose and the lines kept. */
+    /**
+     * The model's answer checked line by line; the text returned holds the feature headers and the lines kept -- each
+     * citing a kept claim. T1-GK: the project's README is NOT quoted into it: what a README says is unchecked
+     * self-description (setup steps, badges, "production-oriented"), and the seed is the project's first input, which
+     * the planner reads as specification -- every line of it rests on claims the running code bore out. The README
+     * stays where it is context: the claim proposer reads it, the page shows it beside the seed.
+     */
     static Composed check(String answer, Set<String> kept, Account account) {
         StringBuilder text = new StringBuilder();
-        if (account.coldRead() != null && !account.coldRead().prose().isEmpty()) {
-            text.append("In its own words:\n");
-            account.coldRead().prose().forEach(p -> text.append("> ").append(p).append('\n'));
-            text.append('\n');
-        }
         List<String> refused = new ArrayList<>();
         for (String raw : answer.split("\\R")) {
             String l = raw.strip();

@@ -172,6 +172,15 @@ class ColdReadServiceTest {
 
     /** T4-CQ: the prefix an application is served under is its own configuration's to state. */
     @Test
+    void aReadmeOfOnlyMarkupIsSaidToSayNothingInWords() throws IOException {
+        importedProject();
+        Files.writeString(tmp.resolve("README.md"), "<p align=\"center\"><img src=\"logo.png\"/></p>\n<!-- badges -->\n");
+        ColdRead r = service.read(tmp);
+        assertThat(r.prose()).isEmpty();
+        assertThat(r.uncertainties()).anyMatch(u -> u.contains("its README holds only markup"));
+    }
+
+    @Test
     void theServedPrefixIsReadFromTheProjectsOwnConfiguration() throws Exception {
         Path res = tmp.resolve("src/main/resources");
         java.nio.file.Files.createDirectories(res);

@@ -52,7 +52,7 @@ public final class ColdReadReport {
 
         b.append("\nWHAT IT SAYS ABOUT ITSELF");
         if (r.prose().isEmpty()) {
-            b.append("\n  (nothing: no README found)\n");
+            b.append("\n  (nothing said in words -- why is among what could not be established)\n");
         } else {
             b.append(" (quoted from its own README)\n");
             for (String l : r.prose()) b.append("  | ").append(l).append('\n');

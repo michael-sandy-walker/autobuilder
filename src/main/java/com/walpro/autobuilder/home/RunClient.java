@@ -38,8 +38,12 @@ class RunClient {
     }
 
     Reply postText(String path, String text) {
+        return postText(path, text, Duration.ofMinutes(2));
+    }
+
+    Reply postText(String path, String text, Duration timeout) {
         return send(HttpRequest.newBuilder().header("Content-Type", "text/plain; charset=utf-8")
-                .POST(HttpRequest.BodyPublishers.ofString(text, StandardCharsets.UTF_8)), path, Duration.ofMinutes(2));
+                .POST(HttpRequest.BodyPublishers.ofString(text, StandardCharsets.UTF_8)), path, timeout);
     }
 
     private Reply send(HttpRequest.Builder request, String path, Duration timeout) {

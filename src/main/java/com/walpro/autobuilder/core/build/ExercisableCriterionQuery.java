@@ -48,6 +48,11 @@ public class ExercisableCriterionQuery {
      */
     private final String commandTemplate;
 
+    /** T4-EK: a criterion carrying its stored exercise is exercisable whatever its wording. Optional. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @lombok.Setter
+    private CriterionExercises criterionExercises;
+
     public ExercisableCriterionQuery(
             CommandSurfaceQuery commandSurfaceQuery,
             @org.springframework.beans.factory.annotation.Value(
@@ -78,7 +83,8 @@ public class ExercisableCriterionQuery {
                 specText == null || specText.isBlank() ? Optional.empty() : InputFormatExample.readFrom(specText);
         return criteria.stream()
                 .filter(c -> c != null && !c.isBlank())
-                .filter(c -> BehaviouralCriterionParser.exercisable(c).isPresent()
+                .filter(c -> (criterionExercises != null && criterionExercises.of(c).isPresent())
+                        || BehaviouralCriterionParser.exercisable(c).isPresent()
                         || CommandExerciseSynthesizer.synthesize(c, surface, unrecognised, format, specText).isPresent())
                 .toList();
     }

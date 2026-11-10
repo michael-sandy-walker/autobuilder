@@ -209,6 +209,12 @@ public class AutobuilderController {
             return ResponseEntity.badRequest().body(Map.of("ok", false,
                     "message", "The goal text is empty."));
         }
+        // T4-EK: not while the project is being reverse-engineered -- the loop would start beside the job's builds, and
+        // the seed the job writes could no longer be confirmed.
+        if (reverseEngineeringJob != null && "running".equals(reverseEngineeringJob.state().phase())) {
+            return ResponseEntity.status(409).body(Map.of("ok", false,
+                    "message", "The project is being reverse-engineered; set its goal once that is done."));
+        }
         var existing = goalPlannerServiceForGoal.getRootGoal();
         if (existing != null) {
             return ResponseEntity.badRequest().body(Map.of("ok", false,
@@ -472,6 +478,24 @@ public class AutobuilderController {
         if (reverseEngineeringJob == null) return ResponseEntity.status(503).body(Map.of("error", "reverse engineering is not enabled in this context"));
         if (!reverseEngineeringJob.start()) return ResponseEntity.status(409).body(Map.of("error", "reverse engineering is already running"));
         return ResponseEntity.accepted().body(reverseEngineeringJob.state());
+    }
+
+    /**
+     * T4-EK slice (b): the seed the operator confirmed (text, as edited) made into this project's purpose and goal tree;
+     * the waiting run is released and closes the root through its own closure edge.
+     */
+    @PostMapping(value = "/reverse-engineering/confirm", consumes = org.springframework.http.MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<?> confirmReverseEngineering(@RequestBody String seed) {
+        if (reverseEngineeringJob == null) return ResponseEntity.status(503).body(Map.of("error", "reverse engineering is not enabled in this context"));
+        try {
+            var made = reverseEngineeringJob.confirm(seed == null ? "" : seed);
+            autobuilderService.goalProvided();
+            return ResponseEntity.ok(made);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @GetMapping("/reverse-engineering/job")

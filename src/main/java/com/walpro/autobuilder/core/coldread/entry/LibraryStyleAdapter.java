@@ -148,20 +148,20 @@ public class LibraryStyleAdapter implements EntryAdapter {
     }
 
     /** The package most entry points are in: claims are written there, the other packages' types imported. */
-    static String homePackage(List<EntryPoint> points) {
+    public static String homePackage(List<EntryPoint> points) {
         Map<String, Integer> count = new LinkedHashMap<>();
         for (EntryPoint p : points) count.merge(packageOf(p.qualifiedType(), p.type()), 1, Integer::sum);
         return count.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse("");
     }
 
-    String source(String pkg, String imports, String cls, String body) {
+    public String source(String pkg, String imports, String cls, String body) {
         String indented = String.join("\n", body.lines().map(l -> "        " + l).toList());
         String text = template.formatted(pkg, imports, cls, indented);
         return pkg.isEmpty() ? text.replaceFirst("(?m)^package ;\\s*\\n", "") : text;
     }
 
     /** The project's public types from other packages, one per simple name, so a claim can name them simply. */
-    static String imports(List<EntryPoint> points, String pkg) {
+    public static String imports(List<EntryPoint> points, String pkg) {
         Map<String, String> bySimple = new LinkedHashMap<>();
         for (EntryPoint p : points) {
             String outer = p.type().contains(".") ? p.type().substring(0, p.type().indexOf('.')) : p.type();

@@ -2117,6 +2117,30 @@ public class GoalPlannerService {
         if (derivedTests != null) derivedTests.ensureFor(rootDescription);
     }
 
+    /**
+     * T4-EK: a goal a project the loop did not build has already reached -- created under {@code parentId} with the
+     * criteria that EARNED it and completed at once. The criteria are kept verbatim (each is the key to the exercise
+     * stored for it, which rewriting would orphan) and bound to the specification without asking the model: the
+     * specification was composed from them, so none is authored beyond it, and the closure edge exercises all of them.
+     */
+    public void addEarnedGoal(String id, String description, String parentId, List<String> criteria, String resolution) {
+        addSubGoal(id, description, false, parentId, "reverse-engineering", null);
+        GoalEntity g = goalMap.get(id);
+        List<String> kept = criteria.stream().filter(c -> c != null && !c.isBlank()).toList();
+        g.getMetadata().put("acceptanceCriteria", new ArrayList<>(kept));
+        Map<String, String> binding = new HashMap<>();
+        for (int i = 1; i <= kept.size(); i++) binding.put(String.valueOf(i), "SPEC");
+        g.getMetadata().put("criteriaBinding", binding);
+        g.getMetadata().put("earnedBy", "reverse-engineering");
+        persist();
+        try {
+            goalGraphService.save(g);
+        } catch (HttpServerErrorException e) {
+            log.debug("Neo4j update failed for earned goal {} (ignoring): {}", id, e.getMessage());
+        }
+        transitionGoal(id, GoalStatus.COMPLETED, resolution);
+    }
+
     public void addSubGoal(String id, String description, boolean setAsCurrent) {
         addSubGoal(id, description, setAsCurrent, rootGoalId);
     }
@@ -2612,10 +2636,29 @@ public class GoalPlannerService {
         return merged;
     }
 
+    /**
+     * T4-EK: whether this project's seed was EARNED -- written from what was found on a project the loop did not build,
+     * every line resting on criteria that carry the exercise that earned them, and confirmed by the operator.
+     *
+     * <p>Such a seed is verified by those criteria, run as stored, and is NOT read again for requirements. Reading its
+     * wording is lossy (field, firestarter 2026-11-10: "GET /loans?memberId={id} returns 200" was probed as a bare
+     * GET /loans -- the route reader drops the query -- answered 400, and the loop rewrote the imported code to make
+     * the parameter optional; a literal id copied from an exercise became work), and it is redundant: every line of it
+     * already has its exact check. A line the operator added is a goal of its own and worked on as one.
+     */
+    public boolean seedIsEarned() {
+        try {
+            var seed = purpose().ledger().seed();
+            return seed != null && com.walpro.autobuilder.core.coldread.ReverseEngineeringConfirmation.ADDED_BY.equals(seed.addedBy());
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
     public List<String> specDerivedRequirements() {
         List<String> out = new ArrayList<>();
         String spec = specification();
-        if (specBehaviourQuery == null || spec == null) {
+        if (specBehaviourQuery == null || spec == null || seedIsEarned()) {
             return out;
         }
         var stated = specBehaviourQuery.statedBehaviours(spec);
@@ -2634,7 +2677,7 @@ public class GoalPlannerService {
         // planner decomposed, so reach does not collapse on fine-grained plans: run 14-42-19
         // wrote 132 criteria of which only 7 were readable as assertions.
         String spec = specification();
-        if (specBehaviourQuery != null && spec != null) {
+        if (specBehaviourQuery != null && spec != null && !seedIsEarned()) {
             var stated = specBehaviourQuery.statedBehaviours(spec);
             for (var entry : stated.entrySet()) {
                 out.addAll(specBehaviourQuery.criteriaFor(entry.getKey(), entry.getValue()));

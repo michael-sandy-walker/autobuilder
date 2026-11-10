@@ -410,6 +410,24 @@ class ObservedLeafPromotionTest {
                 "POST /loans returns HTTP 409 with JSON body {\"message\": \"<reason>\"} when the book is already on an active loan");
     }
 
+    /** T4-EK: an earned seed is verified by its criteria, not read again for requirements. */
+    @Test
+    void anEarnedSeedIsNotReadAgainForRequirements() throws IOException {
+        GoalPlannerService service = serviceWith(SEED, SERVED_ARTIFACT, RESIDUAL_LEAVES);
+        assertThat(service.specDerivedRequirements()).isNotEmpty();
+        int fromSpecAndGoals = service.specBoundBehaviouralCriteria().size();
+
+        service.purpose().recordSeed(SEED,
+                com.walpro.autobuilder.core.coldread.ReverseEngineeringConfirmation.ADDED_BY);
+
+        assertThat(service.seedIsEarned()).isTrue();
+        assertThat(service.specDerivedRequirements()).isEmpty();
+        // The goals' own criteria are still exercised; only the reading of the seed's wording stops.
+        List<String> bound = service.specBoundBehaviouralCriteria();
+        assertThat(bound).isNotEmpty().hasSizeLessThan(fromSpecAndGoals);
+        assertThat(bound).containsAll(RESIDUAL_LEAVES.values().stream().flatMap(List::stream).toList());
+    }
+
     // ---------------------------------------------------------------- fixtures
 
     private static BootGate.BootObservation observing(List<String> claims) {

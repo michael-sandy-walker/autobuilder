@@ -108,6 +108,11 @@ public class BootGate {
     @Autowired(required = false)
     private CriterionProbeSynthesizer criterionProbeSynthesizer;
 
+    /** T4-EK: exercises stored with reverse-engineered criteria; run as stored, before any synthesis. */
+    @Setter
+    @Autowired(required = false)
+    private CriterionExercises criterionExercises;
+
     /**
      * T4-DD: the operations a specification declares. Stateless and defaulted rather than
      * required, so the gate keeps working wherever it is constructed directly.
@@ -663,8 +668,24 @@ public class BootGate {
         // pools shapes cannot answer whether THIS shape was judged.
         int messageProbed = 0;
         int messageContradicted = 0;
+        int asStored = 0;
         for (String criterion : behaviouralCriteria) {
             if (failures.size() >= MAX_NAMED_FAILURES) break;
+            // T4-EK: a criterion that carries the run that earned it is run exactly so, its files written first.
+            Optional<CriterionExercises.Stored> stored = criterionExercises == null ? Optional.empty()
+                    : criterionExercises.of(criterion).filter(x -> "command-style".equals(x.kind()));
+            if (stored.isPresent()) {
+                Optional<String> refuted = runStored(artifact, stored.get());
+                if (refuted == null) {
+                    unobserved++;
+                    continue;
+                }
+                asStored++;
+                probed++;
+                if (refuted.isPresent()) failures.add(ProbeFailure.of(criterion, "\"" + criterion + "\" -- " + refuted.get()));
+                else if (evidence != null) evidence.passed(criterion, "stored run held");
+                continue;
+            }
             Optional<CommandCriterionParser.CommandAssertion> parsed =
                     CommandCriterionParser.parse(criterion, launchTokens);
             if (parsed.isEmpty()) {
@@ -790,6 +811,7 @@ public class BootGate {
         } finally {
             deleteRecursively(fixtureDir);
         }
+        if (asStored > 0) log.info("T4-EK: {} command criterion(s) run as their stored run", asStored);
         log.info("T4-DD: exit-status criteria probed={} skipped={} (unparsed={} unobserved={}) contradicted={}",
                 probed, unparsed + unobserved, unparsed, unobserved, failures.size());
         // Emitted even at zero, and that is the point: a zero here says "no content criterion
@@ -1049,6 +1071,45 @@ public class BootGate {
         }
     }
 
+    /**
+     * T4-EK: one stored run, in a directory of its own with the stored files written first. Empty when it held, the
+     * contradiction when it did not, null when nothing was observed (no exit status).
+     */
+    private Optional<String> runStored(Path artifact, CriterionExercises.Stored stored) {
+        Path cwd = null;
+        try {
+            cwd = Files.createTempDirectory("criterion-run-");
+            for (Map.Entry<String, String> f : stored.files().entrySet()) {
+                Path file = cwd.resolve(f.getKey()).normalize();
+                if (!file.startsWith(cwd)) continue;
+                Files.createDirectories(file.getParent());
+                Files.writeString(file, f.getValue());
+            }
+            Optional<Ended> ended = runArtifactToEnd(artifact, stored.args(), cwd, requestTimeoutMs * 3);
+            if (ended.isEmpty() || ended.get().exit() == null) return null;
+            Ended e = ended.get();
+            if (e.exit() != stored.expected()) {
+                return Optional.of("its stored run " + stored.args() + " expects exit " + stored.expected()
+                        + ", but it exited " + e.exit());
+            }
+            if (stored.outputContains() != null && (e.output() == null || !e.output().contains(stored.outputContains()))) {
+                return Optional.of("its stored run " + stored.args() + " expects output containing \""
+                        + stored.outputContains() + "\", but it printed: " + summarize(e.output()));
+            }
+            return Optional.empty();
+        } catch (IOException e) {
+            return null;
+        } finally {
+            if (cwd != null) deleteRecursively(cwd);
+        }
+    }
+
+    private static String summarize(String output) {
+        if (output == null) return "(nothing)";
+        String o = output.strip();
+        return o.length() <= 200 ? o : o.substring(0, 200) + "...";
+    }
+
     private OptionalInt invokeOnce(Path artifact, List<String> args) {
         return invoke(artifact, args).map(i -> OptionalInt.of(i.exitStatus())).orElse(OptionalInt.empty());
     }
@@ -1104,12 +1165,19 @@ public class BootGate {
     public Optional<Ended> runToEnd(Path workingDir, List<String> args, Path cwd, long timeoutMs) {
         Optional<Path> artifact = findPackagedArtifact(workingDir.toAbsolutePath().normalize());
         if (artifact.isEmpty()) return Optional.empty();
-        List<String> command = new ArrayList<>(buildCommand(artifact.get(), 0));
+        return runArtifactToEnd(artifact.get(), args, cwd, timeoutMs);
+    }
+
+    /** As above, with the archive already found. */
+    Optional<Ended> runArtifactToEnd(Path artifact, List<String> args, Path cwd, long timeoutMs) {
+        List<String> command = new ArrayList<>(buildCommand(artifact, 0));
         if (command.isEmpty()) return Optional.empty();
         command.addAll(args);
         Process process = null;
         try {
-            process = new ProcessBuilder(command).directory(cwd.toFile()).redirectErrorStream(true).start();
+            ProcessBuilder pb = new ProcessBuilder(command).directory(cwd.toFile()).redirectErrorStream(true);
+            pb.environment().keySet().removeAll(INHERITED_JVM_OPTION_VARS);
+            process = pb.start();
             process.getOutputStream().close();
             StringBuilder out = new StringBuilder();
             InputStream in = process.getInputStream();
@@ -1155,17 +1223,26 @@ public class BootGate {
      * process is destroyed then, and by {@link Served#close()} otherwise.
      */
     public Optional<Served> serve(Path workingDir) {
+        return serveOrWhy(workingDir).served();
+    }
+
+    /** The started artifact, or why it could not be started: in its own words when it said why. */
+    public record ServeAttempt(Optional<Served> served, String why) {
+    }
+
+    /** As {@link #serve}, saying why when the artifact did not become ready -- from what it printed, not a guess. */
+    public ServeAttempt serveOrWhy(Path workingDir) {
         Path dir = workingDir.toAbsolutePath().normalize();
         Optional<Path> artifact = findPackagedArtifact(dir);
-        if (artifact.isEmpty()) return Optional.empty();
+        if (artifact.isEmpty()) return new ServeAttempt(Optional.empty(), "no packaged program was found to start");
         int port;
         try (ServerSocket socket = new ServerSocket(0)) {
             port = socket.getLocalPort();
         } catch (IOException e) {
-            return Optional.empty();
+            return new ServeAttempt(Optional.empty(), "no free port to start it on");
         }
         List<String> command = buildCommand(artifact.get(), port);
-        if (command.isEmpty()) return Optional.empty();
+        if (command.isEmpty()) return new ServeAttempt(Optional.empty(), "no command to start it with");
         String prefix = coldReadService == null ? "" : coldReadService.servedPrefix(dir).orElse("");
         Process process = null;
         try {
@@ -1181,20 +1258,39 @@ public class BootGate {
             HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofMillis(Math.min(requestTimeoutMs, 1000))).build();
             if (!awaitHttpReadiness(process, client, port)) {
-                log.info("T4-EK: {} did not become ready to serve -- {}", artifact.get(), String.join(" | ",
-                        new ArrayList<>(tail).subList(Math.max(0, tail.size() - 5), tail.size())));
+                boolean exited = !process.isAlive();
                 process.destroyForcibly();
-                return Optional.empty();
+                String why = (exited ? "it stopped while starting: " : "it did not become ready to serve: ")
+                        + startFailure(new ArrayList<>(tail));
+                log.info("T4-EK: {} -- {}", artifact.get(), why);
+                return new ServeAttempt(Optional.empty(), why);
             }
-            return Optional.of(new Served(process, client, port, prefix, requestTimeoutMs));
+            return new ServeAttempt(Optional.of(new Served(process, client, port, prefix, requestTimeoutMs)), null);
         } catch (IOException e) {
             if (process != null) process.destroyForcibly();
-            return Optional.empty();
+            return new ServeAttempt(Optional.empty(), "it could not be started: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             if (process != null) process.destroyForcibly();
-            return Optional.empty();
+            return new ServeAttempt(Optional.empty(), "interrupted while starting");
         }
+    }
+
+    /**
+     * What a program that did not start said about it: the deepest {@code Caused by} it printed (the root of a chain
+     * of exceptions names what was actually missing), else its last lines.
+     */
+    static String startFailure(List<String> tail) {
+        String deepest = null;
+        for (String line : tail) {
+            String l = line.strip();
+            if (l.startsWith("Caused by:")) deepest = l.substring("Caused by:".length()).strip();
+        }
+        if (deepest != null) return deepest.length() <= 300 ? deepest : deepest.substring(0, 300) + "...";
+        List<String> last = tail.stream().map(String::strip).filter(l -> !l.isEmpty() && !l.startsWith("at ")
+                && !l.startsWith("...")).toList();
+        String joined = String.join(" | ", last.subList(Math.max(0, last.size() - 3), last.size()));
+        return joined.isEmpty() ? "it printed nothing" : (joined.length() <= 300 ? joined : joined.substring(0, 300) + "...");
     }
 
     /**
@@ -1401,8 +1497,29 @@ public class BootGate {
         // existing line rather than logged per criterion: a gate run can carry dozens, and a
         // debug-level line is invisible at the level runs actually use.
         java.util.Map<Integer, Integer> unprobeableByStatus = new java.util.TreeMap<>();
+        int asStored = 0;
         for (String criterion : criteria) {
             if (failures.size() >= MAX_NAMED_FAILURES) break;
+            // T4-EK: a criterion that carries the exercise that earned it is run exactly so -- no parse, no synthesis.
+            Optional<CriterionExercises.Stored> stored = criterionExercises == null ? Optional.empty()
+                    : criterionExercises.of(criterion).filter(x -> "service-style".equals(x.kind()));
+            if (stored.isPresent()) {
+                SequenceOutcome observed = executeSequence(client, port, stored.get().requests());
+                if (!observed.isObserved()) {
+                    unobserved.merge(observed.abstain(), 1, Integer::sum);
+                    continue;
+                }
+                asStored++;
+                probed++;
+                if (observed.status() != stored.get().expected()) {
+                    failures.add(ProbeFailure.of(criterion, "\"" + criterion + "\" -- its stored exercise "
+                            + stored.get().requests() + " expects " + stored.get().expected()
+                            + ", but the running application answered " + observed.status()));
+                } else if (evidence != null) {
+                    evidence.passed(criterion, "stored exercise answered " + observed.status());
+                }
+                continue;
+            }
             Optional<BehaviouralCriterionParser.Assertion> parsed = BehaviouralCriterionParser.parse(criterion);
             if (parsed.isEmpty()) {
                 unparsed++;
@@ -1512,6 +1629,7 @@ public class BootGate {
             }
         }
         int unobservedTotal = unobserved.values().stream().mapToInt(Integer::intValue).sum();
+        if (asStored > 0) log.info("T4-EK: {} criterion(s) run as their stored exercise", asStored);
         log.info("T4-CU: behavioural criteria probed={} skipped={} "
                         + "(unparsed={} unprobeable={}{} unobserved={}{}) contradicted={}",
                 probed, unparsed + unprobeable + unobservedTotal,

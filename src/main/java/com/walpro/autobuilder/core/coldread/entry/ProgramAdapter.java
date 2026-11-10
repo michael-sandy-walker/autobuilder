@@ -100,12 +100,12 @@ public class ProgramAdapter implements EntryAdapter {
         List<Claim> served = claims.stream().filter(k -> k.kind() == EntryKind.SERVICE_STYLE).toList();
         List<Claim> runs = claims.stream().filter(k -> k.kind() == EntryKind.COMMAND_STYLE).toList();
         if (!served.isEmpty()) {
-            var started = bootGate.serve(dir);
-            if (started.isEmpty()) {
-                log.warn("T4-EK: variant {} built but did not serve", variant);
-                return new Ran(true, false, "built, but did not start serving");
+            BootGate.ServeAttempt attempt = bootGate.serveOrWhy(dir);
+            if (attempt.served().isEmpty()) {
+                log.warn("T4-EK: variant {} built but did not serve -- {}", variant, attempt.why());
+                return new Ran(true, false, "built, but " + attempt.why());
             }
-            try (BootGate.Served app = started.get()) {
+            try (BootGate.Served app = attempt.served().get()) {
                 for (Claim k : served) {
                     BootGate.Served.Response r = app.send(k.sequence());
                     boolean held = r.status() != null && r.status() == k.expected();

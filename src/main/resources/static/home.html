@@ -529,7 +529,7 @@ function renderNow() {
     + (actions ? '<div class="row">' + actions + '</div>' : '')
     + (live ? liveHtml() : '')
     + (rev && rev.phase !== 'idle' && (waiting || held) ? revBox() : '')
-    + (waiting ? goalBox() : '') + (job ? jobBox() : '')
+    + (waiting && showGoalBox() ? goalBox() : '') + (job ? jobBox() : '')
     + (run.runPort && !(job && job.phase === 'DECIDING') && !(job && job.phase === 'BRINGING_IN') && showImports() ? importsHtml() : '')
     + (conflicts.length && !(job && job.phase === 'DECIDING') ? '<div class="sub"><div class="title"><b>Waiting for your decision</b>'
        + '</div><div class="why">Conflicts from an import. While one is open, this project cannot be finished.</div>'
@@ -552,7 +552,9 @@ function renderNow() {
   el.querySelectorAll('[data-do]').forEach(b => b.onclick = () => ({ close: closeRun, stop: stopRun, continue: continueHeld, reverse: startReverse })[b.dataset.do]());
   el.querySelectorAll('[data-keep]').forEach(b => b.onclick = () => keepImport(b.dataset.keep));
   el.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => cancelImport(b.dataset.cancel, b.dataset.label));
-  if (waiting) wireGoalBox();
+  if (waiting && showGoalBox()) wireGoalBox();
+  if ($('owngoal')) $('owngoal').onclick = e => { e.preventDefault(); ownGoal = true; rerender(); };
+  wireSeedBox();
   if (job) wireJobBox();
   if (conflicts.length) wireConflicts();
   if (focused && $(focused)) $(focused).focus();
@@ -668,7 +670,29 @@ async function stopRun() {
 }
 
 // T4-EK: what the code does, reverse-engineered -- features from its served surface, claims the running code earned.
-let rev = null;
+let rev = null, seedDraft = null, seedSending = false, ownGoal = false;
+// One way at a time to give an adopted project its purpose: while reverse engineering runs there is none (the loop must
+// not start beside its builds), and once it is done the seed it wrote is the way -- the goal box only on request.
+function showGoalBox() {
+  if (!rev || rev.phase === 'idle' || rev.phase === 'failed') return true;
+  if (rev.phase === 'done') return ownGoal;
+  return false;
+}
+function wireSeedBox() {
+  if (!$('seed')) return;
+  $('seed').value = seedDraft || '';
+  $('seed').oninput = e => seedDraft = e.target.value;
+  $('confirmseed').onclick = async () => {
+    if (seedSending) return;
+    if (!(seedDraft || '').trim()) { toast(false, 'The seed is empty.'); return; }
+    seedSending = true; rerender();
+    let r;
+    try { r = await post('/home/run/reverse-engineering/confirm', null, seedDraft); } finally { seedSending = false; }
+    if (r.status === 200) toast(true, 'Confirmed: the seed is set and the loop closes it next.');
+    else toast(false, 'Not confirmed: ' + message(r));
+    refresh();
+  };
+}
 // Closing the project would end its run under the job: not offered until the job is done.
 const revRunning = () => !!(rev && rev.phase === 'running');
 async function startReverse() {
@@ -681,8 +705,11 @@ const KIND_MEANS = {
   'library-style': 'exercised inside the same process, by a test that calls it',
   'service-style': 'started and kept running, exercised by requests it answers',
   'command-style': 'started with arguments and input, runs to its end, exercised by its exit status, output and files' };
-const NOT_KEPT = { 'not-held': 'the running code answers otherwise', 'not-anchored': 'answered without the feature\'s code too',
-  unowned: 'reaches none of its ways in', unjudged: 'could not be checked' };
+// Why a claim was not kept, in the order shown: only the last can still change.
+const NOT_KEPT_GROUPS = [
+  ['not-held', 'The code does something else', 'the model guessed wrong; dropped'],
+  ['not-anchored', 'Holds even without this project\'s code', 'the framework answers it, not the project; dropped'],
+  ['unjudged', 'Could not be checked', 'kept once the project can run -- run reverse engineering again then'] ];
 function revBox() {
   const head = t => '<div class="sub"><div class="title"><b>Reverse-engineering</b>' + t + '</div>';
   if (rev.phase === 'running') {
@@ -696,10 +723,21 @@ function revBox() {
   const byId = Object.fromEntries(claims.map(j => [j.claim.id, j]));
   const capName = Object.fromEntries((a.capabilities || []).map(c => [c.id, c.name]));
   const kept = claims.filter(j => verdict(j) === 'anchored');
-  let html = head('<span class="badge">' + kept.length + ' of ' + claims.length + ' claims kept</span>')
-    + '<div class="why">A claim is kept when the running code answers it as stated, and no longer does with its '
-    + 'feature\'s code taken out. Nothing in the project changed; the account is kept in ' + esc(rev.kept || '') + '.</div>'
-    + '<div class="why">' + (a.kind ? 'Used ' + esc(a.kind) + ': ' + esc(KIND_MEANS[a.kind] || '') + '.'
+  const asIs = (a.variants || []).find(v => !v.capability);
+  const ranAtAll = asIs && asIs.ran;
+  let html = head('<span class="badge">' + (ranAtAll ? kept.length + ' of ' + claims.length + ' claims kept'
+      : 'could not check') + '</span>')
+    + '<div class="why">What this is for: finding out what the project does by trying claims about it on its running '
+    + 'code. The claims that pass become a seed for you to confirm below; confirmed, it is this project\'s goal tree. '
+    + 'Nothing in the project is changed.</div>';
+  if (a.kind && !ranAtAll) {
+    // The one case that needs the operator: nothing was checked, and the project's own output says why.
+    html += '<div class="why" style="color:var(--bad)"><b>The project could not be '
+      + (asIs && !asIs.built ? 'built' : 'started') + ', so none of the ' + claims.length + ' claims could be checked.</b> '
+      + esc(asIs && asIs.why ? 'It says: ' + asIs.why.replace(/^built, but /, '') : '') + '<br>If it needs a service to run (a database, a message broker), start '
+      + 'that service and run reverse engineering again.</div>';
+  }
+  html += '<div class="why">' + (a.kind ? 'Used ' + esc(a.kind) + ': ' + esc(KIND_MEANS[a.kind] || '') + '.'
         : 'No way into this project was found, so nothing could be exercised.') + '</div>';
   for (const f of a.features || []) {
     html += '<div class="feat"><div><b>' + esc(f.name) + '</b> <span class="note">' + esc(f.entryPoints.join(', ')) + '</span></div>'
@@ -708,13 +746,37 @@ function revBox() {
       + f.claims.map(id => byId[id]).filter(Boolean)
           .map(j => '<li>' + esc(j.claim.text) + '</li>').join('') + '</ul></div>';
   }
-  const dropped = claims.filter(j => verdict(j) !== 'anchored');
-  if (dropped.length) {
-    html += '<details><summary>Not kept (' + dropped.length + ')</summary><ul class="claims">'
-      + dropped.map(j => '<li>' + esc(j.claim.text) + ' <span class="note">-- ' + esc(NOT_KEPT[verdict(j)] || verdict(j))
-        + '</span></li>').join('') + '</ul></details>';
+  for (const [v, title, means] of NOT_KEPT_GROUPS) {
+    const group = claims.filter(j => verdict(j) === v);
+    if (!group.length) continue;
+    html += '<details><summary>' + esc(title) + ' (' + group.length + ') <span class="note">-- ' + esc(means)
+      + '</span></summary><ul class="claims">' + group.map(j => '<li>' + esc(j.claim.text) + '</li>').join('')
+      + '</ul></details>';
   }
-  html += '<details><summary>How the code is built (' + (a.capabilities || []).length + ' parts)</summary><ul class="claims">'
+  if (rev.phase === 'done' && rev.seed) {
+    // T4-EK slice (b): the seed written from what was found -- every line ends with the claims it rests on.
+    if (seedDraft == null) seedDraft = rev.seed;
+    const cited = claims.filter(j => verdict(j) === 'anchored');
+    html += '<div class="sub" style="margin-top:12px"><label for="seed" style="margin-top:0">This project\'s seed, written '
+      + 'from what was found</label><div class="why">Each line ends with the claims it rests on. Edit freely; a line you '
+      + 'add without claims becomes open work the loop checks next. Confirming makes this the project\'s first input '
+      + 'and its goal tree; the loop then closes it by running every criterion again.</div>'
+      + '<textarea id="seed" class="tall"' + (seedSending ? ' readonly' : '') + '></textarea>'
+      + (rev.refused && rev.refused.length ? '<div class="note">Left out because they cite no kept claim: '
+          + esc(rev.refused.join(' | ')) + '</div>' : '')
+      + '<div class="row"><button id="confirmseed" class="primary"' + (seedSending ? ' disabled' : '') + '>'
+      + (seedSending ? 'Confirming... (each part is run once more)' : 'Confirm as this project\'s seed') + '</button>'
+      + (ownGoal ? '' : ' <a href="#" id="owngoal" class="note" style="margin:0">or write a goal yourself instead</a>')
+      + '</div>'
+      + '<details><summary>The claims it cites (' + cited.length + ')</summary><ul class="claims">'
+      + cited.map(j => '<li><b>' + esc(j.claim.id) + '</b> ' + esc(j.claim.text) + '</li>').join('') + '</ul></details></div>';
+  }
+  if (rev.phase === 'confirmed') {
+    html += '<div class="why" style="margin-top:10px"><b>Confirmed.</b> The seed is this project\'s first input; the loop '
+      + 'closes it by running every criterion again.</div>';
+  }
+  html += '<details><summary>How the code is built (' + (a.capabilities || []).length + ' parts) <span class="note">-- '
+    + 'the parts claims were proposed for and features are made of; not part of the seed</span></summary><ul class="claims">'
     + (a.capabilities || []).map(c => '<li><b>' + esc(c.name) + '</b> -- ' + esc(c.summary) + '</li>').join('') + '</ul></details>';
   return html + '</div>';
 }

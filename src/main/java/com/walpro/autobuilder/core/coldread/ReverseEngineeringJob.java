@@ -20,12 +20,17 @@ import java.time.Instant;
 public class ReverseEngineeringJob {
 
     private final ReverseEngineeringService service;
+    private final SeedComposer seedComposer;
+    private final ReverseEngineeringConfirmation confirmation;
     private final String fileBasePath;
 
-    private volatile State state = new State("idle", null, null, null, null, null);
+    private volatile State state = new State("idle", null, null, null, null, null, null, null);
 
-    public ReverseEngineeringJob(ReverseEngineeringService service, @Value("${file.base-path}") String fileBasePath) {
+    public ReverseEngineeringJob(ReverseEngineeringService service, SeedComposer seedComposer,
+                                 ReverseEngineeringConfirmation confirmation, @Value("${file.base-path}") String fileBasePath) {
         this.service = service;
+        this.seedComposer = seedComposer;
+        this.confirmation = confirmation;
         this.fileBasePath = fileBasePath;
     }
 
@@ -33,9 +38,26 @@ public class ReverseEngineeringJob {
      * @param phase   {@code idle}, {@code running}, {@code done} or {@code failed}
      * @param stage   what it is doing now, in words
      * @param kept    where the account was kept, once done
+     * @param seed    the seed composed from the account, for the operator to confirm ({@code phase} {@code done}), or the
+     *                one confirmed ({@code confirmed})
+     * @param refused the lines of the composition that were refused, with why
      */
     public record State(String phase, String stage, Instant since, ReverseEngineeringService.Account account, String error,
-                        String kept) {
+                        String kept, String seed, java.util.List<String> refused) {
+    }
+
+    /**
+     * T4-EK slice (b): the seed the operator confirmed made into the project's purpose and goal tree. Refused unless an
+     * account is waiting for confirmation.
+     */
+    public synchronized ReverseEngineeringConfirmation.Made confirm(String seed) throws java.io.IOException {
+        State s = state;
+        if (!"done".equals(s.phase()) || s.account() == null) {
+            throw new IllegalStateException("there is no reverse-engineered account waiting to be confirmed");
+        }
+        ReverseEngineeringConfirmation.Made made = confirmation.confirm(s.account(), seed);
+        state = new State("confirmed", null, s.since(), s.account(), null, s.kept(), seed, s.refused());
+        return made;
     }
 
     public State state() {
@@ -44,24 +66,28 @@ public class ReverseEngineeringJob {
 
     /** Starts it on the project's code; false when one is already running. */
     public synchronized boolean start() {
-        if (state.phase().equals("running")) return false;
+        if (state.phase().equals("running") || state.phase().equals("confirmed")) return false;
         Path code = Path.of(fileBasePath, "output").toAbsolutePath().normalize();
         Instant since = Instant.now();
-        state = new State("running", "Starting", since, null, null, null);
+        state = new State("running", "Starting", since, null, null, null, null, null);
         Thread t = new Thread(() -> {
             try {
                 Path work = Path.of(System.getProperty("java.io.tmpdir"), "autobuilder-reverse-engineering",
                         Path.of(fileBasePath).toAbsolutePath().normalize().getFileName().toString());
                 var account = service.reverseEngineer(code, work,
-                        stage -> state = new State("running", stage, since, null, null, null));
+                        stage -> state = new State("running", stage, since, null, null, null, null, null));
                 Path keep = Path.of(fileBasePath, "meta", "reverse-engineering");
                 Files.createDirectories(keep);
                 Path kept = keep.resolve(Path.of(account.copy()).getFileName() + ".json");
                 Files.copy(Path.of(account.copy(), "account.json"), kept, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                state = new State("done", null, since, account, null, kept.toString());
+                state = new State("running", "Writing the seed from what was found (the model writes, every line cites claims)",
+                        since, null, null, null, null, null);
+                SeedComposer.Composed composed = seedComposer.compose(account);
+                state = new State("done", null, since, account, null, kept.toString(), composed.text(), composed.refused());
             } catch (Exception | Error e) {
                 log.warn("T4-EK: reverse engineering failed", e);
-                state = new State("failed", null, since, null, e.getMessage() == null ? e.toString() : e.getMessage(), null);
+                state = new State("failed", null, since, null, e.getMessage() == null ? e.toString() : e.getMessage(), null,
+                        null, null);
             }
         }, "reverse-engineering");
         t.setDaemon(true);

@@ -241,6 +241,13 @@ public class HomeController {
         return relayed(run.postJson("/autobuilder/reverse-engineering/job", "", Duration.ofMinutes(2)));
     }
 
+    /** T4-EK slice (b): the seed the operator confirmed, sent to the run that found it. */
+    @PostMapping(value = "/home/run/reverse-engineering/confirm", consumes = "text/plain", produces = "application/json")
+    public ResponseEntity<String> confirmReverseEngineering(@RequestBody String seed) {
+        // Completing each earned goal exercises its criteria (package, start, run): minutes, not seconds.
+        return relayed(run.postText("/autobuilder/reverse-engineering/confirm", seed, Duration.ofMinutes(15)));
+    }
+
     /** T4-EK: where the reverse engineering is, and its account once done. */
     @GetMapping(value = "/home/run/reverse-engineering", produces = "application/json")
     public ResponseEntity<String> reverseEngineering() {

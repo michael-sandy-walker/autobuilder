@@ -57,6 +57,28 @@ class TestRunGateTest {
     }
 
     @Test
+    void claimTestsSitInTheTreeForTheRunOnly(@org.junit.jupiter.api.io.TempDir java.nio.file.Path project) throws Exception {
+        ClaimTests tests = new ClaimTests(project.toString());
+        tests.write("org/x/EarnedK1Test.java", "class EarnedK1Test {}");
+        java.nio.file.Path tree = java.nio.file.Files.createDirectories(project.resolve("output"));
+        java.nio.file.Path placed = tree.resolve("src/test/java/org/x/EarnedK1Test.java");
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.resolveWorkingDir("/tmp/project")).thenReturn(tree.toString());
+        boolean[] thereDuringTheRun = {false};
+        when(buildExecutor.execute(eq("/tmp/project"), any(), eq("mvn test"))).thenAnswer(call -> {
+            thereDuringTheRun[0] = java.nio.file.Files.exists(placed);
+            return new BuildOutcome(BuildResult.COMPILE_OK, "Tests run: 1, Failures: 0, Errors: 0, Skipped: 0", 10L, "mvn test", "c");
+        });
+        TestRunGate g = gate(true);
+        g.setClaimTests(tests);
+
+        assertThat(g.verifyTestsPass("cycle-1")).isEmpty();
+
+        assertThat(thereDuringTheRun[0]).isTrue();
+        assertThat(tree.resolve("src")).doesNotExist();
+    }
+
+    @Test
     void whenItsServicesCannotBeStartedTheTestsAreNotRunAndNothingIsSaidAboutTheProject() {
         var containers = mock(com.walpro.autobuilder.core.services.ServiceContainers.class);
         var started = mock(com.walpro.autobuilder.core.services.ServiceContainers.Started.class);

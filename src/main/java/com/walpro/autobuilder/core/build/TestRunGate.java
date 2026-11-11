@@ -109,6 +109,38 @@ public class TestRunGate {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.services.ServiceContainers serviceContainers;
 
+    /** T4-EK: tests kept in the project's meta, placed in the tree around a run; absent, a run is as before. */
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ClaimTests claimTests;
+    /** What the last run had placed -- taken out of the tree again, kept to quote a failing one to its repairer. */
+    private ClaimTests.Placed claimTestsOfLastRun = ClaimTests.Placed.none();
+
+    /** How much of a failing claim test is quoted: it is not in the tree, so whoever repairs the code cannot open it. */
+    static final int CLAIM_TEST_QUOTE_CHARS = 1500;
+    static final int MAX_CLAIM_TESTS_QUOTED = 3;
+
+    /**
+     * The sources of the failing tests that are kept outside the tree, in words for the blocker; empty when none of
+     * the failing tests is one of them.
+     */
+    String failingClaimTests() {
+        if (claimTestsOfLastRun.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        int quoted = 0;
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        for (String failing : freshReport().map(TestRunGate::failingNames).orElse(Set.of())) {
+            String cls = failing.contains(".") ? failing.substring(0, failing.lastIndexOf('.')) : failing;
+            cls = cls.contains(".") ? cls.substring(cls.lastIndexOf('.') + 1) : cls;
+            String source = claimTestsOfLastRun.source(cls);
+            if (source == null || !seen.add(cls) || quoted++ >= MAX_CLAIM_TESTS_QUOTED) continue;
+            sb.append("; ").append(cls).append(" is a check kept beside the project's criteria, not in its tree -- it reads: ")
+                    .append(source.length() <= CLAIM_TEST_QUOTE_CHARS ? source.strip()
+                            : source.substring(0, CLAIM_TEST_QUOTE_CHARS).strip() + " ...");
+        }
+        return sb.toString();
+    }
+
     @Value("${file.base-path}")
     @Setter
     private String fileBasePath;
@@ -273,7 +305,12 @@ public class TestRunGate {
                         + "about the project, so the test gate abstains", services.why());
                 return Optional.empty();
             }
-            outcome = buildExecutor.execute(fileBasePath, cycleId, testCommand);
+            // T4-EK: the tests kept beside a reverse-engineered project's criteria sit in the tree for this run only.
+            try (ClaimTests.Placed placed = claimTests == null ? ClaimTests.Placed.none()
+                    : claimTests.place(java.nio.file.Path.of(buildExecutor.resolveWorkingDir(fileBasePath)))) {
+                outcome = buildExecutor.execute(fileBasePath, cycleId, testCommand);
+                claimTestsOfLastRun = placed;
+            }
         }
         lastRunStartedAt = startedAt;
         log.info("T4-AN-2: test gate result={} (durationMs={})", outcome.result(), outcome.durationMs());
@@ -352,6 +389,7 @@ public class TestRunGate {
         if (!causes.isEmpty()) {
             summary += "; root cause(s): " + String.join(" | ", causes);
         }
+        summary += failingClaimTests();
         lastBlocker = summary;
         return Optional.of(summary);
     }

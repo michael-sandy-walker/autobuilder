@@ -45,10 +45,19 @@ public class ReverseEngineeringConfirmation {
     private final GoalPlannerService goals;
     private final CriterionExercises exercises;
     private final LibraryStyleAdapter library;
+    private final com.walpro.autobuilder.core.build.ClaimTests claimTests;
     private final Path base;
 
     public ReverseEngineeringConfirmation(GoalPlannerService goals, CriterionExercises exercises, LibraryStyleAdapter library,
                                           @Value("${file.base-path}") String fileBasePath) {
+        this(goals, exercises, library, new com.walpro.autobuilder.core.build.ClaimTests(fileBasePath), fileBasePath);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ReverseEngineeringConfirmation(GoalPlannerService goals, CriterionExercises exercises, LibraryStyleAdapter library,
+                                          com.walpro.autobuilder.core.build.ClaimTests claimTests,
+                                          @Value("${file.base-path}") String fileBasePath) {
+        this.claimTests = claimTests;
         this.goals = goals;
         this.exercises = exercises;
         this.library = library;
@@ -230,20 +239,22 @@ public class ReverseEngineeringConfirmation {
         return sb.toString().strip() + "\n";
     }
 
-    /** A library's claims join the project's own tests, so the test gate runs them as the project's suite. */
+    /**
+     * A library's claims are tests. They are kept beside the criteria ({@link ClaimTests}, {@code meta/claim-tests/}),
+     * not in the project's code: the test gate puts them into the tree for each run of the suite and takes them out
+     * again.
+     */
     private void writeClaimTests(Map<String, List<Claim>> criteriaByFeature) throws IOException {
         List<Claim> tests = criteriaByFeature.values().stream().flatMap(List::stream)
                 .filter(k -> k.kind() == EntryKind.LIBRARY_STYLE).toList();
         if (tests.isEmpty()) return;
-        Path output = base.resolve("output");
-        var points = library.find(ProjectMerge.files(output), null);
+        var points = library.find(ProjectMerge.files(base.resolve("output")), null);
         String pkg = LibraryStyleAdapter.homePackage(points);
         String imports = LibraryStyleAdapter.imports(points, pkg);
         for (Claim k : tests) {
             String cls = TEST_PREFIX + Character.toUpperCase(k.id().charAt(0)) + k.id().substring(1) + "Test";
-            Path file = output.resolve("src/test/java").resolve(pkg.replace('.', '/')).resolve(cls + ".java");
-            Files.createDirectories(file.getParent());
-            Files.writeString(file, library.source(pkg, imports, cls, k.test()));
+            claimTests.write((pkg.isEmpty() ? "" : pkg.replace('.', '/') + "/") + cls + ".java",
+                    library.source(pkg, imports, cls, k.test()));
         }
     }
 }

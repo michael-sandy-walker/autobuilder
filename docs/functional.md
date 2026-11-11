@@ -291,6 +291,19 @@ nothing yet: which pages send such a client elsewhere, and which carry forms, is
 -- where the code reads differently from what the project does, the statements follow the project. A form
 sent without its page having been fetched is given the page first, as someone at a browser would have had it.
 
+**What reverse engineering adds, and where.** It adds what a project built here would already have -- a seed,
+goals, criteria and the checks behind them -- and nothing to the project's code. The checks are kept in the
+project's `meta/`: requests and runs in `criterion-exercises.json`, and a library's checks, which are tests, in
+`meta/claim-tests/`. A test has to sit among the project's tests to be run, so each is put there for the length
+of one run of the suite and taken out again.
+
+**A line you add to the seed before confirming it is checked first.** For each such line the code is asked
+whether it already does that, the same way every other statement was found: a check for the line must hold on
+the project and stop holding with the code it reaches taken out. A line the project already does becomes a
+finished goal with its checks, and nothing is built for it; any other line is open work for the loop. This takes
+as long as exercising the project does, so the confirmation is accepted and the page shows its progress, then
+which of your lines the project does already.
+
 ### 4.2 From the command line
 
 Naming a project at startup (`--file.base-path=data/my-service` or `FILE_BASE_PATH=data/my-service`) skips the

@@ -72,7 +72,7 @@ How to work:
 - `feedback_run_without_asking.md`: run mvn/build/test with dangerouslyDisableSandbox; never prompt. (reviewed 2026-07-09)
 - `feedback_analyse_no_ask.md`: "analyse the last run" = proceed directly. (reviewed 2026-07-09)
 - `feedback_run_analysis_log_order.md`: behaviour ndjson first, autobuilder log for depth. (reviewed 2026-07-09)
-- `feedback_no_auto_commit.md`: notes (tickets, memory) commit as written; code commits need authorization; NEVER push (except own claude/ branch in cloud sessions). (reviewed 2026-11-04)
+- `feedback_no_auto_commit.md`: notes commit as written; code commits at finished, verified units without waiting for a go (2026-11-11); NEVER push (except own claude/ branch in cloud sessions). (reviewed 2026-11-11)
 - `feedback_commit_notes_by_path.md`: commit notes by path; a bare commit sweeps in staged code. (reviewed 2026-11-04)
 - `feedback_commit_the_run_ledger.md`: commit `scripts/run_outcomes.json` with the session's work. (reviewed 2026-10-31)
 - `feedback_compile_right_before_a_code_commit.md`: compile the exact tree in the commit command; files can change between suite and commit (`2fcbf2c6`). (reviewed 2026-11-09)

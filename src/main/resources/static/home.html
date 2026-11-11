@@ -677,7 +677,7 @@ async function stopRun() {
 }
 
 // T4-EK: what the code does, reverse-engineered -- features from its served surface, claims the running code earned.
-let rev = null, seedDraft = null, seedSending = false, ownGoal = false;
+let rev = null, seedDraft = null, seedDraftOf = null, seedSending = false, ownGoal = false;
 // One way at a time to give an adopted project its purpose: while reverse engineering runs there is none (the loop must
 // not start beside its builds), and once it is done the seed it wrote is the way -- the goal box only on request.
 function showGoalBox() {
@@ -714,7 +714,7 @@ function wireSeedBox() {
     let r;
     try { r = await post('/home/run/reverse-engineering/confirm', null, seedDraft); } finally { seedSending = false; }
     if (r.status === 200) toast(true, 'Confirmed: the seed is set and the loop closes it next.');
-    else if (r.status === 202) toast(true, 'Checking first whether the project already does what you added.');
+    else if (r.status === 202) toast(true, 'Confirming -- the box below shows where it is.');
     else toast(false, 'Not confirmed: ' + message(r));
     refresh();
   };
@@ -741,7 +741,8 @@ function revBox() {
   if (rev.phase === 'running') {
     const mins = rev.since ? Math.max(0, Math.round((Date.now() - Date.parse(rev.since)) / 60000)) : 0;
     return head('<span class="badge">running</span>') + '<div class="why">' + esc(rev.stage || '') + ' -- '
-      + mins + ' min so far; it usually takes 5 to 8.</div></div>';
+      + mins + ' min so far' + (/^(Confirming|Checking whether)/.test(rev.stage || '') ? '.'
+        : '; a small project takes 5 to 8, one that needs a service started for every check several times that.') + '</div></div>';
   }
   if (rev.phase === 'failed') return head('<span class="badge">stopped</span>') + '<div class="why">' + esc(rev.error || '') + '</div></div>';
   const a = rev.account, claims = a.claims || [];
@@ -781,7 +782,9 @@ function revBox() {
   }
   if (rev.phase === 'done' && rev.seed) {
     // T4-EK slice (b): the seed written from what was found -- every line ends with the claims it rests on.
-    if (seedDraft == null) seedDraft = rev.seed;
+    // The draft belongs to ONE account. Kept across projects it showed the previous project's edited seed under the
+    // next project's account (seen by the user, 2026-11-11: labelmaker's seed offered for an e-commerce project).
+    if (seedDraft == null || seedDraftOf !== rev.kept) { seedDraft = rev.seed; seedDraftOf = rev.kept; ownGoal = false; }
     const cited = claims.filter(j => verdict(j) === 'anchored');
     if (rev.error) html += '<div class="why" style="margin-top:10px">' + esc(rev.error) + '</div>';
     html += '<div class="sub" style="margin-top:12px"><label for="seed" style="margin-top:0">This project\'s seed, written '

@@ -420,6 +420,9 @@ public class EvolutionProtocolContract {
         String seedCoverage = com.walpro.autobuilder.protocol.coverage.SeedCoverageBlock.render(
                 input.seedCoverage(), com.walpro.autobuilder.protocol.coverage.SeedCoverageBlock.Audience.EVOLUTION);
         if (seedCoverage != null) prompt.append(seedCoverage).append("\n");
+        // T4-EK slice (c): how work on this project is done, where its obligations say so beyond the specification.
+        String workRules = com.walpro.autobuilder.protocol.rules.WorkRulesBlock.render(input.workRules());
+        if (workRules != null) prompt.append(workRules).append("\n");
 
         // T3-BW reports a type whose ANNOTATIONS differ from its peers'; T3-BZ reports one whose
         // PLACEMENT does. Same block on purpose: both say "this type disagrees with the project's

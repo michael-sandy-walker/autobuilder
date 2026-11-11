@@ -154,6 +154,9 @@ public class ReverseEngineeringConfirmation {
         String root = "goal-" + UUID.randomUUID();
         goals.addInitialGoal(root, seed, ADDED_BY);
 
+        writeRules(seed, lines.stream().filter(l -> l.kind().equals(SeedComposer.Line.RULE))
+                .map(SeedComposer.Line::text).distinct().toList());
+
         List<String> earned = new ArrayList<>();
         int criteria = 0;
         for (Feature f : SeedComposer.ordered(account.features())) {
@@ -226,10 +229,33 @@ public class ReverseEngineeringConfirmation {
     }
 
     /** The seed as it is kept: the confirmed text without the claim ids (they live with the goals' criteria). */
+    /**
+     * T4-EK slice (c): the rules the operator confirmed join the project's obligations as {@code rule:} lines -- beside
+     * whatever the file already holds for this seed (written when the root was set), each once. They guide the work
+     * and never block completion; the seed itself does not carry them.
+     */
+    private void writeRules(String seed, List<String> rules) throws IOException {
+        if (rules.isEmpty()) return;
+        Path file = base.resolve(com.walpro.autobuilder.goal.SeedObligationsFile.PATH);
+        List<String> lines = new ArrayList<>();
+        if (Files.isRegularFile(file)) {
+            var parsed = com.walpro.autobuilder.goal.SeedObligationsFile.read(Files.readString(file), seed);
+            if (parsed.usable()) lines.addAll(parsed.obligations());
+        }
+        for (String r : rules) {
+            String line = com.walpro.autobuilder.goal.SeedRequirements.RULE_MARKER + " " + r;
+            if (lines.stream().noneMatch(l -> l.equalsIgnoreCase(line))) lines.add(line);
+        }
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, com.walpro.autobuilder.goal.SeedObligationsFile.render(seed, lines));
+        log.warn("T4-EK: {} rule(s) on how work on this project is done written to {}", rules.size(), file);
+    }
+
     static String seedText(List<SeedComposer.Line> lines) {
         StringBuilder sb = new StringBuilder();
         for (SeedComposer.Line l : lines) {
             switch (l.kind()) {
+                case SeedComposer.Line.RULE -> { }   // how the work is done: the obligations file's, not the seed's
                 case SeedComposer.Line.HEADER -> sb.append('\n').append(l.text()).append(":\n");
                 case SeedComposer.Line.QUOTE -> sb.append(l.text()).append('\n');
                 case SeedComposer.Line.PURPOSE -> sb.append("What it is: ").append(l.text()).append('\n');

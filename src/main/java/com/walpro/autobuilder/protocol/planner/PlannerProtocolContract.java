@@ -391,6 +391,9 @@ Data must never be written to disk.
         if (seedCoverage != null && !seedCoverage.isBlank()) {
             sb.append(seedCoverage).append("\n\n");
         }
+        // T4-EK slice (c): how work on this project is done, where its obligations say so beyond the specification.
+        String workRules = com.walpro.autobuilder.protocol.rules.WorkRulesBlock.render(input.workRules());
+        if (workRules != null) sb.append(workRules).append("\n");
         sb.append("""
             --- GOALS ---
             Root Goal: %s
@@ -463,7 +466,9 @@ Data must never be written to disk.
                 locusStuckBlock == null ? "" : locusStuckBlock + "\n",
                 injectorFixesBlock == null ? "" : injectorFixesBlock + "\n",
                 relatedAbandonedBlock == null ? "" : relatedAbandonedBlock + "\n",
-                seedCoverageBlock == null ? "" : seedCoverageBlock + "\n",
+                (seedCoverageBlock == null ? "" : seedCoverageBlock + "\n")
+                        + (com.walpro.autobuilder.protocol.rules.WorkRulesBlock.render(input.workRules()) == null ? ""
+                        : com.walpro.autobuilder.protocol.rules.WorkRulesBlock.render(input.workRules()) + "\n"),
                 projectStructBlock == null ? "" : projectStructBlock + "\n"
         ));
         if (input.currentSubGoalDescription() == null) {

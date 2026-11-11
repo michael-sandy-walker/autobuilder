@@ -80,11 +80,10 @@ public class ReverseEngineeringJob {
     }
 
     /**
-     * As above. T4-EK slice (c): a seed carrying lines of the operator's own is not confirmed at once -- each such line
-     * is first checked against the code ({@link ReverseEngineeringService#checkStated}), which takes as long as
-     * exercising the project's variants does. Then null is returned, the job reads {@code running} with its stage, and
-     * ends {@code confirmed} (with {@link State#checked}) or back at {@code done} with the error; {@code whenConfirmed}
-     * runs once the goal tree exists.
+     * As above, in the job: null is returned at once, the job reads {@code running} with its stage, and ends
+     * {@code confirmed} (with {@link State#checked}) or back at {@code done} with the error; {@code whenConfirmed} runs
+     * once the goal tree exists. T4-EK slice (c): lines of the operator's own are first checked against the code
+     * ({@link ReverseEngineeringService#checkStated}), which takes as long as exercising the project's variants does.
      */
     public synchronized ReverseEngineeringConfirmation.Made confirm(String seed, Runnable whenConfirmed) throws java.io.IOException {
         State s = state;
@@ -92,25 +91,26 @@ public class ReverseEngineeringJob {
             throw new IllegalStateException("there is no reverse-engineered account waiting to be confirmed");
         }
         java.util.List<String> stated = ReverseEngineeringConfirmation.stated(s.account(), seed);
-        if (stated.isEmpty()) {
-            ReverseEngineeringConfirmation.Made made = confirmation.confirm(s.account(), seed);
-            state = new State("confirmed", null, s.since(), s.account(), null, s.kept(), seed, s.refused(), null, s.offered());
-            whenConfirmed.run();
-            return made;
-        }
-        state = new State("running", "Checking whether the project already does what you added", s.since(), null, null, null,
-                null, null);
+        // Always in the job, never in the request: setting the goals runs every kept check once more, which starts the
+        // project (and its services) and takes minutes -- the user, 2026-11-11: "the confirm button greyed out, but the
+        // page stayed the same for quite a while". The page shows a running job's stage; a waiting request shows nothing.
+        Instant began = Instant.now();   // the page counts the minutes of THIS step, not of the job before it
+        String setting = "Confirming: the seed and its goals are being set, and every kept check is run once more";
+        state = new State("running", stated.isEmpty() ? setting : "Checking whether the project already does what you added",
+                began, null, null, null, null, null);
         Thread t = new Thread(() -> {
             try {
-                var checked = service.checkStated(s.account(), stated,
-                        stage -> state = new State("running", stage, s.since(), null, null, null, null, null));
+                var checked = stated.isEmpty() ? java.util.List.<ReverseEngineeringService.StatedLine>of()
+                        : service.checkStated(s.account(), stated,
+                                stage -> state = new State("running", stage, began, null, null, null, null, null));
+                state = new State("running", setting, began, null, null, null, null, null);
                 confirmation.confirm(s.account(), seed, checked);
                 state = new State("confirmed", null, s.since(), s.account(), null, s.kept(), seed, s.refused(), null,
                         s.offered(), checked);
                 whenConfirmed.run();
             } catch (Exception | Error e) {
-                log.warn("T4-EK: checking the operator's lines failed; the account waits for confirmation again", e);
-                state = new State("done", null, s.since(), s.account(), "Not confirmed -- checking your lines failed: "
+                log.warn("T4-EK: the confirmation failed; the account waits for confirmation again", e);
+                state = new State("done", null, s.since(), s.account(), "Not confirmed: "
                         + (e.getMessage() == null ? e.toString() : e.getMessage()), s.kept(), seed, s.refused(), null, s.offered());
             }
         }, "reverse-engineering");
@@ -147,7 +147,9 @@ public class ReverseEngineeringJob {
                 state = new State("running", "Writing the seed from what was found (the model writes, every line cites claims)",
                         since, null, null, null, null, null);
                 SeedComposer.Composed composed = seedComposer.compose(account);
-                state = new State("done", null, since, account, null, kept.toString(), composed.text(), composed.refused(),
+                // T4-EK slice (c): what was observed of how the project is built, proposed as rules below the seed.
+                state = new State("done", null, since, account, null, kept.toString(),
+                        composed.text().stripTrailing() + ObservedRules.block(account), composed.refused(),
                         null, composed.offered());
             } catch (com.walpro.autobuilder.core.services.ServicesNeeded n) {
                 log.warn("T4-EN: reverse engineering waits for the operator -- {}", n.getMessage());

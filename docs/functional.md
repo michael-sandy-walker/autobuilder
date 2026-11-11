@@ -304,6 +304,14 @@ finished goal with its checks, and nothing is built for it; any other line is op
 as long as exercising the project does, so the confirmation is accepted and the page shows its progress, then
 which of your lines the project does already.
 
+**How work on it is done.** Below the composed seed the page proposes lines that start with `rule:`. They are not
+part of the seed and nothing checks them; they tell the loop how a change to this project is to be made, so that
+a first new feature fits what is there. Each is proposed only from what was observed: one feature's checks
+stopped holding when another's ways in were taken out (it goes through that feature), or features' checks
+stopped holding when a part of the code was taken out (what they do rests on that part). Change them, delete
+them, or add your own `rule:` lines. Confirmed, they are written to the project's obligations
+(`bootstrap/seed.obligations.txt`) and shown to the loop whenever it plans or writes a change.
+
 ### 4.2 From the command line
 
 Naming a project at startup (`--file.base-path=data/my-service` or `FILE_BASE_PATH=data/my-service`) skips the

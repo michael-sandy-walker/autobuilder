@@ -200,6 +200,7 @@ public class CycleContextCoordinator {
                 .relatedAbandonedGoals(relatedAbandoned)
                 // T4-DA: does the plan, taken as a whole, still resemble the specification.
                 .seedCoverage(seedCoverage)
+                .workRules(rulesTheSpecificationDoesNotCarry())
                 .build();
 
             // T2-BK: replace subgoal-scoped signals in the carried context with the entity-backed
@@ -368,6 +369,24 @@ public class CycleContextCoordinator {
      * readout counts the reviewed split rather than one derived per run. Absent falls through to
      * the derived split, unchanged.
      */
+    /**
+     * T4-EK slice (c): the obligations marked rule:, for a project whose specification cannot carry them -- a seed
+     * confirmed from a reverse-engineered account states only WHAT the project does, so how work on it is done lives
+     * in the obligations alone and would otherwise reach no agent. Any other project's rules are sentences of its
+     * specification (the obligations file restates them, usually reworded -- 22 of the 25 toy cases with rules have
+     * at least one whose wording is not literally the seed's), which the agents read already: those are not handed
+     * over a second time, and their prompts stay as they were.
+     */
+    private List<String> rulesTheSpecificationDoesNotCarry() {
+        try {
+            if (!goalPlannerService.seedIsEarned()) return List.of();
+            return goalPlannerService.requirements().rules();
+        } catch (RuntimeException e) {
+            log.debug("T4-EK: the project's rules could not be read -- {}", e.getMessage());
+            return List.of();
+        }
+    }
+
     private com.walpro.autobuilder.analysis.coverage.SeedCoverageReadout analyzeWithWrittenObligations() {
         return seedCoverageAnalyzer.analyze(goalPlannerService.specification(), goalPlannerService.getAllGoals(),
                 goalPlannerService.requirements().obligationsOrClauses());

@@ -61,6 +61,8 @@ public class SeedComposer {
      * (which, from the operator, is a requirement nothing has earned yet).
      */
     public record Line(String kind, String text, String feature, List<String> cites) {
+        /** T4-EK slice (c): a line saying HOW work on the project is done -- not part of the seed, never checked. */
+        public static final String RULE = "rule";
         public static final String HEADER = "header", QUOTE = "quote", CITED = "cited", UNCITED = "uncited",
                 PURPOSE = "purpose";
     }
@@ -286,6 +288,14 @@ public class SeedComposer {
         for (String raw : text.split("\\R")) {
             String l = raw.strip();
             if (l.isEmpty()) continue;
+            // T4-EK slice (c): rules and the note above them are read before anything else -- a rule is never a seed
+            // line, and above all never an operator's statement to be checked against the code.
+            if (l.regionMatches(true, 0, ObservedRules.HEADING, 0, ObservedRules.HEADING.length())) continue;
+            if (l.regionMatches(true, 0, ObservedRules.MARKER, 0, ObservedRules.MARKER.length())) {
+                String rule = l.substring(ObservedRules.MARKER.length()).strip();
+                if (!rule.isEmpty()) out.add(new Line(Line.RULE, rule, null, List.of()));
+                continue;
+            }
             Matcher h = HEADER.matcher(l);
             if (h.matches() && features.contains(h.group(1))) {
                 feature = h.group(1);

@@ -311,6 +311,11 @@ public record CycleContextData(
         // when the comparison could not be grounded, which is not the same as finding nothing.
         SeedCoverageReadout seedCoverage,
 
+        // T4-EK slice (c): the lines the project's obligations mark rule: that its specification does not itself
+        // contain -- how work on it is done. Set each cycle by CycleContextCoordinator; surfaced as
+        // --- HOW WORK ON THIS PROJECT IS DONE --- in the planner and evolution prompts. Empty or null: no block.
+        List<String> workRules,
+
         // T1-EI: skipped-proposal → matching GIVEN_UP goal id, populated by the planner when a
         // dedup-block resolves against an abandoned-goal match. Surfaced in the planner prompt's
         // PROPOSAL FEEDBACK block so the LLM can choose #SubGoalReactivate or remove+replace

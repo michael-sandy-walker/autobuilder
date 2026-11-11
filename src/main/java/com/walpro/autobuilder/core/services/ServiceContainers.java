@@ -125,21 +125,29 @@ public class ServiceContainers {
                 return new Started(null, List.of(), "port " + s.hostPort() + ", where the project reaches " + s.name()
                         + ", is already in use by something else");
             }
-            List<String> args = new ArrayList<>(List.of("run", "-d", "--name", name, "--label", LABEL + "=" + services.project(),
+            // Created, the setup script copied in, then started -- never mounted: a mount needs the script's directory
+            // shared with the Docker host, and where Docker runs in its own machine a working copy under the temporary
+            // directory is not (T4-EO, field: "mounts denied ... is not shared from the host").
+            List<String> args = new ArrayList<>(List.of("create", "--name", name, "--label", LABEL + "=" + services.project(),
                     "-p", s.hostPort() + ":" + s.containerPort()));
             s.env().forEach((k, v) -> args.addAll(List.of("-e", k + "=" + v)));
+            Path script = null;
             if (s.initScript() != null && s.initDir() != null) {
-                Path script = tree.resolve(s.initScript()).toAbsolutePath().normalize();
+                script = tree.resolve(s.initScript()).toAbsolutePath().normalize();
                 if (!script.startsWith(tree.toAbsolutePath().normalize()) || !Files.isRegularFile(script)) {
                     remove(names);
                     return new Started(null, List.of(), "the setup script " + s.initScript() + " is not in the project");
                 }
-                args.addAll(List.of("-v", script + ":" + s.initDir().replaceAll("/+$", "") + "/"
-                        + script.getFileName() + ":ro"));
             }
             args.add(s.image());
             Ran ran = docker.run(args, readyTimeoutMs);
+            if (ran.ok() && script != null) {
+                ran = docker.run(List.of("cp", script.toString(), name + ":" + s.initDir().replaceAll("/+$", "") + "/"
+                        + script.getFileName()), 60_000);
+            }
+            if (ran.ok()) ran = docker.run(List.of("start", name), 60_000);
             if (!ran.ok()) {
+                names.add(name);   // created or not, nothing of it is left
                 remove(names);
                 String said = ran.output() == null ? "docker did not answer" : lastLines(ran.output());
                 return new Started(null, List.of(), s.name() + " (" + s.image() + ") could not be started: " + said, s, said);

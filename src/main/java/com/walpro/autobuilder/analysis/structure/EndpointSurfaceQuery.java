@@ -192,7 +192,27 @@ public class EndpointSurfaceQuery {
     }
 
     /** One request handler: the route, the type that declares it (nested name, and with its package) and the method. */
-    public record Handler(Endpoint endpoint, String type, String qualifiedType, String method) {
+    public record Handler(Endpoint endpoint, String type, String qualifiedType, String method, String declaredPath) {
+
+        /**
+         * T4-EO: the route as a client asks it -- the path as the code declares it. {@link #endpoint} is normalized to
+         * compare two mentions of one route (lower-cased, placeholders unnamed), which is not a path to send or to show:
+         * a route declared {@code /profileDisplay} answers 404 at {@code /profiledisplay}.
+         */
+        public String asDeclared() {
+            return endpoint.verb() + " " + declaredPath;
+        }
+    }
+
+    /** A class prefix and a method path joined as written: one slash between them, the case and the names kept. */
+    static String declared(String prefix, String methodPath) {
+        String p = (prefix == null ? "" : prefix.strip());
+        String m = methodPath == null ? "" : methodPath.strip();
+        String joined = m.isEmpty() ? p : p + "/" + m;
+        int q = joined.indexOf('?');
+        if (q >= 0) joined = joined.substring(0, q);
+        joined = ("/" + joined).replaceAll("/{2,}", "/");
+        return joined.length() > 1 && joined.endsWith("/") && m.isEmpty() ? joined.substring(0, joined.length() - 1) : joined;
     }
 
     /**
@@ -207,8 +227,8 @@ public class EndpointSurfaceQuery {
             if (e.getValue() == null || e.getValue().isBlank()) continue;
             try {
                 Optional<CompilationUnit> cu = com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(e.getValue()).getResult();
-                if (cu.isPresent() && !collectBuiltEndpoints(cu.get(), (endpoint, type, md) -> out.add(new Handler(endpoint,
-                        nestedName(type), qualified(type), md.getNameAsString())))) {
+                if (cu.isPresent() && !collectBuiltEndpoints(cu.get(), (endpoint, declared, type, md) -> out.add(new Handler(endpoint,
+                        nestedName(type), qualified(type), md.getNameAsString(), declared)))) {
                     return Optional.empty();
                 }
             } catch (RuntimeException ex) {
@@ -219,7 +239,7 @@ public class EndpointSurfaceQuery {
     }
 
     private interface HandlerSink {
-        void found(Endpoint endpoint, TypeDeclaration<?> type, MethodDeclaration method);
+        void found(Endpoint endpoint, String declared, TypeDeclaration<?> type, MethodDeclaration method);
     }
 
     private static String nestedName(TypeDeclaration<?> t) {
@@ -245,7 +265,7 @@ public class EndpointSurfaceQuery {
             if (e.getValue() == null || e.getValue().isBlank()) continue;
             try {
                 Optional<CompilationUnit> cu = com.walpro.autobuilder.analysis.structure.JavaSources.parser().parse(e.getValue()).getResult();
-                if (cu.isPresent() && !collectBuiltEndpoints(cu.get(), (endpoint, type, md) -> built.add(endpoint))) {
+                if (cu.isPresent() && !collectBuiltEndpoints(cu.get(), (endpoint, declared, type, md) -> built.add(endpoint))) {
                     return Optional.empty();
                 }
             } catch (RuntimeException ex) {
@@ -283,7 +303,7 @@ public class EndpointSurfaceQuery {
                             if (full != null) {
                                 // A generic mapping's verb attribute is not parsed — claim all
                                 // verbs so an unusual-but-valid mapping never reads as missing.
-                                out.found(new Endpoint(generic ? ANY_VERB : verb, full), type, md);
+                                out.found(new Endpoint(generic ? ANY_VERB : verb, full), declared(prefix, mp), type, md);
                             }
                         }
                     }

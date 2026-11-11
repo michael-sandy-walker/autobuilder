@@ -279,6 +279,18 @@ container (`autobuilder-<project>-<service>`, needs Docker) is created before ea
 removed after it, so no start sees data another left; the first start pulls the image, which can take minutes
 (`autobuilder.services.ready-timeout-ms`). "withdraw" forgets the answer.
 
+**A project whose pages sit behind a login** is exercised as one client would use it. Each check of a statement
+about the project is its own new client: the cookies an answer sets are sent with that check's later requests and
+with no other check, a form is sent as a form and carries the hidden fields of the page it was fetched from, and
+a redirect is not followed -- where it points is recorded beside the answer. So a statement about what a
+signed-in user sees begins with the requests that sign that user in. Who can sign in is whatever exists at the
+start: a service starts empty unless you ticked the project's setup script, and the model that proposes the
+statements is told which of the two it is (and is shown the script). Before any statement is proposed, the
+project is started once and every page that can be asked for as written is asked by a client that has done
+nothing yet: which pages send such a client elsewhere, and which carry forms, is told to the model as observed
+-- where the code reads differently from what the project does, the statements follow the project. A form
+sent without its page having been fetched is given the page first, as someone at a browser would have had it.
+
 ### 4.2 From the command line
 
 Naming a project at startup (`--file.base-path=data/my-service` or `FILE_BASE_PATH=data/my-service`) skips the

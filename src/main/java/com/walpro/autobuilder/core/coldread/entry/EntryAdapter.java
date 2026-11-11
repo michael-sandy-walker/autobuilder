@@ -29,6 +29,15 @@ public interface EntryAdapter {
      */
     Ran exercise(Path dir, String variant, List<Claim> claims, Map<String, Map<String, Observation>> seen);
 
+    /**
+     * T4-EO: what the tree at {@code dir}, used as it is by someone who has done nothing yet, shows that a claim's
+     * exercise must know -- in words for the model, observed and not read from the code. Null when there is nothing to
+     * say (the default: a kind whose ways in keep no state between uses).
+     */
+    default String observedBeforeAnyUse(Path dir, List<EntryPoint> points) {
+        return null;
+    }
+
     /** Whether a tree could be exercised; {@code why} when it could not. */
     record Ran(boolean built, boolean ran, String why) {
     }

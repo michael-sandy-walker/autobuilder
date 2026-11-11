@@ -62,7 +62,7 @@ public class ProgramAdapter implements EntryAdapter {
         List<EntryPoint> programs = programs(files);
         if (programs.isEmpty()) return List.of();
         List<EntryPoint> routes = surface.handlersByCode(files).orElse(List.of()).stream()
-                .map(h -> new EntryPoint(EntryKind.SERVICE_STYLE, h.endpoint().toString(), h.type(), h.qualifiedType(), h.method()))
+                .map(h -> new EntryPoint(EntryKind.SERVICE_STYLE, h.asDeclared(), h.type(), h.qualifiedType(), h.method()))
                 .toList();
         return routes.isEmpty() ? programs : routes;
     }
@@ -71,12 +71,18 @@ public class ProgramAdapter implements EntryAdapter {
     public String exerciseForm(EntryKind kind) {
         if (kind == EntryKind.SERVICE_STYLE) {
             return """
-                    SEND: <METHOD> <path> <JSON body, or nothing>
+                    SEND: <METHOD> <path> <body, or nothing>
                     SEND: <further requests; the LAST one is the one the claim is about, the ones before it set things up>
                     EXPECT: <the HTTP status of the last request>
                     In a path or body, $N.field stands for a field of the answer to request N of the same claim (e.g. \
                     GET /things/$1.id after a first request created one). A setup request must succeed, or the claim is \
                     not judged.
+                    A body is JSON, or a form's fields written name=value&name=value (values as typed; they are encoded \
+                    when sent). Each claim is one new client: the cookies an answer sets are sent with the later requests \
+                    of the same claim and with no other claim, so what needs a session obtains it in its own first \
+                    requests. A request that a page's form makes carries that form's hidden fields when the page was \
+                    fetched earlier in the same claim -- fetch the page, then send the form. A redirect is not followed: \
+                    its own status is the answer.
                     """;
         }
         return """
@@ -106,11 +112,14 @@ public class ProgramAdapter implements EntryAdapter {
                 return new Ran(true, false, "built, but " + attempt.why());
             }
             try (BootGate.Served app = attempt.served().get()) {
-                for (Claim k : served) {
+                // T4-EO: this start is asked once for the pages it shows a client with no cookies, so a claim that sends
+                // a form without having fetched its page is given the page first. The ways in are this tree's own.
+                for (String path : askable(routes(dir))) app.ask(path);
+                for (Claim k : readersFirst(served)) {
                     BootGate.Served.Response r = app.send(k.sequence());
                     boolean held = r.status() != null && r.status() == k.expected();
                     seen.get(k.id()).put(variant, new Observation(variant, r.status(), r.unobserved(),
-                            Observation.clip(r.body()), held));
+                            Observation.clip(r.shown()), held));
                 }
             }
         }
@@ -138,6 +147,89 @@ public class ProgramAdapter implements EntryAdapter {
             }
         }
         return new Ran(true, true, null);
+    }
+
+    /**
+     * T4-EO: the order one start exercises its claims in -- the fewer requests of a claim can change anything (those
+     * that are not a GET), the earlier it runs; claims alike in that keep their order. One start serves every claim, so
+     * what a claim changes is what the later ones find: field runs 3 and 4 lost 17 and 9 claims that only read, because
+     * an earlier claim had changed the user they signed in as. The same order on every variant.
+     */
+    static List<Claim> readersFirst(List<Claim> claims) {
+        List<Claim> ordered = new ArrayList<>(claims);
+        ordered.sort(Comparator.comparingLong(k -> k.sequence().stream().filter(r -> !"GET".equals(r.method())).count()));
+        return ordered;
+    }
+
+    /** How many ways in are asked before any use; a project with more is asked for its first ones only. */
+    static final int MAX_ASKED = 80;
+
+    /**
+     * T4-EO: the tree built and started once, and every way in that can be asked as written (a GET with no placeholder)
+     * asked by a client with no cookies. Reported: the ways in that send such a client elsewhere, and the pages that
+     * carry forms. A project where neither occurs -- one whose answers do not depend on who asks -- reports nothing,
+     * and its claims are proposed as they always were.
+     */
+    @Override
+    public String observedBeforeAnyUse(Path dir, List<EntryPoint> points) {
+        List<String> paths = askable(points);
+        if (paths.isEmpty()) return null;
+        BuildOutcome build = buildExecutor.executeIn(dir.toString(), "reverse-engineering", packageCommand);
+        if (build.failed()) return null;   // the variants say so themselves
+        BootGate.ServeAttempt attempt = bootGate.serveOrWhy(dir);
+        if (attempt.served().isEmpty()) return null;
+        List<BootGate.Served.Asked> asked = new ArrayList<>();
+        try (BootGate.Served app = attempt.served().get()) {
+            for (String path : paths) asked.add(app.ask(path));
+        }
+        return observed(asked);
+    }
+
+    /** The paths of the ways in a client can ask as written: a GET whose path has no placeholder. */
+    static List<String> askable(List<EntryPoint> points) {
+        return points.stream().filter(e -> e.kind() == EntryKind.SERVICE_STYLE).map(EntryPoint::label)
+                .filter(l -> l.startsWith("GET ") && l.indexOf('{') < 0).map(l -> l.substring(4).strip())
+                .filter(p -> p.startsWith("/")).distinct().limit(MAX_ASKED).toList();
+    }
+
+    /** What was observed, in words; null when no way in redirected and no page carried a form. */
+    static String observed(List<BootGate.Served.Asked> asked) {
+        List<String> lines = new ArrayList<>();
+        int plain = 0;
+        for (BootGate.Served.Asked a : asked) {
+            if (a.status() == null) continue;
+            if (a.location() != null) {
+                lines.add("  GET " + a.path() + " -> " + a.status() + ", redirects to " + a.location());
+            } else if (!a.forms().isEmpty()) {
+                StringBuilder sb = new StringBuilder("  GET " + a.path() + " -> " + a.status() + ", a page with ");
+                List<String> forms = new ArrayList<>();
+                for (var f : a.forms()) {
+                    // Only the fields someone fills in. Naming what the page carries by itself made the model try to
+                    // carry it too (field run 2: "&_csrf=$1._csrf" in 41 requests) -- the client does that.
+                    forms.add("a form that posts to " + f.target() + " (fields: "
+                            + (f.fields().isEmpty() ? "none" : String.join(", ", f.fields())) + ")");
+                }
+                lines.add(sb.append(String.join(" and ", forms)).toString());
+            } else {
+                plain++;
+            }
+        }
+        if (lines.isEmpty()) return null;
+        return "WHAT THE RUNNING PROJECT ANSWERED JUST NOW to a client with no cookies (observed on the project as it is, "
+                + "not read from its code -- where the two differ, this is what it does):\n" + String.join("\n", lines) + "\n"
+                + (plain == 0 ? "" : "  (" + plain + " other way(s) in answered such a client themselves, with no form)\n")
+                + "Only GET ways in without a {placeholder} were asked. Where a way in sends a client with no cookies "
+                + "elsewhere, a claim about what it does for someone who has been let in must first do, in its own earlier "
+                + "requests, what the page it is sent to asks for; a claim about a client with no cookies states the answer "
+                + "above.\n";
+    }
+
+    private List<EntryPoint> routes(Path dir) {
+        try {
+            return find(com.walpro.autobuilder.core.merge.ProjectMerge.files(dir), null);
+        } catch (IOException e) {
+            return List.of();
+        }
     }
 
     /**

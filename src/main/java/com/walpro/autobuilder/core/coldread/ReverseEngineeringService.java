@@ -215,11 +215,18 @@ public class ReverseEngineeringService {
 
         List<ClaimProposer.Proposal> proposals = new ArrayList<>();
         List<Claim> claims = new ArrayList<>();
+        String startsWith = projectServices == null ? null : startState(projectServices.toStart(), original);
         if (adapter != null) {
+            progress.accept("Asking the project, started as it is, what it answers before anyone has used it");
+            String observed = adapter.observedBeforeAnyUse(original, points);
+            if (observed != null) {
+                log.warn("T4-EO: observed before any use --\n{}", observed);
+                startsWith = (startsWith == null ? "" : startsWith.strip() + "\n\n") + observed;
+            }
             for (Capability c : capabilities) {
                 progress.accept("Proposing claims for " + c.name() + " (" + (proposals.size() + 1) + " of " + capabilities.size() + ")");
                 ClaimProposer.Proposal p = proposer.propose(original, files, inventory, c, capabilities, coldRead, offered,
-                        claims.size() + 1);
+                        claims.size() + 1, startsWith);
                 proposals.add(p);
                 claims.addAll(p.claims());
             }
@@ -279,6 +286,44 @@ public class ReverseEngineeringService {
      * job stops and asks ({@link com.walpro.autobuilder.core.services.ServicesNeeded}). A recorded answer, either way,
      * is not asked again: a yes is started before every program start by the boot gate, a no starts nothing.
      */
+    /** How much of a setup script is quoted to the claim proposer; a longer one is named, and it can be read by probe. */
+    static final int SETUP_SCRIPT_BUDGET_CHARS = 6_000;
+
+    /**
+     * T4-EO: what exists each time the project is started for an exercise, said from the operator's recorded answer --
+     * each service starts fresh, filled by the project's own setup script when one was ticked and empty otherwise. A
+     * claim about a rule over existing things (someone who may log in, a record to read) can only be exercised with
+     * things that exist; without this the proposer guesses them. Null when the project is started with no service.
+     */
+    static String startState(List<com.walpro.autobuilder.core.services.ServiceProposal> services, Path tree) {
+        if (services == null || services.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder("WHAT EXISTS EACH TIME IT IS STARTED FOR AN EXERCISE:\n");
+        for (var s : services) {
+            sb.append("Its ").append(s.name()).append(" (").append(s.image()).append(") is started new each time. ");
+            String script = null;
+            if (s.initScript() != null) {
+                try {
+                    script = java.nio.file.Files.readString(tree.resolve(s.initScript()));
+                } catch (java.io.IOException | RuntimeException e) {
+                    script = null;   // named below, to be read by probe
+                }
+            }
+            if (s.initScript() == null) {
+                sb.append("It starts EMPTY: nothing exists in it but what the program creates when it starts. Whatever a "
+                        + "claim needs to exist, the claim's own earlier requests must create.\n");
+            } else if (script == null || script.length() > SETUP_SCRIPT_BUDGET_CHARS) {
+                sb.append("It is filled first by the project's own script ").append(s.initScript())
+                        .append(" -- read it to see what exists; nothing else does unless the program or a claim's own "
+                                + "earlier requests create it.\n");
+            } else {
+                sb.append("It is filled first by the project's own script ").append(s.initScript())
+                        .append(" (below); nothing else exists unless the program or a claim's own earlier requests "
+                                + "create it.\n--- ").append(s.initScript()).append('\n').append(script.strip()).append('\n');
+            }
+        }
+        return sb.toString();
+    }
+
     private void askForServices(Path tree, java.util.function.Consumer<String> progress) {
         if (serviceNeeds == null || projectServices == null) return;
         var recorded = projectServices.recorded();

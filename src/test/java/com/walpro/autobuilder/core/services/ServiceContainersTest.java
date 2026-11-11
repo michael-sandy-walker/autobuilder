@@ -26,7 +26,7 @@ class ServiceContainersTest {
     private ServiceContainers containers(ProjectServices services, boolean ready) {
         return new ServiceContainers(services, 1500, (args, t) -> {
             calls.add(args);
-            return new ServiceContainers.Ran(0, args.get(0).equals("run") ? "abc123\n" : "");
+            return new ServiceContainers.Ran(0, args.get(0).equals("create") ? "abc123\n" : "");
         }, port -> ready);
     }
 
@@ -69,14 +69,34 @@ class ServiceContainersTest {
             assertThat(s.failed()).isFalse();
             assertThat(s.names()).containsExactly("autobuilder-my-shop-mysql");
             assertThat(calls.get(0)).containsExactly("rm", "-f", "autobuilder-my-shop-mysql");
-            assertThat(calls.get(1)).containsSequence("run", "-d", "--name", "autobuilder-my-shop-mysql")
+            assertThat(calls.get(1)).containsSequence("create", "--name", "autobuilder-my-shop-mysql")
                     .containsSequence("--label", "autobuilder.project=my-shop")
                     .containsSequence("-p", port + ":3306")
                     .containsSequence("-e", "MYSQL_ALLOW_EMPTY_PASSWORD=yes")
-                    .containsSequence("-v", tree.resolve("basedata.sql").toAbsolutePath() + ":/docker-entrypoint-initdb.d/basedata.sql:ro")
+                    .doesNotContain("-v")
                     .endsWith("mysql:8.0");
+            // T4-EO: the script is copied in before the start, never mounted (a mount needs the host to share its directory)
+            assertThat(calls.get(2)).containsExactly("cp", tree.resolve("basedata.sql").toAbsolutePath().toString(),
+                    "autobuilder-my-shop-mysql:/docker-entrypoint-initdb.d/basedata.sql");
+            assertThat(calls.get(3)).containsExactly("start", "autobuilder-my-shop-mysql");
         }
         assertThat(calls.get(calls.size() - 1)).containsExactly("rm", "-f", "-v", "autobuilder-my-shop-mysql");
+    }
+
+    @Test
+    void aContainerThatCouldNotBeStartedIsNotLeftBehind() throws Exception {
+        ProjectServices services = new ProjectServices(project.toString());
+        services.record(new ProjectServices.Decision(true, List.of(mysql(freePort(), null)), Instant.now()));
+        ServiceContainers c = new ServiceContainers(services, 1500, (args, t) -> {
+            calls.add(args);
+            return args.get(0).equals("start") ? new ServiceContainers.Ran(125, "Error response from daemon: mounts denied\n")
+                    : new ServiceContainers.Ran(0, "");
+        }, port -> true);
+        ServiceContainers.Started s = c.startFresh(tree);
+        assertThat(s.failed()).isTrue();
+        assertThat(s.why()).contains("could not be started").contains("mounts denied");
+        assertThat(calls.get(calls.size() - 1)).as("the created container is removed").containsSequence("rm", "-f", "-v")
+                .anyMatch(a -> a.startsWith("autobuilder-"));
     }
 
     @Test
@@ -121,7 +141,7 @@ class ServiceContainersTest {
             ServiceContainers.Started s = containers(services, true).startFresh(tree);
             assertThat(s.failed()).isTrue();
             assertThat(s.why()).contains("already in use by something else");
-            assertThat(calls).noneMatch(a -> a.get(0).equals("run"));
+            assertThat(calls).noneMatch(a -> a.get(0).equals("create") || a.get(0).equals("start"));
         }
     }
 

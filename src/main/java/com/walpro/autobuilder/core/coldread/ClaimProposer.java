@@ -102,7 +102,18 @@ public class ClaimProposer {
      */
     public Proposal propose(Path code, Map<String, String> source, Map<String, Declaration> inventory, Capability capability,
                             List<Capability> all, ColdRead coldRead, Map<EntryKind, Way> ways, int firstNumber) {
-        String question = question(source, inventory, capability, all, coldRead, ways);
+        return propose(code, source, inventory, capability, all, coldRead, ways, firstNumber, null);
+    }
+
+    /**
+     * @param startsWith T4-EO: what is known of the project as an exercise meets it -- what exists each time it is
+     *                   started (what its services are filled with, or that they are empty) and what it was observed to
+     *                   answer before any use -- in words, each part under its own heading; null when nothing is known
+     */
+    public Proposal propose(Path code, Map<String, String> source, Map<String, Declaration> inventory, Capability capability,
+                            List<Capability> all, ColdRead coldRead, Map<EntryKind, Way> ways, int firstNumber,
+                            String startsWith) {
+        String question = question(source, inventory, capability, all, coldRead, ways, startsWith);
         LogInvestigator.Investigation inv = investigator.investigate(question, Map.of(), code, PROBES, "reverse-engineering");
         List<String> probes = inv.steps().stream().map(LogInvestigator.Step::probe).toList();
         if (!inv.answered()) {
@@ -117,6 +128,11 @@ public class ClaimProposer {
 
     static String question(Map<String, String> source, Map<String, Declaration> inventory, Capability capability,
                            List<Capability> all, ColdRead coldRead, Map<EntryKind, Way> ways) {
+        return question(source, inventory, capability, all, coldRead, ways, null);
+    }
+
+    static String question(Map<String, String> source, Map<String, Declaration> inventory, Capability capability,
+                           List<Capability> all, ColdRead coldRead, Map<EntryKind, Way> ways, String startsWith) {
         StringBuilder sb = new StringBuilder();
         sb.append("""
                 This project was not written by you, and it comes with no description of what it should do. It has \
@@ -154,6 +170,9 @@ public class ClaimProposer {
                         .append(" -- write paths WITHOUT it; it is added when the request is sent)\n");
             }
         }
+        if (startsWith != null && !startsWith.isBlank()) {
+            sb.append('\n').append(startsWith.strip()).append('\n');
+        }
         if (coldRead != null && !coldRead.prose().isEmpty()) {
             sb.append("\nWHAT THE PROJECT SAYS ABOUT ITSELF, quoted:\n");
             coldRead.prose().forEach(l -> sb.append("  ").append(l).append('\n'));
@@ -177,7 +196,8 @@ public class ClaimProposer {
                 Answer with up to %d claims, each starting with a line CLAIM: <one sentence> and followed by its \
                 exercise in the form above. {u} stands for a seven-digit number unique to the claim -- use it where a \
                 value must not repeat across claims (all claims of a kind are exercised, in order, on one copy of the \
-                project).
+                project). What exists when the project starts is there for every claim after yours: a claim that \
+                changes or removes something creates its own first, and leaves what it found as it was.
                 """.formatted(MAX_CLAIMS));
         return sb.toString();
     }

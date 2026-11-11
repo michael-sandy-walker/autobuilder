@@ -1347,14 +1347,57 @@ public class BootGate {
         }
 
         /** The final status and body, or why nothing was observed ({@code unobserved} names the reason). */
-        public record Response(Integer status, String body, String unobserved) {
+        public record Response(Integer status, String body, String unobserved, String location) {
+            public Response(Integer status, String body, String unobserved) { this(status, body, unobserved, null); }
+
             public boolean observed() { return status != null; }
+
+            /** What a reader is shown: where a redirect points (T4-EO: it is not followed), then the body. */
+            public String shown() {
+                if (location == null) return body;
+                return "redirects to " + location + (body == null || body.isBlank() ? "" : " | " + body);
+            }
         }
 
         public Response send(List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
             if (!process.isAlive()) return new Response(null, null, "PROCESS_EXITED");
-            SequenceOutcome o = executeSequence(client, r -> probeRequest(port, prefix, requestTimeoutMs, r), sequence);
-            return new Response(o.status(), o.body(), o.abstain() == null ? null : o.abstain().name());
+            SequenceOutcome o = executeSequence(client, (s, r) -> s.request(port, prefix, requestTimeoutMs, r), sequence,
+                    formPages, prefix);
+            return new Response(o.status(), o.body(), o.abstain() == null ? null : o.abstain().name(), o.location());
+        }
+
+        /** T4-EO: the path a form posts to -> the page seen carrying it, over everything asked of this program. */
+        private final Map<String, String> formPages = new java.util.concurrent.ConcurrentHashMap<>();
+
+        /**
+         * What one way in answers a client that has no cookies.
+         *
+         * @param location where it redirects to, or null
+         * @param forms    the forms of the page it answered with
+         */
+        public record Asked(String path, Integer status, String location, List<ProbeSession.Form> forms) {
+        }
+
+        /**
+         * T4-EO: asks {@code path} as a new client with no cookies -- what the program answers before anyone has done
+         * anything. The forms it shows are remembered ({@link #formPages}), so a later sequence that sends one of them
+         * without having fetched its page is given the page first.
+         */
+        public Asked ask(String path) {
+            if (!process.isAlive()) return new Asked(path, null, null, List.of());
+            ProbeSession session = new ProbeSession(formPages);
+            HttpRequest sent = session.request(port, prefix, requestTimeoutMs,
+                    new CriterionProbeSynthesizer.ProbeRequest("GET", path, null));
+            try {
+                HttpResponse<String> response = client.send(sent, HttpResponse.BodyHandlers.ofString());
+                session.answered(sent, response);
+                return new Asked(path, response.statusCode(), ProbeSession.location(response), session.lastForms());
+            } catch (IOException e) {
+                return new Asked(path, null, null, List.of());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return new Asked(path, null, null, List.of());
+            }
         }
 
         @Override
@@ -1702,8 +1745,9 @@ public class BootGate {
     static final int MAX_MODEL_FALLBACKS_PER_SWEEP = 5;
 
     /** The final status, or the reason there is none. Exactly one field is set. */
-    record SequenceOutcome(Integer status, Unobserved abstain, String body) {
-        SequenceOutcome(Integer status, Unobserved abstain) { this(status, abstain, null); }
+    record SequenceOutcome(Integer status, Unobserved abstain, String body, String location) {
+        SequenceOutcome(Integer status, Unobserved abstain, String body) { this(status, abstain, body, null); }
+        SequenceOutcome(Integer status, Unobserved abstain) { this(status, abstain, null, null); }
         static SequenceOutcome observed(int status) { return new SequenceOutcome(status, null); }
         static SequenceOutcome observed(int status, String body) { return new SequenceOutcome(status, null, body); }
         static SequenceOutcome none(Unobserved why) { return new SequenceOutcome(null, why); }
@@ -1716,14 +1760,21 @@ public class BootGate {
      */
     private SequenceOutcome executeSequence(HttpClient client, int port,
                                             List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
-        return executeSequence(client, r -> probeRequest(port, r), sequence);
+        return executeSequence(client, (s, r) -> s.request(port, servedPrefix, requestTimeoutMs, r), sequence, null, servedPrefix);
     }
 
-    /** As above, with the request built by {@code toRequest}: one sequence semantics for the gate and for {@link Served}. */
+    /**
+     * As above, with the request built by {@code toRequest}: one sequence semantics for the gate and for {@link Served}.
+     * T4-EO: the sequence is one client -- its {@link ProbeSession} carries the cookies and the pages' hidden form
+     * fields from request to request, and ends with it.
+     */
     private static SequenceOutcome executeSequence(HttpClient client,
-                                                   java.util.function.Function<CriterionProbeSynthesizer.ProbeRequest, HttpRequest> toRequest,
-                                                   List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
+                                                   java.util.function.BiFunction<ProbeSession, CriterionProbeSynthesizer.ProbeRequest, HttpRequest> toRequest,
+                                                   List<CriterionProbeSynthesizer.ProbeRequest> sequence,
+                                                   Map<String, String> formPages, String prefix) {
         int status = -1;
+        String location = null;
+        ProbeSession session = new ProbeSession(formPages);
         List<String> bodies = new ArrayList<>();
         for (int i = 0; i < sequence.size(); i++) {
             CriterionProbeSynthesizer.ProbeRequest r = sequence.get(i);
@@ -1738,9 +1789,18 @@ public class BootGate {
                 return SequenceOutcome.none(Unobserved.UNRESOLVED_REFERENCE);
             }
             try {
-                HttpResponse<String> response = client.send(
-                        toRequest.apply(resolved.get()), HttpResponse.BodyHandlers.ofString());
+                // A form is sent from its page: when this client has not fetched it and the program has shown where
+                // it is, the page is fetched first. It is not one of the sequence's requests ($N does not count it).
+                Optional<String> page = session.pageToFetchFirst(prefix, resolved.get());
+                if (page.isPresent()) {
+                    HttpRequest get = toRequest.apply(session, new CriterionProbeSynthesizer.ProbeRequest("GET", page.get(), null));
+                    session.answered(get, client.send(get, HttpResponse.BodyHandlers.ofString()));
+                }
+                HttpRequest sent = toRequest.apply(session, resolved.get());
+                HttpResponse<String> response = client.send(sent, HttpResponse.BodyHandlers.ofString());
+                session.answered(sent, response);
                 status = response.statusCode();
+                location = ProbeSession.location(response);
                 bodies.add(response.body());
                 // A SETUP request that was refused means the state the asserted request needs was
                 // never created, so whatever the asserted request answers is about the wrong
@@ -1763,7 +1823,7 @@ public class BootGate {
             }
         }
         return status < 0 ? SequenceOutcome.none(Unobserved.TRANSPORT)
-                : SequenceOutcome.observed(status, bodies.get(bodies.size() - 1));
+                : new SequenceOutcome(status, null, bodies.get(bodies.size() - 1), location);
     }
 
     /** {@code $N.field} → that field of response N (1-based). Empty when any reference is unresolvable. */
@@ -1791,6 +1851,8 @@ public class BootGate {
             int index = Integer.parseInt(m.group(1));
             if (index < 1 || index > priorBodies.size()) return Optional.empty();
             Optional<String> value = jsonField(priorBodies.get(index - 1), m.group(2));
+            // T4-EO: an answer that is a page has fields too -- the ones its forms carry.
+            if (value.isEmpty()) value = ProbeSession.pageField(priorBodies.get(index - 1), m.group(2));
             if (value.isEmpty()) return Optional.empty();
             m.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(value.get()));
         }
@@ -1885,24 +1947,6 @@ public class BootGate {
         if (prefix == null || prefix.isEmpty() || path == null) return path;
         if (path.equals(prefix) || path.startsWith(prefix + "/") || path.startsWith(prefix + "?")) return path;
         return prefix + (path.startsWith("/") ? path : "/" + path);
-    }
-
-    private HttpRequest probeRequest(int port, CriterionProbeSynthesizer.ProbeRequest r) {
-        return probeRequest(port, servedPrefix, requestTimeoutMs, r);
-    }
-
-    private static HttpRequest probeRequest(int port, String prefix, long requestTimeoutMs,
-                                            CriterionProbeSynthesizer.ProbeRequest r) {
-        HttpRequest.Builder builder = HttpRequest
-                .newBuilder(URI.create("http://127.0.0.1:" + port + served(r.path(), prefix)))
-                .timeout(Duration.ofMillis(requestTimeoutMs));
-        if (r.body() == null || r.body().isBlank()) {
-            builder.method(r.method(), HttpRequest.BodyPublishers.noBody());
-        } else {
-            builder.header("Content-Type", "application/json")
-                    .method(r.method(), HttpRequest.BodyPublishers.ofString(r.body(), StandardCharsets.UTF_8));
-        }
-        return builder.build();
     }
 
     private HttpRequest request(int port, String path) {

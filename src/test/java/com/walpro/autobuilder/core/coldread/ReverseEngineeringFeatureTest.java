@@ -49,7 +49,7 @@ class ReverseEngineeringFeatureTest {
                 "src/main/java/p/BookController.java", BOOKS, "src/main/java/p/LoanController.java", LOANS), null);
         assertThat(points).allSatisfy(e -> assertThat(e.kind()).isEqualTo(EntryKind.SERVICE_STYLE));
         assertThat(points).extracting(EntryPoint::label)
-                .contains("POST /books", "GET /books/{}", "POST /loans", "POST /loans/{}/return", "GET /loans");
+                .contains("POST /books", "GET /books/{id}", "POST /loans", "POST /loans/{id}/return", "GET /loans");
         var features = ReverseEngineeringService.featuresOf(points);
         assertThat(features.keySet()).containsExactly("BookController", "LoanController");
     }

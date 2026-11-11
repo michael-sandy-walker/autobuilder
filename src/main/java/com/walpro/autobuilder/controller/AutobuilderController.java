@@ -488,8 +488,10 @@ public class AutobuilderController {
     public ResponseEntity<?> confirmReverseEngineering(@RequestBody String seed) {
         if (reverseEngineeringJob == null) return ResponseEntity.status(503).body(Map.of("error", "reverse engineering is not enabled in this context"));
         try {
-            var made = reverseEngineeringJob.confirm(seed == null ? "" : seed);
-            autobuilderService.goalProvided();
+            // T4-EK slice (c): lines of the operator's own are checked against the code first; that takes minutes, so
+            // the answer is "accepted" and the job says where it is. The loop is released once the goal tree exists.
+            var made = reverseEngineeringJob.confirm(seed == null ? "" : seed, autobuilderService::goalProvided);
+            if (made == null) return ResponseEntity.accepted().body(Map.of("checking", true));
             return ResponseEntity.ok(made);
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

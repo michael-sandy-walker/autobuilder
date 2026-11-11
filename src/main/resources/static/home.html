@@ -714,6 +714,7 @@ function wireSeedBox() {
     let r;
     try { r = await post('/home/run/reverse-engineering/confirm', null, seedDraft); } finally { seedSending = false; }
     if (r.status === 200) toast(true, 'Confirmed: the seed is set and the loop closes it next.');
+    else if (r.status === 202) toast(true, 'Checking first whether the project already does what you added.');
     else toast(false, 'Not confirmed: ' + message(r));
     refresh();
   };
@@ -782,6 +783,7 @@ function revBox() {
     // T4-EK slice (b): the seed written from what was found -- every line ends with the claims it rests on.
     if (seedDraft == null) seedDraft = rev.seed;
     const cited = claims.filter(j => verdict(j) === 'anchored');
+    if (rev.error) html += '<div class="why" style="margin-top:10px">' + esc(rev.error) + '</div>';
     html += '<div class="sub" style="margin-top:12px"><label for="seed" style="margin-top:0">This project\'s seed, written '
       + 'from what was found</label><div class="why">Each feature line ends with the claims it rests on; a \'What it is\' line ends with the README lines it comes from. Edit freely; a line you '
       + 'add without claims becomes open work the loop checks next. Confirming makes this the project\'s first input '
@@ -803,6 +805,13 @@ function revBox() {
   if (rev.phase === 'confirmed') {
     html += '<div class="why" style="margin-top:10px"><b>Confirmed.</b> The seed is this project\'s first input; the loop '
       + 'closes it by running every criterion again.</div>';
+    if ((rev.checked || []).length) {
+      html += '<div class="why" style="margin-top:6px"><b>The lines you added</b><ul class="claims">' + rev.checked.map(c =>
+        '<li>' + esc(c.line) + ' -- ' + (c.claims.length
+          ? '<b>the project does this already</b> (' + c.claims.length + ' check' + (c.claims.length === 1 ? '' : 's')
+            + ' kept); nothing is built for it'
+          : '<b>open work</b> for the loop: ' + esc(c.why || 'not shown to hold')) + '</li>').join('') + '</ul></div>';
+    }
   }
   html += '<details><summary>How the code is built (' + (a.capabilities || []).length + ' parts) <span class="note">-- '
     + 'the parts claims were proposed for and features are made of; not part of the seed</span></summary><ul class="claims">'

@@ -63,6 +63,12 @@ class ObservedBeforeAnyUseTest {
         var k4 = new com.walpro.autobuilder.core.coldread.ClaimProposer.Claim("k4", "c", "signs in and reads too", List.of(get, post, get), 200);
         assertThat(ProgramAdapter.readersFirst(List.of(k1, k2, k3, k4)))
                 .extracting(com.walpro.autobuilder.core.coldread.ClaimProposer.Claim::id).containsExactly("k3", "k2", "k4", "k1");
+        // A kept sequence has pages put in; it must sort where the proposed one did.
+        var page = new com.walpro.autobuilder.core.build.CriterionProbeSynthesizer.ProbeRequest("GET", "/page", null);
+        var other = new com.walpro.autobuilder.core.build.CriterionProbeSynthesizer.ProbeRequest("POST", "/b", "y=2");
+        var order = com.walpro.autobuilder.core.build.CriterionExercises.EXERCISE_ORDER;
+        assertThat(order.compare(List.of(page, post, get), List.of(post, get))).isZero();
+        assertThat(order.compare(List.of(post), List.of(page, other))).isLessThan(0);
     }
 
     @Test

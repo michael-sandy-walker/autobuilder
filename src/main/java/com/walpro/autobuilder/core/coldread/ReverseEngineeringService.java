@@ -105,7 +105,12 @@ public class ReverseEngineeringService {
      * @param unobserved why there is no answer, when there is none
      * @param held       whether the claim held there, as its kind judges it
      */
-    public record Observation(String variant, Integer status, String unobserved, String body, boolean held) {
+    public record Observation(String variant, Integer status, String unobserved, String body, boolean held,
+                              List<com.walpro.autobuilder.core.build.CriterionProbeSynthesizer.ProbeRequest> sent) {
+
+        public Observation(String variant, Integer status, String unobserved, String body, boolean held) {
+            this(variant, status, unobserved, body, held, null);
+        }
 
         public static String tail(String s) {
             if (s == null) return null;
@@ -278,6 +283,118 @@ public class ReverseEngineeringService {
         json.writeValue(work.resolve("account.json").toFile(), account);
         log.warn("T4-EK: account of {} written to {} -- {} ({} ms)", source, work, verdicts, account.durationMs());
         return account;
+    }
+
+    /**
+     * What checking one stated line found.
+     *
+     * @param line     the line, as stated
+     * @param feature  the feature its kept claims belong to (the first kept claim's), null when none was kept
+     * @param claims   the claims that hold on the tree and stop holding with their way in taken out -- with each, the
+     *                 sequence as it went out; empty when the code was not shown to do what the line states
+     * @param proposed how many claims the model proposed for it
+     * @param why      for a line with no kept claim: what was seen instead, in words
+     */
+    public record StatedLine(String line, String feature, List<Claim> claims, int proposed, String why) {
+        public boolean holds() {
+            return !claims.isEmpty();
+        }
+    }
+
+    /**
+     * T4-EK slice (c): lines someone STATED about a project that already has code (the operator, adding to a
+     * reverse-engineered seed) are checked before they become work -- each the reverse-engineering way: the model
+     * proposes claims for the line, and a claim is kept when it holds on the tree and no longer does with its own way
+     * in taken out. A line with a kept claim is something the project already does, and gets its criteria; a line with
+     * none is open work, as every stated line was before. Field, 2026-11-10: "a refused postcode uses up no running
+     * number" already held, and the loop built a second method for it in 8 cycles.
+     */
+    public List<StatedLine> checkStated(Account account, List<String> lines, java.util.function.Consumer<String> progress)
+            throws IOException {
+        List<StatedLine> out = new ArrayList<>();
+        if (lines.isEmpty()) return out;
+        Path source = Path.of(account.source());
+        Path work = Path.of(account.copy()).resolveSibling("stated-"
+                + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")));
+        Path original = work.resolve("tree");
+        copy(source, original);
+        Map<String, String> files = ProjectMerge.files(original);
+        Map<String, Declaration> inventory = CapabilityCut.inventory(files);
+        EntryAdapter adapter = started;
+        List<EntryPoint> points = started.find(files, account.coldRead());
+        if (points.isEmpty()) {
+            adapter = called;
+            points = called.find(files, account.coldRead());
+        }
+        if (points.isEmpty()) {
+            lines.forEach(l -> out.add(new StatedLine(l, null, List.of(), 0, "the project has no way in to exercise it by")));
+            return out;
+        }
+        Map<EntryKind, ClaimProposer.Way> offered = new LinkedHashMap<>();
+        for (EntryPoint e : points) {
+            EntryAdapter a = adapter;
+            offered.computeIfAbsent(e.kind(), k -> new ClaimProposer.Way(new ArrayList<>(), a.exerciseForm(k))).points().add(e);
+        }
+        Map<String, String> typeOfEntry = new TreeMap<>();
+        for (EntryPoint e : points) {
+            String id = e.memberId(inventory);
+            if (id != null) typeOfEntry.putIfAbsent(id, e.type());
+        }
+        String known = projectServices == null ? null : startState(projectServices.toStart(), original);
+        String observed = adapter.observedBeforeAnyUse(original, points);
+        if (observed != null) known = (known == null ? "" : known.strip() + "\n\n") + observed;
+
+        Map<String, List<Claim>> byLine = new LinkedHashMap<>();
+        List<Claim> claims = new ArrayList<>();
+        int first = account.claims().size() + 1;
+        for (String line : lines) {
+            progress.accept("Checking whether the project already does what you added (" + (byLine.size() + 1) + " of "
+                    + lines.size() + "): the model reads the code");
+            ClaimProposer.Proposal p = proposer.proposeFor(original, line, account.capabilities(), account.coldRead(), offered,
+                    first + claims.size(), known);
+            byLine.put(line, p.claims());
+            claims.addAll(p.claims());
+        }
+        Map<String, Map<String, Observation>> seen = new LinkedHashMap<>();
+        claims.forEach(k -> seen.put(k.id(), new LinkedHashMap<>()));
+        Map<String, Variant> byName = new LinkedHashMap<>();
+        if (!claims.isEmpty()) {
+            progress.accept("Checking " + claims.size() + " claims for your lines against the code as it is");
+            byName.put("as-is", runVariant(adapter, "as-is", original, List.of(), claims, seen));
+            List<Claim> held = claims.stream().filter(k -> holds(seen.get(k.id()).get("as-is"))).toList();
+            int n = 0;
+            // Only the claims that hold are worth a variant; with none, the lines are open work and nothing more is built.
+            for (String id : held.isEmpty() ? List.<String>of() : typeOfEntry.keySet()) {
+                progress.accept("Checking them without " + id + " (" + (++n) + " of " + typeOfEntry.size() + ")");
+                byName.put("entry:" + id, stubbedVariant(adapter, "entry:" + id,
+                        work.resolve("without-entry-" + id.replaceAll("[^A-Za-z0-9_-]", "_")), original, files, inventory,
+                        List.of(id), held, seen));
+            }
+        }
+        Map<String, FeatureVerdict> verdicts = attribute(claims, seen, byName, typeOfEntry);
+        for (String line : lines) {
+            List<Claim> kept = new ArrayList<>();
+            String feature = null;
+            Map<String, Integer> others = new TreeMap<>();
+            for (Claim k : byLine.get(line)) {
+                FeatureVerdict v = verdicts.get(k.id());
+                if (v != null && "anchored".equals(v.verdict())) {
+                    Observation asIs = seen.get(k.id()).get("as-is");
+                    kept.add(asIs != null && asIs.sent() != null
+                            ? new Claim(k.id(), k.capability(), k.text(), k.kind(), asIs.sent(), k.expected(), k.test(), k.run()) : k);
+                    if (feature == null) feature = v.feature();
+                } else {
+                    others.merge(v == null ? "unjudged" : v.verdict(), 1, Integer::sum);
+                }
+            }
+            String why = !kept.isEmpty() ? null : byLine.get(line).isEmpty() ? "the model found nothing in the code that does it"
+                    : "no claim for it was borne out (" + others + ")";
+            out.add(new StatedLine(line, feature, List.copyOf(kept), byLine.get(line).size(), why));
+            log.warn("T4-EK: stated \"{}\" -- {} of {} claim(s) kept{}", line, kept.size(), byLine.get(line).size(),
+                    kept.isEmpty() ? " (" + why + ")" : " under " + feature);
+        }
+        json.writeValue(work.resolve("stated.json").toFile(), out);
+        return out;
     }
 
     /**

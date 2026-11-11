@@ -104,6 +104,11 @@ public class TestRunGate {
     private final String testCommand;
     private final BuildExecutor buildExecutor;
 
+    /** T4-EN/T4-EO: the services the operator said yes to; absent, or nothing said yes to, a test run is as before. */
+    @lombok.Setter
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.services.ServiceContainers serviceContainers;
+
     @Value("${file.base-path}")
     @Setter
     private String fileBasePath;
@@ -257,7 +262,19 @@ public class TestRunGate {
                     + "(no test sources found under src/test) — write the tests the goal calls for");
         }
         long startedAt = System.currentTimeMillis();
-        BuildOutcome outcome = buildExecutor.execute(fileBasePath, cycleId, testCommand);
+        BuildOutcome outcome;
+        // T4-EO: a project's own tests start the project too (a context, a connection), so they get what every other
+        // start of it gets -- the services the operator said yes to, fresh, removed after. Field 2026-11-11: an imported
+        // project's suite failed on "Connection refused" at the closure, and the loop set about changing its tests.
+        try (var services = serviceContainers == null ? com.walpro.autobuilder.core.services.ServiceContainers.Started.none()
+                : serviceContainers.startFresh(java.nio.file.Path.of(buildExecutor.resolveWorkingDir(fileBasePath)))) {
+            if (services.failed()) {
+                log.warn("T4-EO: the services the project needs could not be started ({}) -- the test run says nothing "
+                        + "about the project, so the test gate abstains", services.why());
+                return Optional.empty();
+            }
+            outcome = buildExecutor.execute(fileBasePath, cycleId, testCommand);
+        }
         lastRunStartedAt = startedAt;
         log.info("T4-AN-2: test gate result={} (durationMs={})", outcome.result(), outcome.durationMs());
         if (behaviourLogger != null) {

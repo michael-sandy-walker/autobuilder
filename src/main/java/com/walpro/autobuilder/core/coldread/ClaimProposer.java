@@ -154,6 +154,82 @@ public class ClaimProposer {
             sb.append("\nTHE OTHER CAPABILITIES (claims about them belong to them, not here):\n");
             others.forEach(o -> sb.append("- ").append(o).append('\n'));
         }
+        appendWaysAndKnown(sb, coldRead, ways, startsWith);
+        Set<String> files = new LinkedHashSet<>();
+        for (String id : capability.declarations()) {
+            Declaration d = inventory.get(id);
+            if (d != null) files.add(d.path());
+        }
+        StringBuilder code = new StringBuilder();
+        for (String f : files) {
+            String text = source.get(f);
+            if (text == null || code.length() + text.length() > SOURCE_BUDGET_CHARS) continue;
+            code.append("--- ").append(f).append('\n').append(text.strip()).append('\n');
+        }
+        if (!code.isEmpty()) {
+            sb.append("\nTHE CAPABILITY'S OWN FILES (probe the others it uses):\n").append(code);
+        }
+        sb.append(CLOSING.formatted(MAX_CLAIMS));
+        return sb.toString();
+    }
+
+    /**
+     * T4-EK slice (c): the question for ONE statement someone made about the project (a line the operator added to the
+     * seed) -- does the code already do it, and what exercise shows it? The same rule keeps its claims as any other's:
+     * held on the tree, and no longer with the code the exercise reaches taken out. No claims is an answer too.
+     */
+    static String statementQuestion(String statement, List<Capability> all, ColdRead coldRead, Map<EntryKind, Way> ways,
+                                    String startsWith) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("""
+                This project was not written by you. Someone who works with it states that it does the following:
+
+                  %s
+
+                Find out from its code whether it already does, and state what shows it as claims an exercise can check \
+                -- claims about THIS statement only. Read the code first (probe it); do not take the statement as true.
+
+                Each claim is checked by exercising the project the way it is used. It is kept only when the project \
+                behaves as the claim states, AND no longer does once the code the exercise reaches is taken out (its \
+                methods made to throw, everything else unchanged). If the code does not do what is stated, or only part \
+                of it, answer with the claims for the part it does, or with the single line NONE and what is missing -- \
+                that is a useful answer: the missing part is then built.
+                """.formatted(statement.strip()));
+        if (!all.isEmpty()) {
+            sb.append("\nWHAT THE PROJECT IS MADE OF:\n");
+            all.forEach(c -> sb.append("- ").append(c.name()).append(" -- ").append(c.summary()).append('\n'));
+        }
+        appendWaysAndKnown(sb, coldRead, ways, startsWith);
+        sb.append(CLOSING.formatted(MAX_CLAIMS));
+        return sb.toString();
+    }
+
+    /** As {@link #propose}, for one statement about the project instead of one capability of it. */
+    public Proposal proposeFor(Path code, String statement, List<Capability> all, ColdRead coldRead, Map<EntryKind, Way> ways,
+                               int firstNumber, String startsWith) {
+        String question = statementQuestion(statement, all, coldRead, ways, startsWith);
+        LogInvestigator.Investigation inv = investigator.investigate(question, Map.of(), code, PROBES, "reverse-engineering");
+        List<String> probes = inv.steps().stream().map(LogInvestigator.Step::probe).toList();
+        if (!inv.answered()) return new Proposal(STATED, List.of(), List.of(), probes, null);
+        Proposal p = parse(inv.answer(), STATED, firstNumber, probes, ways.keySet());
+        log.warn("T4-EK: stated \"{}\" -- {} claim(s) proposed, {} malformed, {} probe(s)", statement.strip(), p.claims().size(),
+                p.malformed().size(), probes.size());
+        return p;
+    }
+
+    /** The capability a claim made for a statement carries: none of the project's, it was stated from outside. */
+    public static final String STATED = "stated";
+
+    private static final String CLOSING = """
+
+            Answer with up to %d claims, each starting with a line CLAIM: <one sentence> and followed by its \
+            exercise in the form above. {u} stands for a seven-digit number unique to the claim -- use it where a \
+            value must not repeat across claims (all claims of a kind are exercised, in order, on one copy of the \
+            project). What exists when the project starts is there for every claim after yours: a claim that \
+            changes or removes something creates its own first, and leaves what it found as it was.
+            """;
+
+    private static void appendWaysAndKnown(StringBuilder sb, ColdRead coldRead, Map<EntryKind, Way> ways, String startsWith) {
         for (Map.Entry<EntryKind, Way> w : ways.entrySet()) {
             EntryKind kind = w.getKey();
             List<EntryPoint> points = w.getValue().points();
@@ -177,29 +253,6 @@ public class ClaimProposer {
             sb.append("\nWHAT THE PROJECT SAYS ABOUT ITSELF, quoted:\n");
             coldRead.prose().forEach(l -> sb.append("  ").append(l).append('\n'));
         }
-        Set<String> files = new LinkedHashSet<>();
-        for (String id : capability.declarations()) {
-            Declaration d = inventory.get(id);
-            if (d != null) files.add(d.path());
-        }
-        StringBuilder code = new StringBuilder();
-        for (String f : files) {
-            String text = source.get(f);
-            if (text == null || code.length() + text.length() > SOURCE_BUDGET_CHARS) continue;
-            code.append("--- ").append(f).append('\n').append(text.strip()).append('\n');
-        }
-        if (!code.isEmpty()) {
-            sb.append("\nTHE CAPABILITY'S OWN FILES (probe the others it uses):\n").append(code);
-        }
-        sb.append("""
-
-                Answer with up to %d claims, each starting with a line CLAIM: <one sentence> and followed by its \
-                exercise in the form above. {u} stands for a seven-digit number unique to the claim -- use it where a \
-                value must not repeat across claims (all claims of a kind are exercised, in order, on one copy of the \
-                project). What exists when the project starts is there for every claim after yours: a claim that \
-                changes or removes something creates its own first, and leaves what it found as it was.
-                """.formatted(MAX_CLAIMS));
-        return sb.toString();
     }
 
     /** Parses every kind; a claim of a kind not in {@code kinds} is malformed (the tree has no such way in). */

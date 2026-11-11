@@ -121,6 +121,15 @@ class ProbeSessionTest {
     }
 
     @Test
+    void referencesFollowTheirRequestWhenPagesArePutInBeforeIt() {
+        // request 1 unmoved, one page put in before request 2, two before request 3
+        int[] shift = {0, 0, 1, 2, 0};
+        ProbeRequest r = BootGate.renumbered(new ProbeRequest("POST", "/things/$1.id/parts/$2.id", "of=$3.name&cost=5$"), shift);
+        assertThat(r.path()).isEqualTo("/things/$1.id/parts/$3.id");
+        assertThat(r.body()).isEqualTo("of=$5.name&cost=5$");
+    }
+
+    @Test
     void aJsonBodyIsSentAsItAlwaysWas() throws Exception {
         ProbeSession s = new ProbeSession();
         send(s, "POST", "/enter", "{\"title\":\"a=b\"}");

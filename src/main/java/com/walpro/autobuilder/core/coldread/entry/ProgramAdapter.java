@@ -119,7 +119,7 @@ public class ProgramAdapter implements EntryAdapter {
                     BootGate.Served.Response r = app.send(k.sequence());
                     boolean held = r.status() != null && r.status() == k.expected();
                     seen.get(k.id()).put(variant, new Observation(variant, r.status(), r.unobserved(),
-                            Observation.clip(r.shown()), held));
+                            Observation.clip(r.shown()), held, r.sent()));
                 }
             }
         }
@@ -157,7 +157,7 @@ public class ProgramAdapter implements EntryAdapter {
      */
     static List<Claim> readersFirst(List<Claim> claims) {
         List<Claim> ordered = new ArrayList<>(claims);
-        ordered.sort(Comparator.comparingLong(k -> k.sequence().stream().filter(r -> !"GET".equals(r.method())).count()));
+        ordered.sort(Comparator.comparing(Claim::sequence, com.walpro.autobuilder.core.build.CriterionExercises.EXERCISE_ORDER));
         return ordered;
     }
 

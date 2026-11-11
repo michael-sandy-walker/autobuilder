@@ -46,6 +46,27 @@ public class CriterionExercises {
                          Map<String, String> files, List<String> args, String outputContains) {
     }
 
+    /**
+     * T4-EO: how much a sequence can change of what the start it runs on provides -- its requests that are not a GET.
+     * One start serves many sequences, so what one changes is what the later ones find; whoever runs several on one
+     * start runs them in this order (fewest first, alike in the order given). The exercise that keeps a claim and the
+     * gate that later checks it must agree on it: a claim kept in one order and checked in another is contradicted by
+     * its neighbours, not by the project (field, 2026-11-11: five criteria that sign in as a seeded user ran after the
+     * one that renames that user, and the loop began changing code that was right).
+     */
+    public static long changes(List<CriterionProbeSynthesizer.ProbeRequest> sequence) {
+        return sequence.stream().filter(r -> !"GET".equals(r.method())).count();
+    }
+
+    /**
+     * The order itself: fewest changing requests first; alike in that, by what the changing requests are -- a key both
+     * sides can compute, since a kept sequence differs from the proposed one only by pages (GETs) put in.
+     */
+    public static final java.util.Comparator<List<CriterionProbeSynthesizer.ProbeRequest>> EXERCISE_ORDER =
+            java.util.Comparator.<List<CriterionProbeSynthesizer.ProbeRequest>>comparingLong(CriterionExercises::changes)
+                    .thenComparing(s -> s.stream().filter(r -> !"GET".equals(r.method())).map(Object::toString)
+                            .collect(java.util.stream.Collectors.joining(" | ")));
+
     private final ObjectMapper json = new ObjectMapper();
     private final Path file;
     private volatile long readAt = -1;

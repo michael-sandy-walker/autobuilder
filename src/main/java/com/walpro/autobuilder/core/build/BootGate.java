@@ -1347,8 +1347,9 @@ public class BootGate {
         }
 
         /** The final status and body, or why nothing was observed ({@code unobserved} names the reason). */
-        public record Response(Integer status, String body, String unobserved, String location) {
-            public Response(Integer status, String body, String unobserved) { this(status, body, unobserved, null); }
+        public record Response(Integer status, String body, String unobserved, String location,
+                               List<CriterionProbeSynthesizer.ProbeRequest> sent) {
+            public Response(Integer status, String body, String unobserved) { this(status, body, unobserved, null, null); }
 
             public boolean observed() { return status != null; }
 
@@ -1363,7 +1364,7 @@ public class BootGate {
             if (!process.isAlive()) return new Response(null, null, "PROCESS_EXITED");
             SequenceOutcome o = executeSequence(client, (s, r) -> s.request(port, prefix, requestTimeoutMs, r), sequence,
                     formPages, prefix);
-            return new Response(o.status(), o.body(), o.abstain() == null ? null : o.abstain().name(), o.location());
+            return new Response(o.status(), o.body(), o.abstain() == null ? null : o.abstain().name(), o.location(), o.sent());
         }
 
         /** T4-EO: the path a form posts to -> the page seen carrying it, over everything asked of this program. */
@@ -1547,6 +1548,22 @@ public class BootGate {
      *       words the planner wrote.</li>
      * </ul>
      */
+    /**
+     * T4-EO: the criteria in the order one start exercises them -- those that carry a stored exercise first, the ones
+     * that change less before the ones that change more ({@link CriterionExercises#changes}), exactly as the exercise
+     * that kept them ran them; the rest after, in the order given.
+     */
+    List<String> inExerciseOrder(List<String> criteria) {
+        if (criterionExercises == null) return criteria;
+        List<String> stored = new ArrayList<>(), rest = new ArrayList<>();
+        for (String c : criteria) {
+            (criterionExercises.of(c).filter(x -> "service-style".equals(x.kind())).isPresent() ? stored : rest).add(c);
+        }
+        stored.sort(Comparator.comparing(c -> criterionExercises.of(c).get().requests(), CriterionExercises.EXERCISE_ORDER));
+        stored.addAll(rest);
+        return stored;
+    }
+
     private List<ProbeFailure> probeBehaviouralCriteria(boolean allowModelFallback,
                                                   HttpClient client, int port, String specText,
                                                   List<String> criteria, Path artifactRoot,
@@ -1579,7 +1596,7 @@ public class BootGate {
         // debug-level line is invisible at the level runs actually use.
         java.util.Map<Integer, Integer> unprobeableByStatus = new java.util.TreeMap<>();
         int asStored = 0;
-        for (String criterion : criteria) {
+        for (String criterion : inExerciseOrder(criteria)) {
             if (failures.size() >= MAX_NAMED_FAILURES) break;
             // T4-EK: a criterion that carries the exercise that earned it is run exactly so -- no parse, no synthesis.
             Optional<CriterionExercises.Stored> stored = criterionExercises == null ? Optional.empty()
@@ -1745,8 +1762,10 @@ public class BootGate {
     static final int MAX_MODEL_FALLBACKS_PER_SWEEP = 5;
 
     /** The final status, or the reason there is none. Exactly one field is set. */
-    record SequenceOutcome(Integer status, Unobserved abstain, String body, String location) {
-        SequenceOutcome(Integer status, Unobserved abstain, String body) { this(status, abstain, body, null); }
+    record SequenceOutcome(Integer status, Unobserved abstain, String body, String location,
+                           List<CriterionProbeSynthesizer.ProbeRequest> sent) {
+        SequenceOutcome(Integer status, Unobserved abstain, String body, String location) { this(status, abstain, body, location, null); }
+        SequenceOutcome(Integer status, Unobserved abstain, String body) { this(status, abstain, body, null, null); }
         SequenceOutcome(Integer status, Unobserved abstain) { this(status, abstain, null, null); }
         static SequenceOutcome observed(int status) { return new SequenceOutcome(status, null); }
         static SequenceOutcome observed(int status, String body) { return new SequenceOutcome(status, null, body); }
@@ -1775,6 +1794,11 @@ public class BootGate {
         int status = -1;
         String location = null;
         ProbeSession session = new ProbeSession(formPages);
+        // T4-EO: the sequence as it went out, when pages were fetched that it did not name -- so whoever keeps it for
+        // later (the loop's gate, which is shown no pages) keeps what was observed, not what happened to work here.
+        List<CriterionProbeSynthesizer.ProbeRequest> wentOut = new ArrayList<>();
+        int[] shift = new int[sequence.size() + 2];   // shift[k]: requests put in before the sequence's request k (1-based)
+        int inserted = 0;
         List<String> bodies = new ArrayList<>();
         for (int i = 0; i < sequence.size(); i++) {
             CriterionProbeSynthesizer.ProbeRequest r = sequence.get(i);
@@ -1793,9 +1817,14 @@ public class BootGate {
                 // it is, the page is fetched first. It is not one of the sequence's requests ($N does not count it).
                 Optional<String> page = session.pageToFetchFirst(prefix, resolved.get());
                 if (page.isPresent()) {
-                    HttpRequest get = toRequest.apply(session, new CriterionProbeSynthesizer.ProbeRequest("GET", page.get(), null));
+                    CriterionProbeSynthesizer.ProbeRequest fetch = new CriterionProbeSynthesizer.ProbeRequest("GET", page.get(), null);
+                    HttpRequest get = toRequest.apply(session, fetch);
                     session.answered(get, client.send(get, HttpResponse.BodyHandlers.ofString()));
+                    wentOut.add(fetch);
+                    inserted++;
                 }
+                shift[i + 1] = inserted;
+                wentOut.add(renumbered(r, shift));
                 HttpRequest sent = toRequest.apply(session, resolved.get());
                 HttpResponse<String> response = client.send(sent, HttpResponse.BodyHandlers.ofString());
                 session.answered(sent, response);
@@ -1823,7 +1852,24 @@ public class BootGate {
             }
         }
         return status < 0 ? SequenceOutcome.none(Unobserved.TRANSPORT)
-                : new SequenceOutcome(status, null, bodies.get(bodies.size() - 1), location);
+                : new SequenceOutcome(status, null, bodies.get(bodies.size() - 1), location, inserted == 0 ? null : List.copyOf(wentOut));
+    }
+
+    /** {@code r} with each {@code $N.field} pointing at request N's place after {@code shift[N]} requests were put in before it. */
+    static CriterionProbeSynthesizer.ProbeRequest renumbered(CriterionProbeSynthesizer.ProbeRequest r, int[] shift) {
+        java.util.function.UnaryOperator<String> move = text -> {
+            if (text == null || text.indexOf('$') < 0) return text;
+            java.util.regex.Matcher m = REFERENCE.matcher(text);
+            StringBuilder out = new StringBuilder();
+            while (m.find()) {
+                int n = Integer.parseInt(m.group(1));
+                int to = n >= 1 && n < shift.length ? n + shift[n] : n;
+                m.appendReplacement(out, java.util.regex.Matcher.quoteReplacement("$" + to + "." + m.group(2)));
+            }
+            m.appendTail(out);
+            return out.toString();
+        };
+        return new CriterionProbeSynthesizer.ProbeRequest(r.method(), move.apply(r.path()), move.apply(r.body()));
     }
 
     /** {@code $N.field} → that field of response N (1-based). Empty when any reference is unresolvable. */

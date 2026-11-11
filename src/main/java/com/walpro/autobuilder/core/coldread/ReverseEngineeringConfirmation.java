@@ -60,6 +60,23 @@ public class ReverseEngineeringConfirmation {
     }
 
     public Made confirm(Account account, String confirmed) throws IOException {
+        return confirm(account, confirmed, List.of());
+    }
+
+    /** The lines of a confirmed seed that rest on no kept claim -- the operator's own, to be checked before they are work. */
+    public static List<String> stated(Account account, String confirmed) {
+        Set<String> featureNames = new LinkedHashSet<>();
+        account.features().forEach(f -> featureNames.add(f.name()));
+        return SeedComposer.lines(confirmed, featureNames).stream().filter(l -> l.kind().equals(SeedComposer.Line.UNCITED))
+                .map(SeedComposer.Line::text).distinct().toList();
+    }
+
+    /**
+     * @param checked T4-EK slice (c): what checking the operator's own lines against the code found
+     *                ({@link ReverseEngineeringService#checkStated}). A line the project was shown to do already becomes
+     *                a COMPLETED goal with the criteria that showed it, like a feature's; any other line is open work.
+     */
+    public Made confirm(Account account, String confirmed, List<ReverseEngineeringService.StatedLine> checked) throws IOException {
         if (goals.getRootGoal() != null) {
             throw new IllegalStateException("this run already has a root goal; a project's first purpose is set once");
         }
@@ -97,9 +114,30 @@ public class ReverseEngineeringConfirmation {
                 }
             }
         }
+        Map<String, List<Claim>> shownByLine = new LinkedHashMap<>();
+        for (ReverseEngineeringService.StatedLine c : checked) {
+            if (!c.holds()) continue;
+            List<Claim> shown = new ArrayList<>();
+            for (Claim k : c.claims()) {
+                String text = used.add(k.text()) ? k.text() : k.text() + " (" + k.id() + ")";
+                used.add(text);
+                textOf.put(k, text);
+                shown.add(k);
+                if (k.kind() == EntryKind.SERVICE_STYLE) {
+                    stored.add(new CriterionExercises.Stored(text, k.kind().label(), k.sequence(), k.expected(),
+                            Map.of(), List.of(), null));
+                } else if (k.kind() == EntryKind.COMMAND_STYLE) {
+                    stored.add(new CriterionExercises.Stored(text, k.kind().label(), List.of(), k.expected(),
+                            k.run().files(), k.run().args(), k.run().outputContains()));
+                }
+            }
+            shownByLine.put(c.line(), shown);
+        }
         // Written before any goal: completing a goal may already exercise its criteria.
         exercises.write(stored);
-        writeClaimTests(criteriaByFeature);
+        Map<String, List<Claim>> tests = new LinkedHashMap<>(criteriaByFeature);
+        shownByLine.forEach((line, shown) -> tests.put("stated: " + line, shown));
+        writeClaimTests(tests);
 
         String seed = seedText(lines);
         Files.createDirectories(base.resolve("bootstrap"));
@@ -128,6 +166,16 @@ public class ReverseEngineeringConfirmation {
         for (SeedComposer.Line l : lines) {
             if (!l.kind().equals(SeedComposer.Line.UNCITED)) continue;
             String id = "goal-" + UUID.randomUUID();
+            List<Claim> shown = shownByLine.remove(l.text());
+            if (shown != null) {
+                // The operator's line, already true of the code: earned like a feature, not planned as work.
+                goals.addEarnedGoal(id, l.text(), root, shown.stream().map(textOf::get).toList(),
+                        "stated by the operator and found to hold already: " + shown.size() + " criteria held on the tree "
+                                + "as it was imported and stopped holding with their way in taken out");
+                earned.add(id);
+                criteria += shown.size();
+                continue;
+            }
             goals.addSubGoal(id, l.text(), false, root, "operator", null);
             open.add(id);
         }
@@ -146,6 +194,13 @@ public class ReverseEngineeringConfirmation {
         for (JudgedClaim j : account.claims()) {
             if (j.byFeature() == null || !"anchored".equals(j.byFeature().verdict())) continue;
             Claim k = j.claim();
+            // T4-EO: kept as it went out on the tree as it is -- with the pages that were fetched for its forms named,
+            // so the loop's own check sends what the claim was observed with.
+            List<com.walpro.autobuilder.core.build.CriterionProbeSynthesizer.ProbeRequest> sent = j.observations().stream()
+                    .filter(o -> "as-is".equals(o.variant()) && o.sent() != null).map(ReverseEngineeringService.Observation::sent).findFirst().orElse(null);
+            if (sent != null && k.kind() == EntryKind.SERVICE_STYLE) {
+                k = new Claim(k.id(), k.capability(), k.text(), k.kind(), sent, k.expected(), k.test(), k.run());
+            }
             if (!seen.add(signature(k))) continue;
             out.computeIfAbsent(j.byFeature().feature(), f -> new ArrayList<>()).add(k);
         }

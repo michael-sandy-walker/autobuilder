@@ -38,6 +38,41 @@ class TestRunGateTest {
     }
 
     @Test
+    void theProjectsServicesAreStartedAroundItsTestsAndRemovedAfter() {
+        // T4-EO: tests start the project too; they get the services every other start of it gets.
+        var containers = mock(com.walpro.autobuilder.core.services.ServiceContainers.class);
+        var started = mock(com.walpro.autobuilder.core.services.ServiceContainers.Started.class);
+        when(buildExecutor.resolveWorkingDir("/tmp/project")).thenReturn("/tmp/project/output");
+        when(containers.startFresh(java.nio.file.Path.of("/tmp/project/output"))).thenReturn(started);
+        stubOutcome(BuildResult.COMPILE_OK, "Tests run: 7, Failures: 0, Errors: 0, Skipped: 0");
+        TestRunGate g = gate(true);
+        g.setServiceContainers(containers);
+
+        assertThat(g.verifyTestsPass("cycle-1")).isEmpty();
+
+        var order = org.mockito.Mockito.inOrder(containers, buildExecutor, started);
+        order.verify(containers).startFresh(java.nio.file.Path.of("/tmp/project/output"));
+        order.verify(buildExecutor).execute(eq("/tmp/project"), any(), eq("mvn test"));
+        order.verify(started).close();
+    }
+
+    @Test
+    void whenItsServicesCannotBeStartedTheTestsAreNotRunAndNothingIsSaidAboutTheProject() {
+        var containers = mock(com.walpro.autobuilder.core.services.ServiceContainers.class);
+        var started = mock(com.walpro.autobuilder.core.services.ServiceContainers.Started.class);
+        when(started.failed()).thenReturn(true);
+        when(started.why()).thenReturn("port 3306 is already in use by something else");
+        when(buildExecutor.isEnabled()).thenReturn(true);
+        when(buildExecutor.resolveWorkingDir("/tmp/project")).thenReturn("/tmp/project/output");
+        when(containers.startFresh(any())).thenReturn(started);
+        TestRunGate g = gate(true);
+        g.setServiceContainers(containers);
+
+        assertThat(g.verifyTestsPass("cycle-1")).isEmpty();
+        verify(buildExecutor, never()).execute(anyString(), any(), anyString());
+    }
+
+    @Test
     void failingSuite_returnsBlockerNamingFailedTests_andEmitsAttemptEvent() {
         BehaviourLogger behaviourLogger = mock(BehaviourLogger.class);
         stubOutcome(BuildResult.COMPILE_ERROR, """

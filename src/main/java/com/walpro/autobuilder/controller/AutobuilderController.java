@@ -354,6 +354,26 @@ public class AutobuilderController {
         }
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.coldread.StatedInputService statedInputService;
+
+    /**
+     * T4-ES: the project's next input in words -- what it should also do, one statement a line. Each line is first
+     * checked against the code; what the project already does lands finished with its checks, the rest as open work
+     * under the reopened root. Slow (the project is exercised); lands at once.
+     */
+    @PostMapping(value = "/inputs/words", consumes = org.springframework.http.MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<?> takeStatedInput(@RequestBody String text, @RequestParam(required = false) String by) {
+        if (statedInputService == null) return ResponseEntity.status(503).body(Map.of("error", "inputs are not enabled in this context"));
+        try {
+            return ResponseEntity.ok(autobuilderService.takeStatedInput(statedInputService, text, by));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     /** T4-EI: a capability import's stage in front of the import; optional. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.walpro.autobuilder.core.merge.CapabilityImportService capabilityImportService;

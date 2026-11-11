@@ -229,6 +229,61 @@ public class ReverseEngineeringConfirmation {
     }
 
     /** The seed as it is kept: the confirmed text without the claim ids (they live with the goals' criteria). */
+    /** What landing a later input's lines made: the goals of the lines the project already does, and of the others. */
+    public record Landed(List<String> held, List<String> open, int criteria) {
+    }
+
+    /**
+     * T4-ES: the lines of a LATER input, stated in words about a project that has a root, land in its goal tree after
+     * they were checked against the code ({@link ReverseEngineeringService#checkStated}): a line the project already
+     * does becomes a COMPLETED goal carrying the checks that showed it (their exercises stored, a library's as claim
+     * tests, exactly as a reverse-engineered feature's), and nothing is built for it; every other line becomes an open
+     * goal under the root, which is reopened for it. With no line open the project stays as finished as it was.
+     */
+    public Landed landStated(String inputId, List<ReverseEngineeringService.StatedLine> checked) throws IOException {
+        var root = goals.getRootGoal();
+        if (root == null) throw new IllegalStateException("this project has no goal yet; a first goal is set, not added");
+        List<CriterionExercises.Stored> stored = new ArrayList<>();
+        Map<String, List<Claim>> tests = new LinkedHashMap<>();
+        Map<Claim, String> textOf = new LinkedHashMap<>();
+        for (ReverseEngineeringService.StatedLine c : checked) {
+            for (Claim k : c.claims()) {
+                // The text keys the stored exercise: a wording already stored for another check is told apart by its id.
+                String text = exercises.of(k.text()).isEmpty() && !textOf.containsValue(k.text()) ? k.text()
+                        : k.text() + " (" + k.id() + ")";
+                textOf.put(k, text);
+                if (k.kind() == EntryKind.SERVICE_STYLE) {
+                    stored.add(new CriterionExercises.Stored(text, k.kind().label(), k.sequence(), k.expected(),
+                            Map.of(), List.of(), null));
+                } else if (k.kind() == EntryKind.COMMAND_STYLE) {
+                    stored.add(new CriterionExercises.Stored(text, k.kind().label(), List.of(), k.expected(),
+                            k.run().files(), k.run().args(), k.run().outputContains()));
+                }
+            }
+            if (c.holds()) tests.put("stated: " + c.line(), c.claims());
+        }
+        exercises.append(stored);
+        writeClaimTests(tests);
+        List<String> held = new ArrayList<>(), open = new ArrayList<>();
+        int criteria = 0;
+        for (ReverseEngineeringService.StatedLine c : checked) {
+            if (c.holds()) {
+                String id = "goal-" + UUID.randomUUID();
+                goals.addEarnedGoal(id, c.line(), root.getId(), c.claims().stream().map(textOf::get).toList(),
+                        "stated later and found to hold already: " + c.claims().size() + " criteria held on the project's "
+                                + "code as it was and stopped holding with their way in taken out");
+                goals.setGoalMetadataString(id, "inputId", inputId);
+                held.add(id);
+                criteria += c.claims().size();
+            } else {
+                open.add(goals.landIntent(inputId, c.line(), List.of()));
+            }
+        }
+        log.warn("T4-ES: input {} landed -- {} line(s) the project already does ({} criteria), {} open", inputId, held.size(),
+                criteria, open.size());
+        return new Landed(held, open, criteria);
+    }
+
     /**
      * T4-EK slice (c): the rules the operator confirmed join the project's obligations as {@code rule:} lines -- beside
      * whatever the file already holds for this seed (written when the root was set), each once. They guide the work

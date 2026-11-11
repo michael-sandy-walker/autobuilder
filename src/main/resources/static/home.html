@@ -243,12 +243,16 @@
   <div class="source">
     <label><input type="radio" name="ext-src" value="project" checked> a project here</label>
     <label><input type="radio" name="ext-src" value="path"> code in a directory on this machine</label>
+    <label><input type="radio" name="ext-src" value="words"> a requirement in words</label>
   </div>
+  <p class="note" id="ext-words-note" hidden>Say what the project should also do, one statement a line. Each line is first
+    checked against the code: what the project already does is recorded with its checks and nothing is built for it;
+    the rest is new work. No code comes in, so there is nothing to keep or cancel -- it lands at once.</p>
   <select id="ext-project" style="margin-top:8px"></select>
   <div class="pathrow" id="ext-path-row" hidden><input id="ext-path" placeholder="/home/me/code/their-library" autocomplete="off" spellcheck="false">
     <button id="ext-browse" type="button">Browse...</button></div>
-  <label>What to take</label>
-  <div class="source">
+  <label id="ext-what-label">What to take</label>
+  <div class="source" id="ext-what-row">
     <label><input type="radio" name="ext-what" value="whole" checked> the whole project</label>
     <label><input type="radio" name="ext-what" value="capabilities"> chosen capabilities</label>
   </div>
@@ -957,6 +961,10 @@ function jobBox() {
     + job.inputs.map(i => '<tr><td>' + esc(i.project) + '</td><td>' + esc(i.status) + (i.message ? ': ' + esc(i.message) : '')
       + '</td><td>' + (i.newFiles ?? '') + '</td><td>' + conflictCell(i) + '</td><td>' + (i.corrections ?? '') + '</td><td>'
       + criteriaCell(i) + '</td></tr>').join('') + '</tbody></table>'
+    + job.inputs.filter(i => i.lines).map(i => '<div class="why" style="margin-top:8px"><b>What you stated</b><ul class="claims">'
+      + i.lines.map(l => '<li>' + esc(l.line) + ' -- ' + (l.held
+        ? '<b>the project does this already</b> (' + l.criteria + ' check' + (l.criteria === 1 ? '' : 's') + ' kept); nothing is built for it'
+        : '<b>new work</b> for the loop' + (l.why ? ': ' + esc(l.why) : '')) + '</li>').join('') + '</ul></div>').join('')
     + (job.phase === 'DISCOVERING' ? '<p class="note">A model is reading ' + esc(job.inputs[0].project)
        + ' to find what it can do. This can take minutes; nothing comes in yet.</p>' : '')
     + (job.phase === 'CHOOSING' && job.capabilities ? capabilitiesHtml() : '')
@@ -1333,12 +1341,21 @@ function openExtend(t) {
   $('dlg-extend').showModal();
 }
 function suggestIntent() {
-  const fromProject = document.querySelector('input[name=ext-src]:checked').value === 'project';
-  $('ext-project').hidden = !fromProject; $('ext-path-row').hidden = fromProject;
-  const capabilities = document.querySelector('input[name=ext-what]:checked').value === 'capabilities';
+  const src = document.querySelector('input[name=ext-src]:checked').value;
+  const fromProject = src === 'project', words = src === 'words';
+  $('ext-project').hidden = !fromProject; $('ext-path-row').hidden = fromProject || words;
+  $('ext-what-label').hidden = words; $('ext-what-row').hidden = words; $('ext-words-note').hidden = !words;
+  const capabilities = !words && document.querySelector('input[name=ext-what]:checked').value === 'capabilities';
   $('ext-intent-row').hidden = capabilities; $('ext-cap-note').hidden = !capabilities;
-  $('ext-go').textContent = capabilities ? 'Find its capabilities' : 'Extend';
-  if ($('ext-intent').dataset.touched) return;
+  $('ext-intent-row').querySelector('label').textContent = words ? 'What it should also do -- one statement a line'
+    : 'What to take from it, and how it is used here';
+  $('ext-go').textContent = capabilities ? 'Find its capabilities' : words ? 'Add' : 'Extend';
+  // The box holds either an intent or the requirement itself: a suggestion made for one is not left in for the other.
+  if (words !== ($('ext-intent').dataset.words === '1')) {
+    $('ext-intent').value = ''; delete $('ext-intent').dataset.touched;
+    if (words) $('ext-intent').dataset.words = '1'; else delete $('ext-intent').dataset.words;
+  }
+  if (words || $('ext-intent').dataset.touched) return;
   const n = fromProject ? $('ext-project').value : codeName($('ext-path').value);
   const t = projects.find(x => x.name === n);
   $('ext-intent').value = n ? 'Use ' + n + ' in ' + extending.name + (t && t.seedSummary ? ': ' + t.seedSummary : '.') : '';
@@ -1349,15 +1366,19 @@ $('ext-project').onchange = suggestIntent;
 $('ext-path').oninput = suggestIntent;
 $('ext-intent').oninput = () => $('ext-intent').dataset.touched = '1';
 $('ext-go').onclick = async () => {
-  const fromProject = document.querySelector('input[name=ext-src]:checked').value === 'project';
-  const capabilities = document.querySelector('input[name=ext-what]:checked').value === 'capabilities';
+  const src = document.querySelector('input[name=ext-src]:checked').value;
+  const fromProject = src === 'project', words = src === 'words';
+  const capabilities = !words && document.querySelector('input[name=ext-what]:checked').value === 'capabilities';
   const intent = capabilities ? null : $('ext-intent').value;
-  const input = fromProject ? { project: $('ext-project').value, intent, capabilities }
-                            : { path: $('ext-path').value.trim(), intent, capabilities };
+  const input = words ? { words: $('ext-intent').value }
+    : fromProject ? { project: $('ext-project').value, intent, capabilities }
+                  : { path: $('ext-path').value.trim(), intent, capabilities };
   Object.keys(capDrafts).forEach(k => delete capDrafts[k]); capStale = true;
   const r = await post('/home/extend', { project: extending.name, profiles: profiles(), input });
   if (r.status !== 202) { toast(false, 'Not started: ' + message(r)); return; }
-  $('dlg-extend').close(); toast(true, 'Bringing ' + (input.project || codeName(input.path)) + ' into ' + extending.name + '.');
+  $('dlg-extend').close();
+  toast(true, words ? 'Checking what ' + extending.name + ' already does of it.'
+    : 'Bringing ' + (input.project || codeName(input.path)) + ' into ' + extending.name + '.');
   refresh();
 };
 

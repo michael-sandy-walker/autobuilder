@@ -279,6 +279,52 @@ class IntegrationJobTest {
     }
 
     @Test
+    void aRequirementInWordsIsPostedOnceLandsAtOnceAndReleasesTheHeldRun() throws Exception {
+        project("base");
+        ProjectLauncher launcher = launcher();
+        FakeRun run = new FakeRun(launcher) {
+            @Override
+            Reply postText(String path, String text, Duration timeout) {
+                calls.add("POST " + path + " " + text);
+                return new Reply(200, "{\"inputId\":\"in-2\",\"lines\":[{\"line\":\"it counts\",\"held\":true,\"criteria\":3,\"why\":null},"
+                        + "{\"line\":\"it resets\",\"held\":false,\"criteria\":0,\"why\":\"nothing in the code does it\"}],"
+                        + "\"heldGoals\":[\"g1\"],\"openGoals\":[\"g2\"]}");
+            }
+        };
+        IntegrationJob.Input words = new IntegrationJob.Input(null, null, null, false, false, "it counts\nit resets");
+        assertThat(IntegrationJob.extendProblem(projects, "base", words)).isNull();
+
+        IntegrationJob job = new IntegrationJob("base", projects, false, null, null, List.of(words), launcher, run);
+        job.begin();
+        await(job, IntegrationJob.Phase.RELEASED, IntegrationJob.Phase.FAILED);
+
+        assertThat(job.phase()).as("nothing waits to be kept: no file came in").isEqualTo(IntegrationJob.Phase.RELEASED);
+        assertThat(run.calls).containsSubsequence(
+                "POST /autobuilder/inputs/words?by=operator%20(home%20screen) it counts\nit resets",
+                "POST /autobuilder/start?mode=ADOPT_PROJECT");
+        assertThat(run.calls).noneMatch(c -> c.contains("/keep"));
+        @SuppressWarnings("unchecked")
+        var row = ((List<java.util.Map<String, Object>>) job.describe().get("inputs")).get(0);
+        assertThat(row).containsEntry("project", "a requirement in words").containsEntry("status", "landed")
+                .containsEntry("held", 1).containsEntry("open", 1);
+        assertThat((List<?>) row.get("lines")).hasSize(2);
+    }
+
+    @Test
+    void aRequirementInWordsComesAloneAndIsNothingButItsText() throws Exception {
+        project("base");
+        project("lib");
+        Files.createDirectories(projects.resolve("empty"));
+
+        assertThat(IntegrationJob.extendProblem(projects, "base", new IntegrationJob.Input(null, null, null, false, false, "  ")))
+                .contains("what the project should do");
+        assertThat(IntegrationJob.extendProblem(projects, "base", new IntegrationJob.Input("lib", null, null, false, false, "x")))
+                .contains("one of the three");
+        assertThat(IntegrationJob.extendProblem(projects, "empty", new IntegrationJob.Input(null, null, null, false, false, "x")))
+                .contains("no code yet");
+    }
+
+    @Test
     void anExtendNeedsAnExistingProjectAndAnInputThatIsNotItself() throws Exception {
         project("base");
         project("lib");

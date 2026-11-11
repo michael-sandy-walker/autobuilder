@@ -311,20 +311,35 @@ public class ReverseEngineeringService {
      */
     public List<StatedLine> checkStated(Account account, List<String> lines, java.util.function.Consumer<String> progress)
             throws IOException {
+        return checkStated(Path.of(account.source()), Path.of(account.copy()).getParent(), account.coldRead(),
+                account.capabilities(), account.claims().size() + 1, lines, progress);
+    }
+
+    /**
+     * As above for ANY project that has code -- one the loop built as much as one it did not: the tree at
+     * {@code source} is read as it stands ({@code coldRead} null: read here), no account of an earlier reverse
+     * engineering is needed. A line someone states about a finished project later (its next input, in words) is the
+     * same question as a line added to a composed seed.
+     *
+     * @param workRoot    where the copies of the tree are made
+     * @param firstNumber the number the first claim is numbered from; the caller keeps claim ids apart across calls
+     */
+    public List<StatedLine> checkStated(Path source, Path workRoot, ColdRead coldReadOrNull, List<Capability> capabilities,
+                                        int firstNumber, List<String> lines, java.util.function.Consumer<String> progress)
+            throws IOException {
         List<StatedLine> out = new ArrayList<>();
         if (lines.isEmpty()) return out;
-        Path source = Path.of(account.source());
-        Path work = Path.of(account.copy()).resolveSibling("stated-"
-                + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")));
+        Path work = workRoot.resolve("stated-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")));
         Path original = work.resolve("tree");
         copy(source, original);
+        ColdRead coldRead = coldReadOrNull != null ? coldReadOrNull : coldReadService.read(original);
         Map<String, String> files = ProjectMerge.files(original);
         Map<String, Declaration> inventory = CapabilityCut.inventory(files);
         EntryAdapter adapter = started;
-        List<EntryPoint> points = started.find(files, account.coldRead());
+        List<EntryPoint> points = started.find(files, coldRead);
         if (points.isEmpty()) {
             adapter = called;
-            points = called.find(files, account.coldRead());
+            points = called.find(files, coldRead);
         }
         if (points.isEmpty()) {
             lines.forEach(l -> out.add(new StatedLine(l, null, List.of(), 0, "the project has no way in to exercise it by")));
@@ -346,11 +361,11 @@ public class ReverseEngineeringService {
 
         Map<String, List<Claim>> byLine = new LinkedHashMap<>();
         List<Claim> claims = new ArrayList<>();
-        int first = account.claims().size() + 1;
+        int first = firstNumber;
         for (String line : lines) {
             progress.accept("Checking whether the project already does what you added (" + (byLine.size() + 1) + " of "
                     + lines.size() + "): the model reads the code");
-            ClaimProposer.Proposal p = proposer.proposeFor(original, line, account.capabilities(), account.coldRead(), offered,
+            ClaimProposer.Proposal p = proposer.proposeFor(original, line, capabilities, coldRead, offered,
                     first + claims.size(), known);
             byLine.put(line, p.claims());
             claims.addAll(p.claims());

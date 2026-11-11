@@ -34,6 +34,20 @@ class StatedLineTest {
     }
 
     @Test
+    void anInputsStatementsAreItsLinesWithoutListMarkersRulesOrRepeats() {
+        assertThat(StatedInputService.statements("""
+                - It counts what was issued.
+
+                  2. A refused entry uses up no number.
+                * It counts what was issued.
+                rule: Keep the two classes.
+                Plain line too
+                """)).containsExactly("It counts what was issued.", "A refused entry uses up no number.", "Plain line too");
+        assertThat(StatedInputService.statements("  \n")).isEmpty();
+        assertThat(StatedInputService.statements(null)).isEmpty();
+    }
+
+    @Test
     void aLineHoldsWhenAClaimForItWasKept() {
         var kept = new ClaimProposer.Claim("k9", ClaimProposer.STATED, "x", EntryKind.LIBRARY_STYLE, List.of(), 0, "assertTrue(true);", null);
         assertThat(new ReverseEngineeringService.StatedLine("a", "Counter", List.of(kept), 2, null).holds()).isTrue();

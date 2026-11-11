@@ -92,6 +92,14 @@ public class CriterionExercises {
         readAt = -1;
     }
 
+    /** Adds {@code more} to what the file holds; an exercise already stored under the same criterion is replaced. */
+    public synchronized void append(List<Stored> more) throws IOException {
+        if (more.isEmpty()) return;
+        Map<String, Stored> all = new LinkedHashMap<>(current());
+        for (Stored s : more) all.put(s.criterion(), s);
+        write(List.copyOf(all.values()));
+    }
+
     private Map<String, Stored> current() {
         try {
             if (!Files.isRegularFile(file)) return Map.of();

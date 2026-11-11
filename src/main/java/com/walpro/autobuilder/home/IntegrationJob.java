@@ -52,7 +52,19 @@ class IntegrationJob {
      * what to take from it, and whether its module is the one that runs. With {@code capabilities} (T4-EI), only the
      * capabilities the operator then chooses come in, each as they say; the intent is written from their choices.
      */
-    record Input(String project, String path, String intent, boolean runs, boolean capabilities) {
+    record Input(String project, String path, String intent, boolean runs, boolean capabilities, String words) {
+        /** What a requirement stated in words is called where an input's name is shown. */
+        static final String WORDS = "a requirement in words";
+
+        Input(String project, String path, String intent, boolean runs, boolean capabilities) {
+            this(project, path, intent, runs, capabilities, null);
+        }
+
+        /** T4-ES: whether this input is a requirement stated in words -- no project, no code, the text alone. */
+        boolean stated() {
+            return words != null;
+        }
+
         Input(String project, String path, String intent, boolean runs) {
             this(project, path, intent, runs, false);
         }
@@ -66,6 +78,7 @@ class IntegrationJob {
          * {@code output/} (field: an import from ".../cashbook/output" was labelled "output").
          */
         String label() {
+            if (stated()) return WORDS;
             if (project != null) return project;
             Path p = Path.of(path).normalize();
             Path named = "output".equals(String.valueOf(p.getFileName())) && p.getParent() != null ? p.getParent() : p;
@@ -140,6 +153,15 @@ class IntegrationJob {
     }
 
     private static String inputProblem(Path projectsDir, Path receiving, List<Input> inputs) {
+        // T4-ES: a requirement in words comes alone, and is nothing but its text.
+        if (inputs.stream().anyMatch(Input::stated)) {
+            if (inputs.size() > 1) return "a requirement in words is given on its own";
+            Input i = inputs.get(0);
+            if (i.project() != null || (i.path() != null && !i.path().isBlank())) return "an input is a project, a path or words, one of the three";
+            if (i.words().isBlank()) return "say what the project should do";
+            if (!holdsCode(receiving)) return "the project has no code yet: start it from its specification first";
+            return null;
+        }
         if (inputs.stream().map(i -> i.dir(projectsDir)).distinct().count() < inputs.size()) return "a project is chosen twice";
         if (inputs.stream().filter(Input::runs).count() > 1) return "at most one project's module is the one that runs";
         for (Input i : inputs) {
@@ -196,6 +218,10 @@ class IntegrationJob {
                 discover(inputs.get(0));
                 return;
             }
+            if (inputs.size() == 1 && inputs.get(0).stated()) {
+                stated(inputs.get(0));
+                return;
+            }
             phase(Phase.BRINGING_IN);
             for (Input i : inputs) bringIn(i);
             // Landed, not yet kept: the operator looks at what came in, decides its conflicts, then keeps or cancels it.
@@ -203,6 +229,43 @@ class IntegrationJob {
         } catch (Exception e) {
             fail(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
         }
+    }
+
+    /** How long a stated input may take: each of its lines is checked against the code, which exercises the project. */
+    private static final Duration STATED_TIMEOUT = Duration.ofMinutes(90);
+
+    /**
+     * T4-ES: a requirement in words. It is posted, checked line by line and landed by the run in one call; nothing
+     * waits to be kept (no file came in), so a project this job started held is released at once.
+     */
+    private void stated(Input i) throws IOException {
+        phase(Phase.BRINGING_IN);
+        Map<String, Object> row = landed.get(i.label());
+        synchronized (this) {
+            row.put("status", "checking what the project already does");
+        }
+        RunClient.Reply reply = run.postText("/autobuilder/inputs/words?by=operator%20(home%20screen)", i.words(), STATED_TIMEOUT);
+        if (!reply.ok()) {
+            synchronized (this) {
+                row.put("status", "refused");
+                row.put("message", messageOf(reply.body()));
+            }
+            throw new IllegalStateException("the requirement was not taken: " + messageOf(reply.body()));
+        }
+        JsonNode r = MAPPER.readTree(reply.body());
+        synchronized (this) {
+            row.put("status", "landed");
+            row.put("inputId", r.path("inputId").asText());
+            row.put("lines", MAPPER.convertValue(r.path("lines"), List.class));
+            row.put("held", r.path("heldGoals").size());
+            row.put("open", r.path("openGoals").size());
+        }
+        if (startedHeld) {
+            expect(run.postJson("/autobuilder/start?mode=ADOPT_PROJECT", "", Duration.ofMinutes(2)), "the run was not released");
+        }
+        phase(Phase.RELEASED);
+        log.info("T4-ES: a requirement in words taken into {} -- {} line(s) held already, {} open", name,
+                r.path("heldGoals").size(), r.path("openGoals").size());
     }
 
     private void bringIn(Input i) throws IOException {

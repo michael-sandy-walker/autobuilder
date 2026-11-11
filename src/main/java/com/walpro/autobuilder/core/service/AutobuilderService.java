@@ -2175,6 +2175,23 @@ public class AutobuilderService implements CheckpointableState {
         }
     }
 
+    /**
+     * T4-ES: the project's next input, stated in words, taken between cycles under the lock a cycle holds. It lands at
+     * once (it moves no file): the loop goes on from the goal tree as it then stands.
+     */
+    public com.walpro.autobuilder.core.coldread.StatedInputService.Report takeStatedInput(
+            com.walpro.autobuilder.core.coldread.StatedInputService inputs, String text, String by) throws IOException {
+        lock.lock();
+        try {
+            var report = inputs.take(text, by);
+            if (rootConvergenceTracker != null) rootConvergenceTracker.inputArrived();
+            pointOutsideACycle("an input was stated");
+            return report;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     /** T4-EG: a pending import cancelled between cycles, under the lock a cycle holds. */
     public com.walpro.autobuilder.goal.purpose.InputEvent cancelInput(
             com.walpro.autobuilder.core.merge.ProjectInputService inputs, String id, String by) throws IOException {

@@ -157,6 +157,12 @@ rest.
   in. A project at rest is held throughout, so nothing runs on it before you keep the import; the project whose
   loop is running takes the input between two cycles. How an input lands is described in the technical
   documentation, section 10 ("Bringing a project in").
+  Instead of a project, Extend also takes **a requirement in words**: what the project should also do, one statement
+  a line (a line starting `rule:` says how the work is done and is not a statement). It becomes the project's next
+  input. Each line is first checked against the code, as a line added to a reverse-engineered seed is: what the
+  project already does is recorded as a finished goal with the checks that showed it, and nothing is built for it;
+  the rest is new work, and a finished project reopens for it. No code comes in, so it lands at once -- there is
+  nothing to keep or cancel. The check exercises the project and takes as long as that does.
 - **Restart** clears its `output/` and begins a new lineage from its specification; the earlier run is not read.
   The page asks first.
 - **Duplicate** makes a new project with a byte-for-byte copy of its `bootstrap/` (specification, obligations,

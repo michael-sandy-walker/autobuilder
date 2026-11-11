@@ -296,9 +296,23 @@ public class ReverseEngineeringService {
      * @param why      for a line with no kept claim: what was seen instead, in words
      */
     public record StatedLine(String line, String feature, List<Claim> claims, int proposed, String why) {
+        @com.fasterxml.jackson.annotation.JsonIgnore
         public boolean holds() {
             return !claims.isEmpty();
         }
+    }
+
+    /**
+     * Keeps what checking stated lines found IN THE PROJECT ({@code file} under its {@code meta/}): each line, the
+     * claims kept for it with their exercises, how many were proposed, and -- for a line that became open work -- why
+     * nothing was kept. The goals and stored checks are only what followed from it; without this record the reason a
+     * line was built, or was not, is gone when the application stops (the user, 2026-11-11: "store it in the
+     * project's meta").
+     */
+    public static void keepStated(Path file, List<StatedLine> checked) throws IOException {
+        if (checked == null || checked.isEmpty()) return;
+        Files.createDirectories(file.getParent());
+        new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(file.toFile(), checked);
     }
 
     /**

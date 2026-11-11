@@ -105,6 +105,10 @@ public class ReverseEngineeringJob {
                                 stage -> state = new State("running", stage, began, null, null, null, null, null));
                 state = new State("running", setting, began, null, null, null, null, null);
                 confirmation.confirm(s.account(), seed, checked);
+                // Beside the account it belongs to: reverse-<time>.json -> reverse-<time>.stated.json.
+                if (s.kept() != null) {
+                    ReverseEngineeringService.keepStated(Path.of(s.kept().replaceFirst("\\.json$", "") + ".stated.json"), checked);
+                }
                 state = new State("confirmed", null, s.since(), s.account(), null, s.kept(), seed, s.refused(), null,
                         s.offered(), checked);
                 whenConfirmed.run();

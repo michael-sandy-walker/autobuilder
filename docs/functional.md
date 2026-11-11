@@ -308,7 +308,10 @@ whether it already does that, the same way every other statement was found: a ch
 the project and stop holding with the code it reaches taken out. A line the project already does becomes a
 finished goal with its checks, and nothing is built for it; any other line is open work for the loop. This takes
 as long as exercising the project does, so the confirmation is accepted and the page shows its progress, then
-which of your lines the project does already.
+which of your lines the project does already. What the check found is kept in the project: beside the account as
+`meta/reverse-engineering/<account>.stated.json`, and for a requirement added later in words (Extend) as
+`meta/inputs/<input>/stated.json` -- each line, the checks kept for it, and for a line that became new work, why
+nothing was kept.
 
 **How work on it is done.** Below the composed seed the page proposes lines that start with `rule:`. They are not
 part of the seed and nothing checks them; they tell the loop how a change to this project is to be made, so that

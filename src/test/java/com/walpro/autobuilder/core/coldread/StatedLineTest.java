@@ -48,6 +48,24 @@ class StatedLineTest {
     }
 
     @Test
+    void whatCheckingFoundIsKeptAsAFileAndReadsBack(@org.junit.jupiter.api.io.TempDir java.nio.file.Path meta) throws Exception {
+        var kept = new ClaimProposer.Claim("k9", ClaimProposer.STATED, "a null label is not valid", EntryKind.LIBRARY_STYLE,
+                List.of(), 0, "assertFalse(Labeler.isValid(null));", null);
+        var checked = List.of(new ReverseEngineeringService.StatedLine("isValid is false for null", "Labeler", List.of(kept), 2, null),
+                new ReverseEngineeringService.StatedLine("reset starts again", null, List.of(), 0, "the model found nothing in the code that does it"));
+        java.nio.file.Path file = meta.resolve("inputs/in-2/stated.json");
+
+        ReverseEngineeringService.keepStated(file, checked);
+        ReverseEngineeringService.keepStated(meta.resolve("none.json"), List.of());
+
+        var back = new com.fasterxml.jackson.databind.ObjectMapper().readValue(file.toFile(),
+                new com.fasterxml.jackson.core.type.TypeReference<List<ReverseEngineeringService.StatedLine>>() { });
+        assertThat(back).isEqualTo(checked);
+        assertThat(java.nio.file.Files.readString(file)).contains("the model found nothing").contains("assertFalse(Labeler.isValid(null));");
+        assertThat(meta.resolve("none.json")).as("nothing checked, nothing written").doesNotExist();
+    }
+
+    @Test
     void aLineHoldsWhenAClaimForItWasKept() {
         var kept = new ClaimProposer.Claim("k9", ClaimProposer.STATED, "x", EntryKind.LIBRARY_STYLE, List.of(), 0, "assertTrue(true);", null);
         assertThat(new ReverseEngineeringService.StatedLine("a", "Counter", List.of(kept), 2, null).holds()).isTrue();

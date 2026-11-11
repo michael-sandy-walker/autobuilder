@@ -39,6 +39,9 @@ public class StatedInputService {
         this.base = Path.of(fileBasePath);
     }
 
+    /** What checking the input's lines found, kept in the input's own folder under {@code meta/inputs/<id>/}. */
+    public static final String STATED_FILE = "stated.json";
+
     /** One line of the input and what became of it. */
     public record Line(String line, boolean held, int criteria, String why) {
     }
@@ -79,6 +82,8 @@ public class StatedInputService {
         var checked = service.checkStated(tree, work, null, List.of(), first, statements,
                 stage -> log.info("T4-ES: {}", stage));
         var landed = confirmation.landStated(input.id(), checked);
+        // With the input it belongs to, beside its obligations.
+        ReverseEngineeringService.keepStated(base.resolve("meta/inputs").resolve(input.id()).resolve(STATED_FILE), checked);
         List<Line> lines = checked.stream().map(c -> new Line(c.line(), c.holds(), c.claims().size(), c.why())).toList();
         return new Report(input.id(), lines, landed.held(), landed.open());
     }

@@ -11,7 +11,12 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-12 (Fable 5.2, session 36) -- T4-EU FIRST SLICE BUILT (EVIDENCE READ + PAUSE FOR CLOSURE REFUSALS); OPEN UNTIL SEEN IN A FIELD RUN -- START HERE
+## 2026-11-12 (Fable 5.2, session 37) -- T1-GJ BUILT AND CLOSED; NO T1 LEFT IN THE QUEUE -- START HERE
+
+- **T1-GJ:** the specification reader rendered a requirement from the identity-normalized endpoint, so a route stated with a query lost it before any probe builder saw it. `SpecEndpointBehaviourQuery.StatedBehaviour` now carries the mention's own query and `criteriaFor` renders it; the existing builders ground it from a created resource or decline. Shown by unit tests only (suite 4607 / 0 / 0 / 19 from this run's output); no loop run on a hand-written seed with such a line.
+- **Nothing is running.** Queue: T4-EU waits for a field sighting (`refusal_evidence_read`, paused reason `diagnosis-request-unresolved`); T4-EQ is not scored on labelmaker and firestarter yet (its DoD names three toy cases); T4-CJ slice 3, T4-DD, T4-DS, T6-H each wait on their own condition. The four sweep items below (session 33's "still open with the user") are still open.
+
+## 2026-11-12 (Fable 5.2, session 36) -- T4-EU FIRST SLICE BUILT (EVIDENCE READ + PAUSE FOR CLOSURE REFUSALS); OPEN UNTIL SEEN IN A FIELD RUN
 
 - **The user, after the options:** "Do what's the best option. If it comes out, that it's not, let's try another approach." Built on that; the choices are recorded on the ticket as mine.
 - **What exists now:** a closure refusal that comes back after its requirement was named has the lines it is about read from the project's files (`EvidenceReader`: a model finds the places, the lines are read here; only the lines reach the prompt) -- and a closure refusal that comes back with no question left PAUSES the run (`diagnosis-request-unresolved`). Other sources cycle on as before.

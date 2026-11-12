@@ -39,7 +39,7 @@ import java.util.regex.Pattern;
 @Component
 public class SeedComposer {
 
-    private static final Pattern CITED = Pattern.compile("^\\s*-\\s*(.+?)\\s*\\[\\s*(k\\d+(?:\\s*,\\s*k\\d+)*)\\s*]\\s*$");
+    static final Pattern CITED = Pattern.compile("^\\s*-\\s*(.+?)\\s*\\[\\s*(k\\d+(?:\\s*,\\s*k\\d+)*)\\s*]\\s*$");
     /** A feature header; the model sometimes adds the kind it was shown ("Main (command-style):"). */
     private static final Pattern HEADER = Pattern.compile("^\\s*([A-Za-z_$][\\w.$]*)\\s*(?:\\([^)]*\\))?\\s*:\\s*$");
 
@@ -65,6 +65,10 @@ public class SeedComposer {
         public static final String RULE = "rule";
         public static final String HEADER = "header", QUOTE = "quote", CITED = "cited", UNCITED = "uncited",
                 PURPOSE = "purpose";
+        /** T4-EQ: a heading naming a way the project is used; the lines under it belong to the features their claims do. */
+        public static final String SECTION = "section";
+        /** T4-EQ: how the project is used, read from structure -- context like {@link #PURPOSE}, never a criterion or open work. */
+        public static final String CONTEXT = "context";
     }
 
     /**
@@ -311,6 +315,16 @@ public class SeedComposer {
             }
             if (l.startsWith(">") || l.equalsIgnoreCase("In its own words:")) {
                 out.add(new Line(Line.QUOTE, l, null, List.of()));
+                continue;
+            }
+            if (l.regionMatches(true, 0, SeedRefiner.CONTEXT, 0, SeedRefiner.CONTEXT.length())) {
+                out.add(new Line(Line.CONTEXT, l.substring(SeedRefiner.CONTEXT.length()).strip(), null, List.of()));
+                continue;
+            }
+            // T4-EQ: a heading that is not a feature's name states nothing: it names a use, and ends the feature above.
+            if (!l.startsWith("-") && l.endsWith(":") && l.length() > 1) {
+                feature = null;
+                out.add(new Line(Line.SECTION, l.substring(0, l.length() - 1).strip(), null, List.of()));
                 continue;
             }
             Matcher m = CITED.matcher(l);

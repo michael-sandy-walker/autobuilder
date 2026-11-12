@@ -21,15 +21,17 @@ public class ReverseEngineeringJob {
 
     private final ReverseEngineeringService service;
     private final SeedComposer seedComposer;
+    private final SeedRefiner seedRefiner;
     private final ReverseEngineeringConfirmation confirmation;
     private final String fileBasePath;
 
     private volatile State state = new State("idle", null, null, null, null, null, null, null);
 
-    public ReverseEngineeringJob(ReverseEngineeringService service, SeedComposer seedComposer,
+    public ReverseEngineeringJob(ReverseEngineeringService service, SeedComposer seedComposer, SeedRefiner seedRefiner,
                                  ReverseEngineeringConfirmation confirmation, @Value("${file.base-path}") String fileBasePath) {
         this.service = service;
         this.seedComposer = seedComposer;
+        this.seedRefiner = seedRefiner;
         this.confirmation = confirmation;
         this.fileBasePath = fileBasePath;
     }
@@ -152,8 +154,11 @@ public class ReverseEngineeringJob {
                         since, null, null, null, null, null);
                 SeedComposer.Composed composed = seedComposer.compose(account);
                 // T4-EK slice (c): what was observed of how the project is built, proposed as rules below the seed.
+                // T4-EQ: arranged by how the project is used and worded from what was observed; no line added or lost.
+                state = new State("running", "Arranging the seed by how the project is used", since, null, null, null, null, null);
+                String refined = seedRefiner.refine(account, composed.text());
                 state = new State("done", null, since, account, null, kept.toString(),
-                        composed.text().stripTrailing() + ObservedRules.block(account), composed.refused(),
+                        refined.stripTrailing() + ObservedRules.block(account), composed.refused(),
                         null, composed.offered());
             } catch (com.walpro.autobuilder.core.services.ServicesNeeded n) {
                 log.warn("T4-EN: reverse engineering waits for the operator -- {}", n.getMessage());

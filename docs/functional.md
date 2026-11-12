@@ -303,6 +303,13 @@ project's `meta/`: requests and runs in `criterion-exercises.json`, and a librar
 `meta/claim-tests/`. A test has to sit among the project's tests to be run, so each is put there for the length
 of one run of the suite and taken out again.
 
+**How the seed you are shown is arranged.** Its lines stand under the ways the project is used -- the command
+of a run, the resource of a request, the method a test calls -- read from how each check exercised it, and each
+line is worded from what the project answered then (the exit status, the status code, the exact message). A
+`How it is used:` line says what kind of project it is; like `What it is:` it is context and is never checked.
+Arranging and rewording add and remove nothing: every line still ends with the checks it rests on. Switch
+`autobuilder.reverse-engineering.seed-refinement.enabled`.
+
 **A line you add to the seed before confirming it is checked first.** For each such line the code is asked
 whether it already does that, the same way every other statement was found: a check for the line must hold on
 the project and stop holding with the code it reaches taken out. A line the project already does becomes a

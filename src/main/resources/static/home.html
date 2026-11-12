@@ -792,7 +792,7 @@ function revBox() {
     const cited = claims.filter(j => verdict(j) === 'anchored');
     if (rev.error) html += '<div class="why" style="margin-top:10px">' + esc(rev.error) + '</div>';
     html += '<div class="sub" style="margin-top:12px"><label for="seed" style="margin-top:0">This project\'s seed, written '
-      + 'from what was found</label><div class="why">Each feature line ends with the claims it rests on; a \'What it is\' line ends with the README lines it comes from. Edit freely; a line you '
+      + 'from what was found</label><div class="why">The lines stand under the ways the project is used, and each ends with the claims it rests on; a \'What it is\' line ends with the README lines it comes from, and \'How it is used\' is read from the project\'s structure -- neither is checked. Edit freely; a line you '
       + 'add without claims becomes open work the loop checks next. Confirming makes this the project\'s first input '
       + 'and its goal tree; the loop then closes it by running every criterion again.</div>'
       + '<textarea id="seed" class="tall"' + (seedSending ? ' readonly' : '') + '></textarea>'

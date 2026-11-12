@@ -7,7 +7,7 @@ default in the code, and the value `application.yml` sets when it sets one (prof
 What a key does is the first sentence of the comment on the field that reads it, so it is written once, in
 the code.
 
-126 keys.
+127 keys.
 
 ## `autobuilder.bootstrap`
 
@@ -186,6 +186,7 @@ the code.
 |---|---|---|---|---|
 | `autobuilder.reverse-engineering.command.run-timeout-ms` | How long one command-style run may take before it is stopped and counts as not observed. | `15000` |  | `ProgramAdapter` |
 | `autobuilder.reverse-engineering.library.marker` | What the build file must declare for the claim template to run. | `junit-jupiter` |  | `LibraryStyleAdapter` |
+| `autobuilder.reverse-engineering.seed-refinement.enabled` | Whether a reverse-engineered seed is arranged by how the project is used and worded from what was observed, before the operator sees it (T4-EQ). | `true` |  | `SeedRefiner` |
 
 ## `autobuilder.rewind`
 

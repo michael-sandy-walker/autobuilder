@@ -1,0 +1,39 @@
+How it is used: command-style -- started with arguments and input, runs to its end, exercised by its exit status, output and files. Exercised here through: check, count, column.
+
+check:
+- Running `check` with no file argument exits with status 5 [k19, k46]
+- Running `check` with two file arguments exits with status 5 [k20, k47]
+- Running `check` on a file that does not exist prints "no such file: <path>" and exits with status 1 [k16, k52]
+- Running `check` on a file where a data row's field count differs from the header prints "line <line_number>: expected <expected_fields> fields, found <found_fields>" and exits with status 2 [k6, k7, k8, k9, k10]
+- Running `check` on a file where the header and every data row have the same number of fields exits with status 0 and no output [k11]
+- Running `check` on a file where a data row has fewer fields than the header prints "line <line_number>: expected <expected_fields> fields, found <found_fields>" and exits with status 2 [k12]
+- Running `check` on a file where a data row has more fields than the header prints "line <line_number>: expected <expected_fields> fields, found <found_fields>" and exits with status 2 [k13]
+- Running `check` on a file where several data rows are malformed prints "line <line_number>: expected <expected_fields> fields, found <found_fields>" for each malformed row, one per line, and exits with status 2 [k14]
+- Running `check` on a file where a malformed row starts on a physical line other than the second line prints "line <line_number>: expected <expected_fields> fields, found <found_fields>" using the physical line number and exits with status 2 [k15]
+- Running `check` on an empty file exits with status 2 and no output [k17]
+- Running `check` on a file containing only a header row exits with status 0 and no output [k18]
+- Running `check` on a file where a data row matches the header field count after a malformed row does not report the matching row, but exits with status 2 due to the earlier mismatch [k21]
+
+count:
+- Running `count` with no file argument exits with status 5 [k48]
+- Running `count` with two file arguments exits with status 5 [k49]
+- Running `count` on a file that does not exist prints "no such file: <path>" to standard error and exits with status 1 [k24, k53]
+- Running `count` on a file where a quoted field contains a comma treats the field as a single field and prints the data row count to standard output, exiting with status 0 [k1]
+- Running `count` on a file with a header row and N data rows prints N to standard output and exits with status 0 [k22, k25, k27, k28]
+- Running `count` on a file containing only a header row prints 0 to standard output and exits with status 0 [k23]
+
+column:
+- Running `column` with only a file argument exits with status 5 [k36, k50]
+- Running `column` with a file and two extra arguments exits with status 5 [k37, k51]
+- Running `column` on a file that does not exist prints "no such file: <path>" to stderr and exits with status 1 [k34, k54]
+- Running `column` on a file where a quoted field contains a double-quote unescapes it to a single double-quote in the output value, printing the value to standard output and exiting with status 0 [k2]
+- Running `column` on a file where a quoted field contains a newline keeps it as one field, printing the value to standard output and exiting with status 0 [k3, k4, k5]
+- Running `column` on a file where the header contains the requested column name prints the value of that column for each data row, one per line, to standard output and exits with status 0 [k32, k40, k41]
+- Running `column` on a file where the requested column name is not in the header prints "no such column: <name>" to stderr and exits with status 4 [k33, k42]
+- Running `column` on an empty file prints "no such column: <name>" to stderr and exits with status 4 [k35]
+- Running `column` on a file where a data row has fewer fields than the requested column index contributes no output line for that row while other rows print their value, exiting with status 0 [k38]
+- Running `column` on a file containing only a header row prints nothing to stdout and exits with status 0 [k39]
+
+Other uses:
+- Running with no arguments exits with status 3 and prints "unknown command:" to stderr [k44]
+- Running with an unrecognized first argument exits with status 3 and prints "unknown command: <argument>" to stderr [k45]

@@ -40,6 +40,28 @@ class EntryPointAssertionsTest {
                 .contains("none asserts a value it returns");
     }
 
+    /** A fluent chain's contains(value) states the value; a text's own contains inside a truth assertion does not. */
+    @Test
+    void aFluentChainStatingTheValueMeetsIt_anOrdinaryContainsDoesNot() {
+        assertThat(EntryPointAssertions.unmet(List.of(OBLIGATION), tests("""
+                @Test void describesThePart() {
+                    assertThat(java.util.Optional.of(Gadget.describe(new Part()))).contains("a part");
+                }
+                """))).isEmpty();
+        assertThat(EntryPointAssertions.unmet(List.of(OBLIGATION), tests("""
+                @Test void describesThePart() {
+                    assertThat(java.util.Optional.of(Gadget.describe(new Part()))).as("stated").hasValue("a part");
+                }
+                """))).isEmpty();
+        assertThat(EntryPointAssertions.unmet(List.of(OBLIGATION), tests("""
+                @Test void describesSomething() {
+                    String s = Gadget.describe(new Part());
+                    assertNotNull(s);
+                    assertTrue(java.util.List.of("a part").contains(s.strip()));
+                }
+                """))).containsOnlyKeys(OBLIGATION);
+    }
+
     @Test
     void aValueAssertionMeetsIt_staticOrInstanceOrThroughAHelper() {
         assertThat(EntryPointAssertions.unmet(List.of(OBLIGATION), tests("""

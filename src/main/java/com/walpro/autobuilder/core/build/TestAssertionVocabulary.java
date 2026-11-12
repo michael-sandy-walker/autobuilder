@@ -35,6 +35,18 @@ public final class TestAssertionVocabulary {
             "isEqualTo", "containsExactly", "containsExactlyInAnyOrder", "hasSize", "containsOnly", "isSameAs",
             "containsExactlyEntriesOf", "isEqualToIgnoringWhitespace", "equalTo", "isNull", "nullValue");
 
+    /**
+     * Fluent-chain steps that state the value as well, but share their name with ordinary methods (a text's or a
+     * collection's own {@code contains}): they count only in a chain that starts at one of {@link #FLUENT_ENTRIES}.
+     * {@code assertThat(optional).contains("EA-00001-C")} is how an optional result is compared with a literal, and
+     * it was read as asserting nothing (run {@code data/pantry-rev3}, 2026-11-12: one refusal five cycles running).
+     */
+    public static final Set<String> VALUE_STEPS_OF_A_FLUENT_CHAIN = Set.of(
+            "contains", "hasValue", "containsSame", "containsEntry", "hasToString");
+
+    /** The calls a fluent assertion chain starts at. */
+    public static final Set<String> FLUENT_ENTRIES = Set.of("assertThat", "then");
+
     /** Truth assertions: a value assertion only when they wrap the entry point's own call (a boolean result). */
     public static final Set<String> TRUTH_ASSERTIONS = Set.of("assertTrue", "assertFalse");
 

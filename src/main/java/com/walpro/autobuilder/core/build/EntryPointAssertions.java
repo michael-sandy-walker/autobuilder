@@ -275,6 +275,16 @@ public final class EntryPointAssertions {
             return names;
         }
 
+        /** Whether the chain {@code step} is called on starts at a fluent assertion's entry call. */
+        private static boolean startsAtAnAssertion(MethodCallExpr step) {
+            var scope = step.getScope().orElse(null);
+            while (scope instanceof MethodCallExpr call) {
+                if (TestAssertionVocabulary.FLUENT_ENTRIES.contains(call.getNameAsString())) return true;
+                scope = call.getScope().orElse(null);
+            }
+            return false;
+        }
+
         /** The assertions this test makes, VALUE among them when one compares a returned value. */
         Set<String> assertionsFor(String entryMethod) {
             Set<String> seen = new LinkedHashSet<>();
@@ -282,6 +292,9 @@ public final class EntryPointAssertions {
                 String n = c.getNameAsString();
                 if (TestAssertionVocabulary.VALUE_ASSERTIONS.contains(n)
                         || TestAssertionVocabulary.VALUE_CHAIN_STEPS.contains(n)) {
+                    seen.add(n);
+                    seen.add(VALUE);
+                } else if (TestAssertionVocabulary.VALUE_STEPS_OF_A_FLUENT_CHAIN.contains(n) && startsAtAnAssertion(c)) {
                     seen.add(n);
                     seen.add(VALUE);
                 } else if (TestAssertionVocabulary.TRUTH_ASSERTIONS.contains(n)) {

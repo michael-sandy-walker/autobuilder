@@ -732,6 +732,25 @@ public sealed interface BehaviourEvent {
     }
 
     /**
+     * T4-EU: a refusal came back after its first answer and the lines it is about were looked for in the
+     * project's files. {@code places} are the ranges read and set beside the refusal in the next prompt;
+     * {@code modelReading} is what the investigating model said of them -- a model's reading, kept for the
+     * operator and never put in a prompt.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record RefusalEvidenceRead(
+            Instant timestamp,
+            String cycleId,
+            String signature,
+            java.util.List<String> probes,
+            java.util.List<String> places,
+            String modelReading,
+            long durationMs
+    ) implements BehaviourEvent {
+        public String event() { return "refusal_evidence_read"; }
+    }
+
+    /**
      * T4-BF: per-rejection extractor outcome. Emitted once per compile-probe rejection
      * regardless of whether the mutation was deferred — converts a silent extractor code
      * path into the canonical post-hoc analysis surface. {@code result} is one of

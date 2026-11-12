@@ -76,6 +76,23 @@ class StuckDiagnosisTest {
     }
 
     @Test
+    void aRefusalThatCameBackIsSetBesideTheLinesItIsAbout_andHasNoAnswerWithoutAReader() {
+        String refusal = "closing 'the registry' was refused: Quills.nameOf is asserted by no test";
+        StuckDiagnosis.Observer reader = (signature, evidence) -> new StuckDiagnosis.Asked("", "",
+                "src/test/java/QuillTest.java:4-4\n  4: assertThat(quills.nameOf(1)).contains(\"Q-1\");\n", false);
+        var with = new StuckDiagnosis.Authorities(Map.of(), Map.of(), "a seed", null, null, null, reader);
+
+        var asked = StuckDiagnosis.ask(StuckObservation.Source.CLOSURE_REFUSAL, refusal, List.of(), 1, with).orElseThrow();
+
+        assertThat(asked.answer()).contains(refusal).contains("4: assertThat(quills.nameOf(1)).contains(\"Q-1\");");
+        assertThat(asked.needsOperator()).isFalse();
+        var without = new StuckDiagnosis.Authorities(Map.of(), Map.of(), "a seed");
+        assertThat(StuckDiagnosis.ask(StuckObservation.Source.CLOSURE_REFUSAL, refusal, List.of(), 1, without)
+                .orElseThrow().answered()).isFalse();
+        assertThat(StuckDiagnosis.ask(StuckObservation.Source.CLOSURE_REFUSAL, refusal, List.of(), 2, with)).isEmpty();
+    }
+
+    @Test
     void plainWordsAndSentenceEndsAreNeverCountedAgainstTheSeed() {
         assertThat(StuckDiagnosis.namesTheSeedLacks("The test must assert what the route actually does.", "a seed"))
                 .isEmpty();

@@ -30,9 +30,15 @@ import java.util.Map;
  * <p>Every question, answer, delivery and recurrence is a behaviour event and a line of the ledger
  * file ({@value #LEDGER_PATH}). A signature that comes back after its answer was delivered moves to
  * the next question. When no question is left, or an answer shows a requirement only the operator may
- * bind, the layer emits a {@code diagnosis_request} event: the operator's hand-off. It does NOT halt
- * the run -- the operator's decision for this slice is recorded on T4-DY; the existing brakes keep
- * their own halts.
+ * bind, the layer emits a {@code diagnosis_request} event: the operator's hand-off.
+ *
+ * <p>T4-EU: for a closure refusal the request is no longer the end of it. Before the operator is asked, the
+ * lines the refusal is about are read from the project and set beside it ({@link StuckDiagnosis#evidenceRead});
+ * and a refusal that comes back with no question left PAUSES the run ({@link #takePauseRequest}), the request
+ * being the stated reason. Over the archive (2026-11-12) 10 of 14 closure-refusal requests were followed by
+ * the same refusal again and none of those runs closed afterwards, while two requests about failing tests
+ * were followed by fulfilment 12 and 19 cycles after the failure had come back -- so the pause is for
+ * closure refusals only, and every other source keeps cycling as T4-DY decided.
  */
 @Slf4j
 @Component
@@ -76,6 +82,19 @@ public class StuckLayer {
     @Autowired(required = false)
     private com.walpro.autobuilder.core.build.TestRunGate testRunGate;
 
+    /** T4-EU: reads the lines a refusal is about from the project's files; optional. */
+    @Autowired(required = false)
+    private com.walpro.autobuilder.core.investigate.EvidenceReader evidenceReader;
+
+    /** Whether a closure refusal that comes back with no question left pauses the run, the diagnosis request being the reason (T4-EU). */
+    @org.springframework.beans.factory.annotation.Value("${autobuilder.stuck.pause-on-unresolved-refusal:true}")
+    private boolean pauseOnUnresolvedRefusal = true;
+
+    /** The reason the run pauses with when a diagnosis ended without a fix and the refusal returned. */
+    public static final String PAUSE_REASON = "diagnosis-request-unresolved";
+
+    private volatile String pauseRequest;
+
     /** The last failed change per signature -- rolled back in the tree, needed by the observer's copy. Memory only. */
     private final Map<String, Map<String, String>> lastChange = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -116,6 +135,15 @@ public class StuckLayer {
                         e.recurrencesAfterDelivery(), e.rung());
             }
         }
+        if (pausesWhenNothingIsLeft(o.source())) {
+            StuckLedger.Entry e = find(o);
+            boolean recurred = change == StuckLedger.Change.RECURRED_AFTER_REQUEST
+                    || change == StuckLedger.Change.RECURRED_AFTER_DELIVERY;
+            if (e != null && recurred && e.rung() >= StuckDiagnosis.questionsFor(e.source())) {
+                if (ledger.noQuestionLeft(e)) requestDiagnosis(e, "every question was asked; none ended it");
+                pauseOn(e);
+            }
+        }
         // A brake reports once its window is spent: nothing here can answer it, so the operator is
         // asked at once rather than at the next evolution prompt, which may never come.
         if (StuckDiagnosis.questionsFor(o.source()) == 0) {
@@ -126,6 +154,64 @@ public class StuckLayer {
             }
         }
         if (change != StuckLedger.Change.NONE && change != StuckLedger.Change.COUNTED) writeLedger();
+    }
+
+    /**
+     * T4-EU: the sources whose return after the last question pauses the run. A closure refusal is one check
+     * saying one thing about one goal; the same words again, after everything that could be asked was asked,
+     * mean the next cycle will hear them too. Not the others: see the class description for the count.
+     */
+    static boolean pausesWhenNothingIsLeft(StuckObservation.Source source) {
+        return source == StuckObservation.Source.CLOSURE_REFUSAL;
+    }
+
+    private void pauseOn(StuckLedger.Entry e) {
+        if (!pauseOnUnresolvedRefusal) return;
+        ledger.paused(e, e.lastCycle());
+        pauseRequest = PAUSE_REASON;
+        StringBuilder sb = new StringBuilder();
+        for (StuckLedger.Question q : e.asked()) {
+            sb.append("\n  asked: ").append(q.question()).append(" (").append(q.authority()).append(")\n  ")
+                    .append(q.answer() == null ? "no answer" : q.answer().replace("\n", "\n  "));
+        }
+        String reading = readings.get(e.signature());
+        if (reading != null) {
+            sb.append("\n  the investigating model's own reading of those lines (a model's reading, not a fact): ")
+                    .append(reading.replace("\n", "\n  "));
+        }
+        log.error("T4-EU: PAUSING -- '{}' came back {} time(s) and no question is left to ask of it. What was"
+                + " asked and what was read:{}", e.signature(), e.occurrences(), sb);
+    }
+
+    /**
+     * T4-EU: the reason to pause the run with, once -- a closure refusal came back with no question left.
+     * Read by the scheduler after the cycle; empty when there is none.
+     */
+    public java.util.Optional<String> takePauseRequest() {
+        String r = pauseRequest;
+        pauseRequest = null;
+        return java.util.Optional.ofNullable(r);
+    }
+
+    /** T4-EU: what the investigating model said of the lines it found, by signature -- for the operator, never a prompt. */
+    private final Map<String, String> readings = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The lines a refusal is about, read from the project's files, as the answer to the stuck question. */
+    private StuckDiagnosis.Asked readEvidence(String signature, java.nio.file.Path project, String cycle) {
+        long t0 = System.currentTimeMillis();
+        var reading = evidenceReader.read(signature, project, cycle);
+        if (reading.modelReading() != null) readings.put(signature, reading.modelReading());
+        List<String> places = reading.places().stream().map(p -> p.path() + ":" + p.first() + "-" + p.last()).toList();
+        log.warn("T4-EU: looked for the lines '{}' is about -- {} probe(s), {} place(s) read: {}", signature,
+                reading.probes().size(), places.size(), places);
+        if (behaviourLogger != null) {
+            behaviourLogger.refusalEvidenceRead(cycle, signature, reading.probes(), places, reading.modelReading(),
+                    System.currentTimeMillis() - t0);
+        }
+        if (!reading.found()) return new StuckDiagnosis.Asked("", "", null, false);
+        StringBuilder sb = new StringBuilder();
+        for (var p : reading.places()) sb.append(p.render());
+        return new StuckDiagnosis.Asked("", "", sb.toString(), false);
     }
 
     /** Whether a source's answers are about the tree -- standing whatever subgoal is current -- rather than one subgoal. */
@@ -205,8 +291,10 @@ public class StuckLayer {
                 : projectTypeAuthority.forProject(java.nio.file.Path.of(context.outputPath()));
         StuckDiagnosis.Observer executor = !executionTrace || testRunGate == null || context == null || context.outputPath() == null
                 ? null : (signature, evidence) -> traceFailingTest(signature, evidence, java.nio.file.Path.of(context.outputPath()), live);
+        StuckDiagnosis.Observer evidence = evidenceReader == null || context == null || context.outputPath() == null
+                ? null : (signature, ignored) -> readEvidence(signature, java.nio.file.Path.of(context.outputPath()), cycle);
         StuckDiagnosis.Authorities authorities = new StuckDiagnosis.Authorities(live, adoptedSources(), seed(), observer, types,
-                executor);
+                executor, evidence);
         boolean changed = false;
         for (StuckLedger.Entry e : ledger.pending()) {
             changed = true;

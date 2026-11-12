@@ -7,7 +7,7 @@ default in the code, and the value `application.yml` sets when it sets one (prof
 What a key does is the first sentence of the comment on the field that reads it, so it is written once, in
 the code.
 
-124 keys.
+126 keys.
 
 ## `autobuilder.bootstrap`
 
@@ -231,8 +231,10 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
+| `autobuilder.stuck.evidence-read.enabled` | Whether a refusal that comes back after its first answer has the lines it is about read from the project's files and set beside it (T4-EU). | `true` |  | `EvidenceReader` |
 | `autobuilder.stuck.execution-trace.budget-ms` | The time one trace may take: the build compiles first, then the one test runs under the debugger. | `240000` |  | `StuckLayer` |
 | `autobuilder.stuck.execution-trace.enabled` | The user's decision 2026-10-01: a test that keeps failing is re-run under the debugger (ExecutionTrace). | `true` |  | `StuckLayer` |
+| `autobuilder.stuck.pause-on-unresolved-refusal` | Whether a closure refusal that comes back with no question left pauses the run, the diagnosis request being the reason (T4-EU). | `true` |  | `StuckLayer` |
 | `autobuilder.stuck.step-trace.enabled` | After the trace, the methods whose empty, false or null answer the failure turned on are walked line by line (`StepTrace`) -- a second run of the test under the debugger, about as long as the first. | `true` |  | `StuckLayer` |
 | `autobuilder.stuck.terminal-agent.enabled` | Whether the read-only terminal agent may answer a stuck question by running commands in a copy of the tree. | `true` |  | `TerminalAgent` |
 
@@ -261,7 +263,7 @@ the code.
 
 | Key | What it does | Default in code | application.yml | Read by |
 |---|---|---|---|---|
-| `file.base-path` | The target directory: its bootstrap/, output/, meta/ and logs/ (see the functional documentation). | (empty) | `${FILE_BASE_PATH:}` | `AutobuilderController`, `BehaviourHistory`, `BootGate`, `BrokenTestQuarantine`, `CompileProbeService`, `CriterionExercises`, `FileService`, `FileWatcherService`, `LogConsultation`, `MergeAgent`, `PackageGate`, `ProjectServices`, `RetentionPolicy`, `ReverseEngineeringConfirmation`, `ReverseEngineeringJob`, `TargetCatalog`, `TestRunGate`, `ValueObservationProbe` |
+| `file.base-path` | The target directory: its bootstrap/, output/, meta/ and logs/ (see the functional documentation). | (empty) | `${FILE_BASE_PATH:}` | `AutobuilderController`, `BehaviourHistory`, `BootGate`, `BrokenTestQuarantine`, `ClaimTests`, `CompileProbeService`, `CriterionExercises`, `FileService`, `FileWatcherService`, `LogConsultation`, `MergeAgent`, `PackageGate`, `ProjectServices`, `RetentionPolicy`, `ReverseEngineeringConfirmation`, `ReverseEngineeringJob`, `StatedInputService`, `TargetCatalog`, `TestRunGate`, `ValueObservationProbe` |
 
 ## `llm.api`
 

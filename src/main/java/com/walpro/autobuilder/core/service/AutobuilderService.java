@@ -1546,6 +1546,19 @@ public class AutobuilderService implements CheckpointableState {
             context = context.withGoalExhaustedReason(UNANSWERABLE_HALT).withPausedReason(UNANSWERABLE_HALT);
         }
 
+        // T4-EU: a closure refusal came back after everything that could be asked of it was asked. The next
+        // cycle would hear the same words; the run pauses with the diagnosis request as the reason.
+        if (stuckLayer != null) {
+            Optional<String> unresolved = stuckLayer.takePauseRequest();
+            if (unresolved.isPresent() && context.pausedReason() == null && context.goalExhaustedReason() == null) {
+                log.error("T4-EU: a diagnosis ended without a fix and the refusal returned. Pausing for review -- the"
+                        + " request and what was read are in the log above and in {}.",
+                        com.walpro.autobuilder.core.stuck.StuckLayer.LEDGER_PATH);
+                emitSystemPausedOnce(context.cycleName(), unresolved.get(), 1);
+                context = context.withPausedReason(unresolved.get());
+            }
+        }
+
         // T4-I (root-scoped slice): convergence brake — activity without convergence. Unlike the
         // counters above, a merge alone does NOT reset this; only a new completed-with-merge
         // subgoal (root progress the planner can't fake by re-decomposing) does.

@@ -1079,6 +1079,25 @@ class AutobuilderServiceTest {
         assertThat(stored.goalExhaustedReason()).isEqualTo(AutobuilderService.UNANSWERABLE_HALT);
     }
 
+    // --- T4-EU: a closure refusal came back with no question left ---
+
+    @Test
+    void t4eu_aRefusalThatReturnsAfterItsDiagnosisPausesTheRunWithTheRequestAsTheReason() {
+        var stuck = org.mockito.Mockito.mock(com.walpro.autobuilder.core.stuck.StuckLayer.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(autobuilderService, "stuckLayer", stuck);
+        when(contextCoordinator.prepareRuntimeContext(any())).thenReturn(Optional.of(emptyContext()));
+        when(cycleExecutor.runCycle(any())).thenAnswer(inv -> CycleContextData.builder().build());
+        when(cyclePersistenceService.persistSnapshot(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(stuck.takePauseRequest()).thenReturn(Optional.of(com.walpro.autobuilder.core.stuck.StuckLayer.PAUSE_REASON));
+
+        autobuilderService.runAutobuilderCycle();
+
+        CycleContextData stored = getStoredContext();
+        assertThat(DerivedFacts.systemPaused(stored)).isTrue();
+        assertThat(stored.pausedReason()).isEqualTo(com.walpro.autobuilder.core.stuck.StuckLayer.PAUSE_REASON);
+        assertThat(stored.goalExhaustedReason()).isNull();
+    }
+
     // --- T1-EB: build-blocked deadlock breaker ---
 
     @Test

@@ -53,6 +53,8 @@ public final class StuckLedger {
         String deliveredCycle;
         String endedCycle;
         boolean diagnosisRequested;
+        /** T4-EU: the run was paused on this entry -- it came back with no question left. */
+        String pausedCycle;
         /**
          * T6-T: the delivered answer found no room in the prompt it was due in, so the model has not read it.
          * A failure that comes back meanwhile says nothing about the answer and does not move to the next question.
@@ -97,7 +99,9 @@ public final class StuckLedger {
 
     /** What one observation changed, for the caller to report. */
     public enum Change {
-        NONE, COUNTED, NOW_PENDING, RECURRED_AFTER_DELIVERY
+        NONE, COUNTED, NOW_PENDING, RECURRED_AFTER_DELIVERY,
+        /** T4-EU: it came back after the operator was asked -- no question is left to ask of it. */
+        RECURRED_AFTER_REQUEST
     }
 
     /**
@@ -194,6 +198,9 @@ public final class StuckLedger {
                 e.endedCycle = null;
                 return Change.RECURRED_AFTER_DELIVERY;
             }
+            case UNANSWERED -> {
+                return Change.RECURRED_AFTER_REQUEST;
+            }
             default -> {
             }
         }
@@ -279,6 +286,11 @@ public final class StuckLedger {
                 && (e.source == StuckObservation.Source.BUILD || e.source == StuckObservation.Source.TEST_FAILURES);
     }
 
+    /** T4-EU: records the cycle the run was last paused on this entry. */
+    public synchronized void paused(Entry e, String cycleId) {
+        if (e != null) e.pausedCycle = cycleId == null ? "" : cycleId;
+    }
+
     /** Marks an entry whose source has no question at its rung as handed to the operator; true the first time. */
     public synchronized boolean noQuestionLeft(Entry e) {
         if (e.rung < StuckDiagnosis.questionsFor(e.source)) return false;
@@ -349,6 +361,7 @@ public final class StuckLedger {
             m.put("deliveredCycle", e.deliveredCycle);
             m.put("endedCycle", e.endedCycle);
             m.put("diagnosisRequested", e.diagnosisRequested);
+            if (e.pausedCycle != null) m.put("pausedCycle", e.pausedCycle);
             if (e.prior.seenBefore()) {
                 m.put("priorRuns", e.prior.runs());
                 m.put("priorEndedRuns", e.prior.endedRuns());

@@ -542,11 +542,25 @@ The questions, each answered by an authority, structure first:
   values in scope there; bounded by `autobuilder.stuck.execution-trace.budget-ms`. (Tracing every failing test in
   parallel was tried on 2026-10-07/08 and rolled back: the traces reached the model and no traced test passed
   more often.) Maven projects only; switch `autobuilder.stuck.execution-trace.enabled`.
-- **PROTECTED_WRITE**, **CLOSURE_REFUSAL**: what the protected file says; which requirement keeps closure refused.
+- **PROTECTED_WRITE**: what the protected file says.
+- **CLOSURE_REFUSAL**: which requirement keeps closure refused; and, when the refusal comes back after that,
+  **what the lines it is about say** (`EvidenceReader`): a model probes the project's files for the places the
+  refusal's statement names (`LogInvestigator`), and the lines at the places it cites are read from the files and
+  set beside the statement in the next prompt. Only the lines go into the prompt; the model's own sentence about
+  them is kept in the `refusal_evidence_read` event for the operator, and a place no file holds is dropped. This
+  is what tells work that is still wrong from a check reading right work differently. Switch
+  `autobuilder.stuck.evidence-read.enabled`.
 
 A signature that comes back after its answer moves to the next question. When no question is left, the layer
 asks the operator for a **diagnosis** (a `diagnosis_request` event and log line, with every question asked and its
 answer). The loop itself never acts on a model's reading of a stuck case: every move it takes comes from a fact.
+
+**A closure refusal that comes back with no question left pauses the run** (pause reason
+`diagnosis-request-unresolved`, switch `autobuilder.stuck.pause-on-unresolved-refusal`): the log states what was
+asked and what was read, the ledger keeps it. Only closure refusals: over the archive on 2026-11-12, 10 of 14
+closure-refusal requests were followed by the same refusal again and none of those runs closed, while runs with
+a request about failing tests did reach their goal after the failure had come back. Every other source keeps
+cycling after its request.
 
 **Across runs** (`StuckPriors`, `Neo4jStuckPriors`): how each signature ended is kept in the graph under the task
 (the SHA-256 of the seed); a signature that earlier runs of the same task noticed is asked about at its first

@@ -530,6 +530,12 @@ public class BehaviourLogger {
                 why, asked, detail));
     }
 
+    public void refusalEvidenceRead(String cycleId, String signature, java.util.List<String> probes,
+                                    java.util.List<String> places, String modelReading, long durationMs) {
+        emit(new BehaviourEvent.RefusalEvidenceRead(Instant.now(), cycleId, signature, probes, places, modelReading,
+                durationMs));
+    }
+
     public void llmResponseDiscarded(String cycleId, String role, String reason, String firstLine, int consecutive) {
         emit(new BehaviourEvent.LlmResponseDiscarded(Instant.now(), cycleId, role, reason, firstLine, consecutive));
     }

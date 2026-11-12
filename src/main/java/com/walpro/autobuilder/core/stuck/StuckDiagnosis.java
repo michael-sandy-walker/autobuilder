@@ -47,11 +47,18 @@ public final class StuckDiagnosis {
      * structural question for a signature was asked and the signature came back; null when there is none.
      */
     public record Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed,
-                              Observer observer, StuckQuestions.TypeAuthority types, Observer executor) {
+                              Observer observer, StuckQuestions.TypeAuthority types, Observer executor,
+                              Observer evidence) {
         public Authorities {
             currentSources = currentSources == null ? Map.of() : currentSources;
             adoptedSources = adoptedSources == null ? Map.of() : adoptedSources;
             types = types == null ? StuckQuestions.TypeAuthority.platform() : types;
+        }
+
+        /** Without the reader of the lines a refusal is about (T4-EU). */
+        public Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed,
+                           Observer observer, StuckQuestions.TypeAuthority types, Observer executor) {
+            this(currentSources, adoptedSources, seed, observer, types, executor, null);
         }
 
         public Authorities(Map<String, String> currentSources, Map<String, String> adoptedSources, String seed,
@@ -80,7 +87,8 @@ public final class StuckDiagnosis {
     public static int questionsFor(StuckObservation.Source source) {
         return switch (source) {
             case BUILD -> 4;
-            case PROTECTED_WRITE, CLOSURE_REFUSAL, TEST_FAILURES -> 1;
+            case CLOSURE_REFUSAL -> 2;
+            case PROTECTED_WRITE, TEST_FAILURES -> 1;
             case FLAT_ROOT, EXHAUSTION, BOOT, VETO -> 0;
         };
     }
@@ -109,7 +117,8 @@ public final class StuckDiagnosis {
                 default -> observed(signature, detail, authorities);
             };
             case PROTECTED_WRITE -> protectedFile(signature, authorities);
-            case CLOSURE_REFUSAL -> refusedRequirement(signature, detail, authorities);
+            case CLOSURE_REFUSAL -> rung == 0 ? refusedRequirement(signature, detail, authorities)
+                    : evidenceRead(signature, authorities);
             case TEST_FAILURES -> executed(signature, detail, authorities);
             case FLAT_ROOT, EXHAUSTION, BOOT, VETO -> throw new IllegalStateException("no question for " + source);
         });
@@ -394,6 +403,36 @@ public final class StuckDiagnosis {
             sb.append("\n    The work that answers it is evidence for exactly these requirements, as the refusal states it.");
         }
         return new Asked(question, authority, sb.toString(), unstated);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // CLOSURE_REFUSAL, rung 1: the requirement was named and the refusal came back -- what do the lines it
+    // is about say?
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * T4-EU: a refusal that returns after its requirement was named is either about work that is still wrong,
+     * or a check reading right work differently from what it says. Neither can be told from the refusal's own
+     * text, which is all the first answer has; both can be told from the lines the refusal is about, set
+     * beside it. The reader finds and quotes them ({@code Authorities.evidence}); the answer carries the
+     * check's statement and the lines, and no reading of either.
+     *
+     * <p>Pantry case, 2026-11-12: closure was refused every cycle with "none asserts a value it returns" about
+     * a test whose one assertion compared the value -- the lines were one file away and nothing read them.
+     */
+    static Asked evidenceRead(String signature, Authorities a) {
+        String question = "The refusal came back after its requirement was named. What do the lines it is about say, as they are now?";
+        String authority = "the project's files: the lines the refusal is about, quoted as they are";
+        if (a.evidence() == null) return new Asked(question, authority, null, false);
+        Asked seen = a.evidence().observe(signature, List.of());
+        if (seen == null || !seen.answered()) return new Asked(question, authority, null, false);
+        return new Asked(question, authority, "This keeps being said: " + signature + "\n"
+                + "    The lines it is about, as they are in the project now:\n    "
+                + seen.answer().stripTrailing().replace("\n", "\n    ") + "\n"
+                + "    Set the two side by side. Where the lines do not do what the statement asks for, that is the work."
+                + " Where they already do it and the statement still says otherwise, the check does not recognise it"
+                + " written this way: write the same thing in the plainest form of exactly what the statement asks for.",
+                false);
     }
 
     private static final Pattern CODE_LIKE = Pattern.compile(

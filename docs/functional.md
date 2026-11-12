@@ -411,7 +411,7 @@ What it does on its own when work does not go smoothly -- each of these shows up
 - **The same failure keeps coming back.** The stuck layer asks a question about it and answers it from the code:
   what a type really declares, where a class really lives, what the failing line constructs, the declaring file
   whole -- and, for failing tests, **what a failing test actually executed**: the test is run again under a
-  debugger, and the model is shown each call into your code with the values it received and returned. If no question helps, it asks you for a diagnosis. Earlier runs on the same
+  debugger, and the model is shown each call into your code with the values it received and returned. For a refusal to close a goal it also reads the lines of your project the refusal is about and shows them beside it. If no question helps, it asks you for a diagnosis; a refusal to close that still comes back after that pauses the run, with what was asked and read in the log. Earlier runs on the same
   specification hand over what ended each failure there.
 - **The plan drifts.** Work items the specification does not ask for cannot block the goal; requirements no subgoal
   ever targeted are added back; duplicate subgoals are merged; earlier abandoned work on the same topic is shown

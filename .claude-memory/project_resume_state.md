@@ -19,7 +19,8 @@ metadata:
 - **Shown:** unit tests; one live evidence read on `data/pantry-rev3/output` (the test's `contains("EA-00001-C")` line beside the gate's claim). Suite 4575 / 0 / 0 / 18 from this run's output.
 - **NOT shown:** no loop run has paused or been closed by this (the producing case is fixed by T1-GM). Watch for `refusal_evidence_read` and paused reason `diagnosis-request-unresolved` in the next field runs; the ticket names what would show the option was wrong and what to try then.
 - **Not mine, left alone:** `docs/refactoring-guide.md` appeared untracked during the session (beside `docs/refactoring-plan.md`, `.codex/config.toml`).
-- **Nothing is running.** NEXT as before: `T1-GL` (needs the user at a browser), `T4-EQ` (design first); T4-EU re-enters on its first field sighting.
+- **T4-EQ STAGE 1 BUILT the same session, at the user's "go ahead with stage 1":** `SeedRefiner` after the composer -- sections by how a claim was exercised, a `How it is used:` line from structure, each line reworded from the observed answer and taken only with exactly its ids. Live on the kept clitarget account: the rule written beforehand met (sections `check`/`count`/`column`, the exact messages present, the same 49 ids cited); still 30 lines. Texts in `design/specimens/t4eq-stage1/`. Suite 4583 / 0 / 0 / 19. **Stages 2 (rules earned over a set the surface enumerates) and 3 (terms) WAIT FOR THE USER; their idea for them is on the ticket verbatim ("describing things without naming the word" -- find the word).** Not run: a reverse-engineering job end to end through the home page with the refiner in it.
+- **Nothing is running.** NEXT: the user's word on T4-EQ stage 2; `T1-GL` (needs the user at a browser); T4-EU re-enters on its first field sighting.
 
 ## 2026-11-12 (Fable 5.2, session 35) -- T4-ER BUILT AND CLOSED (`acef9e1f`); T1-GM FOUND, FIXED AND CLOSED (`afa9f239`); T4-EU FILED AT THE USER'S WORD (DESIGN FIRST)
 

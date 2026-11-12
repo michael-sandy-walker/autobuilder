@@ -1,0 +1,30 @@
+What it is: Shipping-label codes for parcels: a zone from the postcode, a running number, and a check character. [r2]
+How it is used: library-style -- exercised inside the same process, by a test that calls it. Exercised here through: Zone.of, Labeler.checkChar, Labeler.next, Labeler.isValid.
+
+Zone.of:
+- Zone.of(<postcode>) returns the zone whose ordinal equals the sum of the digits of <postcode> modulo seven [k1, k2, k3, k4, k5, k6, k7, k8, k9, k46]
+- Zone.of(null) throws IllegalArgumentException [k10]
+- Zone.of(<postcode>) throws IllegalArgumentException when <postcode> is not exactly five characters long [k11]
+- Zone.of(<postcode>) throws IllegalArgumentException when any character of the five-character <postcode> is not a digit [k12]
+
+Labeler.checkChar:
+- Labeler.checkChar(<body>) returns the alphabet letter at index (sum of each character's value times its position's weight) mod 19, where digits are 0-9 and uppercase letters are 10-35, for a valid seven-character <body> [k13, k18, k20, k21, k22, k43]
+- Labeler.checkChar(null) throws IllegalArgumentException [k14]
+- Labeler.checkChar(<body>) throws IllegalArgumentException when <body> is not exactly seven characters long [k15, k44]
+- Labeler.checkChar(<body>) throws IllegalArgumentException when <body> contains a lowercase letter [k16]
+- Labeler.checkChar(<body>) throws IllegalArgumentException when <body> contains a non-alphanumeric character [k17, k45]
+
+Labeler.next:
+- Labeler.next(<postcode>) produces a label with the shape ZONE-NNNNN-C, where the zone prefix is the two-letter prefix for <postcode>, the number is zero-padded to five digits starting at 00001, and the check character is the weighted check character for the body [k23, k31, k32, k33, k34]
+- Each subsequent call to Labeler.next(<postcode>) on the same instance increments the running number by one [k24]
+- Each Labeler instance counts independently, starting again at 00001 [k27]
+
+Labeler.isValid:
+- Labeler.isValid(<code>) returns true for a well-formed <code> whose zone prefix, five digits and check character all satisfy the rules [k35]
+- Labeler.isValid(<code>) returns false when the trailing check character does not match the weighted rule for the body [k36]
+- Labeler.isValid(<code>) returns false when the two-letter zone prefix does not match any known zone [k37]
+- Labeler.isValid(<code>) returns false when <code> is not exactly ten characters long [k38]
+- Labeler.isValid(<code>) returns false when the dashes are not in positions 2 and 8 [k39]
+- Labeler.isValid(<code>) returns false when <code> is lowercase rather than uppercase [k40]
+- Labeler.isValid(null) returns false [k41]
+- Labeler.isValid(<code>) returns false when any of the five middle characters is not a digit [k42]

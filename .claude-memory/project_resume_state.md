@@ -11,7 +11,17 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-12 (Fable 5.2, session 35) -- T4-ER BUILT AND CLOSED (`acef9e1f`); T1-GM FOUND, FIXED AND CLOSED (`afa9f239`); T4-EU FILED AT THE USER'S WORD (DESIGN FIRST) -- START HERE
+## 2026-11-12 (Fable 5.2, session 36) -- T4-EU FIRST SLICE BUILT (EVIDENCE READ + PAUSE FOR CLOSURE REFUSALS); OPEN UNTIL SEEN IN A FIELD RUN -- START HERE
+
+- **The user, after the options:** "Do what's the best option. If it comes out, that it's not, let's try another approach." Built on that; the choices are recorded on the ticket as mine.
+- **What exists now:** a closure refusal that comes back after its requirement was named has the lines it is about read from the project's files (`EvidenceReader`: a model finds the places, the lines are read here; only the lines reach the prompt) -- and a closure refusal that comes back with no question left PAUSES the run (`diagnosis-request-unresolved`). Other sources cycle on as before.
+- **Why closure refusals only:** `scripts/diagnosis_request_aftermath.py` over 159 logs -- 10 of 14 closure-refusal requests recurred, none of those runs closed; failing-test requests on `rung1` were followed by fulfilment after recurring. 12 of all 58 requests were followed by GOAL_FULFILLED, so a pause at the request itself was ruled out.
+- **Shown:** unit tests; one live evidence read on `data/pantry-rev3/output` (the test's `contains("EA-00001-C")` line beside the gate's claim). Suite 4575 / 0 / 0 / 18 from this run's output.
+- **NOT shown:** no loop run has paused or been closed by this (the producing case is fixed by T1-GM). Watch for `refusal_evidence_read` and paused reason `diagnosis-request-unresolved` in the next field runs; the ticket names what would show the option was wrong and what to try then.
+- **Not mine, left alone:** `docs/refactoring-guide.md` appeared untracked during the session (beside `docs/refactoring-plan.md`, `.codex/config.toml`).
+- **Nothing is running.** NEXT as before: `T1-GL` (needs the user at a browser), `T4-EQ` (design first); T4-EU re-enters on its first field sighting.
+
+## 2026-11-12 (Fable 5.2, session 35) -- T4-ER BUILT AND CLOSED (`acef9e1f`); T1-GM FOUND, FIXED AND CLOSED (`afa9f239`); T4-EU FILED AT THE USER'S WORD (DESIGN FIRST)
 
 - **The user: "You may act autonomously"**; code committed at finished, verified units without a go ([[feedback_no_auto_commit]] as of 2026-11-11). Nothing pushed.
 - **Owed check done first:** the full suite on `290ca61a` -- green. **The count I first quoted (4587) was wrong: `target/surefire-reports` holds nine stale report files from earlier days; count only reports written by the run** (this session's last suite, both fixes in: 4543 / 0 / 0 / 17).

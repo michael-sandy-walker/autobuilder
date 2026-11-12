@@ -29,7 +29,7 @@ Direction and orientation:
 Design notes, read before touching their area:
 - `project_t4j_design_note.md`: T4-J signal audit (decay, obsolete vs missing; calibration LAST). Before signal tuning/deletion. (reviewed 2026-07-09)
 - `project_signal_consumer_map.md`, `project_signal_dispositions.md`, `project_t4j_perturbation_lab.md`: signal emitter/reader map, decided disposition per signal, frozen-state lab (ROLE-identity decay constants matter). Before signal work. (reviewed 2026-09-24)
-- `project_t4dy_meta_layer_design_note.md`: T4-DY diagnostic layer: stuck signature -> question -> authority (structure, observation, model last) -> fact + ledger; closed. (reviewed 2026-10-05)
+- `project_t4dy_meta_layer_design_note.md`: T4-DY diagnostic layer: stuck signature -> question -> authority (structure, observation, model last) -> fact + ledger; closed; T4-EU added the evidence read and the pause for closure refusals. (reviewed 2026-11-12)
 - `project_t4bz_design_note.md`, `project_t4bo_design_note.md`: signal re-architecture (invariants I1-I12) and decay observability. Before signal plumbing. (reviewed 2026-09-08)
 - `project_t4ai_design_note.md`: meta lane was decorative; deleted. Before touching AdaptiveExecutionEngine/DeliberationService. (reviewed 2026-07-09)
 - `project_t2ei_design_note.md`: T2-EI structure-first goal closure. (reviewed 2026-07-09)

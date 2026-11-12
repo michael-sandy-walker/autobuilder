@@ -1,0 +1,45 @@
+How it is used: command-style -- started with arguments and input, runs to its end, exercised by its exit status, output and files. Exercised here through: check, count, column.
+
+check:
+- field count mismatch: exits with status 2 and prints to standard output "line <line_number>: expected <expected_fields> fields, found <found_fields>", in each of these cases [k6, k7, k8, k9, k10, k12, k13, k14, k15, k21]
+  - a data row has fewer fields than the header -- printed: line 2: expected 3 fields, found 2 [k6, k7, k8, k9, k10, k12]
+  - a data row has more fields than the header -- printed: line 2: expected 2 fields, found 3 [k13]
+  - Running `check` on a file where multiple data rows have field counts differing from the header prints one line per malformed row to standard output, each in the format "line <line_number>: expected <expected_fields> fields, found <found_fields>", and exits with status 2 -- printed: line 2: expected 3 fields, found 2 / line 3: expected 3 fields, found 4 [k14]
+  - Running `check` on a file where a malformed data row begins on a physical line other than the second line prints "line <line_number>: expected <expected_fields> fields, found <found_fields>" to standard output, using the physical line number where the row begins, and exits with status 2 -- printed: line 3: expected 2 fields, found 1 [k15]
+  - Running `check` on a file where a data row has fewer fields than the header, followed by a row with the correct field count, prints "line <line_number>: expected <expected_fields> fields, found <found_fields>" to standard output for the malformed row and exits with status 2 -- printed: line 2: expected 3 fields, found 2 [k21]
+- Running `check` on an empty file exits with status 2 and produces no output [k17]
+
+count:
+- row count: exits with status 0 and prints to standard output "<n>", in each of these cases [k1, k22, k25, k27, k28, k23]
+  - Running `count` on a file where a quoted field contains a comma treats the field as a single unit and prints the number of data rows to standard output, exiting with status 0 -- printed: 1 [k1]
+  - the file has a header row and N data rows -- printed: 3 ; 1 ; 2 [k22, k25, k27, k28]
+  - the file contains only a header row -- printed: 0 [k23]
+
+column:
+- Running `column` on a file where a quoted field contains a double-quote unescapes the double-quote in the output value, printing the value to standard output and exiting with status 0 [k2]
+- Running `column` on a file where a quoted field contains a newline treats the field as a single unit, printing the value including the newline to standard output and exiting with status 0 [k3, k4, k5]
+- Running `column` on a file where the header contains the requested column name prints the value of that column for each data row, one per line, to standard output and exits with status 0 [k32, k40, k41]
+- column not found: exits with status 4 and prints to standard error "no such column: <name>", in each of these cases [k33, k42, k35]
+  - the requested column name is not in the header [k33, k42]
+  - the file is empty [k35]
+- Running `column` on a file where a data row has fewer fields than the requested column index omits that row from the output while printing values for other rows to standard output, exiting with status 0 [k38]
+
+count, column:
+- Quoted Field Delimiter Handling: A field enclosed in double quotes is treated as a single unit, preserving internal delimiters such as commas and newlines, and unescaping internal double quotes. For example, a quoted field containing a comma is counted as one field rather than two. [k1, k2, k3, k4, k5]
+
+check, column:
+- valid structure: exits with status 0 and prints nothing, in each of these cases [k11, k18, k39]
+  - (check) the header and every data row have the same number of fields [k11]
+  - the file contains only a header row [k18, k39]
+
+All uses:
+- invalid argument count: exits with status 5 and prints nothing, in each of these cases [k19, k46, k20, k47, k48, k49, k36, k50, k37, k51]
+  - (check, count) the command is given zero file arguments [k19, k46, k48]
+  - (check, count) the command is given two file arguments [k20, k47, k49]
+  - (column) the command is given one file argument and zero additional arguments [k36, k50]
+  - (column) the command is given one file argument and two additional arguments [k37, k51]
+- file not found: exits with status 1 and prints to standard error "no such file: <path>" -- when the specified file does not exist [k16, k52, k24, k53, k34, k54]
+
+Other uses:
+- Running the command with no arguments prints "unknown command:" to standard error and exits with status 3 [k44]
+- Running the command with an unrecognized first argument prints "unknown command: <argument>" to standard error and exits with status 3 [k45]

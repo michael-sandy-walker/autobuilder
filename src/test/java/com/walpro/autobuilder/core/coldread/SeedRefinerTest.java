@@ -113,7 +113,7 @@ class SeedRefinerTest {
                 - Any unknown command exits 3 [k5, k6]
                 """;
 
-        String refined = new SeedRefiner(answering(answer, "no rule found"), true).refine(account, COMPOSED);
+        String refined = new SeedRefiner(answering(answer, "nothing"), true).refine(account, COMPOSED);
 
         assertThat(refined).startsWith("What it is: A tool for text files [r1]\nHow it is used: command-style");
         assertThat(refined).contains("- tally <file> prints the number of rows and exits 0 [k1]")
@@ -126,15 +126,6 @@ class SeedRefinerTest {
         for (String id : List.of("k1", "k2", "k3", "k4", "k5", "k6")) {
             assertThat(refined.split("\\[" + id + "]", -1)).hasSize(2);
         }
-    }
-
-    @Test
-    void afterTheWording_theRulesAreAskedFor_andARuleTakesThePlaceOfItsLines() {
-        String refined = new SeedRefiner(answering("nothing usable",
-                "- Unknown command: anything that is not a command exits 3. [k5, k6]", "1: yes\n2: yes"), true).refine(account, COMPOSED);
-
-        assertThat(refined).contains("\nOther uses:\n- Unknown command: anything that is not a command exits 3. [k5, k6]\n")
-                .doesNotContain("No arguments exits 3").contains("- Tallying a file prints its row count [k1]");
     }
 
     @Test
@@ -156,116 +147,211 @@ class SeedRefinerTest {
                 .doesNotContain("[k1]");
     }
 
-    // --- stage 2 and 3: the word for what several lines describe ---
+    // --- stage 2 and 3: one answer, stated once ---
 
-    private static final Account WIDE = wide();
-
-    private static Account wide() {
-        return new Account("src", "copy", null, "command-style",
-                List.of(new Feature("Tool", "command-style", List.of("program Tool"), List.of("Tool.main"), List.of(), List.of(), List.of())),
-                List.of(), List.of(), List.of(), List.of(),
-                List.of(run("k1", 5, "", "tally"), run("k2", 5, "", "tally", "a", "b"),
-                        run("k3", 5, "", "audit"), run("k4", 5, "", "audit", "a", "b"),
-                        run("k5", 5, "", "pick", "a"), run("k6", 5, "", "pick", "a", "b", "c"),
-                        run("k7", 1, "no such file: x\n", "tally", "x"), run("k8", 1, "no such file: x\n", "audit", "x"),
-                        run("k9", 0, "2\n", "tally", "a"), run("k10", 0, "", "audit", "a"), run("k11", 0, "v\n", "pick", "a", "n"),
-                        run("k12", 4, "no such column: n\n", "pick", "a", "n")),
-                Map.of(), 0);
+    private static JudgedClaim ran(String id, int exit, String out, String err, String... args) {
+        Claim k = new Claim(id, "c1", "claim " + id, EntryKind.COMMAND_STYLE, List.of(), exit, null,
+                new CommandRun(Map.of(), List.of(args), null));
+        return new JudgedClaim(k, "anchored", List.of(),
+                List.of(new Observation("as-is", exit, null, out + err, true, null, err)),
+                new FeatureVerdict("Tool", "anchored", List.of(), "Tool.main"));
     }
+
+    private static final Account WIDE = new Account("src", "copy", null, "command-style",
+            List.of(new Feature("Tool", "command-style", List.of("program Tool"), List.of("Tool.main"), List.of(), List.of(), List.of())),
+            List.of(), List.of(), List.of(), List.of(),
+            List.of(ran("k1", 5, "", "", "tally"), ran("k2", 5, "", "", "tally", "a.txt", "b.txt"),
+                    ran("k3", 5, "", "", "audit"), ran("k4", 5, "", "", "pick", "a.txt"),
+                    ran("k5", 1, "", "no such file: gone.txt\n", "tally", "gone.txt"),
+                    ran("k6", 1, "", "no such file: away.txt\n", "audit", "away.txt"),
+                    ran("k7", 2, "row 2: 3 short\n", "", "audit", "a.txt"), ran("k8", 2, "row 7: 1 short\n", "", "audit", "b.txt"),
+                    ran("k9", 0, "2\n", "", "tally", "a.txt"), ran("k10", 0, "x\ny\n", "", "pick", "a.txt", "n"),
+                    ran("k11", 0, "x\n", "", "pick", "b.txt", "n")),
+            Map.of(), 0);
 
     private static final String WIDE_SEED = """
             Tool:
             - tally with no file exits 5 [k1]
             - tally with two files exits 5 [k2]
             - audit with no file exits 5 [k3]
-            - audit with two files exits 5 [k4]
-            - pick with only a file exits 5 [k5]
-            - pick with two extra arguments exits 5 [k6]
-            - tally on a missing file prints "no such file: <path>" and exits 1 [k7]
-            - audit on a missing file prints "no such file: <path>" and exits 1 [k8]
+            - pick with only a file exits 5 [k4]
+            - tally on a missing file prints "no such file: <path>" and exits 1 [k5]
+            - audit on a missing file prints "no such file: <path>" to standard error and exits 1 [k6]
+            - audit reports a short row and exits 2 [k7]
+            - audit counts rows from the first line of the file and exits 2 [k8]
             - tally prints the row count and exits 0 [k9]
-            - audit of a well-formed file exits 0 [k10]
-            - pick prints the column and exits 0 [k11]
-            - pick of a column that is not there exits 4 [k12]
+            - pick prints the column and exits 0 [k10, k11]
             """;
 
     @Test
-    void aRuleStandsUnderTheUsesItsClaimsWentThrough_allOfThemOrTheOnesNamed() {
+    void anAnswerIsTheRecord_withTheExercisesOwnValuesAndNumbersTakenOut_andTheStreamItWasPrintedTo() {
+        var byId = new java.util.HashMap<String, JudgedClaim>();
+        WIDE.claims().forEach(j -> byId.put(j.claim().id(), j));
+
+        assertThat(SeedRefiner.answerOf(byId.get("k5"))).isEqualTo(SeedRefiner.answerOf(byId.get("k6")));
+        assertThat(SeedRefiner.answerOf(byId.get("k5")).phrase())
+                .isEqualTo("exits with status 1 and prints to standard error \"no such file: <argument>\"");
+        assertThat(SeedRefiner.answerOf(byId.get("k7"))).isEqualTo(SeedRefiner.answerOf(byId.get("k8")));
+        assertThat(SeedRefiner.answerOf(byId.get("k7")).phrase())
+                .isEqualTo("exits with status 2 and prints to standard output \"row <n>: <n> short\"");
+        assertThat(SeedRefiner.answerOf(byId.get("k1")).phrase()).isEqualTo("exits with status 5 and prints nothing");
+        assertThat(SeedRefiner.answerOf(byId.get("k10"))).isNotEqualTo(SeedRefiner.answerOf(byId.get("k11")));
+    }
+
+    @Test
+    void linesWhoseClaimsWereAllAnsweredAlikeAreOneGroup_aLineOnDifferingAnswersBelongsToNone() {
+        var groups = SeedRefiner.groups(WIDE, SeedRefiner.sections(WIDE, WIDE_SEED));
+
+        assertThat(groups).hasSize(3);
+        assertThat(groups.get(0).lines()).extracting(SeedRefiner.Cited::cites)
+                .containsExactly(List.of("k1"), List.of("k2"), List.of("k3"), List.of("k4"));
+        assertThat(groups.get(1).lines()).extracting(SeedRefiner.Cited::cites).containsExactly(List.of("k5"), List.of("k6"));
+        assertThat(groups.get(2).lines()).extracting(SeedRefiner.Cited::cites).containsExactly(List.of("k7"), List.of("k8"));
+    }
+
+    private static final String NAMED = """
+            GROUP 1
+            name: wrong number of arguments
+            answer: exits with status 5 and prints nothing
+            - no file is given [k1, k3]
+            - two files are given [k2]
+            - the column name is missing [k4]
+            - something about a claim that is not there [k1, k99]
+
+            GROUP 2
+            name: missing file
+            answer: exits with status 1 and prints to standard error "no such file: <path>"
+            - when the file does not exist [k5, k6]
+
+            GROUP 3
+            name: short row
+            answer: exits 2 and says a row is short
+            - a row is short [k7, k8]
+            """;
+
+    @Test
+    void aGroupIsStatedOnce_underTheUsesItsClaimsWentThrough_withItsConditionsBelowIt() {
         var sections = SeedRefiner.sections(WIDE, WIDE_SEED);
-        String answer = """
-                - Wrong number of arguments: a command given fewer or more arguments than it takes exits 5. [k1, k2, k3, k4, k5, k6]
-                - Missing file: a file that does not exist is answered with "no such file: <path>" and exit 1. [k7, k8]
-                """;
-        int[] rules = new int[1];
+        var groups = SeedRefiner.groups(WIDE, sections);
 
-        var merged = SeedRefiner.merged(WIDE, sections, answer, rules);
+        String text = SeedRefiner.render(null, null, SeedRefiner.grouped(sections, groups, NAMED));
 
-        assertThat(rules[0]).isEqualTo(2);
-        assertThat(merged.keySet()).containsExactly("tally", "audit", "pick", "tally, audit", SeedRefiner.ALL);
-        assertThat(merged.get(SeedRefiner.ALL)).extracting(SeedRefiner.Cited::cites)
-                .containsExactly(List.of("k1", "k2", "k3", "k4", "k5", "k6"));
-        assertThat(merged.get("tally, audit").get(0).text()).startsWith("Missing file:");
-        assertThat(merged.get("tally")).extracting(SeedRefiner.Cited::cites).containsExactly(List.of("k9"));
-        assertThat(merged.get("pick")).extracting(SeedRefiner.Cited::cites).containsExactly(List.of("k11"), List.of("k12"));
+        assertThat(text).isEqualTo("""
+                tally:
+                - tally prints the row count and exits 0 [k9]
+
+                audit:
+                - short row: exits with status 2 and prints to standard output "row <n>: <n> short" -- when a row is short -- printed: row 2: 3 short ; row 7: 1 short [k7, k8]
+
+                pick:
+                - pick prints the column and exits 0 [k10, k11]
+
+                tally, audit:
+                - missing file: exits with status 1 and prints to standard error "no such file: <path>" -- when the file does not exist [k5, k6]
+
+                All uses:
+                - wrong number of arguments: exits with status 5 and prints nothing, in each of these cases [k1, k2, k3, k4]
+                  - (tally, audit) no file is given [k1, k3]
+                  - (tally) two files are given [k2]
+                  - (pick) the column name is missing [k4]
+                """);
     }
 
     @Test
-    void aRuleIsRefused_whenItSplitsALine_namesAnUnknownClaim_replacesOneLine_orJoinsDifferentStatuses() {
+    void theModelsPhraseForAnAnswerIsTakenOnlyWhileItCarriesTheRecord() {
+        var a = new SeedRefiner.Answer(1, List.of("no such file: <argument>"), true, SeedRefiner.ERR);
+
+        assertThat(SeedRefiner.carries("exits with status 1 and prints to standard error \"no such file: <path>\"", a)).isTrue();
+        assertThat(SeedRefiner.carries("exits with status 1 and prints \"no such file: <path>\"", a)).isFalse();
+        assertThat(SeedRefiner.carries("exits with status 2 and prints to standard error \"no such file: <path>\"", a)).isFalse();
+        assertThat(SeedRefiner.carries("exits with status 1 and prints to standard error \"file missing\"", a)).isFalse();
+    }
+
+    @Test
+    void aLineItsConditionDoesNotStateInFullKeepsItsOwnWords_asItsOwnCase() {
+        // wording answer, then the groups, then the verdicts on k1..k8 in the seed's order: the 6th and 8th are not confirmed
+        String verdicts = "1: yes\n2: yes\n3: yes\n4: yes\n5: yes\n6: no -- the line says where it is printed\n7: yes";
+
+        String refined = new SeedRefiner(answering("nothing usable", NAMED, verdicts), true).refine(WIDE, WIDE_SEED);
+
+        assertThat(refined).contains("- missing file: exits with status 1 and prints to standard error \"no such file: <path>\", in each of these cases [k5, k6]")
+                .contains("  - (tally) the file does not exist [k5]")
+                .contains("  - (audit) audit on a missing file prints \"no such file: <path>\" to standard error and exits 1 [k6]")
+                .contains("  - a row is short -- printed: row 2: 3 short [k7]")
+                .contains("  - audit counts rows from the first line of the file and exits 2 -- printed: row 7: 1 short [k8]");
+    }
+
+    @Test
+    void aSeedWithGroupsIsReadBackWithItsCasesBelowTheirLine_andNothingAsTheOperatorsOwn() {
         var sections = SeedRefiner.sections(WIDE, WIDE_SEED);
-        String answer = """
-                - Everything works: every command exits 0 or 4. [k11, k12]
-                - Renamed: tally with no file exits 5. [k1]
-                - Invented: something. [k1, k2, k99]
-                - Success: each command exits 0 on good input. [k9, k10, k11]
-                - Second use of a line: again. [k9, k10]
-                """;
-        int[] rules = new int[1];
+        String text = SeedRefiner.render(null, SeedRefiner.contextLine(WIDE, sections),
+                SeedRefiner.grouped(sections, SeedRefiner.groups(WIDE, sections), NAMED));
 
-        var merged = SeedRefiner.merged(WIDE, sections, answer, rules);
+        var lines = SeedComposer.lines(text, Set.of("Tool"));
 
-        assertThat(rules[0]).isEqualTo(1);
-        assertThat(merged.get(SeedRefiner.ALL)).extracting(SeedRefiner.Cited::cites).containsExactly(List.of("k9", "k10", "k11"));
-        assertThat(merged.get("tally")).extracting(SeedRefiner.Cited::cites)
-                .containsExactly(List.of("k1"), List.of("k2"), List.of("k7"));
-        assertThat(merged.get("pick")).extracting(SeedRefiner.Cited::cites)
-                .containsExactly(List.of("k5"), List.of("k6"), List.of("k12"));
-        // nothing lost: every claim is cited once
-        var cited = merged.values().stream().flatMap(List::stream).flatMap(l -> l.cites().stream()).toList();
-        assertThat(cited).containsExactlyInAnyOrder("k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8", "k9", "k10", "k11", "k12");
-    }
-
-    @Test
-    void aReplacedLineItsRuleDoesNotStateInFullComesBackAsItsOwnLine_andTheRuleStandsForTheRest() {
-        String rules = "- Wrong number of arguments: too few or too many arguments exit 5. [k1, k2, k3, k4, k5, k6]";
-        // pairs are numbered in the seed's order: k1..k6 = 1..6; the third is not confirmed, the fifth is denied
-        String verdicts = "1: yes\n2: yes\n4: yes\n5: no -- the line says which argument is missing\n6: yes";
-
-        String refined = new SeedRefiner(answering("nothing usable", rules, verdicts), true).refine(WIDE, WIDE_SEED);
-
-        assertThat(refined).contains("- Wrong number of arguments: too few or too many arguments exit 5. [k1, k2, k4, k6]")
-                .contains("- audit with no file exits 5 [k3]").contains("- pick with only a file exits 5 [k5]")
-                .doesNotContain("tally with no file exits 5");
-    }
-
-    @Test
-    void withNoVerdictAtAll_everyReplacedLineComesBack() {
-        String rules = "- Missing file: answered with \"no such file: <path>\" and exit 1. [k7, k8]";
-
-        String refined = new SeedRefiner(answering("nothing usable", rules, "I cannot tell."), true).refine(WIDE, WIDE_SEED);
-
-        assertThat(refined).doesNotContain("Missing file:").contains("[k7]").contains("[k8]");
-    }
-
-    @Test
-    void aSeedWithRulesIsReadBackWithNoOperatorsLine_andARuleFindsItsFeature() {
-        var merged = SeedRefiner.merged(WIDE, SeedRefiner.sections(WIDE, WIDE_SEED),
-                "- Missing file: answered with \"no such file: <path>\" and exit 1. [k7, k8]", null);
-        String text = SeedRefiner.render(null, SeedRefiner.contextLine(WIDE, SeedRefiner.sections(WIDE, WIDE_SEED)), merged);
-
-        assertThat(text).contains("\ntally, audit:\n- Missing file: answered with");
         assertThat(ReverseEngineeringConfirmation.stated(WIDE, text)).isEmpty();
-        assertThat(SeedComposer.lines(text, Set.of("Tool")).stream().filter(l -> l.kind().equals(SeedComposer.Line.CITED))
-                .map(l -> l.cites().size())).contains(2);
+        assertThat(lines.stream().filter(l -> l.kind().equals(SeedComposer.Line.CASE)).map(SeedComposer.Line::text))
+                .containsExactly("(tally, audit) no file is given", "(tally) two files are given", "(pick) the column name is missing");
+        assertThat(ReverseEngineeringConfirmation.seedText(lines))
+                .contains("- wrong number of arguments: exits with status 5 and prints nothing, in each of these cases\n  - (tally, audit) no file is given\n");
+    }
+
+
+    // --- a rule of the input: lines picked out by something only their inputs contain ---
+
+    private static JudgedClaim read(String id, String content, String out, String... args) {
+        Claim k = new Claim(id, "c1", "claim " + id, EntryKind.COMMAND_STYLE, List.of(), 0, null,
+                new CommandRun(Map.of("in.txt", content), List.of(args), null));
+        return new JudgedClaim(k, "anchored", List.of(), List.of(new Observation("as-is", 0, null, out, true, null, "")),
+                new FeatureVerdict("Tool", "anchored", List.of(), "Tool.main"));
+    }
+
+    private static final Account TILDE = new Account("src", "copy", null, "command-style",
+            List.of(new Feature("Tool", "command-style", List.of("program Tool"), List.of("Tool.main"), List.of(), List.of(), List.of())),
+            List.of(), List.of(), List.of(), List.of(),
+            List.of(read("k1", "a;b\n1;2\n", "1\n", "tally", "in.txt"), read("k2", "a;b\n~1;2~;3\n", "one\n", "tally", "in.txt"),
+                    read("k3", "a;b\n1;2\n", "x\n", "pick", "in.txt", "a"), read("k4", "a;b\n~x~~y~;2\n", "x~y\n", "pick", "in.txt", "a"),
+                    read("k5", "a;b\n", "0 rows\n", "tally", "in.txt"), read("k6", "a;b\n3;4\n", "y\n", "pick", "in.txt", "b"),
+                    read("k7", "a;b\n5;6\n", "z\n", "audit", "in.txt"), read("k8", "a;b\n", "empty\n", "audit", "in.txt")),
+            Map.of(), 0);
+
+    private static final String TILDE_SEED = """
+            Tool:
+            - tally counts the rows [k1]
+            - tally counts a row with a marked field as one [k2]
+            - pick prints a column [k3]
+            - pick prints a marked field without its marks [k4]
+            - tally of a file with only a header prints 0 rows [k5]
+            - pick prints the second column [k6]
+            - audit accepts a file [k7]
+            - audit of a file with only a header says empty [k8]
+            """;
+
+    @Test
+    void theLinesWhoseInputsAloneHoldASymbolAreSetTogether_aSymbolEveryInputHasPicksOutNothing() {
+        var marked = SeedRefiner.marked(TILDE, SeedRefiner.sections(TILDE, TILDE_SEED));
+
+        assertThat(marked).hasSize(1);
+        assertThat(marked.get(0).symbols()).isEqualTo("~");
+        assertThat(marked.get(0).lines()).extracting(SeedRefiner.Cited::cites).containsExactly(List.of("k2"), List.of("k4"));
+        assertThat(marked.get(0).uses()).containsExactly("tally", "pick");
+    }
+
+    @Test
+    void aNamedRuleOfTheInputIsAddedAboveTheLinesUnderTheirUses_andNoLineIsTakenAway() {
+        var sections = SeedRefiner.sections(TILDE, TILDE_SEED);
+        var marked = SeedRefiner.marked(TILDE, sections);
+
+        var with = SeedRefiner.withTerms(sections, sections, marked,
+                "SET 1\nname: Marked fields\nrule: A field between two ~ is one field; ~~ inside it is one ~.");
+        var none = SeedRefiner.withTerms(sections, sections, marked, "SET 1\nname: NONE\nrule: -");
+
+        assertThat(with.keySet()).containsExactly("tally", "pick", "audit", "tally, pick");
+        assertThat(with.get("tally, pick")).extracting(SeedRefiner.Cited::render)
+                .containsExactly("- Marked fields: A field between two ~ is one field; ~~ inside it is one ~. [k2, k4]");
+        assertThat(with.get("tally")).hasSize(3);
+        assertThat(with.get("pick")).hasSize(3);
+        assertThat(none).isEqualTo(sections);
     }
 
     @Test

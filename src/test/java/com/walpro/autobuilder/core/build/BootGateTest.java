@@ -761,6 +761,28 @@ class BootGateTest {
     }
 
     @Test
+    void aRunToItsEnd_keepsWhatWentToStandardErrorApart_andStillInTheWholeOutput() throws Exception {
+        // T4-EQ: a jar with no Main-Class makes the launcher itself print to standard error and exit 1 -- a run that
+        // prints only there, with nothing to build. WHERE a program printed is then a recorded fact.
+        Path base = Path.of("target", "boot-gate-streams-test-" + System.nanoTime()).toAbsolutePath();
+        Files.createDirectories(base.resolve("target"));
+        writeMinimalJar(base.resolve("target/app.jar"));
+        try {
+            BootGate g = new BootGate(true, "java -jar {artifact}", "", 5000, 3000, buildExecutor, new EndpointSurfaceQuery());
+
+            BootGate.Ended ended = g.runArtifactToEnd(base.resolve("target/app.jar"), java.util.List.of(), base, 30_000).orElseThrow();
+
+            assertThat(ended.exit()).isEqualTo(1);
+            assertThat(ended.output()).contains("no main manifest attribute");
+            assertThat(ended.errorOutput()).isEqualTo(ended.output());
+        } finally {
+            try (Stream<Path> walk = Files.walk(base)) {
+                walk.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+            }
+        }
+    }
+
+    @Test
     void relativeFileBasePath_artifactPathStaysValidAcrossChildProcessCwdChange() throws Exception {
         // T1-FJ field bug (2026-07-07 run 22 relaunch): production's file.base-path resolves to a
         // RELATIVE string (FILE_BASE_PATH=firestarter -> working-dir=firestarter/output).

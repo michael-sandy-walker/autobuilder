@@ -1172,7 +1172,10 @@ public class BootGate {
 
     /** Polls the root path until the process answers HTTP (any status), dies, or the deadline passes. */
     /** T4-EK: how a run that was started to its end ended: its exit status and output, or why there is none. */
-    public record Ended(Integer exit, String output, String unobserved) {
+    public record Ended(Integer exit, String output, String unobserved, String errorOutput) {
+        public Ended(Integer exit, String output, String unobserved) {
+            this(exit, output, unobserved, null);
+        }
     }
 
     static final int MAX_RUN_OUTPUT_CHARS = 64_000;
@@ -1197,36 +1200,28 @@ public class BootGate {
         if (services.failed()) return Optional.of(new Ended(null, services.why(), "SERVICES_NOT_STARTED"));
         Process process = null;
         try (services) {
-            ProcessBuilder pb = new ProcessBuilder(command).directory(cwd.toFile()).redirectErrorStream(true);
+            // T4-EQ: the two streams are read apart, so WHERE a program printed something is a recorded fact and not a
+            // line's own wording; `output` stays everything it printed, in the order the lines were read.
+            ProcessBuilder pb = new ProcessBuilder(command).directory(cwd.toFile());
             pb.environment().keySet().removeAll(INHERITED_JVM_OPTION_VARS);
             process = pb.start();
             process.getOutputStream().close();
             StringBuilder out = new StringBuilder();
-            InputStream in = process.getInputStream();
-            Thread reader = new Thread(() -> {
-                try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = r.readLine()) != null) {
-                        synchronized (out) {
-                            if (out.length() < MAX_RUN_OUTPUT_CHARS) out.append(line).append('\n');
-                        }
-                    }
-                } catch (IOException ignored) {
-                    // the process ended or was destroyed
-                }
-            });
-            reader.setDaemon(true);
-            reader.start();
+            StringBuilder err = new StringBuilder();
+            Thread reader = runOutputReader(process.getInputStream(), out, null);
+            Thread errorReader = runOutputReader(process.getErrorStream(), out, err);
             if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly();
                 reader.join(1000);
+                errorReader.join(1000);
                 synchronized (out) {
-                    return Optional.of(new Ended(null, out.toString(), "TIMEOUT"));
+                    return Optional.of(new Ended(null, out.toString(), "TIMEOUT", err.toString()));
                 }
             }
             reader.join(2000);
+            errorReader.join(2000);
             synchronized (out) {
-                return Optional.of(new Ended(process.exitValue(), out.toString(), null));
+                return Optional.of(new Ended(process.exitValue(), out.toString(), null, err.toString()));
             }
         } catch (IOException e) {
             if (process != null) process.destroyForcibly();
@@ -1236,6 +1231,26 @@ public class BootGate {
             if (process != null) process.destroyForcibly();
             return Optional.of(new Ended(null, null, "INTERRUPTED"));
         }
+    }
+
+    /** Reads one stream of a run line by line into {@code all} (shared by both streams, its own lock) and, when given, {@code own}. */
+    private static Thread runOutputReader(InputStream in, StringBuilder all, StringBuilder own) {
+        Thread reader = new Thread(() -> {
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    synchronized (all) {
+                        if (all.length() < MAX_RUN_OUTPUT_CHARS) all.append(line).append('\n');
+                        if (own != null && own.length() < MAX_RUN_OUTPUT_CHARS) own.append(line).append('\n');
+                    }
+                }
+            } catch (IOException ignored) {
+                // the process ended or was destroyed
+            }
+        });
+        reader.setDaemon(true);
+        reader.start();
+        return reader;
     }
 
     /**

@@ -1,0 +1,29 @@
+BookController:
+- POST /books creates a book with a valid title and 13-digit ISBN, returning HTTP 201 and a JSON body containing the assigned id, title, and isbn [k34, k46, k47, k48]
+- POST /books rejects a book with a blank title with HTTP 400 [k23, k35]
+- POST /books rejects a book with a non-13-digit ISBN with HTTP 400 [k36]
+- POST /books translates a ValidationException to HTTP 400 with a JSON body whose "message" field carries the exception text [k24]
+- GET /books returns HTTP 200 and a JSON array of all saved books in insertion order [k7, k39, k49]
+- GET /books/{id} returns HTTP 200 and a JSON body containing the book's id for an existing book [k1, k37, k50]
+- GET /books/{id} returns HTTP 404 for a non-existent book id [k11, k27, k38, k51]
+
+MemberController:
+- POST /members creates a member with a name and email, returning HTTP 201 and a JSON body containing the assigned id and name [k2, k40, k52, k53]
+- POST /members rejects a member with a blank name with HTTP 400 [k41]
+- POST /members rejects a member with a duplicate email with HTTP 409 [k32, k42]
+- POST /members translates a ValidationException to HTTP 400 with a JSON body whose "message" field carries the exception text [k25]
+- POST /members translates a DuplicateEmailException to HTTP 409 with a JSON body whose "message" field is "email already exists: <email>" [k32]
+- GET /members/{id} returns HTTP 200 and a JSON body containing the member's id for an existing member [k2, k43, k54]
+- GET /members/{id} returns HTTP 404 for a non-existent member id [k12, k28, k44, k55]
+
+LoanController:
+- POST /loans lends a book to a member, returning HTTP 201 and a JSON body containing the assigned loan id and returned=false [k3, k6, k22, k45, k56]
+- POST /loans rejects a loan request missing bookId or memberId with HTTP 400 [k26]
+- POST /loans rejects lending a book that does not exist with HTTP 404 [k16, k29]
+- POST /loans rejects lending to a member that does not exist with HTTP 404 [k17]
+- POST /loans rejects lending a book that is already on active loan with HTTP 409 [k9, k13, k30]
+- POST /loans rejects lending to a member who already holds 3 active loans with HTTP 422 [k14, k33]
+- POST /loans/{id}/return returns a loan, answering HTTP 200 and marking the loan as returned [k19, k57]
+- POST /loans/{id}/return rejects returning a loan that has already been returned with HTTP 409 [k15, k31]
+- POST /loans/{id}/return rejects returning a loan that does not exist with HTTP 404 [k18]
+- GET /loans?memberId={id} returns HTTP 200 and a list of loans belonging to that member [k8]

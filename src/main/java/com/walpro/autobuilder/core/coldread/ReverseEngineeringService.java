@@ -104,9 +104,17 @@ public class ReverseEngineeringService {
      * @param status     the kind's own answer: an HTTP status, an exit status, 0 for a test that passed
      * @param unobserved why there is no answer, when there is none
      * @param held       whether the claim held there, as its kind judges it
+     * @param error      T4-EQ: of a program run, the part of {@code body} it printed to standard error; null when the
+     *                   streams were not read apart (a request, a test, an account kept before this was recorded)
      */
     public record Observation(String variant, Integer status, String unobserved, String body, boolean held,
-                              List<com.walpro.autobuilder.core.build.CriterionProbeSynthesizer.ProbeRequest> sent) {
+                              List<com.walpro.autobuilder.core.build.CriterionProbeSynthesizer.ProbeRequest> sent,
+                              String error) {
+
+        public Observation(String variant, Integer status, String unobserved, String body, boolean held,
+                           List<com.walpro.autobuilder.core.build.CriterionProbeSynthesizer.ProbeRequest> sent) {
+            this(variant, status, unobserved, body, held, sent, null);
+        }
 
         public Observation(String variant, Integer status, String unobserved, String body, boolean held) {
             this(variant, status, unobserved, body, held, null);

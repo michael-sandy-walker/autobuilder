@@ -69,6 +69,8 @@ public class SeedComposer {
         public static final String SECTION = "section";
         /** T4-EQ: how the project is used, read from structure -- context like {@link #PURPOSE}, never a criterion or open work. */
         public static final String CONTEXT = "context";
+        /** T4-EQ: a cited line standing under the cited line above it -- one of the cases in which that line's answer comes. */
+        public static final String CASE = "case";
     }
 
     /**
@@ -329,7 +331,8 @@ public class SeedComposer {
             }
             Matcher m = CITED.matcher(l);
             if (m.matches()) {
-                out.add(new Line(Line.CITED, m.group(1).strip(), feature, ids(m.group(2))));
+                boolean nested = !raw.isEmpty() && Character.isWhitespace(raw.charAt(0));
+                out.add(new Line(nested ? Line.CASE : Line.CITED, m.group(1).strip(), feature, ids(m.group(2))));
             } else {
                 out.add(new Line(Line.UNCITED, l.replaceFirst("^-\\s*", ""), feature, List.of()));
             }

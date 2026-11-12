@@ -307,10 +307,14 @@ of one run of the suite and taken out again.
 of a run, the resource of a request, the method a test calls -- read from how each check exercised it, and each
 line is worded from what the project answered then (the exit status, the status code, the exact message). A
 `How it is used:` line says what kind of project it is; like `What it is:` it is context and is never checked.
-Where several lines describe one rule, the rule is named and stated once in their place (`Wrong number of
-arguments: ...`), citing all their checks; it stands under `All uses` only when its checks went through every use,
-otherwise under the uses they did go through. A line that says something its rule does not stays as its own line.
-Arranging, rewording and naming rules remove no check: every line still ends with the checks it rests on. Switch
+Lines that the project answered in the same way -- the same status, the same message once the values of the
+one check are taken out, the same output stream -- are stated once: a line with the rule's name and that answer,
+taken from what was recorded, and under it the cases in which it comes (`file not found: exits with status 1 and
+prints to standard error "no such file: <path>" -- when the specified file does not exist`). A case that says
+something of its own keeps its full wording. Such a rule stands under `All uses` only when its checks went
+through every use, otherwise under the uses they did go through. Where a few lines are the only ones whose input
+contains some character (a quote, say), what they show together about how the input is read is named and added
+above them. None of this removes a check: every line still ends with the checks it rests on. Switch
 `autobuilder.reverse-engineering.seed-refinement.enabled`.
 
 **A line you add to the seed before confirming it is checked first.** For each such line the code is asked

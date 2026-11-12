@@ -1,0 +1,33 @@
+How it is used: service-style -- started and kept running, exercised by requests it answers. Exercised here through: /books, /members, /loans.
+
+/books:
+- POST /books with a valid title and 13-digit ISBN returns HTTP 201 and a JSON body containing the assigned id, title, and isbn [k34, k46, k47, k48]
+- missing title: status 400, "{"message":"title is required"}", in each of these cases [k23, k35, k24]
+  - title is blank [k23, k35]
+  - POST /books translates a ValidationException to HTTP 400 with a JSON body whose "message" field carries the exception text [k24]
+- POST /books with a non-13-digit ISBN returns HTTP 400 and a JSON body with the message "isbn must match \d{13}" [k36]
+- GET /books returns HTTP 200 and a JSON array of all saved books in insertion order [k7, k39, k49]
+- GET /books/{id} for an existing book returns HTTP 200 and a JSON body containing the book's id [k1, k37, k50]
+- GET /books/{id} for a non-existent book id returns HTTP 404 and a JSON body with the message "Book not found with id <id>" [k11, k27, k38, k51]
+
+/members:
+- POST /members with a name and email returns HTTP 201 and a JSON body containing the assigned id and name [k2, k40, k52, k53]
+- missing name: status 400, "{"message":"name is required"}", in each of these cases [k41, k25]
+  - name is blank [k41]
+  - POST /members translates a ValidationException to HTTP 400 with a JSON body whose "message" field carries the exception text [k25]
+- POST /members with a duplicate email returns HTTP 409 and a JSON body with the message "email already exists: <email>" [k32, k42]
+- POST /members translates a DuplicateEmailException to HTTP 409 with a JSON body whose "message" field is "email already exists: <email>" [k32]
+- GET /members/{id} for an existing member returns HTTP 200 and a JSON body containing the member's id [k2, k43, k54]
+- GET /members/{id} for a non-existent member id returns HTTP 404 and a JSON body with the message "member not found: <id>" [k12, k28, k44, k55]
+
+/loans:
+- POST /loans lending a book to a member returns HTTP 201 and a JSON body containing the assigned loan id and returned=false [k3, k6, k22, k45, k56]
+- POST /loans missing bookId or memberId returns HTTP 400 and a JSON body with the message "bookId and memberId are required" [k26]
+- POST /loans lending a book that does not exist returns HTTP 404 and a JSON body with the message "Book not found with id: <id>" [k16, k29]
+- POST /loans lending to a member that does not exist returns HTTP 404 and a JSON body with the message "Member not found with id: <id>" [k17]
+- POST /loans lending a book that is already on active loan returns HTTP 409 and a JSON body with the message "Book is already on loan" [k9, k13, k30]
+- POST /loans lending to a member who already holds 3 active loans returns HTTP 422 and a JSON body with the message "Member has reached the maximum of 3 active loans" [k14, k33]
+- POST /loans/{id}/return returns HTTP 200 and a JSON body marking the loan as returned [k19, k57]
+- POST /loans/{id}/return for a loan that has already been returned returns HTTP 409 and a JSON body with the message "Loan is already returned" [k15, k31]
+- POST /loans/{id}/return for a loan that does not exist returns HTTP 404 and a JSON body with the message "Loan not found with id: <id>" [k18]
+- GET /loans?memberId={id} returns HTTP 200 and a list of loans belonging to that member [k8]

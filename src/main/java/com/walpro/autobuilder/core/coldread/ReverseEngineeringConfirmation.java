@@ -329,6 +329,7 @@ public class ReverseEngineeringConfirmation {
                 case SeedComposer.Line.RULE -> { }   // how the work is done: the obligations file's, not the seed's
                 case SeedComposer.Line.HEADER, SeedComposer.Line.SECTION -> sb.append('\n').append(l.text()).append(":\n");
                 case SeedComposer.Line.CONTEXT -> sb.append(SeedRefiner.CONTEXT).append(' ').append(l.text()).append('\n');
+                case SeedComposer.Line.CASE -> sb.append("  - ").append(l.text()).append('\n');
                 case SeedComposer.Line.QUOTE -> sb.append(l.text()).append('\n');
                 case SeedComposer.Line.PURPOSE -> sb.append("What it is: ").append(l.text()).append('\n');
                 default -> sb.append("- ").append(l.text()).append('\n');

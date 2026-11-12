@@ -140,7 +140,8 @@ public class ProgramAdapter implements EntryAdapter {
                     BootGate.Ended e = ended.get();
                     boolean held = e.exit() != null && e.exit() == k.expected() && (k.run().outputContains() == null
                             || (e.output() != null && e.output().contains(k.run().outputContains())));
-                    seen.get(k.id()).put(variant, new Observation(variant, e.exit(), e.unobserved(), Observation.clip(e.output()), held));
+                    seen.get(k.id()).put(variant, new Observation(variant, e.exit(), e.unobserved(), Observation.clip(e.output()), held, null,
+                            Observation.clip(e.errorOutput())));
                 }
             } catch (IOException e) {
                 return new Ran(true, false, e.getMessage());

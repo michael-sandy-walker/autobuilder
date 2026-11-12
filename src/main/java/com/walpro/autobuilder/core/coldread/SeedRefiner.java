@@ -121,13 +121,43 @@ public class SeedRefiner {
                     String verdicts = ask(saidPrompt(groups, said, asked));
                     log.debug("T4-EQ: verdicts --\n{}", verdicts);
                     java.util.Set<Integer> yes = verdicts == null ? java.util.Set.of() : saidIn(verdicts);
-                    int back = 0;
+                    Map<Integer, String> missing = verdicts == null ? Map.of() : missingIn(verdicts);
+                    List<Cited> thin = new ArrayList<>();
+                    List<String> why = new ArrayList<>();
                     for (int i = 0; i < asked.size(); i++) {
                         if (yes.contains(i + 1)) continue;
-                        said.conditionOf().remove(asked.get(i));
-                        back++;
+                        thin.add(asked.get(i));
+                        why.add(missing.getOrDefault(i + 1, "something the line states"));
                     }
-                    if (back > 0) log.warn("T4-EQ: {} of {} line(s) said something their condition does not -- kept in their own words", back, asked.size());
+                    // A line whose condition was too thin is asked for once more, alone, with what was missing said;
+                    // the new condition is checked like the first, and only a yes keeps it.
+                    int back = thin.size();
+                    if (!thin.isEmpty()) {
+                        String again = ask(againPrompt(groups, said, thin, why));
+                        log.debug("T4-EQ: conditions again --\n{}", again);
+                        Map<Integer, String> fuller = again == null ? Map.of() : numbered(again);
+                        List<Cited> retried = new ArrayList<>();
+                        for (int i = 0; i < thin.size(); i++) {
+                            String c = fuller.get(i + 1);
+                            if (c == null || c.isBlank()) {
+                                said.conditionOf().remove(thin.get(i));
+                                continue;
+                            }
+                            said.conditionOf().put(thin.get(i), c.replaceFirst("(?i)^when\\s+", ""));
+                            retried.add(thin.get(i));
+                        }
+                        if (!retried.isEmpty()) {
+                            String second = ask(saidPrompt(groups, said, retried));
+                            log.debug("T4-EQ: verdicts on them --\n{}", second);
+                            java.util.Set<Integer> yes2 = second == null ? java.util.Set.of() : saidIn(second);
+                            for (int i = 0; i < retried.size(); i++) {
+                                if (yes2.contains(i + 1)) back--;
+                                else said.conditionOf().remove(retried.get(i));
+                            }
+                        }
+                        log.warn("T4-EQ: {} of {} line(s) said something their condition did not -- {} given a fuller condition, {} kept in their own words",
+                                thin.size(), asked.size(), thin.size() - back, back);
+                    }
                 }
                 named = grouped(worded, groups, said);
                 log.warn("T4-EQ: {} answer(s) the project gives to several lines stated once -- {} line(s) under them, {} line(s) in all, {} before",
@@ -592,6 +622,57 @@ public class SeedRefiner {
     }
 
     private static final java.util.regex.Pattern SAID = java.util.regex.Pattern.compile("^\\s*(\\d+)\\s*[:.)]\\s*yes\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    private static final java.util.regex.Pattern MISSING = java.util.regex.Pattern.compile("^\\s*(\\d+)\\s*[:.)]\\s*no\\b\\W*(.*)$", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final java.util.regex.Pattern NUMBERED = java.util.regex.Pattern.compile("^\\s*(\\d+)\\s*[:.)]\\s*(.+)$");
+
+    /** What each pair answered no was said to lack, by its number. */
+    static Map<Integer, String> missingIn(String verdicts) {
+        Map<Integer, String> out = new LinkedHashMap<>();
+        for (String raw : verdicts.split("\\R")) {
+            Matcher m = MISSING.matcher(raw);
+            if (m.find() && !m.group(2).isBlank()) out.put(Integer.parseInt(m.group(1)), m.group(2).strip());
+        }
+        return out;
+    }
+
+    /** The lines of an answer that start with a number, by it. */
+    static Map<Integer, String> numbered(String answer) {
+        Map<Integer, String> out = new LinkedHashMap<>();
+        for (String raw : answer.split("\\R")) {
+            Matcher m = NUMBERED.matcher(raw);
+            if (m.find()) out.putIfAbsent(Integer.parseInt(m.group(1)), m.group(2).strip());
+        }
+        return out;
+    }
+
+    static String againPrompt(List<Group> groups, Named named, List<Cited> thin, List<String> why) {
+        StringBuilder sb = new StringBuilder("""
+                Each numbered item below is one LINE of a specification, the ANSWER of the project it ends in (which \
+                is stated once, elsewhere, for several lines), and a CONDITION that was written for the line and \
+                found to leave something out.
+
+                Write each condition again: WHEN the answer comes, and whatever the line states about the answer in \
+                this case that the answer alone does not say (which line number is reported, in which order, what is \
+                left out) -- so that the answer and your condition together state everything the line states. Not \
+                the use (which command, request or call), and do not repeat the answer's own words.
+
+                Answer one line per item, nothing else:
+                <number>: <the condition>
+
+                """);
+        for (int i = 0; i < thin.size(); i++) {
+            Cited line = thin.get(i);
+            int gi = 0;
+            for (int g = 0; g < groups.size(); g++) if (groups.get(g).lines().stream().anyMatch(l -> l == line)) gi = g;
+            Answer a = groups.get(gi).answer();
+            String phrase = carries(named.phrases().get(gi + 1), a) ? named.phrases().get(gi + 1) : a.phrase();
+            sb.append(i + 1).append(".\n  LINE: ").append(line.text()).append("\n  ANSWER: ").append(phrase)
+                    .append("\n  CONDITION: ").append(named.conditionOf().get(line))
+                    .append("\n  LEFT OUT: ").append(why.get(i)).append("\n");
+        }
+        return sb.toString();
+    }
 
     /** The pairs answered yes; a pair with any other answer, or none, counts as not said. */
     static java.util.Set<Integer> saidIn(String verdicts) {

@@ -268,17 +268,30 @@ class SeedRefinerTest {
     }
 
     @Test
-    void aLineItsConditionDoesNotStateInFullKeepsItsOwnWords_asItsOwnCase() {
-        // wording answer, then the groups, then the verdicts on k1..k8 in the seed's order: the 6th and 8th are not confirmed
+    void aConditionFoundTooThinIsAskedForOnceMore_andALineStillNotStatedInFullKeepsItsOwnWords() {
+        // the answers in the order they are asked for: the wording, the groups, the verdicts on k1..k8 (the 6th denied,
+        // the 8th not confirmed), fuller conditions for those two, and the verdicts on them (the second still denied)
         String verdicts = "1: yes\n2: yes\n3: yes\n4: yes\n5: yes\n6: no -- the line says where it is printed\n7: yes";
+        String again = "1: the file does not exist, said on standard error\n2: a later row is short, counted from the first line";
+        String second = "1: yes\n2: no -- still not what the line says";
 
-        String refined = new SeedRefiner(answering("nothing usable", NAMED, verdicts), true).refine(WIDE, WIDE_SEED);
+        String refined = new SeedRefiner(answering("nothing usable", NAMED, verdicts, again, second), true).refine(WIDE, WIDE_SEED);
 
         assertThat(refined).contains("- missing file: exits with status 1 and prints to standard error \"no such file: <path>\", in each of these cases [k5, k6]")
                 .contains("  - (tally) the file does not exist [k5]")
-                .contains("  - (audit) audit on a missing file prints \"no such file: <path>\" to standard error and exits 1 [k6]")
+                .contains("  - (audit) the file does not exist, said on standard error [k6]")
                 .contains("  - a row is short -- printed: row 2: 3 short [k7]")
                 .contains("  - audit counts rows from the first line of the file and exits 2 -- printed: row 7: 1 short [k8]");
+    }
+
+    @Test
+    void withNoFullerConditionOffered_theLineKeepsItsOwnWords() {
+        String verdicts = "1: yes\n2: yes\n3: yes\n4: yes\n5: yes\n6: no\n7: yes\n8: yes";
+
+        String refined = new SeedRefiner(answering("nothing usable", NAMED, verdicts, "I have nothing to add."), true).refine(WIDE, WIDE_SEED);
+
+        assertThat(refined).contains("  - (audit) audit on a missing file prints \"no such file: <path>\" to standard error and exits 1 [k6]")
+                .contains("- short row: exits with status 2 and prints to standard output \"row <n>: <n> short\" -- when a row is short");
     }
 
     @Test

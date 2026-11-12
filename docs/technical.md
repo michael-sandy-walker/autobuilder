@@ -198,6 +198,17 @@ block that does not fit is left out whole and counted, never cut.
   the same conversation, and the model then writes its change. The prompt otherwise carries the last attempt's
   errors only; the question reaches everything the run has done, and what the files contain now. Switch:
   `autobuilder.log-consultation.enabled`.
+- **One question of a kept source** (`ReferenceConsultation`), while the subgoal descends from the goal a
+  capability import landed as and the capability's source was kept beside it
+  (`meta/inputs/<input>/reference/`): a reply of `#ReferenceQuestion <question>` is answered by the same
+  investigator reading that source's files.
+- **What a kept source already answered** (`ReferenceConsultation.answersBlock`): every answered question is kept
+  with its input (`meta/inputs/<input>/reference-answers.json`; the same question asked again replaces its
+  answer) and shown, newest first within the budget, to the work under the import's goal and -- while that input
+  is the project's newest -- to all other work too. The source does not change, so its answers stay true; the
+  work that follows the asking cycle (a test for the code, a repair, a rewrite) runs under goals that are
+  siblings of the import's goal. The file is part of what a checkpoint captures. The log question's answers are
+  not kept: they describe a run that moves on.
 
 **Context**
 

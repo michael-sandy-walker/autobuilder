@@ -371,6 +371,44 @@ class CapabilityImportServiceTest {
     }
 
     @Test
+    void whatTheReferenceAnsweredIsKept_andShownToLaterWorkOutsideTheImportsGoal() throws IOException {
+        ReferenceConsultation consultation = new ReferenceConsultation(goals, files, service, investigator);
+        CapabilityImportService.Selection s = discovered();
+        service.choose(s.id(), List.of(new Choice("c3", Mode.ADAPT, "Refusals become typed.", true)));
+        ProjectInputService.Report r = inputs.bring(service.request(s.id()));
+        service.landed(s.id(), r.inputId());
+        inputs.keep(r.inputId(), "operator");
+        assertThat(consultation.answersBlock(10_000)).as("nothing asked yet").isNull();
+
+        consultation.answer(ReferenceConsultation.MARKER + " How is a refusal typed?", "cycle-1");
+
+        assertThat(files.readFile("meta/inputs/" + r.inputId() + ReferenceConsultation.ANSWERS_FILE))
+                .contains("How is a refusal typed?", "cycle-1");
+        // The import's goal is done with; what follows is a sibling of it, as a refused closure's work is.
+        goals.addSubGoal("other", "Assert the values the typed refusals return", true, "root", "planner", null);
+        assertThat(goals.getCurrentSubGoal().getId()).isEqualTo("other");
+        assertThat(consultation.offerBlock()).as("the offer stays under the import's goal").isNull();
+        String block = consultation.answersBlock(10_000);
+        assertThat(block).contains("WHAT THE REFERENCE PROJECT lending ANSWERED EARLIER",
+                "Question: How is a refusal typed?", ANSWER.strip().lines().findFirst().orElseThrow());
+
+        // The same question again replaces its answer; a second question is kept beside it, and a budget that
+        // holds only one shows the newest and counts the other.
+        goals.setCurrentSubGoal(goals.getAllGoals().stream().filter(g -> g.getMetadata() != null
+                && r.inputId().equals(g.getMetadata().get("inputId"))).findFirst().orElseThrow().getId());
+        consultation.answer(ReferenceConsultation.MARKER + " How is a refusal typed?", "cycle-2");
+        assertThat(consultation.keptAnswers(r.inputId())).hasSize(1).first()
+                .extracting(ReferenceConsultation.Kept::cycle).isEqualTo("cycle-2");
+        consultation.answer(ReferenceConsultation.MARKER + " Where are refusals mapped?", "cycle-3");
+        assertThat(consultation.keptAnswers(r.inputId())).hasSize(2);
+        int one = com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(
+                "Question: Where are refusals mapped?\nAnswer:\n" + ANSWER) + 1;
+        assertThat(consultation.answersBlock(one)).contains("Where are refusals mapped?", "1 earlier answer(s) not shown")
+                .doesNotContain("How is a refusal typed?");
+        assertThat(consultation.answersBlock(0)).isNull();
+    }
+
+    @Test
     void aSelectionCancelledBeforeItsImportTouchedNothing() throws IOException {
         CapabilityImportService.Selection s = discovered();
         service.choose(s.id(), List.of(new Choice("c1", Mode.CODE, "Keep records.", false)));

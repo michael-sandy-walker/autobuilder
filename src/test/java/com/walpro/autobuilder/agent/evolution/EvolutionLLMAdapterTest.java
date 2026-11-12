@@ -339,4 +339,21 @@ class EvolutionLLMAdapterTest {
         assertThat(prompt.getValue()).doesNotContain("THIS RUN'S LOG");
         assertThat(consult.getValue()).isNull();
     }
+
+    /** T4-ER: what a kept source answered earlier is in the prompt of work that has no offer of its own. */
+    @Test
+    void whatAKeptSourceAnsweredIsInThePrompt_withoutAnOffer() throws IOException {
+        var reference = org.mockito.Mockito.mock(com.walpro.autobuilder.core.merge.ReferenceConsultation.class);
+        when(reference.answersBlock(org.mockito.ArgumentMatchers.anyInt())).thenReturn("--- WHAT THE REFERENCE PROJECT x ANSWERED EARLIER --- a");
+        org.springframework.test.util.ReflectionTestUtils.setField(agent, "referenceConsultation", reference);
+        when(protocolInvoker.callWithValidation(any(), anyString(), anyString(), any(), any(), any(), any()))
+                .thenReturn(LLMResponseResult.failure(null, "none"));
+
+        agent.evolve(CycleContextData.builder().build());
+
+        ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
+        verify(protocolInvoker).callWithValidation(any(), anyString(), prompt.capture(), any(), any(), any(), any());
+        assertThat(prompt.getValue()).contains("--- WHAT THE REFERENCE PROJECT x ANSWERED EARLIER --- a")
+                .doesNotContain("#ReferenceQuestion");
+    }
 }

@@ -194,6 +194,12 @@ public class EvolutionLLMAdapter {
         boolean retrying = refreshed.rejectionFeedback() != null && !refreshed.rejectionFeedback().isEmpty();
         String logOffer = retrying && logConsultation != null ? logConsultation.offerBlock() : null;
         if (logOffer != null) userPrompt = userPrompt + "\n\n" + logOffer;
+        // T4-ER: what a kept source already answered stays in front of the work it was asked for.
+        if (referenceConsultation != null) {
+            String answered = referenceConsultation.answersBlock(Math.max(0, promptTokenBudget.promptHeadroomTokens()
+                    - com.walpro.autobuilder.protocol.PromptTokenBudget.estimateTokens(userPrompt)) / 2);
+            if (answered != null) userPrompt = userPrompt + "\n\n" + answered;
+        }
         // T4-EI: adapting a capability whose source was kept, the model may instead ask one question of that source.
         String referenceOffer = referenceConsultation != null ? referenceConsultation.offerBlock() : null;
         if (referenceOffer != null) userPrompt = userPrompt + "\n\n" + referenceOffer;

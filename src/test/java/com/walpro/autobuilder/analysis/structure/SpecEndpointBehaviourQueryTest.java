@@ -115,6 +115,51 @@ class SpecEndpointBehaviourQueryTest {
         }
     }
 
+    /**
+     * T1-GJ: a route the specification states WITH a query is rendered with it. Field, firestarter
+     * under a reverse-engineered seed: this line became "GET /loans returns HTTP 200", the bare
+     * request answered 400 and the loop made the parameter optional in the imported code.
+     */
+    @Test
+    void aRouteStatedWithAQueryIsRenderedWithIt() {
+        String seed = "Members: POST /members (create; name required).\n\n"
+                + "GET /loans?memberId={id} returns 200 with the member's loans, active and returned.";
+        Map<Endpoint, List<SpecEndpointBehaviourQuery.StatedBehaviour>> all = query.statedBehaviours(seed);
+        Endpoint loans = new Endpoint("GET", "/loans");
+
+        assertThat(all.get(loans)).extracting(SpecEndpointBehaviourQuery.StatedBehaviour::input)
+                .containsExactly("memberId={id}");
+        List<String> criteria = query.criteriaFor(loans, all.get(loans));
+        assertThat(criteria).hasSize(1);
+        assertThat(criteria.get(0)).startsWith("GET /loans?memberId={id} returns HTTP 200");
+
+        // Read back: the same endpoint, and the input the builders ground or decline.
+        var parser = com.walpro.autobuilder.core.build.BehaviouralCriterionParser.class;
+        assertThat(com.walpro.autobuilder.core.build.BehaviouralCriterionParser.parse(criteria.get(0)).orElseThrow().path())
+                .as("%s reads the endpoint", parser.getSimpleName()).isEqualTo("/loans");
+        assertThat(com.walpro.autobuilder.core.build.BehaviouralCriterionParser.statedInput(criteria.get(0)))
+                .contains("memberId={id}");
+    }
+
+    @Test
+    void twoMentionsOfOneRouteKeepTheirOwnInputs() {
+        String seed = "GET /loans?memberId={id} returns 200 with that member's loans.\n\n"
+                + "GET /loans returns 400 when no member is named.";
+        Endpoint loans = new Endpoint("GET", "/loans");
+        List<String> criteria = query.criteriaFor(loans, query.statedBehaviours(seed).get(loans));
+
+        assertThat(criteria).hasSize(2);
+        assertThat(criteria.get(0)).startsWith("GET /loans?memberId={id} returns HTTP 200");
+        assertThat(criteria.get(1)).startsWith("GET /loans returns HTTP 400");
+    }
+
+    @Test
+    void aRouteStatedWithoutAQueryIsRenderedAsBefore() {
+        Endpoint members = new Endpoint("POST", "/members");
+        assertThat(query.statedBehaviours(SPEC).get(members))
+                .allSatisfy(b -> assertThat(b.input()).isNull());
+    }
+
     @Test
     void abstainsOnASpecThatNamesNothing() {
         assertThat(query.statedBehaviours("Build a string formatting library.")).isEmpty();

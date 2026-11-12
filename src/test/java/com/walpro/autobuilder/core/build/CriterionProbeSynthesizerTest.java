@@ -406,6 +406,35 @@ class CriterionProbeSynthesizerTest {
     }
 
     /**
+     * T1-GJ, from the seed line to the request: a specification stating a route with a query
+     * yields a requirement whose probe carries the parameter, taken from a resource the sequence
+     * creates -- and where nothing can be created, no probe at all. Never the bare route.
+     */
+    @Test
+    void aSeedLineStatingARouteWithAQueryIsProbedWithItOrNotAtAll(@org.junit.jupiter.api.io.TempDir Path root) throws Exception {
+        Path model = root.resolve("src/main/java/com/example/Member.java");
+        Files.createDirectories(model.getParent());
+        Files.writeString(model, "public class Member { private String name; private String email; }");
+        String seed = "Members: POST /members (create; name required; email required).\n\n"
+                + "GET /loans?memberId={id} returns 200 with the member's loans, active and returned.";
+
+        var behaviourQuery = new com.walpro.autobuilder.analysis.structure.SpecEndpointBehaviourQuery();
+        var loans = new com.walpro.autobuilder.analysis.structure.Endpoint("GET", "/loans");
+        List<String> requirements = behaviourQuery.criteriaFor(loans, behaviourQuery.statedBehaviours(seed).get(loans));
+        assertThat(requirements).hasSize(1);
+        var a = BehaviouralCriterionParser.parse(requirements.get(0)).orElseThrow();
+
+        var grounded = synthesizer.synthesize(seed, a, root);
+        assertThat(grounded).isPresent();
+        assertThat(grounded.get().get(0).path()).isEqualTo("/members");
+        assertThat(grounded.get().get(grounded.get().size() - 1).path()).isEqualTo("/loans?memberId=$1.id");
+
+        // No artifact to derive a body from: nothing is created, so nothing is asked.
+        assertThat(synthesizer.synthesize(seed, a, null)).isEmpty();
+        assertThat(BehaviouralCriterionParser.exercisable(requirements.get(0))).isEmpty();
+    }
+
+    /**
      * A criterion about an ABSENT reference is not probed against a resource that was just
      * created — asserted as an OUTCOME, because that is what this test can honestly claim.
      *

@@ -79,8 +79,28 @@ public class SpecEndpointBehaviourQuery {
             "\\b(required|must|matches|match|unique|at most|at least|no more than|max|min|maximum|minimum)\\b",
             Pattern.CASE_INSENSITIVE);
 
-    /** One stated behaviour: the status, and the specification's own words for when it applies. */
-    public record StatedBehaviour(int status, String condition) {
+    /**
+     * One stated behaviour: the status, the specification's own words for when it applies, and the
+     * input the specification stated the route WITH (the query of its mention, as written), or
+     * null when it stated none.
+     *
+     * <p>T1-GJ: the {@link Endpoint} a behaviour is filed under is normalized for identity and so
+     * carries no query. A requirement rendered from the endpoint alone asked for the bare route --
+     * "GET /loans?memberId={id} returns 200" became "GET /loans returns HTTP 200", the application
+     * rightly refused the missing parameter, and the loop made the parameter optional. The input
+     * rides here, beside the status, so {@link #criteriaFor} can state the route as the
+     * specification did and the probe builders (which already ground or decline a stated input)
+     * are handed what was stated.
+     */
+    public record StatedBehaviour(int status, String condition, String input) {
+        public StatedBehaviour(int status, String condition) {
+            this(status, condition, null);
+        }
+
+        StatedBehaviour statedWith(String statedInput) {
+            return statedInput == null ? this : new StatedBehaviour(status, condition, statedInput);
+        }
+
         @Override
         public String toString() {
             return condition == null || condition.isBlank()
@@ -100,12 +120,14 @@ public class SpecEndpointBehaviourQuery {
         List<int[]> paragraphs = paragraphSpans(specText);
         List<int[]> mentions = new ArrayList<>();
         List<Endpoint> endpoints = new ArrayList<>();
+        List<String> inputs = new ArrayList<>();
         Matcher m = ENDPOINT.matcher(specText);
         while (m.find()) {
             String path = EndpointPaths.normalizePath(m.group(2));
             if (path == null) continue;
             mentions.add(new int[]{m.start()});
             endpoints.add(new Endpoint(m.group(1).toUpperCase(), path));
+            inputs.add(EndpointPaths.discardedInput(m.group(2)).orElse(null));
         }
         if (endpoints.isEmpty()) return out;
 
@@ -124,7 +146,9 @@ public class SpecEndpointBehaviourQuery {
                 }
             }
             if (stated.isEmpty()) continue;
-            out.computeIfAbsent(endpoints.get(i), k -> new ArrayList<>()).addAll(stated);
+            String input = inputs.get(i);
+            List<StatedBehaviour> filed = out.computeIfAbsent(endpoints.get(i), k -> new ArrayList<>());
+            for (StatedBehaviour b : stated) filed.add(b.statedWith(input));
         }
         return out;
     }
@@ -219,7 +243,8 @@ public class SpecEndpointBehaviourQuery {
         if (endpoint == null || behaviours == null) return out;
         for (StatedBehaviour b : behaviours) {
             String condition = b.condition() == null || b.condition().isBlank() ? "" : " — " + b.condition();
-            out.add(endpoint.verb() + " " + endpoint.path() + " returns HTTP " + b.status() + condition);
+            String route = b.input() == null ? endpoint.path() : endpoint.path() + "?" + b.input();
+            out.add(endpoint.verb() + " " + route + " returns HTTP " + b.status() + condition);
         }
         return out;
     }

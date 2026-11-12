@@ -13,15 +13,15 @@ Restamp a line the day you re-check it against its file.
 - Build `mvn clean install`, test `mvn test -Dtest=C#m`; targets `data/<name>/`, runs pick by `PREFLIGHT_TARGET=x`; goal stack `meta/GoalStack.json`; profiles `test`, `dev-local`, `dev-auto`, `fast`
 - **`.claude-memory/` IS the loading memory** — checkout/branch/cherry-pick touching it mutates live memory; commit first. Tiers T1 correctness .. T6 harness
 ## Roadmap
-- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-11)
-- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-11)
+- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-12)
+- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-12)
 - `tier_definitions.md` — tier meanings. (reviewed 2026-09-08)
 ## Meta / Process (YOU+ME work, not the product)
 - `meta_process.md` — how YOU+ME divide/sequence/staff work; "Model" = which Claude runs a session. (reviewed 2026-10-20)
 ## Project insights
 Direction and orientation:
 - `project_session_agenda.md`: 2026-08-23 REORDER section is live; S1-S6 reasoning only; never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state; only the NEWEST block has the entry marker. Read before quoting run numbers. (reviewed 2026-11-11)
+- `project_resume_state.md`: latest session/run state; only the NEWEST block has the entry marker. Read before quoting run numbers. (reviewed 2026-11-12)
 - `project_wave2_structure.md`: wave 2 layers; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: goal = a loop with a self-model it consults before acting; "substrate or patch?". (reviewed 2026-09-08)
 - `project_living_project_vision.md`: a project keeps taking inputs (seed = first); OFFSPRING code+graph become knowledge. Before input/merge/import work. (reviewed 2026-10-30)
@@ -100,7 +100,7 @@ Evidence discipline:
 - `feedback_dont_group_defects_by_vocabulary.md`: a shared description is not a shared cause. (reviewed 2026-08-29)
 - `feedback_compare_against_the_last_good_build.md`: compare to the last GOOD build; name it in the batch header. (reviewed 2026-10-11)
 - `feedback_dont_evaluate_a_build_with_older_runs.md`: a window is a rate only if build AND target are constant. (reviewed 2026-09-21)
-- `feedback_read_test_results_from_the_run.md`: quote test counts only from THIS run's output. (reviewed 2026-11-03)
+- `feedback_read_test_results_from_the_run.md`: quote test counts only from THIS run's output; the reports directory keeps stale files. (reviewed 2026-11-12)
 - `feedback_verify_diff_is_substantive.md`: prove which input now yields different output. (reviewed 2026-09-08)
 - `feedback_verify_at_decision_timestamp.md`: diagnose against state AT decision time. (reviewed 2026-07-09)
 - `feedback_activity_not_progress.md`: a mechanism firing is not helping; check the outcome. (reviewed 2026-07-09)

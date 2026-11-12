@@ -21,3 +21,15 @@ could not start -- a second unmarked constructor, the same mistake made earlier 
 a commit after a suite is GATED on the parsed numbers in the same command (`[ failures = 0 ] && [ errors = 0 ] &&
 git commit ... || echo NOT COMMITTED`), never just printed beside it. And a Spring bean given a second constructor
 for tests gets `@Autowired` on the one Spring should use, in the same edit.
+
+## 2026-11-12 -- summing `target/surefire-reports` counts stale reports too
+
+With `mvn -q` there is no summary line, so I summed the `TEST-*.xml` reports and quoted 4587 for a
+suite that had run about 4540: nine report files from earlier days (classes since deleted or not
+run) were still in the directory and were added in.
+
+**Why:** the directory is not cleared by `mvn test`; a count over all of it is not this run's count.
+
+**How to apply:** sum only reports whose modification time is after the suite's start (or run
+without `-q` and read the summary line). Print the names of the stale files once so the gap is
+visible.

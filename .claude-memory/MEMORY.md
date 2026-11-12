@@ -54,7 +54,7 @@ Measurement and yardsticks:
 - `project_t4bq_naming_consistency_ab.md`: A/B stood down; 3-pair minimum before claims. (reviewed 2026-07-09)
 False completions and diagnosis lenses:
 - `project_false_completion_unmasked.md`, `_2`, `_3`, `_4`: the four false completions -- stub-blind verifier, unbootable jar (abstain is not pass), DI defect averaged away, bookkeeping ledger never reading the seed. (reviewed 2026-09-28)
-- `project_invented_facts_have_authorities.md`: defects are INVENTED FACTS whose cheap authority went unconsulted; structure before model. (reviewed 2026-09-30)
+- `project_invented_facts_have_authorities.md`: defects are INVENTED FACTS whose cheap authority went unconsulted; structure before model. Also: group by the RECORD, leave the model the word (T4-EQ). (reviewed 2026-11-12)
 - `project_capability_outruns_routing.md`: a missing behaviour is UNREACHED, not unbuilt; find the link that does not fire. (reviewed 2026-09-21)
 - `project_ticket_premises_expire.md`: a ticket's BLOCKER is a dated claim; grep both ways first. (reviewed 2026-09-21)
 - `project_detector_went_silent_as_the_fault_spread.md`: ask any majority rule what it does when the anomaly is the majority. (reviewed 2026-09-03)

@@ -14,6 +14,7 @@ import com.walpro.autobuilder.core.coldread.entry.EntryKind;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -383,5 +384,70 @@ class SeedRefinerTest {
         String refined = new SeedRefiner(llm, true).refine(account, COMPOSED);
 
         assertThat(refined).contains("\naudit:\n- Auditing a well-formed file exits 0 [k3]\n");
+    }
+
+    // --- a claim with no recorded answer: its exercise is the record ---
+
+    private static JudgedClaim tested(String id, String body) {
+        Claim k = new Claim(id, "c1", "claim " + id, EntryKind.LIBRARY_STYLE, List.of(), 0, body, null);
+        return new JudgedClaim(k, "anchored", List.of(), List.of(new Observation("as-is", 0, null, null, true)),
+                new FeatureVerdict("Dial", "anchored", List.of(), "Dial.of"));
+    }
+
+    private static final Account CALLED = new Account("src", "copy", null, "library-style",
+            List.of(new Feature("Dial", "library-style", List.of("Dial"), List.of("Dial.of"), List.of(), List.of(),
+                    List.of("k1", "k2", "k3", "k4"))),
+            List.of(), List.of(), List.of(), List.of(),
+            List.of(tested("k1", "assertEquals(Dial.LOW, Dial.of(\"0\"));"),
+                    tested("k2", "assertEquals(Dial.LOW, Dial.of(\"0\"));\n  assertEquals(Dial.HIGH, Dial.of(\"9\"));"),
+                    tested("k3", "assertEquals(Dial.HIGH, Dial.of(\"9\"));"),
+                    tested("k4", "Dial d = new Dial();\nassertThrows(IllegalStateException.class, () -> d.turn(null));")),
+            Map.of(), 0);
+
+    @Test
+    void aLineWhoseClaimsLeftNoAnswerShowsTheirExercisesAsItsCases_oneThatOpensAnotherStandsUnderIt() {
+        Map<String, List<SeedRefiner.Cited>> sections = new LinkedHashMap<>();
+        sections.put("Dial.of", List.of(new SeedRefiner.Cited("Dial.of gives the setting at the digit's position", List.of("k1", "k2", "k3")),
+                new SeedRefiner.Cited("Turning to nothing is refused", List.of("k4"))));
+
+        List<SeedRefiner.Cited> lines = SeedRefiner.withExercises(CALLED, sections).get("Dial.of");
+
+        assertThat(lines).extracting(SeedRefiner.Cited::render).containsExactly(
+                "- Dial.of gives the setting at the digit's position [k1, k2, k3]",
+                // k1 is how k2 opens; k3 is k2's second statement, which is not how it opens, so it is shown itself.
+                "  - e.g. assertEquals(Dial.LOW, Dial.of(\"0\")); assertEquals(Dial.HIGH, Dial.of(\"9\")); [k1, k2]",
+                "  - e.g. assertEquals(Dial.HIGH, Dial.of(\"9\")); [k3]",
+                "- Turning to nothing is refused [k4]",
+                "  - e.g. Dial d = new Dial(); assertThrows(IllegalStateException.class, () -> d.turn(null)); [k4]");
+    }
+
+    @Test
+    void anExerciseIsShownOnce_underTheLineCitingTheFewestClaims_andALineWithARecordedAnswerShowsNone() {
+        Map<String, List<SeedRefiner.Cited>> sections = new LinkedHashMap<>();
+        sections.put("Dial.of", List.of(new SeedRefiner.Cited("A rule of the input", List.of("k1", "k3")),
+                new SeedRefiner.Cited("The lowest digit is LOW", List.of("k1"))));
+
+        assertThat(SeedRefiner.withExercises(CALLED, sections).get("Dial.of")).extracting(SeedRefiner.Cited::render).containsExactly(
+                "- A rule of the input [k1, k3]",
+                "  - e.g. assertEquals(Dial.HIGH, Dial.of(\"9\")); [k3]",
+                "- The lowest digit is LOW [k1]",
+                "  - e.g. assertEquals(Dial.LOW, Dial.of(\"0\")); [k1]");
+
+        Map<String, List<SeedRefiner.Cited>> runs = new LinkedHashMap<>();
+        runs.put("tally", List.of(new SeedRefiner.Cited("Tallying a file prints its row count", List.of("k1"))));
+        assertThat(SeedRefiner.withExercises(account, runs).get("tally")).hasSize(1);
+    }
+
+    @Test
+    void theExercisesAreReadBackAsCases_neverAsTheOperatorsOwnLines_andStayInTheKeptSeed() {
+        String composed = "Dial:\n- Dial.of gives the setting at the digit's position [k1, k2, k3]\n- Turning to nothing is refused [k4]\n";
+
+        String refined = new SeedRefiner(answering("nothing usable"), true).refine(CALLED, composed);
+
+        var lines = SeedComposer.lines(refined, Set.of("Dial"));
+        assertThat(lines.stream().filter(l -> l.kind().equals(SeedComposer.Line.CASE))).hasSize(3);
+        assertThat(ReverseEngineeringConfirmation.stated(CALLED, refined)).isEmpty();
+        assertThat(ReverseEngineeringConfirmation.seedText(lines))
+                .contains("  - e.g. assertEquals(Dial.HIGH, Dial.of(\"9\"));\n");
     }
 }

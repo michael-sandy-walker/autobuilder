@@ -180,7 +180,79 @@ public class SeedRefiner {
         } catch (RuntimeException e) {
             log.warn("T4-EQ: no rule of the input was named -- {}", e.getMessage());
         }
-        return render(purposeLine(composed), context, named);
+        return render(purposeLine(composed), context, withExercises(account, named));
+    }
+
+    /** Starts a case that is a claim's exercise, as it was run. */
+    static final String EXERCISE = "e.g.";
+
+    /**
+     * Under a line whose claims have NO recorded answer, the exercises themselves, as its cases.
+     *
+     * <p>A run or a request leaves what the project answered, and the wording above is made from it. A test leaves
+     * only that it passed -- so the values it passed WITH (which input, which result) are in the exercise and nowhere
+     * else, and a line worded as a rule ("the zone whose position is the digit sum modulo seven") states none of
+     * them. Field, labelmaker 2026-11-12: every zone name, the check alphabet and each check character stood in the
+     * kept claims' tests and not once in the seed. Nothing is read out of the exercise and nothing is asked of a
+     * model: it is shown as it was run.
+     *
+     * <p>Each claim's exercise is shown once, under the line that cites the fewest claims among those citing it. Two
+     * claims exercised alike share a case, and a claim whose exercise is the opening of another's stands under that
+     * one: the longer exercise ran the same statements first, in the same state.
+     */
+    static Map<String, List<Cited>> withExercises(Account account, Map<String, List<Cited>> sections) {
+        Map<String, JudgedClaim> byId = new LinkedHashMap<>();
+        account.claims().forEach(j -> byId.put(j.claim().id(), j));
+        Map<String, Cited> owner = new LinkedHashMap<>();
+        sections.values().forEach(lines -> lines.forEach(l -> {
+            if (l.nested()) return;
+            for (String id : l.cites()) {
+                Cited now = owner.get(id);
+                if (now == null || l.cites().size() < now.cites().size()) owner.put(id, l);
+            }
+        }));
+        Map<String, List<Cited>> out = new LinkedHashMap<>();
+        sections.forEach((use, lines) -> {
+            List<Cited> with = new ArrayList<>();
+            for (Cited l : lines) {
+                with.add(l);
+                if (l.nested()) continue;
+                Map<String, List<String>> statements = new LinkedHashMap<>();
+                for (String id : l.cites()) {
+                    JudgedClaim j = byId.get(id);
+                    if (j == null || owner.get(id) != l || answerOf(j) != null || j.claim().test() == null) continue;
+                    List<String> body = j.claim().test().lines().map(String::strip).filter(x -> !x.isEmpty()).toList();
+                    if (!body.isEmpty()) statements.put(id, body);
+                }
+                // Longest first, so an exercise that opens another is found under it; the order shown is the line's own.
+                List<String> longestFirst = new ArrayList<>(statements.keySet());
+                longestFirst.sort((a, b) -> statements.get(b).size() - statements.get(a).size());
+                Map<String, List<String>> shownWith = new LinkedHashMap<>();
+                for (String id : longestFirst) {
+                    List<String> body = statements.get(id);
+                    String under = null;
+                    for (String shown : shownWith.keySet()) {
+                        List<String> longer = statements.get(shown);
+                        if (longer.size() >= body.size() && longer.subList(0, body.size()).equals(body)) {
+                            under = shown;
+                            break;
+                        }
+                    }
+                    if (under == null) shownWith.put(id, new ArrayList<>(List.of(id)));
+                    else shownWith.get(under).add(id);
+                }
+                java.util.Set<String> placed = new java.util.HashSet<>();
+                for (String id : l.cites()) {
+                    for (Map.Entry<String, List<String>> shown : shownWith.entrySet()) {
+                        if (!shown.getValue().contains(id) || !placed.add(shown.getKey())) continue;
+                        List<String> inOrder = l.cites().stream().filter(shown.getValue()::contains).toList();
+                        with.add(new Cited(EXERCISE + " " + String.join(" ", statements.get(shown.getKey())), inOrder, true));
+                    }
+                }
+            }
+            out.put(use, with);
+        });
+        return out;
     }
 
     // ------------------------------------------------------------------------------------------------------------

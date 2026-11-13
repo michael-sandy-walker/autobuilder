@@ -187,7 +187,7 @@ public class SeedRefiner {
     static final String EXERCISE = "e.g.";
 
     /**
-     * Under a line whose claims have NO recorded answer, the exercises themselves, as its cases.
+     * Under a line that stands for SEVERAL claims with no recorded answer, their exercises, as its cases.
      *
      * <p>A run or a request leaves what the project answered, and the wording above is made from it. A test leaves
      * only that it passed -- so the values it passed WITH (which input, which result) are in the exercise and nowhere
@@ -195,6 +195,10 @@ public class SeedRefiner {
      * them. Field, labelmaker 2026-11-12: every zone name, the check alphabet and each check character stood in the
      * kept claims' tests and not once in the seed. Nothing is read out of the exercise and nothing is asked of a
      * model: it is shown as it was run.
+     *
+     * <p>Only where a line stands for several claims: a line resting on one claim is worded from that claim and
+     * states its values itself. Measured on the second library-style project (2026-11-13, 59 of 63 lines resting on
+     * one claim), cases under every line repeated the line and made the seed three times as long.
      *
      * <p>Each claim's exercise is shown once, under the line that cites the fewest claims among those citing it. Two
      * claims exercised alike share a case, and a claim whose exercise is the opening of another's stands under that
@@ -205,7 +209,7 @@ public class SeedRefiner {
         account.claims().forEach(j -> byId.put(j.claim().id(), j));
         Map<String, Cited> owner = new LinkedHashMap<>();
         sections.values().forEach(lines -> lines.forEach(l -> {
-            if (l.nested()) return;
+            if (l.nested() || l.cites().size() < 2) return;
             for (String id : l.cites()) {
                 Cited now = owner.get(id);
                 if (now == null || l.cites().size() < now.cites().size()) owner.put(id, l);

@@ -405,7 +405,7 @@ class SeedRefinerTest {
             Map.of(), 0);
 
     @Test
-    void aLineWhoseClaimsLeftNoAnswerShowsTheirExercisesAsItsCases_oneThatOpensAnotherStandsUnderIt() {
+    void aLineStandingForSeveralClaimsThatLeftNoAnswerShowsTheirExercisesAsItsCases_oneThatOpensAnotherStandsUnderIt() {
         Map<String, List<SeedRefiner.Cited>> sections = new LinkedHashMap<>();
         sections.put("Dial.of", List.of(new SeedRefiner.Cited("Dial.of gives the setting at the digit's position", List.of("k1", "k2", "k3")),
                 new SeedRefiner.Cited("Turning to nothing is refused", List.of("k4"))));
@@ -417,24 +417,25 @@ class SeedRefinerTest {
                 // k1 is how k2 opens; k3 is k2's second statement, which is not how it opens, so it is shown itself.
                 "  - e.g. assertEquals(Dial.LOW, Dial.of(\"0\")); assertEquals(Dial.HIGH, Dial.of(\"9\")); [k1, k2]",
                 "  - e.g. assertEquals(Dial.HIGH, Dial.of(\"9\")); [k3]",
-                "- Turning to nothing is refused [k4]",
-                "  - e.g. Dial d = new Dial(); assertThrows(IllegalStateException.class, () -> d.turn(null)); [k4]");
+                // a line resting on one claim states its values itself
+                "- Turning to nothing is refused [k4]");
     }
 
     @Test
-    void anExerciseIsShownOnce_underTheLineCitingTheFewestClaims_andALineWithARecordedAnswerShowsNone() {
+    void anExerciseIsShownOnce_underTheLineCitingTheFewestClaimsOfThoseStandingForSeveral_andALineWithARecordedAnswerShowsNone() {
         Map<String, List<SeedRefiner.Cited>> sections = new LinkedHashMap<>();
-        sections.put("Dial.of", List.of(new SeedRefiner.Cited("A rule of the input", List.of("k1", "k3")),
-                new SeedRefiner.Cited("The lowest digit is LOW", List.of("k1"))));
+        sections.put("Dial.of", List.of(new SeedRefiner.Cited("A rule of the input", List.of("k1", "k2", "k3")),
+                new SeedRefiner.Cited("The ends of the dial", List.of("k1", "k3"))));
 
         assertThat(SeedRefiner.withExercises(CALLED, sections).get("Dial.of")).extracting(SeedRefiner.Cited::render).containsExactly(
-                "- A rule of the input [k1, k3]",
-                "  - e.g. assertEquals(Dial.HIGH, Dial.of(\"9\")); [k3]",
-                "- The lowest digit is LOW [k1]",
-                "  - e.g. assertEquals(Dial.LOW, Dial.of(\"0\")); [k1]");
+                "- A rule of the input [k1, k2, k3]",
+                "  - e.g. assertEquals(Dial.LOW, Dial.of(\"0\")); assertEquals(Dial.HIGH, Dial.of(\"9\")); [k2]",
+                "- The ends of the dial [k1, k3]",
+                "  - e.g. assertEquals(Dial.LOW, Dial.of(\"0\")); [k1]",
+                "  - e.g. assertEquals(Dial.HIGH, Dial.of(\"9\")); [k3]");
 
         Map<String, List<SeedRefiner.Cited>> runs = new LinkedHashMap<>();
-        runs.put("tally", List.of(new SeedRefiner.Cited("Tallying a file prints its row count", List.of("k1"))));
+        runs.put("tally", List.of(new SeedRefiner.Cited("Tallying a file", List.of("k1", "k2"))));
         assertThat(SeedRefiner.withExercises(account, runs).get("tally")).hasSize(1);
     }
 
@@ -445,7 +446,7 @@ class SeedRefinerTest {
         String refined = new SeedRefiner(answering("nothing usable"), true).refine(CALLED, composed);
 
         var lines = SeedComposer.lines(refined, Set.of("Dial"));
-        assertThat(lines.stream().filter(l -> l.kind().equals(SeedComposer.Line.CASE))).hasSize(3);
+        assertThat(lines.stream().filter(l -> l.kind().equals(SeedComposer.Line.CASE))).hasSize(2);
         assertThat(ReverseEngineeringConfirmation.stated(CALLED, refined)).isEmpty();
         assertThat(ReverseEngineeringConfirmation.seedText(lines))
                 .contains("  - e.g. assertEquals(Dial.HIGH, Dial.of(\"9\"));\n");

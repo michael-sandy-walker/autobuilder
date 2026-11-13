@@ -1,0 +1,28 @@
+What it is: Shipping-label codes for parcels: a zone from the postcode, a running number, and a check character. [r2]
+
+Zone:
+- Zone.of maps a five-digit postcode to a zone whose ordinal equals the sum of its digits modulo seven [k1, k2, k3, k4, k5, k6, k7, k8, k9]
+- Zone.of rejects a null postcode by throwing IllegalArgumentException [k10]
+- Zone.of rejects a postcode that is not exactly five characters long by throwing IllegalArgumentException [k11]
+- Zone.of rejects a five-character string containing a non-digit character by throwing IllegalArgumentException [k12]
+
+Labeler:
+- Labeler.checkChar returns the 19-letter alphabet character at index (sum of each character's value times its position's weight) mod 19, where a digit d has value d and an uppercase letter L has value 10+(L-'A'), with weights {7,3,9,7,3,9,7} [k13, k18, k20, k21, k22]
+- Labeler.checkChar throws IllegalArgumentException when the body is null [k14]
+- Labeler.checkChar throws IllegalArgumentException when the body is not exactly seven characters long [k15]
+- Labeler.checkChar throws IllegalArgumentException when the body contains a lowercase letter [k16]
+- Labeler.checkChar throws IllegalArgumentException when the body contains a non-alphanumeric character [k17]
+- Labeler.next returns a label whose zone prefix is the first two letters of the zone derived from the postcode, whose number is 00001, and whose check character is the weighted check of that body [k23, k28, k29, k30, k31, k34]
+- Each subsequent Labeler.next call on the same instance increments the running number by one [k24]
+- A rejected postcode makes Labeler.next throw IllegalArgumentException and consumes no running number [k26, k32, k33]
+- Each Labeler instance keeps its own running counter, starting at 00001 [k27]
+- Labeler.isValid returns true for a well-formed label whose zone prefix, five digits and trailing check character are all consistent with the weighted computation [k35]
+- Labeler.isValid returns false when the trailing check character does not match the weighted computation for the rest of the label [k36]
+- Labeler.isValid returns false when the two-character zone prefix does not match any known zone [k37]
+- Labeler.isValid returns false when the label is not exactly ten characters long [k38]
+- Labeler.isValid returns false when the dashes are missing from the label [k39]
+- Labeler.isValid returns false when the label is lowercase instead of uppercase [k40]
+- Labeler.isValid returns false for an empty label [k41]
+- Labeler.isValid returns false for a null label [k42]
+- Labeler.isValid returns false when the five-digit middle field contains a non-digit character [k43]
+- Labeler.isValid returns false when the dashes are in the wrong positions [k44]

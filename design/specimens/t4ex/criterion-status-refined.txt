@@ -1,0 +1,140 @@
+What it is: A tool that reads an acceptance criterion about an HTTP endpoint and a specification stating response statuses for endpoints, extracting the asserted endpoint/status and the stated behaviours to compare them. [r2, r3, r4, r5]
+How it is used: library-style -- exercised inside the same process, by a test that calls it. Exercised here through: EndpointPaths.normalizePath, EndpointPaths.discardedInput, EndpointPaths.declaredIn, SpecEndpointBehaviourQuery.StatedBehaviour.toString, BehaviouralCriterionParser.parse, BehaviouralCriterionParser.statedInput, BehaviouralCriterionParser.statedParameterName, BehaviouralCriterionParser.statesAbsentInput, BehaviouralCriterionParser.mentionsSurface, SpecEndpointBehaviourQuery.statedBehaviours, SpecEndpointBehaviourQuery.criteriaFor, SeedStatusSupport.of.
+
+EndpointPaths.normalizePath:
+- path normalization: EndpointPaths.normalizePath returned "/loans", in each of these cases [k13, k15, k17]
+  - input is "/loans?memberId={id}" [k13]
+  - input is "/Loans" [k15, k17]
+- `EndpointPaths.normalizePath(String)` returns "/a/b" when called with "/a//b" [k14]
+- `EndpointPaths.normalizePath(String)` returns "/loans/{}" when called with "/loans/{id}" [k16]
+- invalid path normalization: EndpointPaths.normalizePath returned null, in each of these cases [k18, k19, k20, k21]
+  - input is null [k18]
+  - input is whitespace [k19]
+  - input is "?memberId=1" [k20]
+  - input is "/" [k21]
+
+EndpointPaths.discardedInput:
+- `EndpointPaths.discardedInput(String)` returns Optional[memberId={id}] when called with "/loans?memberId={id}" [k22]
+- no discarded input: EndpointPaths.discardedInput returned Optional.empty, in each of these cases [k23, k24]
+  - input is "/loans" [k23]
+  - input is "/loans?" or "/loans?   " [k24]
+
+EndpointPaths.declaredIn:
+- no declared endpoint: EndpointPaths.declaredIn returned [], in each of these cases [k25, k26, k33, k34, k35, k36]
+  - input is null [k25]
+  - input is "The system returns a list of loans." [k26]
+  - input is "GET /" [k33]
+  - input is "" [k34]
+  - input is "the path is /loans" [k35]
+  - input is "the verb is GET" [k36]
+- declared endpoint extraction: EndpointPaths.declaredIn returned [GET /loans], in each of these cases [k28, k31]
+  - input is "GET /loans?memberId=42" [k28]
+  - input is "GET /loans/" [k31]
+- `EndpointPaths.declaredIn(String)` returns [GET /loans/details] when called with "GET //loans//details" [k29]
+- `EndpointPaths.declaredIn(String)` returns [GET /loans/{}] when called with "GET /loans/{id}" [k30]
+- `EndpointPaths.declaredIn(String)` returns [GET /loans, POST /loans] when called with "GET /loans then POST /loans and again GET /loans" [k32]
+
+SpecEndpointBehaviourQuery.StatedBehaviour.toString:
+- `SpecEndpointBehaviourQuery.StatedBehaviour.toString()` returns "404" when the condition is null or " " and returns "409 on duplicate" when the condition is "on duplicate" [k47, k58]
+  - e.g. SpecEndpointBehaviourQuery.StatedBehaviour.toString() returned "404"; SpecEndpointBehaviourQuery.StatedBehaviour.toString() returned "409 on duplicate" [k47]
+  - e.g. SpecEndpointBehaviourQuery.StatedBehaviour.toString() returned "409"; SpecEndpointBehaviourQuery.StatedBehaviour.toString() returned "404" [k58]
+- `SpecEndpointBehaviourQuery.StatedBehaviour.toString()` returns "409 on duplicate" when the condition is "on duplicate" [k47, k59]
+  - e.g. SpecEndpointBehaviourQuery.StatedBehaviour.toString() returned "409 on duplicate" [k59]
+
+BehaviouralCriterionParser.parse:
+- `BehaviouralCriterionParser.parse(String)` returns Optional[Assertion[criterionText=POST /books with invalid input returns HTTP 400 with JSON body {"message":"..."}, verb=POST, path=/books, expectedStatus=400]] when called with "POST /books with invalid input returns HTTP 400 with JSON body {\"message\":\"...\"}" [k61]
+- invalid criterion parsing: BehaviouralCriterionParser.parse returned Optional.empty, in each of these cases [k63, k64, k65, k66, k70, k71]
+  - input is "POST /books then GET /books both return HTTP 200" [k63]
+  - input is "POST /books returns HTTP 201 or HTTP 400" [k64]
+  - input is "Validation rejects a missing title" or "POST /books creates a book" [k65]
+  - input is null or "" [k66]
+  - input is "POST /books with a max 120 chars title creates a book" [k70]
+  - input is "POST /books returns HTTP 999" [k71]
+- `BehaviouralCriterionParser.parse(String)` returns Optional[Assertion[criterionText=GET /books/{id} returns HTTP 404 for non-existing id, verb=GET, path=/books/{}, expectedStatus=404]] when called with "GET /books/{id} returns HTTP 404 for non-existing id" [k67]
+- `BehaviouralCriterionParser.parse(String)` returns Optional[Assertion[criterionText=POST /members returns status 409, verb=POST, path=/members, expectedStatus=409]] when called with "POST /members returns status 409" and Optional[Assertion[criterionText=POST /members returns status code 409, verb=POST, path=/members, expectedStatus=409]] when called with "POST /members returns status code 409" [k68]
+- `BehaviouralCriterionParser.parse(String)` returns Optional[Assertion[criterionText=POST /books returns 400, verb=POST, path=/books, expectedStatus=400]] when called with "POST /books returns 400" and Optional[Assertion[criterionText=POST /loans returns 404 Not Found when book or member does not exist, verb=POST, path=/loans, expectedStatus=404]] when called with "POST /loans returns 404 Not Found when book or member does not exist" [k69]
+
+BehaviouralCriterionParser.statedInput:
+- `BehaviouralCriterionParser.statedInput(String)` returns Optional[memberId={id}] when called with "GET /loans?memberId={id} returns HTTP 200 with a JSON array of all loans for the member" [k73]
+- `BehaviouralCriterionParser.statedInput(String)` returns Optional[title=x&author=y] when called with "GET /books?title=x&author=y returns HTTP 200" [k74]
+- no stated input: BehaviouralCriterionParser.statedInput returned Optional.empty, in each of these cases [k75, k76]
+  - input is "GET /loans returns HTTP 200" or "POST /books returns HTTP 400" [k75]
+  - input is null [k76]
+
+BehaviouralCriterionParser.statedParameterName:
+- `BehaviouralCriterionParser.statedParameterName(String)` returns Optional[memberId] when called with "GET /loans?memberId={id} returns HTTP 200 with a JSON array of all loans for the member" [k77]
+- `BehaviouralCriterionParser.statedParameterName(String)` returns Optional.empty when called with "GET /loans returns HTTP 200" [k78]
+
+BehaviouralCriterionParser.statesAbsentInput:
+- absent input detection: BehaviouralCriterionParser.statesAbsentInput returned true, in each of these cases [k79, k80, k81, k82, k83, k84]
+  - criterion states "memberId parameter is missing" [k79]
+  - criterion states "memberId is absent" [k80]
+  - criterion states "memberId is omitted" [k81]
+  - criterion states "memberId is not provided" [k82]
+  - criterion states "memberId is not supplied" [k83]
+  - criterion states "request is made without the memberId" [k84]
+
+BehaviouralCriterionParser.mentionsSurface:
+- surface mention detection: BehaviouralCriterionParser.mentionsSurface returned true, in each of these cases [k85, k86, k87, k88, k89, k94, k95]
+  - input is "POST /books with invalid input returns HTTP 400" [k85]
+  - input is "GET /loans?memberId=123 should return the list" [k86]
+  - input is "DELETE /books/42 removes the book" [k87]
+  - input is "PUT /books/42 updates the title" [k88]
+  - input is "PATCH /loans/7 changes the due date" [k89]
+  - input is "POST /loans returns 404 Not Found when book or member does not exist" [k94]
+  - input is "When the user calls GET /members/999 the system should respond" [k95]
+- no surface mention: BehaviouralCriterionParser.mentionsSurface returned false, in each of these cases [k90, k92, k93, k96]
+  - input is null [k90]
+  - input is "The path /books should exist" [k92]
+  - input is "POST to the books endpoint" [k93]
+  - input is "The GET request should be valid" [k96]
+
+SpecEndpointBehaviourQuery.statedBehaviours:
+- no stated behaviours: SpecEndpointBehaviourQuery.statedBehaviours returned {}, in each of these cases [k37, k39, k42, k43]
+  - input is null, "", or "Build a string formatting library." [k37]
+  - input is "POST /books (title required, max 120 chars)." [k39]
+  - input is "GET /books (list all)." [k42]
+  - input is "GET /loans (list all).\n\nInvalid input returns HTTP 400 with JSON body." [k43]
+- stated behaviour extraction: SpecEndpointBehaviourQuery.statedBehaviours returned {GET /books/{}=[<n> if absent]} -- when input is "GET /books/{id} (404 if absent)." and the status code is 404 -- printed: SpecEndpointBehaviourQuery.statedBehaviours("GET /books/{id} (404 if absent).") returned {GET /books/{}=[404 if absent]} [k38, k48]
+  - e.g. SpecEndpointBehaviourQuery.statedBehaviours("GET /books/{id} (404 if absent).") returned {GET /books/{}=[404 if absent]} [k38, k48]
+- `SpecEndpointBehaviourQuery.statedBehaviours(String)` returns {POST /members=[400 Invalid input returns HTTP 400 with JSON body]} when called with "POST /members (name required).\n\nInvalid input returns HTTP 400 with JSON body." [k40]
+- `SpecEndpointBehaviourQuery.statedBehaviours(String)` returns {POST /loans/{}/return=[404 if loan absent]} when called with "POST /loans/{id}/return (mark returned; 404 if loan absent).\n\nInvalid input returns HTTP 400 with JSON body." [k41]
+- `SpecEndpointBehaviourQuery.statedBehaviours(String)` returns {POST /members=[400 if missing]} when called with "POST /members (name required; 400 if missing).\n\nInvalid input returns HTTP 400 with JSON body." [k44]
+
+SpecEndpointBehaviourQuery.criteriaFor:
+- criteria with condition: SpecEndpointBehaviourQuery.criteriaFor returned [<argument> returns HTTP <n> — on duplicate] -- when endpoint is POST /members and behaviour is [409 on duplicate] -- printed: SpecEndpointBehaviourQuery.criteriaFor(POST /members, [409 on duplicate]) returned [POST /members returns HTTP 409 — on duplicate] [k45, k56, k50]
+  - e.g. SpecEndpointBehaviourQuery.criteriaFor(POST /members, [409 on duplicate]) returned [POST /members returns HTTP 409 — on duplicate] [k45, k56, k50]
+- `SpecEndpointBehaviourQuery.criteriaFor(Endpoint, List<StatedBehaviour>)` returns [] when called with null and [404 if absent], and returns [] when called with GET /books and null [k46, k52, k53]
+  - e.g. SpecEndpointBehaviourQuery.criteriaFor(null, [404 if absent]) returned []; SpecEndpointBehaviourQuery.criteriaFor(GET /books, null) returned [] [k46]
+  - e.g. SpecEndpointBehaviourQuery.criteriaFor(null, [404 if absent]) returned [] [k52]
+  - e.g. SpecEndpointBehaviourQuery.criteriaFor(POST /members, null) returned [] [k53]
+- criteria without condition: SpecEndpointBehaviourQuery.criteriaFor returned [<argument> returns HTTP <n>], in each of these cases [k51, k49]
+  - endpoint is GET /books/{} and behaviour is [404] -- printed: SpecEndpointBehaviourQuery.criteriaFor(GET /books/{}, [404]) returned [GET /books/{} returns HTTP 404] [k51]
+  - endpoint is POST /members and behaviour is [409] -- printed: SpecEndpointBehaviourQuery.criteriaFor(POST /members, [409]) returned [POST /members returns HTTP 409] [k49]
+- `SpecEndpointBehaviourQuery.criteriaFor(Endpoint, List<StatedBehaviour>)` returns [] when called with POST /members and [] [k54]
+- `SpecEndpointBehaviourQuery.criteriaFor(Endpoint, List<StatedBehaviour>)` returns [POST /loans returns HTTP 404 — if either not found, POST /loans returns HTTP 409 — if book is already on loan] when called with POST /loans and [404 if either not found, 409 if book is already on loan] [k55]
+- `SpecEndpointBehaviourQuery.criteriaFor(Endpoint, List<StatedBehaviour>)` returns [GET /books/{} returns HTTP 404 — if absent] when called with GET /books/{} and [404 if absent] [k57]
+
+SeedStatusSupport.of:
+- no opinion on support: SeedStatusSupport.of returned NO_OPINION, in each of these cases [k97, k98]
+  - either argument is null or whitespace [k97]
+  - criterion and spec describe different endpoints or lack specific status match [k98]
+- unsupported behaviour: SeedStatusSupport.of returned UNSUPPORTED, in each of these cases [k99, k101, k105, k107]
+  - criterion endpoint differs from spec endpoint [k99]
+  - criterion status differs from spec status [k101, k105, k107]
+- supported behaviour: SeedStatusSupport.of returned SUPPORTED -- when criterion matches spec endpoint and status [k100, k103, k104, k108]
+  - e.g. SeedStatusSupport.of("GET /books/{id} returns HTTP 404 when the book is absent", "GET /books/{id} (single; 404 if absent)") returned SUPPORTED [k100]
+  - e.g. SeedStatusSupport.of("GET /loans?memberId={id} returns HTTP 200 with a JSON array of loans", "GET /loans?memberId={id} (list all loans for a member, active and returned)") returned SUPPORTED [k103]
+  - e.g. SeedStatusSupport.of("GET /books with an invalid title returns HTTP 400 with a JSON body", "GET /books (create; title required, max 120 chars)
+
+Invalid input returns HTTP 400 with JSON body {"message": "<reason>"}.") returned SUPPORTED [k104]
+  - e.g. SeedStatusSupport.of("POST /books returns HTTP 201 with the created object", "POST /books (create) returns HTTP 201 with the created object") returned SUPPORTED [k108]
+- `SeedStatusSupport.of(String, String)` returns SUPPORTED when called with "GET /books returns HTTP 200 with the list" and "GET /books (list all) returns HTTP 200 with the list", and returns UNSUPPORTED when called with "GET /books returns HTTP 201 with the list" and "GET /books (list all) returns HTTP 200 with the list" [k102]
+- `SeedStatusSupport.of(String, String)` returns UNSUPPORTED when called with "GET /books/{id} returns HTTP 404 when absent" and "GET /books/{id} (single)", and returns SUPPORTED when called with "GET /books/{id} returns HTTP 404 when absent" and "GET /books/{id} (single; 404 if absent)" [k106]
+
+Other uses:
+- `Endpoint.toString()` returns "GET /loans" when called on an Endpoint with verb "GET" and path "/loans", and returns "POST /members" when called on an Endpoint with verb "POST" and path "/members" [k1, k60]
+  - e.g. Endpoint.toString() returned "GET /loans" [k1]
+  - e.g. Endpoint.toString() returned "POST /members" [k60]
+- `BehaviouralCriterionParser.exercisable(String)` returns Optional.empty when called with "GET /loans?memberId={id} returns HTTP 200 with a JSON array of all loans for the member" [k72]
+- `BehaviouralCriterionParser.Assertion.describe()` returns "GET /books → 200" when called on an Assertion parsed from "GET /books returns HTTP 200 with a JSON array of all books" [k62]

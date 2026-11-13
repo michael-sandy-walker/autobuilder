@@ -1,0 +1,112 @@
+What it is: Structural diff of Java sources that parses Java source into a tree of declared elements and compares two versions of a file, reporting which elements were added, removed or changed [r2, r3, r4]
+How it is used: library-style -- exercised inside the same process, by a test that calls it. Exercised here through: StructuralDiffNode.isUnchanged, StructuralDiffNode.getType, StructuralDiffNode.getId, ParsedElementBuilder.addChild, StructuralDiffNode.isModified, DiffSummarizer.summarizePlainText, JavaStructureParser.parse, StructuralDiffUtils.flatten, StructuralDiffUtils.filterByType, StructuralDiffUtils.hasChanges, StructuralJavaDiffBuilder.diffJavaFile.
+
+StructuralDiffNode.isUnchanged:
+- StructuralDiffBuilder.diff(<oldElement>, <newElement>) returns a node where isUnchanged() returns false when <oldElement> is null and <newElement> is non-null [k1, k13]
+  - e.g. StructuralDiffNode.isUnchanged() returned false [k1]
+  - e.g. StructuralDiffNode.getType() returned METHOD [k13]
+- StructuralDiffBuilder.diff(<oldElement>, <newElement>) returns a node where isUnchanged() returns false when <oldElement> is non-null and <newElement> is null [k2, k14]
+  - e.g. StructuralDiffNode.isUnchanged() returned false [k2]
+  - e.g. StructuralDiffNode.getType() returned FIELD [k14]
+- node unchanged status false: StructuralDiffNode.isUnchanged returned false, in each of these cases [k3, k16, k1, k2]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) is called with both elements present with different content, the returned node is reported as line 1 [k3, k16]
+  - old element null, new element non-null [k1]
+  - old element non-null, new element null [k2]
+  - both elements present with different content [k3]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) is called with both elements present with different content, the returned node is reported as line 2 [k16]
+- node unchanged status true: StructuralDiffNode.isUnchanged returned true, in each of these cases [k4, k15, k20, k24, k10]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) is called with both elements present with equal content, the returned node is reported as line 3 [k4, k15]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) is called with a child present in both elements with identical content, the returned node is reported as line 4 [k20]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) is called with the diff of two identical whole trees, the returned root node is reported as line 5 [k24]
+  - both elements present with equal content [k4]
+  - both descriptors have equal content and children list is empty [k10]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) is called with both elements present with identical content, the returned node is reported as line 6 [k15]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) is called with a child present in both elements with identical content, the returned node is reported as line 7 [k20]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) is called with the diff of two identical whole trees, the returned root node is reported as line 8 [k24]
+
+StructuralDiffNode.getType:
+- StructuralDiffBuilder.diff(<oldElement>, <newElement>) returns a node where getType() returns the type of <newElement> when <newElement> is present, else the type of <oldElement> [k5, k6, k22]
+  - e.g. StructuralDiffNode.getType() returned METHOD [k5]
+  - e.g. StructuralDiffNode.getType() returned CONSTRUCTOR [k6]
+  - e.g. StructuralDiffNode.getType() returned INTERFACE; StructuralDiffNode.getType() returned CLASS [k22]
+- node type from new element: StructuralDiffNode.getType returned METHOD, in each of these cases [k5, k13]
+  - new element present [k5]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) returns a node where getType() returns the type of <newElement> when <oldElement> is null [k13]
+- StructuralDiffNode(<oldElement>, <newElement>, <children>) returns a node where getType() returns the type of <oldElement> when only <oldElement> is present [k6]
+- StructuralDiffNode(<oldElement>, <newElement>, <children>) returns a node where getType() returns UNKNOWN when neither <oldElement> nor <newElement> is present [k12]
+- StructuralDiffBuilder.diff(<oldElement>, <newElement>) returns a node where getType() returns the type of <oldElement> when <newElement> is null [k14]
+- StructuralDiffBuilder.diff(<oldElement>, <newElement>) returns a node where getType() returns the type of <newElement> when present, else the type of <oldElement> [k22]
+
+StructuralDiffNode.getId:
+- StructuralDiffBuilder.diff(<oldElement>, <newElement>) returns a node where getId() returns the id of <newElement> when <newElement> is present, else the id of <oldElement> [k7, k8, k23]
+  - e.g. StructuralDiffNode.getId() returned "new1000007" [k7]
+  - e.g. StructuralDiffNode.getId() returned "old1000008" [k8]
+  - e.g. StructuralDiffNode.getId() returned "new.id"; StructuralDiffNode.getId() returned "old.id" [k23]
+- StructuralDiffNode(<oldElement>, <newElement>, <children>) returns a node where getId() returns the id of <newElement> when <newElement> is present, even if <oldElement> has a different id [k7]
+- StructuralDiffNode(<oldElement>, <newElement>, <children>) returns a node where getId() returns the id of <oldElement> when only <oldElement> is present [k8]
+- StructuralDiffBuilder.diff(<oldElement>, <newElement>) returns a node where getId() returns the id of <newElement> when present, else the id of <oldElement> [k23]
+
+ParsedElementBuilder.addChild:
+- child added to builder: ParsedElementBuilder.addChild returned ParsedElementBuilder, in each of these cases [k17, k18, k21]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) returns a node where a child present only in <newElement> appears as an added child node [k17]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) returns a node where a child present only in <oldElement> appears as a deleted child node [k18]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) returns a node where the children list is sorted by id, giving deterministic ordering regardless of input order [k21]
+  - ParsedElementBuilder.id(<id>), ParsedElementBuilder.type(<type>), ParsedElementBuilder.content(<content>), ParsedElementBuilder.putMeta(<key>, <value>), ParsedElementBuilder.addChild(<child>), ParsedElementBuilder.addChildren(<children>), ParsedElementBuilder.build() constructs elements used in diffing, where a child present only in the new element appears as an added child node [k17]
+  - ParsedElementBuilder.id(<id>), ParsedElementBuilder.type(<type>), ParsedElementBuilder.content(<content>), ParsedElementBuilder.putMeta(<key>, <value>), ParsedElementBuilder.addChild(<child>), ParsedElementBuilder.addChildren(<children>), ParsedElementBuilder.build() constructs elements used in diffing, where a child present only in the old element appears as a deleted child node [k18]
+  - ParsedElementBuilder.id(<id>), ParsedElementBuilder.type(<type>), ParsedElementBuilder.content(<content>), ParsedElementBuilder.putMeta(<key>, <value>), ParsedElementBuilder.addChild(<child>), ParsedElementBuilder.addChildren(<children>), ParsedElementBuilder.build() constructs elements used in diffing, where the children list of a diff node is sorted by id, giving deterministic ordering regardless of input order [k21]
+
+StructuralDiffNode.isModified:
+- child modified status: StructuralDiffNode.isModified returned true, in each of these cases [k19]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) is called with a child present in both elements with different content, the returned node is reported as line 16 [k19]
+  - StructuralDiffBuilder.diff(<oldElement>, <newElement>) is called with a child present in both elements with different content, the returned node is reported as line 17 [k19]
+
+DiffSummarizer.summarizePlainText:
+- DiffSummarizer.summarizePlainText(<root>) returns "(no changes)" when the root is unchanged and has no changed children [k43]
+- DiffSummarizer.summarizePlainText(<root>) returns "- METHOD (added): <id>\n" when the root is an added node [k44]
+- DiffSummarizer.summarizePlainText(<root>) returns "- FIELD (deleted): <id>\n" when the root is a deleted node [k45]
+- DiffSummarizer.summarizePlainText(<root>) returns "- CLASS (modified): <id>\n" when the root is a modified node [k46]
+- DiffSummarizer.summarizePlainText(<root>) indents each child level by two additional spaces relative to its parent [k47]
+
+JavaStructureParser.parse:
+- parsed file structure: JavaStructureParser.parse returned ParsedElement[id=<argument>, type=FILE, content=<argument>, metadata={path=<argument>}, children=[ParsedElement[id=com.example.Foo, type=CLASS, content=public class Foo {
+
+    public void hello() {
+    }
+}, metadata={}, children=[ParsedElement[i ..., in each of these cases [k33, k36]
+  - JavaStructureParser.parse(<path>, <content>) returns a FILE-typed element whose id is <path> and whose children are the declared types [k33]
+  - JavaStructureParser.parse(<path>, <content>) records each method as a METHOD child whose id is the class id plus the method name [k36]
+- JavaStructureParser.parse(<path>, <content>) sets the class element id to the fully-qualified name (package + class name) [k35]
+
+StructuralDiffUtils.flatten:
+- StructuralDiffUtils.flatten(<root>) returns a list whose first element is the root node itself, followed by its children in pre-order (depth-first) order [k49]
+- StructuralDiffUtils.flatten(<root>) returns a single-element list containing that node when the node has no children [k50]
+
+StructuralDiffUtils.filterByType:
+- StructuralDiffUtils.filterByType(<root>, <type>) returns only the nodes (at any depth) whose element type equals <type>, in the same order flatten produces them [k51]
+- StructuralDiffUtils.filterByType(<root>, <type>) returns an empty list when no node in the tree has the requested type [k52]
+- StructuralDiffUtils.filterByType(<root>, <type>) identifies a method present only in the new content as an added METHOD node whose id contains the method name [k29]
+- StructuralDiffUtils.filterByType(<root>, <type>) identifies a method present only in the old content as a deleted METHOD node whose id contains the method name [k30]
+- StructuralDiffUtils.filterByType(<root>, <type>) identifies a method whose source differs between old and new as a modified METHOD node whose id contains the method name [k31]
+
+StructuralDiffUtils.hasChanges:
+- changes detected: StructuralDiffUtils.hasChanges returned true, in each of these cases [k53, k54, k55, k57, k58, k60]
+  - root node added [k53]
+  - root node deleted [k54]
+  - root node modified [k55]
+  - root unchanged, descendant child added [k57]
+  - root unchanged, descendant child modified [k58]
+  - root unchanged, descendant child deleted [k60]
+- no changes detected: StructuralDiffUtils.hasChanges returned false, in each of these cases [k56, k59]
+  - root unchanged, no children [k56]
+  - root and all children unchanged [k59]
+
+StructuralJavaDiffBuilder.diffJavaFile:
+- StructuralJavaDiffBuilder.diffJavaFile(<relPath>, <oldContent>, <newContent>) returns a non-null root node whose id is <relPath> and whose type is FILE [k25]
+- StructuralJavaDiffBuilder.diffJavaFile(<relPath>, <oldContent>, <newContent>) returns a root node that is unchanged and the tree has no changes when old and new content are identical [k26]
+- StructuralJavaDiffBuilder.diffJavaFile(<relPath>, <oldContent>, <newContent>) returns a root node classified as added and the tree has changes when old content is null [k27]
+- StructuralJavaDiffBuilder.diffJavaFile(<relPath>, <oldContent>, <newContent>) returns a root node classified as deleted and the tree has changes when new content is null [k28]
+- StructuralJavaDiffBuilder.diffJavaFile(<relPath>, <oldContent>, <newContent>) classifies the root FILE node as modified when the file content differs [k32]
+
+Other uses:
+- DiffSummarizer.summarize(<root>) returns "(no changes)" when the root node is unchanged and has no changed children [k37]
+- DiffSummarizer.summarizeForPrompt(<root>) renders an added node with the ➕ symbol, capitalized type, and the id in backticks [k48]

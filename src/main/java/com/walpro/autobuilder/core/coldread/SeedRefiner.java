@@ -54,8 +54,7 @@ import java.util.regex.Matcher;
  * in a detail the composer happened to write for one and not another ("to stderr").
  *
  * <p><b>Openings (2026-11-14).</b> Last, each section of two or more lines is given a few sentences on what its
- * lines add up to ({@link #summarised}); a line goes under its opening only when the opening holds everything the
- * project was recorded to answer it with.
+ * lines add up to ({@link #summarised}), above the lines, which all stay.
  */
 @Slf4j
 @Component
@@ -186,62 +185,45 @@ public class SeedRefiner {
         }
         Map<String, List<Cited>> full = withExercises(account, named);
         String purpose = purposeLine(composed);
-        Summarised summed = new Summarised(full, Map.of(), null);
+        Summarised summed = new Summarised(Map.of(), null);
         try {
-            summed = summarised(account, full, purpose == null);
+            summed = summarised(full, purpose == null);
         } catch (RuntimeException e) {
-            log.warn("T4-EQ: no section was given an opening; every line stays -- {}", e.getMessage());
+            log.warn("T4-EQ: no section was given an opening -- {}", e.getMessage());
         }
-        return render(purpose, summed.whole(), context, summed.sections(), summed.openings());
+        return render(purpose, summed.whole(), context, full, summed.openings());
     }
 
     // ------------------------------------------------------------------------------------------------------------
-    // Openings: what a section's lines add up to, said once in a person's words; the lines it says in full go under it.
+    // Openings: what a section's lines add up to, said once in a person's words, above the lines themselves.
     // ------------------------------------------------------------------------------------------------------------
 
     /** Starts a section's opening (and the line on the whole project when no README gave one); read back as {@link SeedComposer.Line#SUMMARY}. */
     public static final String SUMMARY = "In short:";
-    /** A value of the project longer than this is not looked for in an opening: the line that holds it stays. */
-    static final int STATED_CHARS = 120;
 
-    /** The sections after their openings were written: the lines still standing, each section's opening, the line on the whole. */
-    record Summarised(Map<String, List<Cited>> sections, Map<String, Cited> openings, String whole) {
-    }
-
-    /** A line with the cases standing under it. */
-    record Block(String use, Cited line, List<Cited> cases) {
-        List<String> ids() {
-            List<String> ids = new ArrayList<>(line.cites());
-            for (Cited c : cases) for (String id : c.cites()) if (!ids.contains(id)) ids.add(id);
-            return ids;
-        }
-    }
-
-    static List<Block> blocks(String use, List<Cited> lines) {
-        List<Block> out = new ArrayList<>();
-        for (Cited l : lines) {
-            if (l.nested() && !out.isEmpty()) out.get(out.size() - 1).cases().add(l);
-            else out.add(new Block(use, l, new ArrayList<>()));
-        }
-        return out;
+    /** Each section's opening by its use, and the line on the whole project (null when not asked for or not given). */
+    record Summarised(Map<String, String> openings, String whole) {
     }
 
     /**
      * Each section of two or more lines is given an opening -- what its lines together describe, as a person would
-     * say it who wants it built -- and a line the opening states in full is taken out, its claims cited by the opening.
+     * say it who wants it built. The lines stay beneath it, all of them.
      *
      * <p>The user, 2026-11-14: a model can make sense of rule A, rule B and rule C and write "make an apple". It
-     * can; and whoever builds from that sentence alone makes the apple they already know. So a line goes only when
-     * BOTH hold: the model, asked line by line, says the opening states all of it; and every value the project was
-     * RECORDED to answer that line's claims with (a message, a name, a status -- {@link #answerOf}, the exercise's
-     * own values taken out) stands in the opening character for character ({@link #states}). Anything else stays as
-     * the line it was. The claims of a line taken out are cited by the opening, so no kept claim leaves the seed;
-     * what the loop checks is the claims, never this wording.
+     * can; and whoever builds from that sentence alone makes the apple they already know -- so the sentence is put
+     * above the lines, not in their place (the user, the same day: "keep both"). Tried first and taken out: a line
+     * went under its opening when the opening stated it in full, values included. An opening that held everything was
+     * the lines strung together again; one that read as a sentence held too little for a line to go (1 of 12 and 3 of
+     * 11 on two projects).
+     *
+     * <p>An opening is the one place where the model writes freely, so it is asked the other way round before it is
+     * used: one that says something its lines do not show is dropped (only an explicit "no" keeps one). It is
+     * context and is never checked; what the loop checks is the claims.
      */
-    Summarised summarised(Account account, Map<String, List<Cited>> sections, boolean wantWhole) {
+    Summarised summarised(Map<String, List<Cited>> sections, boolean wantWhole) {
         List<String> uses = sections.entrySet().stream()
-                .filter(e -> blocks(e.getKey(), e.getValue()).size() >= 2).map(Map.Entry::getKey).toList();
-        if (uses.isEmpty()) return new Summarised(sections, Map.of(), null);
+                .filter(e -> e.getValue().stream().filter(l -> !l.nested()).count() >= 2).map(Map.Entry::getKey).toList();
+        if (uses.isEmpty()) return new Summarised(Map.of(), null);
         String answer = ask(summaryPrompt(sections, uses, wantWhole));
         log.debug("T4-EQ: openings asked --\n{}\nanswered --\n{}", summaryPrompt(sections, uses, wantWhole), answer);
         Map<String, String> texts = new LinkedHashMap<>();
@@ -258,9 +240,7 @@ public class SeedRefiner {
                 if (wantWhole && whole == null && w.find() && !w.group(1).isBlank()) whole = oneLine(w.group(1));
             }
         }
-        if (texts.isEmpty()) return new Summarised(sections, Map.of(), whole);
-        // An opening is the one place where the model writes freely, so it is asked the other way round first: an
-        // opening that says something its lines do not show is not used (only an explicit "no" keeps one).
+        if (texts.isEmpty()) return new Summarised(Map.of(), whole);
         List<String> opened = new ArrayList<>(texts.keySet());
         String beyond = ask(beyondPrompt(texts, sections));
         log.debug("T4-EQ: asked whether an opening says more than its lines --\n{}", beyond);
@@ -272,40 +252,9 @@ public class SeedRefiner {
             }
         }
         for (int i = 0; i < opened.size(); i++) if (!within.contains(i + 1)) texts.remove(opened.get(i));
-        if (texts.size() < opened.size()) {
-            log.warn("T4-EQ: {} of {} opening(s) not used -- they said something their lines do not show", opened.size() - texts.size(), opened.size());
-        }
-        if (texts.isEmpty()) return new Summarised(sections, Map.of(), whole);
-        List<Block> asked = new ArrayList<>();
-        texts.keySet().forEach(use -> asked.addAll(blocks(use, sections.get(use))));
-        String verdicts = ask(coveredPrompt(texts, asked));
-        log.debug("T4-EQ: asked which lines the openings state in full --\n{}", verdicts);
-        java.util.Set<Integer> yes = verdicts == null ? java.util.Set.of() : saidIn(verdicts);
-        Map<String, JudgedClaim> byId = new LinkedHashMap<>();
-        account.claims().forEach(j -> byId.put(j.claim().id(), j));
-        java.util.Set<Cited> gone = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-        Map<String, List<String>> folded = new LinkedHashMap<>();
-        int said = 0, held = 0;
-        for (int i = 0; i < asked.size(); i++) {
-            if (!yes.contains(i + 1)) continue;
-            said++;
-            Block b = asked.get(i);
-            if (!states(texts.get(b.use()), b.ids().stream().map(byId::get).toList())) {
-                held++;
-                continue;
-            }
-            gone.add(b.line());
-            gone.addAll(b.cases());
-            List<String> ids = folded.computeIfAbsent(b.use(), u -> new ArrayList<>());
-            for (String id : b.ids()) if (!ids.contains(id)) ids.add(id);
-        }
-        Map<String, List<Cited>> out = new LinkedHashMap<>();
-        sections.forEach((use, lines) -> out.put(use, lines.stream().filter(l -> !gone.contains(l)).toList()));
-        Map<String, Cited> openings = new LinkedHashMap<>();
-        texts.forEach((use, text) -> openings.put(use, new Cited(text, folded.getOrDefault(use, List.of()))));
-        log.warn("T4-EQ: {} section(s) given an opening -- {} of {} line(s) said in full by one, {} of them kept for a value the opening does not hold, {} taken under it",
-                texts.size(), said, asked.size(), held, said - held);
-        return new Summarised(out, openings, whole);
+        log.warn("T4-EQ: {} section(s) given an opening above their lines -- {} more not used, they said something their lines do not show",
+                texts.size(), opened.size() - texts.size());
+        return new Summarised(texts, whole);
     }
 
     private static final java.util.regex.Pattern OPENING = java.util.regex.Pattern.compile("^\\s*SECTION\\s+(\\d+)\\s*:\\s*(.*)$", java.util.regex.Pattern.CASE_INSENSITIVE);
@@ -340,36 +289,6 @@ public class SeedRefiner {
         return t.endsWith(":") ? t.substring(0, t.length() - 1) + "." : t;
     }
 
-    /**
-     * Whether {@code opening} holds every value the project was recorded to answer these claims with: each stretch of
-     * an answer between the exercise's own values, as written; a run's or a request's status when it is not the plain
-     * one. A claim with no recorded answer, or an answer longer than {@link #STATED_CHARS}, is not stated by any opening.
-     */
-    static boolean states(String opening, List<JudgedClaim> claims) {
-        String text = opening.replaceAll("\\s+", " ");
-        for (JudgedClaim j : claims) {
-            Answer a = j == null ? null : answerOf(j);
-            if (a == null) return false;
-            if (!a.called() && a.status() != 0 && a.status() != 200
-                    && !java.util.regex.Pattern.compile("(?<!\\d)" + a.status() + "(?!\\d)").matcher(text).find()) return false;
-            for (String p : a.pattern()) {
-                String said = p;
-                if (a.called()) {
-                    int at = Math.max(p.indexOf(" returned "), p.indexOf(" raised "));
-                    if (at < 0) continue;   // returns nothing: no value to hold
-                    said = p.substring(p.indexOf(' ', at + 1) + 1);
-                }
-                // what was raised and its message are two values: a sentence may well put words between them
-                for (String part : said.split(java.util.regex.Pattern.quote(ARGUMENT) + "|" + java.util.regex.Pattern.quote(NUMBER) + "|: ")) {
-                    String value = part.replaceAll("\\s+", " ").replaceAll("^[\\s\"'.,:;()\\[\\]{}=/-]+|[\\s\"'.,:;()\\[\\]{}=/-]+$", "");
-                    if (value.length() < 2) continue;
-                    if (value.length() > STATED_CHARS || !text.contains(value)) return false;
-                }
-            }
-        }
-        return true;
-    }
-
     static String summaryPrompt(Map<String, List<Cited>> sections, List<String> uses, boolean wantWhole) {
         StringBuilder sb = new StringBuilder("""
                 Below are sections of a specification that was written down line by line from what a project was \
@@ -384,8 +303,7 @@ public class SeedRefiner {
                 the cases the lines give.
                 - Wherever the lines give a fixed value of the project -- a message, a name, a constant, a status \
                 or exit code, a format -- give it exactly as written, character for character.
-                - A particular input and its result that a line happens to use as its example may be left out, \
-                where you state in full the rule that produces the result.
+                - The lines stay below your opening, so it need not repeat every case: say what they add up to.
                 """);
         if (wantWhole) sb.append("\nThen, as WHOLE, one sentence that says what the project as a whole is, from the sections alone.\n");
         sb.append("\nAnswer in exactly this form, each on one line, nothing else:\nSECTION <number>: <the opening>\n");
@@ -393,31 +311,6 @@ public class SeedRefiner {
         for (int i = 0; i < uses.size(); i++) {
             sb.append("\nSECTION ").append(i + 1).append(" -- ").append(uses.get(i)).append('\n');
             for (Cited l : sections.get(uses.get(i))) sb.append(l.nested() ? "  - " : "- ").append(l.text()).append('\n');
-        }
-        return sb.toString();
-    }
-
-    static String coveredPrompt(Map<String, String> openings, List<Block> asked) {
-        StringBuilder sb = new StringBuilder("""
-                Each numbered item below is the OPENING of a section of a specification and one LINE of that section, \
-                with the cases under it if it has any. Decide for each: with the opening there, can the line be \
-                left out without losing anything someone building the project needs?
-
-                Yes only when the opening states everything the line and its cases state: every condition, every \
-                fixed value (a message, a name, a constant, a status), every order. A particular input with its \
-                result counts as stated only when the opening gives the rule in full, so that the result can be \
-                worked out from the opening alone.
-
-                Answer one line per item, nothing else:
-                <number>: yes
-                or
-                <number>: no -- <what would be lost>
-
-                """);
-        for (int i = 0; i < asked.size(); i++) {
-            Block b = asked.get(i);
-            sb.append(i + 1).append(".\n  OPENING: ").append(openings.get(b.use())).append("\n  LINE: ").append(b.line().text()).append('\n');
-            for (Cited c : b.cases()) sb.append("    - ").append(c.text()).append('\n');
         }
         return sb.toString();
     }
@@ -561,20 +454,14 @@ public class SeedRefiner {
     }
 
     /** {@code whole}: the line on the whole project when no README gave one; {@code openings}: each section's, by its use. */
-    static String render(String purpose, String whole, String context, Map<String, List<Cited>> sections, Map<String, Cited> openings) {
+    static String render(String purpose, String whole, String context, Map<String, List<Cited>> sections, Map<String, String> openings) {
         StringBuilder sb = new StringBuilder();
         if (purpose != null) sb.append(purpose).append('\n');
         else if (whole != null) sb.append(SUMMARY).append(' ').append(whole).append('\n');
         if (context != null) sb.append(context).append('\n');
         sections.forEach((use, lines) -> {
-            Cited opening = openings.get(use);
-            if (opening == null && lines.isEmpty()) return;
             sb.append('\n').append(use).append(":\n");
-            if (opening != null) {
-                sb.append(SUMMARY).append(' ').append(opening.text());
-                if (!opening.cites().isEmpty()) sb.append(" [").append(String.join(", ", opening.cites())).append("]");
-                sb.append('\n');
-            }
+            if (openings.get(use) != null) sb.append(SUMMARY).append(' ').append(openings.get(use)).append('\n');
             lines.forEach(l -> sb.append(l.render()).append('\n'));
         });
         return sb.toString().strip() + "\n";

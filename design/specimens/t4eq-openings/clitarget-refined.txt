@@ -1,14 +1,15 @@
-In short: The project is a command-line tool that validates CSV field counts and extracts specific columns from files.
+In short: The project is a command-line tool that validates CSV field counts, extracts specific columns, and enforces strict argument and file existence rules.
 How it is used: command-style -- started with arguments and input, runs to its end, exercised by its exit status, output and files. Exercised here through: check, count, column.
 
 check:
-In short: The check command validates that data rows match the header field count. It exits with status 2 and prints "line <line_number>: expected <expected_fields> fields, found <found_fields>" to standard output for each mismatch. It exits with status 2 and produces no output for an empty file. [k17]
+In short: check verifies that every data row in a file has the same number of fields as the header. It exits with status 2 if the file is empty or if any data row has a field count mismatch. For each malformed row, it prints "line <line_number>: expected <expected_fields> fields, found <found_fields>" to standard output.
 - field count mismatch: exits with status 2 and prints to standard output "line <line_number>: expected <expected_fields> fields, found <found_fields>", in each of these cases [k6, k7, k8, k9, k10, k12, k13, k14, k15, k21]
   - a data row has fewer fields than the header -- printed: line 2: expected 3 fields, found 2 [k6, k7, k8, k9, k10, k12]
   - a data row has more fields than the header -- printed: line 2: expected 2 fields, found 3 [k13]
   - multiple data rows have field counts differing from the header, one line is printed per malformed row -- printed: line 2: expected 3 fields, found 2 / line 3: expected 3 fields, found 4 [k14]
   - a malformed data row begins on a physical line other than the second line, the physical line number where the row begins is used -- printed: line 3: expected 2 fields, found 1 [k15]
   - Running `check` on a file where a data row has fewer fields than the header, followed by a row with the correct field count, prints "line <line_number>: expected <expected_fields> fields, found <found_fields>" to standard output for the malformed row and exits with status 2 -- printed: line 2: expected 3 fields, found 2 [k21]
+- Running `check` on an empty file exits with status 2 and produces no output [k17]
 
 count:
 - row count: exits with status 0 and prints to standard output "<n>", in each of these cases [k1, k22, k25, k27, k28, k23]
@@ -17,7 +18,7 @@ count:
   - the file contains only a header row -- printed: 0 [k23]
 
 column:
-In short: The column command extracts values from a specified column. It prints the value for each data row to standard output and exits with status 0. It exits with status 4 and prints "no such column: <name>" to standard error if the column is not found.
+In short: column extracts the values of a specified column from a file. It exits with status 0 and prints the values to standard output, preserving newlines and unescaping double-quotes within quoted fields. It omits data rows that have fewer fields than the requested column index. It exits with status 4 and prints "no such column: <name>" to standard error if the column is not in the header or the file is empty.
 - Running `column` on a file where a quoted field contains a double-quote unescapes the double-quote in the output value printed to standard output, exiting with status 0 [k2]
 - Running `column` on a file where a quoted field contains a newline treats the field as a single unit, printing the value with the newline preserved to standard output, and exits with status 0 [k3, k4, k5]
 - Running `column` on a file where the header contains the requested column name prints the value of that column for each data row, one per line, to standard output and exits with status 0 [k32, k40, k41]
@@ -35,13 +36,15 @@ check, column:
   - the file contains only a header row [k18, k39]
 
 All uses:
-In short: The command enforces specific argument counts for check and column. It exits with status 5 and prints nothing if the argument count is invalid. It exits with status 1 and prints "no such file: <path>" to standard error if the file does not exist. [k16, k52, k24, k53, k34, k54]
+In short: All uses enforce strict argument counts and file existence. It exits with status 5 and prints nothing if the number of file arguments is invalid for the command. It exits with status 1 and prints "no such file: <path>" to standard error if the specified file does not exist.
 - invalid argument count: exits with status 5 and prints nothing, in each of these cases [k19, k46, k20, k47, k48, k49, k36, k50, k37, k51]
   - (check, count) the command is given zero file arguments [k19, k46, k48]
   - (check, count) the command is given two file arguments [k20, k47, k49]
   - (column) the command is given one file argument and zero additional arguments [k36, k50]
   - (column) the command is given one file argument and two additional arguments [k37, k51]
+- file not found: exits with status 1 and prints to standard error "no such file: <path>" -- when the specified file does not exist [k16, k52, k24, k53, k34, k54]
 
 Other uses:
-In short: The command handles unrecognized inputs. It prints "unknown command:" to standard error and exits with status 3 if no arguments are given. It prints "unknown command: <argument>" to standard error and exits with status 3 if the first argument is unrecognized. [k44]
+In short: Other uses handle invalid command invocations. It exits with status 3 and prints "unknown command:" to standard error if no arguments are provided. It exits with status 3 and prints "unknown command: <argument>" to standard error if the first argument is unrecognized.
+- Running the command with no arguments prints "unknown command:" to standard error and exits with status 3 [k44]
 - Running the command with an unrecognized first argument prints "unknown command: <argument>" to standard error and exits with status 3 [k45]

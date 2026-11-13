@@ -308,9 +308,8 @@ of a run, the resource of a request, the method a test calls -- read from how ea
 line is worded from what the project answered then (the exit status, the status code, the exact message). A
 `How it is used:` line says what kind of project it is; like `What it is:` it is context and is never checked.
 A section of two or more lines opens with an `In short:` line -- what its lines add up to, in a few plain
-sentences written by the model. It is context as well and is never checked. A line the opening states in full,
-with every value the project answered, is taken out and its claims are cited by the opening instead; every
-other line stays beneath it as it was. A project without a README gets one `In short:` line at the top.
+sentences written by the model. It is context as well and is never checked; the lines it sums up all stay
+beneath it. A project without a README gets one `In short:` line at the top.
 Lines that the project answered in the same way -- the same status, the same message once the values of the
 one check are taken out, the same output stream -- are stated once: a line with the rule's name and that answer,
 taken from what was recorded, and under it the cases in which it comes (`file not found: exits with status 1 and

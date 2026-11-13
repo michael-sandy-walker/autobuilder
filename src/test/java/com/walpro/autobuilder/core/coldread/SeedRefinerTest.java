@@ -503,65 +503,49 @@ class SeedRefinerTest {
         assertThat(ReverseEngineeringConfirmation.seedText(lines)).contains("  - e.g. Dial.of(\"9\") returned HIGH\n");
     }
 
-    // ---- T4-EQ: a section's opening -- what its lines add up to, and the lines it states in full taken under it ----
+    // ---- T4-EQ: a section's opening -- what its lines add up to, above the lines, which all stay ----
 
     private static Map<String, List<SeedRefiner.Cited>> tallySection() {
         Map<String, List<SeedRefiner.Cited>> sections = new LinkedHashMap<>();
         sections.put("tally", List.of(
                 new SeedRefiner.Cited("Tallying a file prints its row count", List.of("k1")),
                 new SeedRefiner.Cited("Tallying a file that is not there exits 1 with no such file: <path>", List.of("k2"))));
+        sections.put("audit", List.of(new SeedRefiner.Cited("Auditing a well-formed file exits 0", List.of("k3"))));
         return sections;
     }
 
     @Test
-    void anOpeningHoldsAClaimsRecordedAnswer_onlyWithItsWordsAndItsStatus() {
-        JudgedClaim missing = account.claims().get(1);   // exits 1, "no such file: gone.txt", the path its own argument
-        assertThat(SeedRefiner.states("Counts rows. Exits 1 and prints \"no such file: <path>\" for a file that is not there.", List.of(missing))).isTrue();
-        assertThat(SeedRefiner.states("Counts rows. Exits 1 with an error for a file that is not there.", List.of(missing))).isFalse();
-        assertThat(SeedRefiner.states("Counts rows. Prints \"no such file: <path>\" for a file that is not there.", List.of(missing))).isFalse();
-        // a claim nothing was recorded for is stated by no opening
-        assertThat(SeedRefiner.states("anything", java.util.Collections.singletonList((JudgedClaim) null))).isFalse();
-    }
-
-    @Test
-    void aLineItsOpeningStatesInFullGoesUnderIt_andTheOpeningCitesItsClaims() {
+    void aSectionOfSeveralLinesOpensWithWhatTheyAddUpTo_andEveryLineStaysBeneath() {
         LLMClient llm = answering(
-                "SECTION 1: Counts the rows of a file. Exits 1 and prints \"no such file: <path>\" when the file is not there.",
-                "1: no",
-                "1: no -- how the count is printed\n2: yes");
-        var summed = new SeedRefiner(llm, true).summarised(account, tallySection(), false);
+                "SECTION 1: Counts the rows of a file. A file that is not there is an error:\nSECTION 2: not asked for",
+                "1: no");
+        var summed = new SeedRefiner(llm, true).summarised(tallySection(), false);
 
-        assertThat(summed.sections().get("tally")).extracting(SeedRefiner.Cited::text).containsExactly("Tallying a file prints its row count");
-        assertThat(summed.openings().get("tally").cites()).containsExactly("k2");
-        String text = SeedRefiner.render(null, summed.whole(), null, summed.sections(), summed.openings());
-        assertThat(text).contains("tally:\nIn short: Counts the rows of a file. Exits 1 and prints \"no such file: <path>\" when the file is not there. [k2]\n- Tallying a file prints its row count [k1]");
+        // one section of two lines was asked about; an opening cannot end like a heading
+        assertThat(summed.openings()).containsOnlyKeys("tally");
+        assertThat(summed.whole()).isNull();
+        String text = SeedRefiner.render(null, summed.whole(), null, tallySection(), summed.openings());
+        assertThat(text).contains("tally:\nIn short: Counts the rows of a file. A file that is not there is an error.\n"
+                + "- Tallying a file prints its row count [k1]\n- Tallying a file that is not there exits 1 with no such file: <path> [k2]\n");
+        assertThat(text).contains("audit:\n- Auditing a well-formed file exits 0 [k3]");
     }
 
     @Test
-    void aLineSaidToBeStatedStays_whenTheOpeningDoesNotHoldWhatTheProjectAnswered() {
-        LLMClient llm = answering(
-                "SECTION 1: Counts the rows of a file and fails on a file that is not there.",
-                "1: no",
-                "1: yes\n2: yes");
-        var summed = new SeedRefiner(llm, true).summarised(account, tallySection(), false);
-
-        // k1 printed only a number, which every opening holds; k2's message and status are not in this one
-        assertThat(summed.sections().get("tally")).extracting(SeedRefiner.Cited::text)
-                .containsExactly("Tallying a file that is not there exits 1 with no such file: <path>");
-        assertThat(summed.openings().get("tally").cites()).containsExactly("k1");
-    }
-
-    @Test
-    void anOpeningThatSaysMoreThanItsLines_isNotUsed_andNoLineGoes() {
+    void anOpeningThatSaysMoreThanItsLines_isNotUsed() {
         LLMClient llm = answering(
                 "SECTION 1: Counts the rows of any file, always.\nWHOLE: A tool for files.",
-                "1: yes -- any file, always",
-                "1: yes\n2: yes");
-        var summed = new SeedRefiner(llm, true).summarised(account, tallySection(), true);
+                "1: yes -- any file, always");
+        var summed = new SeedRefiner(llm, true).summarised(tallySection(), true);
 
         assertThat(summed.openings()).isEmpty();
-        assertThat(summed.sections()).isEqualTo(tallySection());
         assertThat(summed.whole()).isEqualTo("A tool for files.");
+        assertThat(SeedRefiner.render(null, summed.whole(), null, tallySection(), summed.openings())).startsWith("In short: A tool for files.\n");
+    }
+
+    @Test
+    void anOpeningNobodyVouchedFor_isNotUsed() {
+        LLMClient llm = answering("SECTION 1: Counts the rows of a file.", "I cannot tell.");
+        assertThat(new SeedRefiner(llm, true).summarised(tallySection(), false).openings()).isEmpty();
     }
 
     @Test
@@ -570,7 +554,7 @@ class SeedRefinerTest {
                 In short: A tool for text files.
 
                 tally:
-                In short: Counts the rows of a file. [k2]
+                In short: Counts the rows of a file.
                 - Tallying a file prints its row count [k1]
                 """;
         List<SeedComposer.Line> lines = SeedComposer.lines(seed, Set.of("Tool"));
@@ -578,7 +562,6 @@ class SeedRefinerTest {
         assertThat(lines).extracting(SeedComposer.Line::kind).containsExactly(
                 SeedComposer.Line.SUMMARY, SeedComposer.Line.SECTION, SeedComposer.Line.SUMMARY, SeedComposer.Line.CITED);
         assertThat(lines.get(2).text()).isEqualTo("Counts the rows of a file.");
-        assertThat(lines.get(2).cites()).containsExactly("k2");
         assertThat(ReverseEngineeringConfirmation.stated(account, seed)).isEmpty();
         assertThat(ReverseEngineeringConfirmation.seedText(lines)).contains("tally:\nIn short: Counts the rows of a file.\n- Tallying a file prints its row count");
     }

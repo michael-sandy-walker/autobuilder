@@ -100,7 +100,7 @@ public class ReverseEngineeringConfirmation {
                         + ", which is not a kept claim");
             }
         }
-        if (lines.stream().noneMatch(l -> l.kind().equals(SeedComposer.Line.CITED))) {
+        if (lines.stream().noneMatch(l -> restsOnClaims(l))) {
             throw new IllegalArgumentException("the seed has no line resting on a kept claim");
         }
 
@@ -163,7 +163,7 @@ public class ReverseEngineeringConfirmation {
             List<Claim> claims = criteriaByFeature.getOrDefault(f.name(), List.of());
             if (claims.isEmpty()) continue;
             List<String> featureLines = lines.stream()
-                    .filter(l -> l.kind().equals(SeedComposer.Line.CITED) && f.name().equals(featureOf(l, account)))
+                    .filter(l -> restsOnClaims(l) && f.name().equals(featureOf(l, account)))
                     .map(SeedComposer.Line::text).toList();
             String description = f.name() + " -- " + (featureLines.isEmpty() ? String.join(", ", f.entryPoints())
                     : String.join("; ", featureLines));
@@ -322,6 +322,11 @@ public class ReverseEngineeringConfirmation {
         return null;
     }
 
+    /** A line resting on kept claims, or a section's opening standing for such lines (T4-EQ). */
+    private static boolean restsOnClaims(SeedComposer.Line l) {
+        return l.kind().equals(SeedComposer.Line.CITED) || (l.kind().equals(SeedComposer.Line.SUMMARY) && !l.cites().isEmpty());
+    }
+
     static String seedText(List<SeedComposer.Line> lines) {
         StringBuilder sb = new StringBuilder();
         for (SeedComposer.Line l : lines) {
@@ -329,6 +334,7 @@ public class ReverseEngineeringConfirmation {
                 case SeedComposer.Line.RULE -> { }   // how the work is done: the obligations file's, not the seed's
                 case SeedComposer.Line.HEADER, SeedComposer.Line.SECTION -> sb.append('\n').append(l.text()).append(":\n");
                 case SeedComposer.Line.CONTEXT -> sb.append(SeedRefiner.CONTEXT).append(' ').append(l.text()).append('\n');
+                case SeedComposer.Line.SUMMARY -> sb.append(SeedRefiner.SUMMARY).append(' ').append(l.text()).append('\n');
                 case SeedComposer.Line.CASE -> sb.append("  - ").append(l.text()).append('\n');
                 case SeedComposer.Line.QUOTE -> sb.append(l.text()).append('\n');
                 case SeedComposer.Line.PURPOSE -> sb.append("What it is: ").append(l.text()).append('\n');

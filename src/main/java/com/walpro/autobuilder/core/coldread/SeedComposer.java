@@ -48,6 +48,7 @@ public class SeedComposer {
             Pattern.CASE_INSENSITIVE);
     /** T1-GK: a line of the README-only section -- something it says that no claim shows. */
     private static final Pattern README_CITED = Pattern.compile("^\\s*-\\s*(.+?)\\s*\\[\\s*(r\\d+(?:\\s*,\\s*r\\d+)*)\\s*]\\s*$");
+    private static final Pattern SUMMARY_CITES = Pattern.compile("^(.+?)\\s*\\[\\s*(k\\d+(?:\\s*,\\s*k\\d+)*)\\s*]\\s*$");
     static final String NOT_SHOWN = "Not shown by any claim:";
 
     private final LLMClient llmClient;
@@ -71,6 +72,11 @@ public class SeedComposer {
         public static final String CONTEXT = "context";
         /** T4-EQ: a cited line standing under the cited line above it -- one of the cases in which that line's answer comes. */
         public static final String CASE = "case";
+        /**
+         * T4-EQ: what a section's lines add up to, in a person's words ({@link SeedRefiner#SUMMARY}) -- context, never a
+         * criterion or open work. It cites the claims of the lines it stands for, when it stands for any.
+         */
+        public static final String SUMMARY = "summary";
     }
 
     /**
@@ -321,6 +327,13 @@ public class SeedComposer {
             }
             if (l.regionMatches(true, 0, SeedRefiner.CONTEXT, 0, SeedRefiner.CONTEXT.length())) {
                 out.add(new Line(Line.CONTEXT, l.substring(SeedRefiner.CONTEXT.length()).strip(), null, List.of()));
+                continue;
+            }
+            if (l.regionMatches(true, 0, SeedRefiner.SUMMARY, 0, SeedRefiner.SUMMARY.length())) {
+                String t = l.substring(SeedRefiner.SUMMARY.length()).strip();
+                Matcher c = SUMMARY_CITES.matcher(t);
+                boolean cited = c.matches();
+                out.add(new Line(Line.SUMMARY, cited ? c.group(1).strip() : t, null, cited ? ids(c.group(2)) : List.of()));
                 continue;
             }
             // T4-EQ: a heading that is not a feature's name states nothing: it names a use, and ends the feature above.

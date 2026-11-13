@@ -61,4 +61,22 @@ class LibraryAndCommandAdapterTest {
         assertThat(called.source("", "", "C", "x();")).doesNotContain("package");
         assertThat(LibraryStyleAdapter.homePackage(called.find(library, null))).isEqualTo("org.x.label");
     }
+
+    /**
+     * T1-GN: a claim may name a type that declares no way in -- a record or an enum the ways in take and return. On
+     * the first project with several packages, 55 of 60 claims did not compile for want of such an import.
+     */
+    @Test
+    void aClaimCanNameEveryPublicTypeOfAnotherPackage_alsoOneWithNoMethodOfItsOwn() {
+        Map<String, String> files = Map.of(
+                "src/main/java/org/x/diff/Differ.java", "package org.x.diff;\npublic class Differ { public int diff() { return 0; } }\n",
+                "src/main/java/org/x/model/Kind.java", "package org.x.model;\npublic enum Kind { ADDED, REMOVED }\n",
+                "src/main/java/org/x/model/Node.java", "package org.x.model;\npublic record Node(String id, Kind kind) { }\nclass Hidden { }\n",
+                "src/test/java/org/x/model/NodeTest.java", "package org.x.model;\npublic class NodeTest { }\n");
+
+        assertThat(called.find(files, null)).extracting(EntryPoint::type).containsOnly("Differ");
+        assertThat(LibraryStyleAdapter.imports(files, "org.x.diff"))
+                .isEqualTo("import org.x.model.Kind;\nimport org.x.model.Node;\n");
+        assertThat(LibraryStyleAdapter.imports(files, "org.x.model")).isEqualTo("import org.x.diff.Differ;\n");
+    }
 }

@@ -130,10 +130,11 @@ public class LibraryStyleAdapter implements EntryAdapter {
             Map<String, String> tests = new LinkedHashMap<>();
             Map<String, String> pathOf = new LinkedHashMap<>();
             String pkg = homePackage(points);
+            String imports = imports(com.walpro.autobuilder.core.merge.ProjectMerge.files(tree), pkg);
             for (Claim k : claims) {
                 String cls = CLASS_PREFIX + Character.toUpperCase(k.id().charAt(0)) + k.id().substring(1) + "Test";
                 String path = "src/test/java/" + (pkg.isEmpty() ? "" : pkg.replace('.', '/') + "/") + cls + ".java";
-                tests.put(path, source(pkg, imports(points, pkg), cls, k.test()));
+                tests.put(path, source(pkg, imports, cls, k.test()));
                 pathOf.put(k.id(), path);
             }
             Map<String, Boolean> passed = bench.run(tree, tests);
@@ -160,15 +161,29 @@ public class LibraryStyleAdapter implements EntryAdapter {
         return pkg.isEmpty() ? text.replaceFirst("(?m)^package ;\\s*\\n", "") : text;
     }
 
-    /** The project's public types from other packages, one per simple name, so a claim can name them simply. */
-    public static String imports(List<EntryPoint> points, String pkg) {
-        Map<String, String> bySimple = new LinkedHashMap<>();
-        for (EntryPoint p : points) {
-            String outer = p.type().contains(".") ? p.type().substring(0, p.type().indexOf('.')) : p.type();
-            String q = packageOf(p.qualifiedType(), p.type());
-            if (q.equals(pkg)) continue;
-            bySimple.putIfAbsent(outer, (q.isEmpty() ? "" : q + ".") + outer);
-        }
+    /**
+     * The project's public top-level types from other packages than {@code pkg}, one per simple name, so a claim can
+     * name them simply.
+     *
+     * <p>T1-GN: read from the SOURCES, not from the ways in. A type with no public method of its own -- a record or an
+     * enum the ways in take and return -- declares no way in, and a claim has to name it all the same: built from the
+     * entry points, the imports left such a claim uncompilable, and on the first project with several packages 55 of
+     * 60 claims were dropped as not held. (One package needs no import, which is why one-package projects never
+     * showed it.)
+     */
+    public static String imports(Map<String, String> files, String pkg) {
+        Map<String, String> bySimple = new java.util.TreeMap<>();
+        JavaParser parser = new JavaParser(new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17));
+        new java.util.TreeMap<>(files).forEach((path, text) -> {
+            if (!path.endsWith(".java") || !path.contains(MAIN)) return;
+            CompilationUnit cu = parser.parse(text).getResult().orElse(null);
+            if (cu == null) return;
+            String q = cu.getPackageDeclaration().map(d -> d.getNameAsString()).orElse("");
+            if (q.equals(pkg) || q.isEmpty()) return;   // its own package needs none; the unnamed one cannot be imported
+            for (TypeDeclaration<?> t : cu.getTypes()) {
+                if (t.hasModifier(Modifier.Keyword.PUBLIC)) bySimple.putIfAbsent(t.getNameAsString(), q + "." + t.getNameAsString());
+            }
+        });
         StringBuilder sb = new StringBuilder();
         bySimple.values().forEach(q -> sb.append("import ").append(q).append(";\n"));
         return sb.toString();

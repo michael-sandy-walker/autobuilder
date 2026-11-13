@@ -347,9 +347,9 @@ public class ReverseEngineeringConfirmation {
         List<Claim> tests = criteriaByFeature.values().stream().flatMap(List::stream)
                 .filter(k -> k.kind() == EntryKind.LIBRARY_STYLE).toList();
         if (tests.isEmpty()) return;
-        var points = library.find(ProjectMerge.files(base.resolve("output")), null);
-        String pkg = LibraryStyleAdapter.homePackage(points);
-        String imports = LibraryStyleAdapter.imports(points, pkg);
+        var sources = ProjectMerge.files(base.resolve("output"));
+        String pkg = LibraryStyleAdapter.homePackage(library.find(sources, null));
+        String imports = LibraryStyleAdapter.imports(sources, pkg);
         for (Claim k : tests) {
             String cls = TEST_PREFIX + Character.toUpperCase(k.id().charAt(0)) + k.id().substring(1) + "Test";
             claimTests.write((pkg.isEmpty() ? "" : pkg.replace('.', '/') + "/") + cls + ".java",

@@ -1,0 +1,90 @@
+What it is: A tool that reads an acceptance criterion about an HTTP endpoint and a specification stating response statuses for endpoints, extracting values from text. [r2, r3, r4, r5]
+How it is used: library-style -- exercised inside the same process, by a test that calls it. Exercised here through: EndpointPaths.declaredIn, EndpointPaths.normalizePath, EndpointPaths.discardedInput, SpecEndpointBehaviourQuery.statedBehaviours, SpecEndpointBehaviourQuery.criteriaFor, BehaviouralCriterionParser.parse, SeedStatusSupport.of.
+
+EndpointPaths.declaredIn:
+- When `declaredIn(null)` is called, it returns an empty set [k9, k25]
+  - e.g. assertTrue(EndpointPaths.declaredIn(null).isEmpty()); [k9, k25]
+- When `declaredIn("no endpoints here")` is called, it returns an empty set [k10, k26]
+  - e.g. assertTrue(EndpointPaths.declaredIn("no endpoints here").isEmpty()); [k10]
+  - e.g. assertTrue(EndpointPaths.declaredIn("The system returns a list of loans.").isEmpty()); [k26]
+- When `declaredIn("GET /Loans")` is called, it returns a set containing the endpoint with verb "GET" and path "/loans" [k11]
+- When `declaredIn("GET /")` is called, it returns an empty set [k12]
+- When `declaredIn("GET /loans and again GET /loans?memberId=1")` is called, it returns a set of size 1 containing the endpoint with verb "GET" and path "/loans" [k29]
+- When `declaredIn("GET /loans?memberId=42")` is called, it returns a set containing the endpoint with verb "GET" and path "/loans" [k30]
+- When `declaredIn("GET //loans//details")` is called, it returns a set containing the endpoint with verb "GET" and path "/loans/details" [k31]
+- When `declaredIn("GET /books/{id}")` is called, it returns a set containing the endpoint with verb "GET" and path "/books/{}" [k32]
+- When `declaredIn("GET /loans/")` is called, it returns a set containing the endpoint with verb "GET" and path "/loans" [k33]
+- When `declaredIn("GET /Loans/Details")` is called, it returns a set containing the endpoint with verb "GET" and path "/loans/details" [k34]
+- When `declaredIn("GET /")` is called, it returns an empty set [k35]
+- When `declaredIn("GET /?memberId=1")` is called, it returns an empty set [k36]
+
+EndpointPaths.normalizePath:
+- When `normalizePath("/loans?memberId={id}")` is called, it returns "/loans" [k13]
+- When `normalizePath("/a//b")` is called, it returns "/a/b" [k14]
+- When `normalizePath("/Loans")` is called, it returns "/loans" [k15]
+- When `normalizePath("/loans/{id}")` is called, it returns "/loans/{}" [k16]
+- When `normalizePath("/loans/")` is called, it returns "/loans" [k17]
+- When `normalizePath(null)` is called, it returns null [k18]
+- When `normalizePath(" ")` is called, it returns null [k19]
+- When `normalizePath("/")` is called, it returns null [k20]
+
+EndpointPaths.discardedInput:
+- When `discardedInput("/loans?memberId={id}")` is called, it returns an Optional containing "memberId={id}" [k21]
+- When `discardedInput("/loans")` is called, it returns an empty Optional [k22]
+- When `discardedInput("/loans?")` is called, it returns an empty Optional [k23]
+- When `discardedInput(null)` is called, it returns an empty Optional [k24]
+
+SpecEndpointBehaviourQuery.statedBehaviours:
+- When `statedBehaviours(null)` is called, it returns an empty map [k37]
+- When `statedBehaviours("GET /books/{id} (404 if absent).")` is called, it returns a map containing the endpoint with verb "GET" and path "/books/{}" mapped to a list of behaviours [k38]
+- When `statedBehaviours("POST /members (create; name required).\n\nInvalid input returns HTTP 400 with JSON body.")` is called, it returns a map containing the endpoint with verb "POST" and path "/members" mapped to a list of behaviours [k39]
+- When `statedBehaviours("POST /loans/{id}/return (mark returned; 404 if loan absent).\n\nInvalid input returns HTTP 400 with JSON body.")` is called, it returns a map containing the endpoint with verb "POST" and path "/loans/{}/return" mapped to a list of behaviours [k40]
+- When `statedBehaviours("POST /books (create; title required, max 120 chars).")` is called, it returns a map containing the endpoint with verb "POST" and path "/books" mapped to an empty list of behaviours [k41]
+- When `statedBehaviours("GET /loans (list all loans).\n\nInvalid input returns HTTP 400 with JSON body.")` is called, it returns a map containing the endpoint with verb "GET" and path "/loans" mapped to an empty list of behaviours [k42]
+- When `statedBehaviours("GET /books (list all).")` is called, it returns a map that does not contain the key for the endpoint with verb "GET" and path "/books" [k43]
+- When `statedBehaviours("GET /books/{id} (404 if absent; 404 if missing).")` is called, it returns a map containing the endpoint with verb "GET" and path "/books/{}" mapped to a list of behaviours [k44]
+- When `statedBehaviours("GET /Books/{id} (404 if absent).")` is called, it returns a map containing the key for the endpoint with verb "GET" and path "/books/{}" [k48]
+
+SpecEndpointBehaviourQuery.criteriaFor:
+- When `criteriaFor(new Endpoint("POST", "/members"), List.of(new SpecEndpointBehaviourQuery.StatedBehaviour(409, "on duplicate")))` is called, it returns a list of size 1 [k45]
+- When `criteriaFor(null, List.of(new SpecEndpointBehaviourQuery.StatedBehaviour(404, "x")))` is called, it returns an empty list [k46, k53, k54]
+  - e.g. SpecEndpointBehaviourQuery q = new SpecEndpointBehaviourQuery(); assertTrue(q.criteriaFor(null, List.of(new SpecEndpointBehaviourQuery.StatedBehaviour(404, "x"))).isEmpty()); assertTrue(q.criteriaFor(new Endpoint("GET", "/x"), null).isEmpty()); [k46]
+  - e.g. SpecEndpointBehaviourQuery q = new SpecEndpointBehaviourQuery(); List<String> out = q.criteriaFor(null, List.of(new SpecEndpointBehaviourQuery.StatedBehaviour(404, "if absent"))); assertTrue(out.isEmpty()); [k53]
+  - e.g. SpecEndpointBehaviourQuery q = new SpecEndpointBehaviourQuery(); List<String> out = q.criteriaFor(new Endpoint("GET", "/members/{}"), null); assertTrue(out.isEmpty()); [k54]
+- When `criteriaFor(new Endpoint("POST", "/members"), List.of(new SpecEndpointBehaviourQuery.StatedBehaviour(409, null)))` is called, it returns a list of size 1 containing the string "POST /members returns HTTP 409" [k49]
+- When `criteriaFor(new Endpoint("POST", "/members"), List.of(new SpecEndpointBehaviourQuery.StatedBehaviour(409, "on duplicate")))` is called, it returns a list of size 1 [k50]
+- When `criteriaFor(new Endpoint("GET", "/books/{}"), List.of(new SpecEndpointBehaviourQuery.StatedBehaviour(404, " ")))` is called, it returns a list of size 1 containing the string "GET /books/{} returns HTTP 404" [k51]
+- When `criteriaFor(new Endpoint("POST", "/loans"), List.of(new SpecEndpointBehaviourQuery.StatedBehaviour(404, "if either not found"), new SpecEndpointBehaviourQuery.StatedBehaviour(409, "if book is alrea..."))` is called, it returns a list of size 2 [k52]
+- When `criteriaFor(new Endpoint("POST", "/members"), List.of())` is called, it returns an empty list [k55]
+- When `criteriaFor(new Endpoint("DELETE", "/loans/{id}"), List.of(new SpecEndpointBehaviourQuery.StatedBehaviour(404, "if loan absent")))` is called, it returns a list of size 1 [k56]
+- When `criteriaFor(new Endpoint("POST", "/books"), List.of(new SpecEndpointBehaviourQuery.StatedBehaviour(201, null)))` is called, it returns a list of size 1 where the first element contains the substring "returns HTTP 201" [k57]
+- When `criteriaFor(new Endpoint("POST", "/members"), List.of(new SpecEndpointBehaviourQuery.StatedBehaviour(400, "Invalid input")))` is called, it returns a list of size 1 where the first element contains the substring "returns HTTP" [k58]
+
+BehaviouralCriterionParser.parse:
+- When `parse("POST /books with invalid input returns HTTP 400 with JSON body {\"message\":\"...\"}")` is called, it returns an Optional containing an Assertion with verb "POST", path "/books", and expected status 400 [k61]
+- When `parse("POST /books then GET /books both return HTTP 200")` is called, it returns an empty Optional [k63]
+- When `parse("POST /books returns HTTP 201 or HTTP 400")` is called, it returns an empty Optional [k64]
+- When `parse("Validation rejects a missing title")` is called, it returns an empty Optional [k65]
+- When `parse("POST /books accepts a title of at most 120 chars")` is called, it returns an empty Optional [k66]
+- When `parse("GET /books returns 999 records")` is called, it returns an empty Optional [k67]
+- When `parse("POST /loans returns 404 Not Found when book or member does not exist")` is called, it returns an Optional containing an Assertion with verb "POST", path "/loans", and expected status 404 [k68]
+- When `parse("POST /members returns status 409")` is called, it returns an Optional containing an Assertion with expected status 409 [k69]
+- When `parse("GET /books/{id} returns HTTP 404 for non-existing id")` is called, it returns an Optional containing an Assertion with verb "GET", path "/books/{}", and expected status 404 [k70]
+
+SeedStatusSupport.of:
+- When `of(null, "GET /a (404 if absent)")` is called, it returns NO_OPINION [k73]
+- When `of("The list is in order", "GET /a (404 if absent)")` is called, it returns NO_OPINION [k74]
+- When `of("GET /b returns HTTP 200 with the item", "GET /a (404 if absent)")` is called, it returns UNSUPPORTED [k75]
+- When `of("GET /a returns HTTP 404 when the item does not exist", "GET /a (404 if absent)")` is called, it returns SUPPORTED [k76]
+- When `of("GET /a returns HTTP 200 with the item", "GET /a (404 if absent)")` is called, it returns SUPPORTED [k77]
+- When `of("GET /a returns HTTP 206 with a partial list", "GET /a (206 with a partial list)")` is called, it returns SUPPORTED [k78]
+- When `of("POST /coils returns HTTP 423 when the emitter is sealed", "Coils: POST /coils (register a coil; emitterId required; 423 if the emitter is sealed), GET /coils?emitterId={id} (list the coils on an emitter).")` is called, it returns SUPPORTED [k79]
+
+Other uses:
+- When `describe()` is called on an Assertion with verb "POST", path "/books", and status 400, it returns "POST /books → 400" [k62]
+- When `toString()` is called on an Endpoint with verb "GET" and path "/loans", it returns "GET /loans" [k1]
+- When `toString()` is called on a StatedBehaviour with status 404 and condition " ", it returns "404" [k47, k59, k60]
+  - e.g. assertEquals("404", new SpecEndpointBehaviourQuery.StatedBehaviour(404, "  ").toString()); assertEquals("404 if absent", new SpecEndpointBehaviourQuery.StatedBehaviour(404, "if absent").toString()); [k47]
+  - e.g. SpecEndpointBehaviourQuery.StatedBehaviour b1 = new SpecEndpointBehaviourQuery.StatedBehaviour(404, null); assertEquals("404", b1.toString()); SpecEndpointBehaviourQuery.StatedBehaviour b2 = new SpecEndpointBehaviourQuery.StatedBehaviour(409, "  "); assertEquals("409", b2.toString()); [k59]
+  - e.g. SpecEndpointBehaviourQuery.StatedBehaviour b = new SpecEndpointBehaviourQuery.StatedBehaviour(409, "on duplicate"); assertEquals("409 on duplicate", b.toString()); [k60]
+- When `statedInput("GET /loans?memberId={id} returns HTTP 200 with a JSON array")` is called, it returns an Optional containing "memberId={id}" [k71]

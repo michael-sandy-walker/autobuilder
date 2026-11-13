@@ -1,0 +1,78 @@
+What it is: A tool that reads an acceptance criterion about an HTTP endpoint and a specification stating response statuses for endpoints, extracting values from text. [r2, r3, r4, r5]
+
+BehaviouralCriterionParser.Assertion:
+- Renders the assertion as "verb path → status" when `describe()` is called [k62]
+
+Endpoint:
+- Renders as its verb, a single space, then its path when `toString()` is called [k1]
+
+EndpointPaths:
+- Returns an empty set when `declaredIn(String)` is called with null text [k9, k25]
+- Returns an empty set when `declaredIn(String)` is called with text containing no verb-qualified path mention [k10, k26]
+- Returns the endpoint with an upper-cased verb and a normalized path for a single mention when `declaredIn(String)` is called [k11]
+- Returns an empty set when `declaredIn(String)` is called with text where the only mention normalizes to a bare root path [k12]
+- Collapses duplicate mentions of the same endpoint into one set element when `declaredIn(String)` is called [k29]
+- Strips the query string from a path when building the endpoint when `declaredIn(String)` is called [k30]
+- Collapses duplicate slashes in a path when `declaredIn(String)` is called [k31]
+- Replaces path variables with the empty-brace placeholder when `declaredIn(String)` is called [k32]
+- Drops a trailing slash from a path when `declaredIn(String)` is called [k33]
+- Lower-cases the path when `declaredIn(String)` is called [k34]
+- Skips a mention whose path normalizes to null (a bare root path) when `declaredIn(String)` is called [k35]
+- Skips a mention whose path is only a query string (normalizes to null) when `declaredIn(String)` is called [k36]
+- Strips the query string so a path with a query normalizes to the bare path when `normalizePath(String)` is called [k13]
+- Collapses runs of duplicate slashes into a single slash when `normalizePath(String)` is called [k14]
+- Lower-cases the path when `normalizePath(String)` is called [k15]
+- Replaces every path variable with the empty braces placeholder when `normalizePath(String)` is called [k16]
+- Drops a trailing slash from a multi-segment path when `normalizePath(String)` is called [k17]
+- Returns null for null input when `normalizePath(String)` is called [k18]
+- Returns null for blank input when `normalizePath(String)` is called [k19]
+- Returns null when the path is only a root slash when `normalizePath(String)` is called [k20]
+- Returns the query string that `normalizePath` discards when `discardedInput(String)` is called [k21]
+- Returns empty when the path has no query string when `discardedInput(String)` is called [k22]
+- Returns empty when the query string is blank when `discardedInput(String)` is called [k23]
+- Returns empty for null input when `discardedInput(String)` is called [k24]
+
+SpecEndpointBehaviourQuery:
+- Returns an empty map when `statedBehaviours(String)` is called with null, blank, or specification naming no endpoint [k37]
+- Recovers a status stated adjacent to an endpoint's own clause, carrying the specification's own condition wording, when `statedBehaviours(String)` is called [k38]
+- Binds a document-wide (cross-cutting) status to an endpoint only when that endpoint's own clause states an input constraint when `statedBehaviours(String)` is called [k39]
+- Does not bind a cross-cutting status to an endpoint whose clause states no input constraint when `statedBehaviours(String)` is called [k40]
+- Rejects a three-digit number that is not a valid HTTP response status (a quantity), so it contributes no behaviour, when `statedBehaviours(String)` is called [k41]
+- Does not let a trailing paragraph leak a status into the last endpoint's clause (paragraph boundary bound) when `statedBehaviours(String)` is called [k42]
+- Omits an endpoint entirely when no status is stated for it (no default expectation) when `statedBehaviours(String)` is called [k43]
+- Deduplicates a status stated more than once for the same endpoint when `statedBehaviours(String)` is called [k44]
+- Normalizes the endpoint path (path variables become {}, lower-cased) so a mention with a variable is keyed by its normalized form when `statedBehaviours(String)` is called [k48]
+- Renders each behaviour as "<verb> <path> returns HTTP <status>" plus the condition wording when present when `criteriaFor(Endpoint, List<StatedBehaviour>)` is called [k45]
+- Returns an empty list when the endpoint or the behaviour list is null when `criteriaFor(Endpoint, List<StatedBehaviour>)` is called [k46, k53, k54]
+- Renders each behaviour as a single string of the form "<verb> <path> returns HTTP <status>" when the behaviour has no condition when `criteriaFor(Endpoint, List<StatedBehaviour>)` is called [k49]
+- Appends the behaviour's condition after an em-dash separator when the condition is non-blank when `criteriaFor(Endpoint, List<StatedBehaviour>)` is called [k50]
+- Treats a blank condition the same as a null one, producing no trailing separator, when `criteriaFor(Endpoint, List<StatedBehaviour>)` is called [k51]
+- Returns one string per behaviour, in the same order as the input list, when `criteriaFor(Endpoint, List<StatedBehaviour>)` is called [k52]
+- Returns an empty list when the behaviours list is empty when `criteriaFor(Endpoint, List<StatedBehaviour>)` is called [k55]
+- Uses the endpoint's verb and path verbatim in the rendered string when `criteriaFor(Endpoint, List<StatedBehaviour>)` is called [k56]
+- Renders the status as a bare number immediately after the literal "HTTP " marker when `criteriaFor(Endpoint, List<StatedBehaviour>)` is called [k57]
+- Output for a behaviour with a condition still contains the "returns HTTP <status>" marker before the condition when `criteriaFor(Endpoint, List<StatedBehaviour>)` is called [k58]
+
+SpecEndpointBehaviourQuery.StatedBehaviour:
+- Renders the status alone when the condition is blank, and "status condition" otherwise, when `toString()` is called [k47, k59, k60]
+
+BehaviouralCriterionParser:
+- Reads a single-endpoint, single-status criterion into an assertion carrying the verb, the normalized path, the expected status, and the criterion text verbatim when `parse(String)` is called [k61]
+- Abstains (empty) when the criterion names two distinct endpoints when `parse(String)` is called [k63]
+- Abstains (empty) when the criterion states two different response statuses when `parse(String)` is called [k64]
+- Abstains (empty) when there is no endpoint, no status, or the input is null/blank when `parse(String)` is called [k65]
+- Does not read a bare three-digit number not introduced by a status marker as a response status, so such a criterion abstains, when `parse(String)` is called [k66]
+- Does not read a number outside the 100–599 range as a response status even when a marker precedes it, so the criterion abstains, when `parse(String)` is called [k67]
+- Accepts a response verb (returns/return) as a status marker, so "POST /loans returns 404 ..." parses to status 404, when `parse(String)` is called [k68]
+- Accepts "status" and "status code" as status markers when `parse(String)` is called [k69]
+- Normalizes a path variable to a single {} placeholder in the assertion's path when `parse(String)` is called [k70]
+- Recovers the query component that path normalization discards, and is empty when the criterion names no input, when `statedInput(String)` is called [k71]
+
+SeedStatusSupport:
+- Yields NO_OPINION when `of(String, String)` is called with a null or blank criterion, or a null or blank specification [k73]
+- Yields NO_OPINION when `of(String, String)` is called with a criterion the parser cannot read as exactly one endpoint with exactly one status [k74]
+- Yields UNSUPPORTED when `of(String, String)` is called with an endpoint the specification never names [k75]
+- Yields SUPPORTED when the specification states that status for the endpoint and UNSUPPORTED otherwise, for a status outside 200-299, when `of(String, String)` is called [k76]
+- Yields SUPPORTED when the specification states no success status for the endpoint, for a status in 200-299, when `of(String, String)` is called [k77]
+- Yields SUPPORTED only if the asserted status is one of them, when the specification states one or more success statuses, for a status in 200-299, when `of(String, String)` is called [k78]
+- Applies the same rule over an invented vocabulary, being vocabulary-independent, when `of(String, String)` is called [k79]

@@ -1,0 +1,104 @@
+What it is: Structural diff of Java sources that parses Java source into a tree of declared elements and compares two versions of a file, reporting which elements were added, removed or changed [r2, r3, r4]
+How it is used: library-style -- exercised inside the same process, by a test that calls it. Exercised here through: StructuralDiffNode.isUnchanged, StructuralDiffNode.getType, StructuralDiffNode.getId, ParsedElementBuilder.addChild, StructuralDiffNode.isModified, DiffSummarizer.summarizePlainText, JavaStructureParser.parse, StructuralDiffUtils.flatten, StructuralDiffUtils.filterByType, StructuralDiffUtils.hasChanges, StructuralJavaDiffBuilder.diffJavaFile.
+
+StructuralDiffNode.isUnchanged:
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) classifies a node as added when the old element is null and the new element is non-null [k1, k13]
+  - e.g. ElementDescriptor d = new ElementDescriptor("id1000001", ElementType.METHOD, "content", Map.of()); StructuralDiffNode node = new StructuralDiffNode(null, d, List.of()); assertTrue(node.isAdded()); assertFalse(node.isDeleted()); assertFalse(node.isModified()); assertFalse(node.isUnchanged()); [k1]
+  - e.g. ParsedElement newEl = new ParsedElementBuilder().id("a.b.c").type(ElementType.METHOD).content("void c(){}").build(); StructuralDiffNode node = StructuralDiffBuilder.diff(null, newEl); assertTrue(node.isAdded()); assertFalse(node.isDeleted()); assertFalse(node.isModified()); assertEquals("a.b.c", node.getId()); assertEquals(ElementType.METHOD, node.getType()); [k13]
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) classifies a node as deleted when the old element is non-null and the new element is null [k2, k14]
+  - e.g. ElementDescriptor d = new ElementDescriptor("id1000002", ElementType.FIELD, "content", Map.of()); StructuralDiffNode node = new StructuralDiffNode(d, null, List.of()); assertTrue(node.isDeleted()); assertFalse(node.isAdded()); assertFalse(node.isModified()); assertFalse(node.isUnchanged()); [k2]
+  - e.g. ParsedElement oldEl = new ParsedElementBuilder().id("a.b.d").type(ElementType.FIELD).content("int d;").build(); StructuralDiffNode node = StructuralDiffBuilder.diff(oldEl, null); assertTrue(node.isDeleted()); assertFalse(node.isAdded()); assertFalse(node.isModified()); assertEquals("a.b.d", node.getId()); assertEquals(ElementType.FIELD, node.getType()); [k14]
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) classifies a node as modified when both elements are present with different content [k3, k16]
+  - e.g. ElementDescriptor oldD = new ElementDescriptor("id1000003", ElementType.METHOD, "old", Map.of()); ElementDescriptor newD = new ElementDescriptor("id1000003", ElementType.METHOD, "new", Map.of()); StructuralDiffNode node = new StructuralDiffNode(oldD, newD, List.of()); assertTrue(node.isModified()); assertFalse(node.isAdded()); assertFalse(node.isDeleted()); assertFalse(node.isUnchanged()); [k3]
+  - e.g. ParsedElement oldEl = new ParsedElementBuilder().id("a.b.m").type(ElementType.METHOD).content("void m(){}").build(); ParsedElement newEl = new ParsedElementBuilder().id("a.b.m").type(ElementType.METHOD).content("void m(int x){}").build(); StructuralDiffNode node = StructuralDiffBuilder.diff(oldEl, newEl); assertTrue(node.isModified()); assertFalse(node.isAdded()); assertFalse(node.isDeleted()); assertFalse(node.isUnchanged()); [k16]
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) classifies a node as unchanged when both elements are present with equal content [k4, k15]
+  - e.g. ElementDescriptor oldD = new ElementDescriptor("id1000004", ElementType.CLASS, "same", Map.of()); ElementDescriptor newD = new ElementDescriptor("id1000004", ElementType.CLASS, "same", Map.of()); StructuralDiffNode node = new StructuralDiffNode(oldD, newD, List.of()); assertTrue(node.isUnchanged()); assertFalse(node.isAdded()); assertFalse(node.isDeleted()); assertFalse(node.isModified()); [k4]
+  - e.g. ParsedElement oldEl = new ParsedElementBuilder().id("a.b.m").type(ElementType.METHOD).content("void m(){}").build(); ParsedElement newEl = new ParsedElementBuilder().id("a.b.m").type(ElementType.METHOD).content("void m(){}").build(); StructuralDiffNode node = StructuralDiffBuilder.diff(oldEl, newEl); assertTrue(node.isUnchanged()); assertFalse(node.isAdded()); assertFalse(node.isDeleted()); assertFalse(node.isModified()); [k15]
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) aligns children by id, so a child present in both elements with identical content appears as an unchanged child node [k20]
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) yields a root that is unchanged and whose children are all unchanged when the diff of two identical whole trees is computed [k24]
+- StructuralDiffNode.isAdded() returns true when the oldElement is null and newElement is non-null [k1]
+- StructuralDiffNode.isDeleted() returns true when the oldElement is non-null and newElement is null [k2]
+- StructuralDiffNode.isModified() returns true when both old and new descriptors are present and have differing content [k3]
+- StructuralDiffNode.isUnchanged() returns true when both old and new descriptors are present and have equal content [k4]
+- StructuralDiffNode can be constructed with an empty children list and still classify correctly as unchanged when both descriptors have equal content [k10]
+- StructuralDiffNode classifies as unchanged when both elements are present with identical content [k15]
+- StructuralDiffNode classifies as modified when both elements are present with different content [k16]
+- StructuralDiffNode classifies a child present in both elements with identical content as an unchanged child node [k20]
+- StructuralDiffNode yields a root that is unchanged and whose children are all unchanged when the diff of two identical whole trees is computed [k24]
+
+StructuralDiffNode.getType:
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) takes the node's type from the new element when present, else from the old element [k5, k6, k22]
+  - e.g. ElementDescriptor oldD = new ElementDescriptor("id1000005", ElementType.FIELD, "c", Map.of()); ElementDescriptor newD = new ElementDescriptor("id1000005", ElementType.METHOD, "c", Map.of()); StructuralDiffNode node = new StructuralDiffNode(oldD, newD, List.of()); assertEquals(ElementType.METHOD, node.getType()); [k5]
+  - e.g. ElementDescriptor oldD = new ElementDescriptor("id1000006", ElementType.CONSTRUCTOR, "c", Map.of()); StructuralDiffNode node = new StructuralDiffNode(oldD, null, List.of()); assertEquals(ElementType.CONSTRUCTOR, node.getType()); [k6]
+  - e.g. ParsedElement oldEl = new ParsedElementBuilder().id("a.b").type(ElementType.CLASS).content("class B{}").build(); ParsedElement newEl = new ParsedElementBuilder().id("a.b").type(ElementType.INTERFACE).content("interface B{}").build(); StructuralDiffNode node = StructuralDiffBuilder.diff(oldEl, newEl); assertEquals(ElementType.INTERFACE, node.getType()); ParsedElement oldOnly = new ParsedElementBuilder().id("a.b").type(ElementType.CLASS).content("class B{}").build(); StructuralDiffNode delNode = StructuralDiffBuilder.diff(oldOnly, null); assertEquals(ElementType.CLASS, delNode.getType()); [k22]
+- StructuralDiffNode.getType() returns the newElement's type when a newElement is present, even if the oldElement has a different type [k5]
+- StructuralDiffNode.getType() returns the oldElement's type when only an oldElement is present [k6]
+- StructuralDiffNode reports the UNKNOWN constant as the fallback type when neither old nor new element is present [k12]
+- StructuralDiffNode classifies as added when the old element is null, carrying the new element's id and type [k13]
+- StructuralDiffNode classifies as deleted when the new element is null, carrying the old element's id and type [k14]
+- StructuralDiffNode takes its type from the new element when present, else from the old element [k22]
+
+StructuralDiffNode.getId:
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) takes the node's id from the new element when present, else from the old element [k7, k8, k23]
+  - e.g. ElementDescriptor oldD = new ElementDescriptor("old1000007", ElementType.METHOD, "c", Map.of()); ElementDescriptor newD = new ElementDescriptor("new1000007", ElementType.METHOD, "c", Map.of()); StructuralDiffNode node = new StructuralDiffNode(oldD, newD, List.of()); assertEquals("new1000007", node.getId()); [k7]
+  - e.g. ElementDescriptor oldD = new ElementDescriptor("old1000008", ElementType.METHOD, "c", Map.of()); StructuralDiffNode node = new StructuralDiffNode(oldD, null, List.of()); assertEquals("old1000008", node.getId()); [k8]
+  - e.g. ParsedElement oldEl = new ParsedElementBuilder().id("old.id").type(ElementType.METHOD).content("void m(){}").build(); ParsedElement newEl = new ParsedElementBuilder().id("new.id").type(ElementType.METHOD).content("void m(){}").build(); StructuralDiffNode node = StructuralDiffBuilder.diff(oldEl, newEl); assertEquals("new.id", node.getId()); StructuralDiffNode delNode = StructuralDiffBuilder.diff(oldEl, null); assertEquals("old.id", delNode.getId()); [k23]
+- StructuralDiffNode.getId() returns the newElement's id when a newElement is present, even if the oldElement has a different id [k7]
+- StructuralDiffNode.getId() returns the oldElement's id when only an oldElement is present [k8]
+- StructuralDiffNode takes its id from the new element when present, else from the old element [k23]
+
+ParsedElementBuilder.addChild:
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) aligns children by id, so a child present only in the new element appears as an added child node [k17]
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) aligns children by id, so a child present only in the old element appears as a deleted child node [k18]
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) sorts the children list of a diff node by id, giving deterministic ordering regardless of input order [k21]
+- ParsedElementBuilder.id(String), ParsedElementBuilder.type(ElementType), ParsedElementBuilder.content(String), ParsedElementBuilder.putMeta(String, Object), ParsedElementBuilder.addChild(ParsedElement), ParsedElementBuilder.addChildren(Collection<ParsedElement>), ParsedElementBuilder.build() constructs elements used in diffing, where children are aligned by id so a child present only in the new element appears as an added child node [k17]
+- ParsedElementBuilder.id(String), ParsedElementBuilder.type(ElementType), ParsedElementBuilder.content(String), ParsedElementBuilder.putMeta(String, Object), ParsedElementBuilder.addChild(ParsedElement), ParsedElementBuilder.addChildren(Collection<ParsedElement>), ParsedElementBuilder.build() constructs elements used in diffing, where children are aligned by id so a child present only in the old element appears as a deleted child node [k18]
+- ParsedElementBuilder.id(String), ParsedElementBuilder.type(ElementType), ParsedElementBuilder.content(String), ParsedElementBuilder.putMeta(String, Object), ParsedElementBuilder.addChild(ParsedElement), ParsedElementBuilder.addChildren(Collection<ParsedElement>), ParsedElementBuilder.build() constructs elements used in diffing, where the children list of a diff node is sorted by id, giving deterministic ordering regardless of input order [k21]
+
+StructuralDiffNode.isModified:
+- StructuralDiffBuilder.diff(ParsedElement, ParsedElement) aligns children by id, so a child present in both elements with different content appears as a modified child node [k19]
+- StructuralDiffNode classifies a child present in both elements with different content as a modified child node [k19]
+
+DiffSummarizer.summarizePlainText:
+- DiffSummarizer.summarizePlainText(StructuralDiffNode) returns "(no changes)" when the root is unchanged and has no changed children [k43]
+- DiffSummarizer.summarizePlainText(StructuralDiffNode) renders an added node as "- METHOD (added): <id>" with no leading indentation at the top level [k44]
+- DiffSummarizer.summarizePlainText(StructuralDiffNode) renders a deleted node as "- FIELD (deleted): <id>" [k45]
+- DiffSummarizer.summarizePlainText(StructuralDiffNode) renders a modified node as "- CLASS (modified): <id>" [k46]
+- DiffSummarizer.summarizePlainText(StructuralDiffNode) indents each child level by two additional spaces relative to its parent [k47]
+
+JavaStructureParser.parse:
+- JavaStructureParser.parse(String, String) returns a FILE-typed element whose id is the path and whose children are the declared types [k33]
+- JavaStructureParser.parse(String, String) sets the class element id to the fully-qualified name (package + class name) [k35]
+- JavaStructureParser.parse(String, String) records each method as a METHOD child whose id is the class id plus the method name [k36]
+
+StructuralDiffUtils.flatten:
+- StructuralDiffUtils.flatten(StructuralDiffNode) returns a list whose first element is the root node itself, followed by its children in pre-order (depth-first) order [k49]
+- StructuralDiffUtils.flatten(StructuralDiffNode) on a node with no children returns a single-element list containing that node [k50]
+
+StructuralDiffUtils.filterByType:
+- StructuralDiffUtils.filterByType(StructuralDiffNode, ElementType) returns only the nodes (at any depth) whose element type equals the requested type, in the same order flatten produces them [k51]
+- StructuralDiffUtils.filterByType(StructuralDiffNode, ElementType) returns an empty list when no node in the tree has the requested type [k52]
+- StructuralDiffUtils identifies a method present only in the new content as an added METHOD node whose id contains the method name [k29]
+- StructuralDiffUtils identifies a method present only in the old content as a deleted METHOD node whose id contains the method name [k30]
+- StructuralDiffUtils identifies a method whose source differs between old and new as a modified METHOD node whose id contains the method name [k31]
+
+StructuralDiffUtils.hasChanges:
+- StructuralDiffUtils.hasChanges(StructuralDiffNode) returns true when the root node itself is added [k53]
+- StructuralDiffUtils.hasChanges(StructuralDiffNode) returns true when the root node itself is deleted [k54]
+- StructuralDiffUtils.hasChanges(StructuralDiffNode) returns true when the root node itself is modified [k55]
+- StructuralDiffUtils.hasChanges(StructuralDiffNode) returns false when the root node is unchanged and has no children [k56]
+- StructuralDiffUtils.hasChanges(StructuralDiffNode) returns true when the root is unchanged but a descendant child is added [k57]
+- StructuralDiffUtils.hasChanges(StructuralDiffNode) returns true when the root is unchanged but a descendant child is modified [k58]
+- StructuralDiffUtils.hasChanges(StructuralDiffNode) returns false when the root and all its children are unchanged [k59]
+- StructuralDiffUtils.hasChanges(StructuralDiffNode) returns true when the root is unchanged but a descendant child is deleted [k60]
+
+StructuralJavaDiffBuilder.diffJavaFile:
+- StructuralJavaDiffBuilder.diffJavaFile(String, String, String) returns a non-null root node whose id is the relPath argument and whose type is FILE [k25]
+- StructuralJavaDiffBuilder.diffJavaFile(String, String, String) returns a root node that is unchanged and the tree has no changes when old and new content are identical [k26]
+- StructuralJavaDiffBuilder.diffJavaFile(String, String, String) returns a root node classified as added and the tree has changes when old content is null [k27]
+- StructuralJavaDiffBuilder.diffJavaFile(String, String, String) returns a root node classified as deleted and the tree has changes when new content is null [k28]
+- StructuralJavaDiffBuilder.diffJavaFile(String, String, String) classifies the root FILE node as modified when the file content differs [k32]
+
+Other uses:
+- DiffSummarizer.summarize(StructuralDiffNode) returns "(no changes)" when the root node is unchanged and has no changed children [k37]
+- DiffSummarizer.summarizeForPrompt(StructuralDiffNode) renders an added node with the ➕ symbol, capitalized type, and the id in backticks [k48]

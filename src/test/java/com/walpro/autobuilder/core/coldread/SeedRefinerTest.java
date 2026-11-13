@@ -386,53 +386,105 @@ class SeedRefinerTest {
         assertThat(refined).contains("\naudit:\n- Auditing a well-formed file exits 0 [k3]\n");
     }
 
-    // --- a claim with no recorded answer: its exercise is the record ---
+    // --- a test's answer: what its calls into the project answered ---
 
-    private static JudgedClaim tested(String id, String body) {
-        Claim k = new Claim(id, "c1", "claim " + id, EntryKind.LIBRARY_STYLE, List.of(), 0, body, null);
-        return new JudgedClaim(k, "anchored", List.of(), List.of(new Observation("as-is", 0, null, null, true)),
-                new FeatureVerdict("Dial", "anchored", List.of(), "Dial.of"));
+    private static ReverseEngineeringService.Call returned(String entry, String value, String... args) {
+        return new ReverseEngineeringService.Call(entry, List.of(args), ReverseEngineeringService.Call.RETURNED, value);
+    }
+
+    private static ReverseEngineeringService.Call raised(String entry, String value, String... args) {
+        return new ReverseEngineeringService.Call(entry, List.of(args), ReverseEngineeringService.Call.RAISED, value);
+    }
+
+    private static JudgedClaim tested(String id, String entry, ReverseEngineeringService.Call... calls) {
+        Claim k = new Claim(id, "c1", "claim " + id, EntryKind.LIBRARY_STYLE, List.of(), 0, "assertTrue(true);", null);
+        return new JudgedClaim(k, "anchored", List.of(),
+                List.of(new Observation("as-is", 0, null, null, true, null, null, calls.length == 0 ? null : List.of(calls))),
+                new FeatureVerdict("Dial", "anchored", List.of(), entry));
     }
 
     private static final Account CALLED = new Account("src", "copy", null, "library-style",
-            List.of(new Feature("Dial", "library-style", List.of("Dial"), List.of("Dial.of"), List.of(), List.of(),
-                    List.of("k1", "k2", "k3", "k4"))),
+            List.of(new Feature("Dial", "library-style", List.of("Dial"), List.of("Dial.of", "Dial.fits"), List.of(), List.of(),
+                    List.of("k1", "k2", "k3", "k4", "k5", "k6", "k7"))),
             List.of(), List.of(), List.of(), List.of(),
-            List.of(tested("k1", "assertEquals(Dial.LOW, Dial.of(\"0\"));"),
-                    tested("k2", "assertEquals(Dial.LOW, Dial.of(\"0\"));\n  assertEquals(Dial.HIGH, Dial.of(\"9\"));"),
-                    tested("k3", "assertEquals(Dial.HIGH, Dial.of(\"9\"));"),
-                    tested("k4", "Dial d = new Dial();\nassertThrows(IllegalStateException.class, () -> d.turn(null));")),
+            List.of(tested("k1", "Dial.of", returned("Dial.of", "LOW", "\"0\"")),
+                    tested("k2", "Dial.of", returned("Dial.of", "HIGH", "\"9\"")),
+                    tested("k3", "Dial.of", raised("Dial.of", "IllegalArgumentException: not a digit: xy", "\"xy\"")),
+                    tested("k4", "Dial.of", raised("Dial.of", "IllegalArgumentException: not a digit: 12", "\"12\"")),
+                    // what a test sets up on the way is not its answer: the judged way in is Dial.fits
+                    tested("k5", "Dial.fits", returned("Dial.of", "LOW", "\"1\""), returned("Dial.fits", "false", "LOW", "7")),
+                    tested("k6", "Dial.fits", returned("Dial.fits", "false", "HIGH", "2")),
+                    tested("k7", "Dial.of")),
             Map.of(), 0);
 
-    @Test
-    void aLineStandingForSeveralClaimsThatLeftNoAnswerShowsTheirExercisesAsItsCases_oneThatOpensAnotherStandsUnderIt() {
-        Map<String, List<SeedRefiner.Cited>> sections = new LinkedHashMap<>();
-        sections.put("Dial.of", List.of(new SeedRefiner.Cited("Dial.of gives the setting at the digit's position", List.of("k1", "k2", "k3")),
-                new SeedRefiner.Cited("Turning to nothing is refused", List.of("k4"))));
-
-        List<SeedRefiner.Cited> lines = SeedRefiner.withExercises(CALLED, sections).get("Dial.of");
-
-        assertThat(lines).extracting(SeedRefiner.Cited::render).containsExactly(
-                "- Dial.of gives the setting at the digit's position [k1, k2, k3]",
-                // k1 is how k2 opens; k3 is k2's second statement, which is not how it opens, so it is shown itself.
-                "  - e.g. assertEquals(Dial.LOW, Dial.of(\"0\")); assertEquals(Dial.HIGH, Dial.of(\"9\")); [k1, k2]",
-                "  - e.g. assertEquals(Dial.HIGH, Dial.of(\"9\")); [k3]",
-                // a line resting on one claim states its values itself
-                "- Turning to nothing is refused [k4]");
+    private static JudgedClaim claim(String id) {
+        return CALLED.claims().stream().filter(j -> j.claim().id().equals(id)).findFirst().orElseThrow();
     }
 
     @Test
-    void anExerciseIsShownOnce_underTheLineCitingTheFewestClaimsOfThoseStandingForSeveral_andALineWithARecordedAnswerShowsNone() {
+    void aTestsAnswerIsWhatItsJudgedCallsAnswered_withTheCallsOwnArgumentsAndNumbersTakenOut() {
+        assertThat(SeedRefiner.answerOf(claim("k1")).phrase()).isEqualTo("Dial.of returned LOW");
+        // the argument inside the message and the number are the call's own; the two refusals are one answer
+        assertThat(SeedRefiner.answerOf(claim("k3")).phrase()).isEqualTo("Dial.of raised IllegalArgumentException: not a digit: <argument>");
+        assertThat(SeedRefiner.answerOf(claim("k4"))).isEqualTo(SeedRefiner.answerOf(claim("k3")));
+        assertThat(SeedRefiner.answerOf(claim("k5"))).isEqualTo(SeedRefiner.answerOf(claim("k6")));
+        assertThat(SeedRefiner.answerOf(claim("k5")).phrase()).isEqualTo("Dial.fits returned false");
+        // a test whose calls were not recorded has no answer, as before
+        assertThat(SeedRefiner.answerOf(claim("k7"))).isNull();
+        assertThat(SeedRefiner.observed(claim("k7"))).isNull();
+        assertThat(SeedRefiner.observed(claim("k5"))).isEqualTo("Dial.fits(LOW, 7) returned false");
+        assertThat(SeedRefiner.carries("Dial.fits returned false", SeedRefiner.answerOf(claim("k5")))).isTrue();
+        assertThat(SeedRefiner.carries("it is refused", SeedRefiner.answerOf(claim("k5")))).isFalse();
+    }
+
+    @Test
+    void linesOfTestsAnsweredAlikeAreOneGroup() {
+        Map<String, List<SeedRefiner.Cited>> sections = new LinkedHashMap<>();
+        sections.put("Dial.fits", List.of(new SeedRefiner.Cited("A low setting does not fit seven", List.of("k5")),
+                new SeedRefiner.Cited("A high setting does not fit two", List.of("k6"))));
+        sections.put("Dial.of", List.of(new SeedRefiner.Cited("The lowest digit is LOW", List.of("k1")),
+                new SeedRefiner.Cited("The highest digit is HIGH", List.of("k2"))));
+
+        List<SeedRefiner.Group> groups = SeedRefiner.groups(CALLED, sections);
+
+        assertThat(groups).hasSize(1);
+        assertThat(groups.get(0).answer().phrase()).isEqualTo("Dial.fits returned false");
+        assertThat(groups.get(0).lines()).extracting(SeedRefiner.Cited::text)
+                .containsExactly("A low setting does not fit seven", "A high setting does not fit two");
+    }
+
+    @Test
+    void aLineStandingForSeveralClaimsShowsWhatEachClaimsCallsAnswered_asItsCases() {
+        Map<String, List<SeedRefiner.Cited>> sections = new LinkedHashMap<>();
+        sections.put("Dial.of", List.of(new SeedRefiner.Cited("Dial.of gives the setting at the digit's position", List.of("k1", "k2", "k7")),
+                // a line resting on one claim states its values itself
+                new SeedRefiner.Cited("A letter is refused", List.of("k3"))));
+
+        assertThat(SeedRefiner.withExercises(CALLED, sections).get("Dial.of")).extracting(SeedRefiner.Cited::render).containsExactly(
+                "- Dial.of gives the setting at the digit's position [k1, k2, k7]",
+                "  - e.g. Dial.of(\"0\") returned LOW [k1]",
+                "  - e.g. Dial.of(\"9\") returned HIGH [k2]",
+                "- A letter is refused [k3]");
+    }
+
+    @Test
+    void aClaimsCallsAreShownOnce_underTheNarrowestLineStandingForSeveral_andNotUnderALineThatHasItsCases() {
         Map<String, List<SeedRefiner.Cited>> sections = new LinkedHashMap<>();
         sections.put("Dial.of", List.of(new SeedRefiner.Cited("A rule of the input", List.of("k1", "k2", "k3")),
-                new SeedRefiner.Cited("The ends of the dial", List.of("k1", "k3"))));
+                new SeedRefiner.Cited("The ends of the dial", List.of("k1", "k2")),
+                new SeedRefiner.Cited("Refused: Dial.of raised IllegalArgumentException, in each of these cases", List.of("k3", "k4")),
+                new SeedRefiner.Cited("a letter", List.of("k3"), true),
+                new SeedRefiner.Cited("two digits", List.of("k4"), true)));
 
         assertThat(SeedRefiner.withExercises(CALLED, sections).get("Dial.of")).extracting(SeedRefiner.Cited::render).containsExactly(
                 "- A rule of the input [k1, k2, k3]",
-                "  - e.g. assertEquals(Dial.LOW, Dial.of(\"0\")); assertEquals(Dial.HIGH, Dial.of(\"9\")); [k2]",
-                "- The ends of the dial [k1, k3]",
-                "  - e.g. assertEquals(Dial.LOW, Dial.of(\"0\")); [k1]",
-                "  - e.g. assertEquals(Dial.HIGH, Dial.of(\"9\")); [k3]");
+                "  - e.g. Dial.of(\"xy\") raised IllegalArgumentException: not a digit: xy [k3]",
+                "- The ends of the dial [k1, k2]",
+                "  - e.g. Dial.of(\"0\") returned LOW [k1]",
+                "  - e.g. Dial.of(\"9\") returned HIGH [k2]",
+                "- Refused: Dial.of raised IllegalArgumentException, in each of these cases [k3, k4]",
+                "  - a letter [k3]",
+                "  - two digits [k4]");
 
         Map<String, List<SeedRefiner.Cited>> runs = new LinkedHashMap<>();
         runs.put("tally", List.of(new SeedRefiner.Cited("Tallying a file", List.of("k1", "k2"))));
@@ -440,15 +492,14 @@ class SeedRefinerTest {
     }
 
     @Test
-    void theExercisesAreReadBackAsCases_neverAsTheOperatorsOwnLines_andStayInTheKeptSeed() {
-        String composed = "Dial:\n- Dial.of gives the setting at the digit's position [k1, k2, k3]\n- Turning to nothing is refused [k4]\n";
+    void theCasesAreReadBackAsCases_neverAsTheOperatorsOwnLines_andStayInTheKeptSeed() {
+        String composed = "Dial:\n- Dial.of gives the setting at the digit's position [k1, k2]\n- A letter is refused [k3]\n";
 
         String refined = new SeedRefiner(answering("nothing usable"), true).refine(CALLED, composed);
 
         var lines = SeedComposer.lines(refined, Set.of("Dial"));
         assertThat(lines.stream().filter(l -> l.kind().equals(SeedComposer.Line.CASE))).hasSize(2);
         assertThat(ReverseEngineeringConfirmation.stated(CALLED, refined)).isEmpty();
-        assertThat(ReverseEngineeringConfirmation.seedText(lines))
-                .contains("  - e.g. assertEquals(Dial.HIGH, Dial.of(\"9\"));\n");
+        assertThat(ReverseEngineeringConfirmation.seedText(lines)).contains("  - e.g. Dial.of(\"9\") returned HIGH\n");
     }
 }

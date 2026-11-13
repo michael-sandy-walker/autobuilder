@@ -10,6 +10,7 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.walpro.autobuilder.core.build.BuildExecutor;
 import com.walpro.autobuilder.core.coldread.ClaimProposer.Claim;
 import com.walpro.autobuilder.core.coldread.ColdRead;
+import com.walpro.autobuilder.core.coldread.ReverseEngineeringService.Call;
 import com.walpro.autobuilder.core.coldread.ReverseEngineeringService.Observation;
 import com.walpro.autobuilder.goal.DerivedTests;
 import lombok.extern.slf4j.Slf4j;
@@ -131,6 +132,9 @@ public class LibraryStyleAdapter implements EntryAdapter {
             Map<String, String> pathOf = new LinkedHashMap<>();
             String pkg = homePackage(points);
             String imports = imports(com.walpro.autobuilder.core.merge.ProjectMerge.files(tree), pkg);
+            // T4-EQ: on the tree as it is, what each claim's calls answered is recorded beside whether its test passed.
+            // Read before the record goes in (above), so the recorder is never taken for a way in of the project.
+            Path calls = AS_IS.equals(variant) ? recorded(tree) : null;
             for (Claim k : claims) {
                 String cls = CLASS_PREFIX + Character.toUpperCase(k.id().charAt(0)) + k.id().substring(1) + "Test";
                 String path = "src/test/java/" + (pkg.isEmpty() ? "" : pkg.replace('.', '/') + "/") + cls + ".java";
@@ -140,12 +144,38 @@ public class LibraryStyleAdapter implements EntryAdapter {
             Map<String, Boolean> passed = bench.run(tree, tests);
             for (Claim k : claims) {
                 boolean held = Boolean.TRUE.equals(passed.get(pathOf.get(k.id())));
-                seen.get(k.id()).put(variant, new Observation(variant, held ? 0 : 1, null, null, held));
+                List<Call> answered = calls == null ? null : CallRecorder.read(calls, fileStem(pathOf.get(k.id())));
+                seen.get(k.id()).put(variant, new Observation(variant, held ? 0 : 1, null, null, held, null, null,
+                        answered == null || answered.isEmpty() ? null : answered));
             }
             return new Ran(true, true, null);
         } catch (IOException e) {
             return new Ran(false, false, e.getMessage());
         }
+    }
+
+    /** The variant that is the tree as it is: the one whose answers are recorded. */
+    static final String AS_IS = "as-is";
+
+    /**
+     * The tree with a record of its calls in it, and where the calls are written; null when it has no way in to record
+     * or no longer builds with the record -- it is then as it was, and the claims are judged without one.
+     */
+    private Path recorded(Path tree) throws IOException {
+        Path calls = tree.resolve(".recorded-calls");
+        Map<Path, String> before = CallRecorder.instrument(tree, calls, CLASS_PREFIX);
+        if (before.isEmpty()) return null;
+        String broken = bench.compiles(tree);
+        if (broken == null) return calls;
+        log.warn("T4-EQ: the tree does not build with its calls recorded -- the claims are judged without a record ({})",
+                Observation.tail(broken));
+        CallRecorder.restore(before);
+        return null;
+    }
+
+    private static String fileStem(String path) {
+        String name = path.substring(path.lastIndexOf('/') + 1);
+        return name.endsWith(".java") ? name.substring(0, name.length() - ".java".length()) : name;
     }
 
     /** The package most entry points are in: claims are written there, the other packages' types imported. */
@@ -220,7 +250,7 @@ public class LibraryStyleAdapter implements EntryAdapter {
         }
     }
 
-    private static boolean publiclyReachable(TypeDeclaration<?> t) {
+    static boolean publiclyReachable(TypeDeclaration<?> t) {
         Node n = t;
         while (n instanceof TypeDeclaration<?> td) {
             boolean isPublic = td.hasModifier(Modifier.Keyword.PUBLIC)
@@ -232,7 +262,7 @@ public class LibraryStyleAdapter implements EntryAdapter {
         return true;
     }
 
-    private static String nested(TypeDeclaration<?> t) {
+    static String nested(TypeDeclaration<?> t) {
         String name = t.getNameAsString();
         Node n = t.getParentNode().orElse(null);
         while (n instanceof TypeDeclaration<?> outer) {

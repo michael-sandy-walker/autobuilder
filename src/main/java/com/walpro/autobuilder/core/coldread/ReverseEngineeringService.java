@@ -106,10 +106,19 @@ public class ReverseEngineeringService {
      * @param held       whether the claim held there, as its kind judges it
      * @param error      T4-EQ: of a program run, the part of {@code body} it printed to standard error; null when the
      *                   streams were not read apart (a request, a test, an account kept before this was recorded)
+     * @param calls      T4-EQ: of a test on the tree as it is, the calls it made into the project and what each
+     *                   answered, in order; null when none was recorded (another kind, another variant, an account kept
+     *                   before this was recorded, a tree that did not build with the record in it)
      */
     public record Observation(String variant, Integer status, String unobserved, String body, boolean held,
                               List<com.walpro.autobuilder.core.build.CriterionProbeSynthesizer.ProbeRequest> sent,
-                              String error) {
+                              String error, List<Call> calls) {
+
+        public Observation(String variant, Integer status, String unobserved, String body, boolean held,
+                           List<com.walpro.autobuilder.core.build.CriterionProbeSynthesizer.ProbeRequest> sent,
+                           String error) {
+            this(variant, status, unobserved, body, held, sent, error, null);
+        }
 
         public Observation(String variant, Integer status, String unobserved, String body, boolean held,
                            List<com.walpro.autobuilder.core.build.CriterionProbeSynthesizer.ProbeRequest> sent) {
@@ -128,6 +137,29 @@ public class ReverseEngineeringService {
         public static String clip(String s) {
             if (s == null) return null;
             return s.length() <= 300 ? s : s.substring(0, 300);
+        }
+    }
+
+    /**
+     * T4-EQ: one call a claim's test made into the project, and what it answered.
+     *
+     * @param entry   the way in, as its type and method ({@code Type.method})
+     * @param args    the arguments as text (a text in quotes, null as {@code null})
+     * @param outcome {@code returned}, {@code raised}, or {@code done} for a call that returns nothing
+     * @param value   what was returned, or the raised type and its message; empty for {@code done}
+     */
+    public record Call(String entry, List<String> args, String outcome, String value) {
+        public static final String RETURNED = "returned", RAISED = "raised", DONE = "done";
+
+        /** The answer alone: what the way in did, without what it was called with. */
+        public String answer() {
+            return DONE.equals(outcome) ? entry + " returns nothing" : entry + " " + outcome + " " + value;
+        }
+
+        /** The call with its answer, as one would say it. */
+        public String said() {
+            String call = entry + "(" + String.join(", ", args == null ? List.of() : args) + ")";
+            return DONE.equals(outcome) ? call + " returns nothing" : call + " " + outcome + " " + value;
         }
     }
 

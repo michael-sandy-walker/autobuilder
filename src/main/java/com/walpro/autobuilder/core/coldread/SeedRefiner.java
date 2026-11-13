@@ -183,76 +183,52 @@ public class SeedRefiner {
         return render(purposeLine(composed), context, withExercises(account, named));
     }
 
-    /** Starts a case that is a claim's exercise, as it was run. */
+    /** Starts a case that is what one claim's calls answered. */
     static final String EXERCISE = "e.g.";
 
     /**
-     * Under a line that stands for SEVERAL claims with no recorded answer, their exercises, as its cases.
+     * Under a line that stands for SEVERAL claims and has no cases yet, what each claim's calls answered, as its cases.
      *
-     * <p>A run or a request leaves what the project answered, and the wording above is made from it. A test leaves
-     * only that it passed -- so the values it passed WITH (which input, which result) are in the exercise and nowhere
-     * else, and a line worded as a rule ("the zone whose position is the digit sum modulo seven") states none of
-     * them. Field, labelmaker 2026-11-12: every zone name, the check alphabet and each check character stood in the
-     * kept claims' tests and not once in the seed. Nothing is read out of the exercise and nothing is asked of a
-     * model: it is shown as it was run.
+     * <p>A line worded as a rule over several claims ("the zone at the position of the digit sum modulo seven") states
+     * none of the values the claims showed it with. Field, labelmaker 2026-11-12: every zone name, the check alphabet
+     * and each check character stood in the kept claims and not once in the seed. The values are taken from the
+     * record -- the call and what it returned -- never read out of a test's text, and no model is asked.
      *
-     * <p>Only where a line stands for several claims: a line resting on one claim is worded from that claim and
-     * states its values itself. Measured on the second library-style project (2026-11-13, 59 of 63 lines resting on
-     * one claim), cases under every line repeated the line and made the seed three times as long.
-     *
-     * <p>Each claim's exercise is shown once, under the line that cites the fewest claims among those citing it. Two
-     * claims exercised alike share a case, and a claim whose exercise is the opening of another's stands under that
-     * one: the longer exercise ran the same statements first, in the same state.
+     * <p>Only for claims whose calls were recorded (a run or a request states its answer in the line itself), only
+     * where a line stands for several claims (a line resting on one claim is worded from it, values included: on the
+     * second library-style project 59 of 63 lines rested on one claim and a case under each repeated the line), and
+     * not under a line that already has its cases (an answer stated once, with its conditions below). Each claim's
+     * calls are shown once, under the line citing the fewest claims among those citing it; claims answered alike
+     * share a case.
      */
     static Map<String, List<Cited>> withExercises(Account account, Map<String, List<Cited>> sections) {
         Map<String, JudgedClaim> byId = new LinkedHashMap<>();
         account.claims().forEach(j -> byId.put(j.claim().id(), j));
         Map<String, Cited> owner = new LinkedHashMap<>();
-        sections.values().forEach(lines -> lines.forEach(l -> {
-            if (l.nested() || l.cites().size() < 2) return;
-            for (String id : l.cites()) {
-                Cited now = owner.get(id);
-                if (now == null || l.cites().size() < now.cites().size()) owner.put(id, l);
+        sections.values().forEach(lines -> {
+            for (int i = 0; i < lines.size(); i++) {
+                Cited l = lines.get(i);
+                boolean hasCases = i + 1 < lines.size() && lines.get(i + 1).nested();
+                if (l.nested() || hasCases || l.cites().size() < 2) continue;
+                for (String id : l.cites()) {
+                    Cited now = owner.get(id);
+                    if (now == null || l.cites().size() < now.cites().size()) owner.put(id, l);
+                }
             }
-        }));
+        });
         Map<String, List<Cited>> out = new LinkedHashMap<>();
         sections.forEach((use, lines) -> {
             List<Cited> with = new ArrayList<>();
             for (Cited l : lines) {
                 with.add(l);
-                if (l.nested()) continue;
-                Map<String, List<String>> statements = new LinkedHashMap<>();
+                Map<String, List<String>> sharing = new LinkedHashMap<>();
                 for (String id : l.cites()) {
                     JudgedClaim j = byId.get(id);
-                    if (j == null || owner.get(id) != l || answerOf(j) != null || j.claim().test() == null) continue;
-                    List<String> body = j.claim().test().lines().map(String::strip).filter(x -> !x.isEmpty()).toList();
-                    if (!body.isEmpty()) statements.put(id, body);
+                    if (j == null || owner.get(id) != l) continue;
+                    String calls = called(j);
+                    if (calls != null) sharing.computeIfAbsent(calls, c -> new ArrayList<>()).add(id);
                 }
-                // Longest first, so an exercise that opens another is found under it; the order shown is the line's own.
-                List<String> longestFirst = new ArrayList<>(statements.keySet());
-                longestFirst.sort((a, b) -> statements.get(b).size() - statements.get(a).size());
-                Map<String, List<String>> shownWith = new LinkedHashMap<>();
-                for (String id : longestFirst) {
-                    List<String> body = statements.get(id);
-                    String under = null;
-                    for (String shown : shownWith.keySet()) {
-                        List<String> longer = statements.get(shown);
-                        if (longer.size() >= body.size() && longer.subList(0, body.size()).equals(body)) {
-                            under = shown;
-                            break;
-                        }
-                    }
-                    if (under == null) shownWith.put(id, new ArrayList<>(List.of(id)));
-                    else shownWith.get(under).add(id);
-                }
-                java.util.Set<String> placed = new java.util.HashSet<>();
-                for (String id : l.cites()) {
-                    for (Map.Entry<String, List<String>> shown : shownWith.entrySet()) {
-                        if (!shown.getValue().contains(id) || !placed.add(shown.getKey())) continue;
-                        List<String> inOrder = l.cites().stream().filter(shown.getValue()::contains).toList();
-                        with.add(new Cited(EXERCISE + " " + String.join(" ", statements.get(shown.getKey())), inOrder, true));
-                    }
-                }
+                sharing.forEach((calls, ids) -> with.add(new Cited(EXERCISE + " " + cut(calls), ids, true)));
             }
             out.put(use, with);
         });
@@ -411,6 +387,10 @@ public class SeedRefiner {
         if (j.observations() == null) return null;
         for (ReverseEngineeringService.Observation o : j.observations()) {
             if (!"as-is".equals(o.variant()) || o.status() == null) continue;
+            if (j.claim().kind() == EntryKind.LIBRARY_STYLE) {
+                String calls = called(j);
+                return calls == null ? null : cut(calls);
+            }
             String body = o.body() == null || o.body().isBlank() ? "(no output)" : cut(o.body().strip().replace("\n", "\\n"));
             String stream = streamOf(o);
             return (j.claim().kind() == EntryKind.COMMAND_STYLE ? "exit " : "status ") + o.status() + ", "
@@ -463,9 +443,15 @@ public class SeedRefiner {
      * distinct lines with the exercise's own argument and file names and every number written as placeholders.
      * Two claims with the same answer were answered alike, whatever words their lines use for it.
      */
-    record Answer(int status, List<String> pattern, boolean command, String stream) {
+    record Answer(int status, List<String> pattern, boolean command, String stream, boolean called) {
+        Answer(int status, List<String> pattern, boolean command, String stream) {
+            this(status, pattern, command, stream, false);
+        }
+
         /** The answer in words, from the record alone. */
         String phrase() {
+            // a call's answer says itself: which way in, and what it returned or raised
+            if (called) return String.join(" / ", pattern);
             String first = command ? "exits with status " + status : "answers with status " + status;
             if (pattern.isEmpty()) return first + (command ? " and prints nothing" : "");
             return first + (command ? " and prints " + (stream == null ? "" : "to " + stream + " ") : ", ")
@@ -484,13 +470,57 @@ public class SeedRefiner {
 
     static final String ARGUMENT = "<argument>", NUMBER = "<n>";
 
+    /**
+     * The calls of a test that are its answer: those into the way in the claim was judged through -- what it set up
+     * on the way (an object built, a first call before the one asserted) is how it got there, not what it shows. All
+     * of its calls when none went through that way in.
+     */
+    static List<ReverseEngineeringService.Call> judgedCalls(JudgedClaim j, ReverseEngineeringService.Observation o) {
+        if (o.calls() == null) return List.of();
+        String entry = j.byFeature() == null ? null : j.byFeature().entry();
+        List<ReverseEngineeringService.Call> through = entry == null ? List.of()
+                : o.calls().stream().filter(c -> entry.equals(c.entry())).toList();
+        return through.isEmpty() ? o.calls() : through;
+    }
+
+    /** What a claim's calls answered on the tree as it is, each call as one would say it; null when none was recorded. */
+    static String called(JudgedClaim j) {
+        if (j.observations() == null) return null;
+        for (ReverseEngineeringService.Observation o : j.observations()) {
+            if (!"as-is".equals(o.variant()) || o.calls() == null || o.calls().isEmpty()) continue;
+            List<String> said = new ArrayList<>();
+            for (ReverseEngineeringService.Call c : judgedCalls(j, o)) if (!said.contains(c.said())) said.add(c.said());
+            return String.join("; ", said);
+        }
+        return null;
+    }
+
     /** The answer a claim was observed with on the tree as it is; null when none was recorded (a test). */
     static Answer answerOf(JudgedClaim j) {
         if (j.observations() == null) return null;
         ClaimProposer.Claim k = j.claim();
         for (ReverseEngineeringService.Observation o : j.observations()) {
             if (!"as-is".equals(o.variant()) || o.status() == null) continue;
-            if (k.kind() == EntryKind.LIBRARY_STYLE) return null;
+            if (k.kind() == EntryKind.LIBRARY_STYLE) {
+                // A test's answer is what its calls into the project answered; none recorded, no answer.
+                List<String> pattern = new ArrayList<>();
+                for (ReverseEngineeringService.Call c : judgedCalls(j, o)) {
+                    List<String> given = new ArrayList<>();
+                    if (c.args() != null) {
+                        for (String a : c.args()) {
+                            given.add(a);
+                            if (a.length() > 2 && a.startsWith("\"") && a.endsWith("\"")) given.add(a.substring(1, a.length() - 1));
+                        }
+                    }
+                    given.removeIf(v -> v.length() < 2 || v.equals("null"));
+                    given.sort((a, b) -> b.length() - a.length());
+                    String l = c.answer();
+                    for (String v : given) l = c.entry() + l.substring(c.entry().length()).replace(v, ARGUMENT);
+                    l = c.entry() + l.substring(c.entry().length()).replaceAll("\\d+", NUMBER);
+                    if (!pattern.contains(l)) pattern.add(l);
+                }
+                return pattern.isEmpty() ? null : new Answer(0, pattern, false, null, true);
+            }
             List<String> own = new ArrayList<>();
             if (k.run() != null) {
                 if (k.run().args() != null) own.addAll(k.run().args().subList(Math.min(1, k.run().args().size()), k.run().args().size()));
@@ -541,6 +571,8 @@ public class SeedRefiner {
                             printed.add(o.body().strip().replace("\n", " / "));
                         }
                     }
+                    String calls = called(j);
+                    if (calls != null) printed.add(calls);
                 }
                 if (!one || common == null) continue;
                 Group g = byAnswer.computeIfAbsent(common, a -> new Group(a, new ArrayList<>(),
@@ -598,7 +630,7 @@ public class SeedRefiner {
 
     /** Whether a phrase the model wrote for an answer still carries the record: the status and the message's own words, in order. */
     static boolean carries(String phrase, Answer answer) {
-        if (phrase == null || !phrase.matches(".*\\b" + answer.status() + "\\b.*")) return false;
+        if (phrase == null || (!answer.called() && !phrase.matches(".*\\b" + answer.status() + "\\b.*"))) return false;
         if (answer.stream() != null && !answer.pattern().isEmpty() && !phrase.contains(answer.stream())) return false;
         String rest = phrase;
         for (String line : answer.pattern()) {

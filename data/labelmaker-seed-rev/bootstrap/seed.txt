@@ -1,0 +1,74 @@
+  A new project, adopted as it stands. Its tree holds only its build file (pom.xml) and a README; nothing
+  exists under src/main/java or src/test/java yet. In its own words, from its README:
+
+    "labelmaker -- Shipping-label codes for parcels: a zone from the postcode, a running number, and a check
+    character."
+
+  It is a library, in package org.labelmaker.label, with no dependencies beyond the JDK. What it does:
+
+  What it is: Shipping-label codes for parcels: a zone from the postcode, a running number, and a check character.
+  How it is used: library-style -- exercised inside the same process, by a test that calls it. Exercised here through: Zone.of, Labeler.checkChar, Labeler.next, Labeler.isValid.
+
+  Zone.of:
+  In short: Zone.of maps a five-digit postcode to a zone name by summing the digits, taking the result modulo seven, and selecting the zone with that ordinal. The postcode must be exactly five characters long and contain only digits. Invalid input raises an IllegalArgumentException with the message postcode must be exactly five digits or postcode must contain only digits.
+  - Zone.of(<postcode>) returns the zone whose ordinal equals the sum of the digits of <postcode> modulo seven
+    - e.g. Zone.of("00000") returned NORTH
+    - e.g. Zone.of("01067") returned NORTH
+    - e.g. Zone.of("10115") returned EAST
+    - e.g. Zone.of("20095") returned SOUTH
+    - e.g. Zone.of("50667") returned WEST
+    - e.g. Zone.of("60311") returned HARBOR
+    - e.g. Zone.of("00005") returned VALLEY
+    - e.g. Zone.of("00006") returned SUMMIT
+    - e.g. Zone.of("99999") returned WEST
+  - postcode length validation: Zone.of raised IllegalArgumentException: postcode must be exactly five digits, in each of these cases
+    - postcode is null
+    - postcode is not exactly five characters long
+  - Zone.of(<postcode>) raises IllegalArgumentException: postcode must contain only digits when <postcode> contains a non-digit character
+
+  Labeler.checkChar:
+  In short: Labeler.checkChar computes a single uppercase letter from a seven-character body using a weighted sum of character values modulo nineteen. Digits have their numeric value, and uppercase letters have values from ten to thirty-five. The body must be exactly seven characters long and contain only uppercase letters and digits.
+  - Labeler.checkChar(<body>) returns the 19-letter alphabet character at index (sum of each character's value times its position's weight) mod 19, where a digit d has value d and an uppercase letter L has value 10+(L-'A'), with weights {7,3,9,7,3,9,7}
+    - e.g. Labeler.checkChar("NO00001") returned 'N'; Labeler.checkChar("EA00001") returned 'C'; Labeler.checkChar("WE12345") returned 'J'; Labeler.checkChar("SU99999") returned 'N'; Labeler.checkChar("VA00042") returned 'N'; Labeler.checkChar("HA00099") returned 'J'; Labeler.checkChar("SO00042") returned 'R'
+    - e.g. Labeler.checkChar("0000000") returned 'A'
+    - e.g. Labeler.checkChar("WE12345") returned 'J'
+    - e.g. Labeler.checkChar("SU99999") returned 'N'
+    - e.g. Labeler.checkChar("NO00001") returned 'N'
+  - body length validation: Labeler.checkChar raised IllegalArgumentException: body must be exactly 7 characters, in each of these cases
+    - body is null -- printed: Labeler.checkChar(null) raised IllegalArgumentException: body must be exactly 7 characters
+    - body is not exactly seven characters long -- printed: Labeler.checkChar("NO0000") raised IllegalArgumentException: body must be exactly 7 characters; Labeler.checkChar("NO000012") raised IllegalArgumentException: body must be exactly 7 characters
+  - body character set validation: Labeler.checkChar raised IllegalArgumentException: body must contain only uppercase letters and digits, in each of these cases
+    - body contains a lowercase letter
+    - body contains a non-alphanumeric character
+
+  Labeler.next:
+  In short: Labeler.next generates a label with a zone prefix, a running number starting at 00001, and a computed check character. The running number increments by one for each successful call on the same instance. Invalid postcodes raise an IllegalArgumentException and do not increment the running number.
+  - Labeler.next(<postcode>) returns a label whose zone prefix is the first two letters of the zone derived from <postcode>, whose number is 00001, and whose check character is the weighted check of that body
+    - e.g. Labeler.next("10115") returned "EA-00001-C"
+    - e.g. Labeler.next("20095") returned "SO-00001-K"
+  - Each subsequent Labeler.next(<postcode>) call on the same instance increments the running number by one
+  - Labeler.next(<postcode>) raises IllegalArgumentException and consumes no running number when <postcode> is rejected
+    - e.g. Labeler.next("50667") returned "WE-00001-H"; Labeler.next("50667") returned "WE-00002-R"; Labeler.next("50667") returned "WE-00003-C"; Labeler.next("1011") raised IllegalArgumentException: postcode must be exactly five digits; Labeler.next("60311") returned "HA-00004-G"; Labeler.next("00005") return ...
+    - e.g. Labeler.next("50667") returned "WE-00001-H"; Labeler.next(null) raised IllegalArgumentException: postcode must be exactly five digits; Labeler.next("50667") returned "WE-00002-R"
+    - e.g. Labeler.next("50667") returned "WE-00001-H"; Labeler.next("1O115") raised IllegalArgumentException: postcode must contain only digits; Labeler.next("50667") returned "WE-00002-R"
+  - Each Labeler instance keeps its own running counter, starting at 00001
+
+  Labeler.isValid:
+  In short: Labeler.isValid returns true for a ten-character label with the format XX-NNNNN-C where the zone, digits, and check character are consistent. It returns false if the label is null, empty, lowercase, has incorrect length, missing or misplaced dashes, an unknown zone, non-digit numbers, or a mismatched check character.
+  - Labeler.isValid(<label>) returns true for a well-formed label whose zone prefix, five digits and trailing check character are all consistent with the weighted computation
+  - label validity check: Labeler.isValid returned false, in each of these cases
+    - trailing check character does not match the weighted computation for the rest of the label
+    - two-character zone prefix does not match any known zone
+    - label is not exactly ten characters long
+    - dashes are missing from the label
+    - label is lowercase instead of uppercase
+    - label is empty
+    - label is null
+    - five-digit middle field contains a non-digit character
+    - dashes are in the wrong positions
+
+  The classes to change are Zone and Labeler -- neither exists yet: create them under src/main/java in package
+  org.labelmaker.label. Write the tests the library needs yourself, under src/test/java. The operator will check
+  the library with tests of their own.
+
+  OBJECTIVE: the library does what is described above, and the whole suite passes.

@@ -1,0 +1,2 @@
+# T4-CQ: paths under output/ the loop may not write, one glob per line.
+# None: the loop writes the code and its own tests; the specification is withheld (bootstrap/withheld).

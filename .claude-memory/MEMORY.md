@@ -103,6 +103,7 @@ Evidence discipline:
 - `feedback_read_test_results_from_the_run.md`: quote test counts only from THIS run's output; the reports directory keeps stale files. (reviewed 2026-11-12)
 - `feedback_verify_diff_is_substantive.md`: prove which input now yields different output. (reviewed 2026-09-08)
 - `feedback_verify_at_decision_timestamp.md`: diagnose against state AT decision time. (reviewed 2026-07-09)
+- `feedback_record_author_is_not_the_users_word.md`: "by operator (home screen)" may be the model's Suggest accepted in a batch; check before saying "you decided". (reviewed 2026-11-16)
 - `feedback_activity_not_progress.md`: a mechanism firing is not helping; check the outcome. (reviewed 2026-07-09)
 - `feedback_check_a_mechanisms_last_event.md`: count a mechanism's FINAL-step event over the archive; a test mocking that step proves wiring only (T4-BE: 0 restages in 581 runs). (reviewed 2026-11-08)
 - `feedback_replay_over_batches.md`: validate by deterministic replay; a DoD names its instrument; make the case happen (direct build, a console-driven ear test) instead of waiting for it in a run; name the ticket's purpose before the next fix. (reviewed 2026-11-16)
@@ -135,6 +136,7 @@ Code and design constraints:
 Watchers:
 - `feedback_batch_watcher_alarms_on_the_environment.md`: alarm on Neo4j down and <2 GB free; read the bolt port after every suite (Docker Desktop OOM-killed during mvn test). (reviewed 2026-11-16)
 - `feedback_monitor_every_terminal.md`: monitors match EVERY terminal state; pgrep/pkill must not match itself; never pipe a status loop through `uniq` (silent). (reviewed 2026-11-11)
+- `feedback_read_the_reply_before_reporting_state.md`: read every state-changing call's reply and read the state back before reporting it. (reviewed 2026-11-16)
 - `feedback_escalate_unrecoverable_stagnation.md`: detect periodic failure early; same decision while nothing moves = grind. (reviewed 2026-10-19)
 - `feedback_waiter_fires_on_loop_terminal.md`: waiters fire on the LOOP's terminal line. (reviewed 2026-09-24)
 - `feedback_fix_first_when_a_finding_changes_the_measurement.md`: stop and fix first; no batch from uncommitted code. (reviewed 2026-09-30)

@@ -310,6 +310,10 @@ line is worded from what the project answered then (the exit status, the status 
 A section of two or more lines opens with an `In short:` line -- what its lines add up to, in a few plain
 sentences written by the model. It is context as well and is never checked; the lines it sums up all stay
 beneath it. A project without a README gets one `In short:` line at the top.
+Below `How it is used:`, `Declared:` lines state what the project's source declares and the checks could not
+observe: for a library, each public method's signature and whether it is called on the type or on an instance,
+and how each type is created; for any project, the constants of its enums in order and the values written into its
+code as constants (an alphabet, a table of weights). They are read from the source, never checked.
 Lines that the project answered in the same way -- the same status, the same message once the values of the
 one check are taken out, the same output stream -- are stated once: a line with the rule's name and that answer,
 taken from what was recorded, and under it the cases in which it comes (`file not found: exits with status 1 and

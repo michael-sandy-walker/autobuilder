@@ -524,7 +524,7 @@ class SeedRefinerTest {
         // one section of two lines was asked about; an opening cannot end like a heading
         assertThat(summed.openings()).containsOnlyKeys("tally");
         assertThat(summed.whole()).isNull();
-        String text = SeedRefiner.render(null, summed.whole(), null, tallySection(), summed.openings());
+        String text = SeedRefiner.render(null, summed.whole(), null, List.of(), tallySection(), summed.openings());
         assertThat(text).contains("tally:\nIn short: Counts the rows of a file. A file that is not there is an error.\n"
                 + "- Tallying a file prints its row count [k1]\n- Tallying a file that is not there exits 1 with no such file: <path> [k2]\n");
         assertThat(text).contains("audit:\n- Auditing a well-formed file exits 0 [k3]");
@@ -539,7 +539,7 @@ class SeedRefinerTest {
 
         assertThat(summed.openings()).isEmpty();
         assertThat(summed.whole()).isEqualTo("A tool for files.");
-        assertThat(SeedRefiner.render(null, summed.whole(), null, tallySection(), summed.openings())).startsWith("In short: A tool for files.\n");
+        assertThat(SeedRefiner.render(null, summed.whole(), null, List.of(), tallySection(), summed.openings())).startsWith("In short: A tool for files.\n");
     }
 
     @Test
@@ -564,5 +564,27 @@ class SeedRefinerTest {
         assertThat(lines.get(2).text()).isEqualTo("Counts the rows of a file.");
         assertThat(ReverseEngineeringConfirmation.stated(account, seed)).isEmpty();
         assertThat(ReverseEngineeringConfirmation.seedText(lines)).contains("tally:\nIn short: Counts the rows of a file.\n- Tallying a file prints its row count");
+    }
+
+    // ---- T4-EQ: what the source declares -- a way in's shape, a value the code holds -- stated as context ----
+
+    @Test
+    void theDeclarationsStandAfterTheContextLine_andAreReadBackAsContextNeverAsTheOperatorsOwn() {
+        String text = SeedRefiner.render(null, null, "How it is used: library-style.",
+                List.of("static char Dial.code(String body) -- called on Dial itself", "constant Dial.LETTERS = \"ABC\""),
+                tallySection(), Map.of());
+        assertThat(text).startsWith("How it is used: library-style.\n\nDeclared: static char Dial.code(String body) -- called on Dial itself\n"
+                + "Declared: constant Dial.LETTERS = \"ABC\"\n\ntally:\n");
+
+        List<SeedComposer.Line> lines = SeedComposer.lines(text, Set.of("Tool"));
+        assertThat(lines.stream().filter(l -> l.kind().equals(SeedComposer.Line.DECLARED)).map(SeedComposer.Line::text))
+                .containsExactly("static char Dial.code(String body) -- called on Dial itself", "constant Dial.LETTERS = \"ABC\"");
+        assertThat(ReverseEngineeringConfirmation.stated(account, text)).isEmpty();
+        assertThat(ReverseEngineeringConfirmation.seedText(lines)).contains("Declared: constant Dial.LETTERS = \"ABC\"\n");
+    }
+
+    @Test
+    void anAccountWhoseSourceIsGoneDeclaresNothing() {
+        assertThat(SeedRefiner.declared(account)).isEmpty();   // "src" is not a directory here
     }
 }

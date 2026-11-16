@@ -76,6 +76,11 @@ public class SeedComposer {
          * criterion or open work. The lines it sums up stand beneath it.
          */
         public static final String SUMMARY = "summary";
+        /**
+         * T4-EQ: what the project's source declares ({@link SeedRefiner#DECLARED}): a way in's shape, a value its code
+         * holds. Context, never a criterion or the operator's own line.
+         */
+        public static final String DECLARED = "declared";
     }
 
     /**
@@ -326,6 +331,10 @@ public class SeedComposer {
             }
             if (l.regionMatches(true, 0, SeedRefiner.CONTEXT, 0, SeedRefiner.CONTEXT.length())) {
                 out.add(new Line(Line.CONTEXT, l.substring(SeedRefiner.CONTEXT.length()).strip(), null, List.of()));
+                continue;
+            }
+            if (l.regionMatches(true, 0, SeedRefiner.DECLARED, 0, SeedRefiner.DECLARED.length())) {
+                out.add(new Line(Line.DECLARED, l.substring(SeedRefiner.DECLARED.length()).strip(), null, List.of()));
                 continue;
             }
             if (l.regionMatches(true, 0, SeedRefiner.SUMMARY, 0, SeedRefiner.SUMMARY.length())) {

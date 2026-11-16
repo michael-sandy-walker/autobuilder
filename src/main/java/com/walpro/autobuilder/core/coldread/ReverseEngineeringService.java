@@ -318,7 +318,7 @@ public class ReverseEngineeringService {
             verdicts.merge(fv.verdict(), 1, Integer::sum);
         }
         List<Feature> features = summarise(byFeature, judged);
-        Account account = new Account(source.toString(), work.toString(), coldRead, kind, features, capabilities,
+        Account account = new Account(source.toAbsolutePath().normalize().toString(), work.toString(), coldRead, kind, features, capabilities,
                 found.unknown(), proposals, variants, judged, verdicts, System.currentTimeMillis() - t0);
         json.writeValue(work.resolve("account.json").toFile(), account);
         log.warn("T4-EK: account of {} written to {} -- {} ({} ms)", source, work, verdicts, account.durationMs());

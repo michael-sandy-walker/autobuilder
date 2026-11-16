@@ -55,6 +55,9 @@ import java.util.regex.Matcher;
  *
  * <p><b>Openings (2026-11-14).</b> Last, each section of two or more lines is given a few sentences on what its
  * lines add up to ({@link #summarised}), above the lines, which all stay.
+ *
+ * <p><b>Declarations (2026-11-16).</b> After the context line, what the source declares: each way in's shape and the
+ * values the code holds ({@link #declared}) -- what a builder could not learn from the observations.
  */
 @Slf4j
 @Component
@@ -191,7 +194,24 @@ public class SeedRefiner {
         } catch (RuntimeException e) {
             log.warn("T4-EQ: no section was given an opening -- {}", e.getMessage());
         }
-        return render(purpose, summed.whole(), context, full, summed.openings());
+        return render(purpose, summed.whole(), context, declared(account), full, summed.openings());
+    }
+
+    /** Starts a line the project's source declares (T4-EQ); read back as {@link SeedComposer.Line#DECLARED}. */
+    public static final String DECLARED = "Declared:";
+
+    /**
+     * What the project's source declares about how it is used -- each way in's shape for a library-style project, and
+     * the values its code holds ({@link com.walpro.autobuilder.core.coldread.entry.Declarations}). Context, never a
+     * criterion: the claims still say what it does. Empty when the source is not there to read.
+     */
+    static List<String> declared(Account account) {
+        if (account == null || account.source() == null) return List.of();
+        // A job records its source as an absolute path; a relative one would be read from wherever this JVM runs.
+        java.nio.file.Path source = java.nio.file.Path.of(account.source());
+        if (!source.isAbsolute()) return List.of();
+        boolean library = EntryKind.LIBRARY_STYLE.label().equals(account.kind());
+        return com.walpro.autobuilder.core.coldread.entry.Declarations.of(source, library);
     }
 
     // ------------------------------------------------------------------------------------------------------------
@@ -450,15 +470,23 @@ public class SeedRefiner {
     }
 
     static String render(String purpose, String context, Map<String, List<Cited>> sections) {
-        return render(purpose, null, context, sections, Map.of());
+        return render(purpose, null, context, List.of(), sections, Map.of());
     }
 
-    /** {@code whole}: the line on the whole project when no README gave one; {@code openings}: each section's, by its use. */
-    static String render(String purpose, String whole, String context, Map<String, List<Cited>> sections, Map<String, String> openings) {
+    /**
+     * {@code whole}: the line on the whole project when no README gave one; {@code declared}: what its source declares,
+     * one line each; {@code openings}: each section's, by its use.
+     */
+    static String render(String purpose, String whole, String context, List<String> declared,
+                         Map<String, List<Cited>> sections, Map<String, String> openings) {
         StringBuilder sb = new StringBuilder();
         if (purpose != null) sb.append(purpose).append('\n');
         else if (whole != null) sb.append(SUMMARY).append(' ').append(whole).append('\n');
         if (context != null) sb.append(context).append('\n');
+        if (!declared.isEmpty()) {
+            sb.append('\n');
+            declared.forEach(d -> sb.append(DECLARED).append(' ').append(d).append('\n'));
+        }
         sections.forEach((use, lines) -> {
             sb.append('\n').append(use).append(":\n");
             if (openings.get(use) != null) sb.append(SUMMARY).append(' ').append(openings.get(use)).append('\n');

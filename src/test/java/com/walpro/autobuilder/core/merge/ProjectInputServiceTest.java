@@ -432,6 +432,8 @@ class ProjectInputServiceTest {
         ProjectInputService.Report r = bring();
         String id = r.conflicts().get(0).id();
 
+        when(comparison.contradicting(org.mockito.ArgumentMatchers.eq(InputComparison.RECEIVING), any(), anyString(), org.mockito.ArgumentMatchers.eq("at most 5 turns")))
+                .thenReturn(List.of("A coil has at most 3 turns."));
         assertThatThrownBy(() -> service.decide(id, "own", "operator", " ")).isInstanceOf(IllegalArgumentException.class);
         var decided = service.decide(id, "own", "operator", "at most 5 turns");
         service.keep(r.inputId(), "operator");
@@ -458,7 +460,7 @@ class ProjectInputServiceTest {
                 List.of("A knot holds.", "A coil may have 9 turns.")));
         differs(TURNS, false);
         org.mockito.ArgumentCaptor<List<String>> asked = org.mockito.ArgumentCaptor.forClass(List.class);
-        when(comparison.contradicting(asked.capture(), org.mockito.ArgumentMatchers.eq("the turn limit"),
+        when(comparison.contradicting(org.mockito.ArgumentMatchers.eq(InputComparison.BROUGHT), asked.capture(), org.mockito.ArgumentMatchers.eq("the turn limit"),
                 org.mockito.ArgumentMatchers.eq("at most 3 turns"))).thenReturn(List.of("A coil may have 9 turns.", "Knot is final"));
         ProjectInputService.Report r = bring();
 
@@ -483,9 +485,11 @@ class ProjectInputServiceTest {
         InputComparison.Difference colour = new InputComparison.Difference("the rope colour", "red", "blue");
         when(comparison.sameConcept(anyString(), any(), anyString())).thenReturn(List.of("Coil"));
         when(comparison.differences(anyString(), anyString(), anyString())).thenReturn(List.of(TURNS, colour));
-        when(comparison.stating(any(), any())).thenReturn(List.of("A coil has at most 3 turns."));
+        when(comparison.contradicting(org.mockito.ArgumentMatchers.eq(InputComparison.RECEIVING), any(), anyString(), anyString()))
+                .thenReturn(List.of("A coil has at most 3 turns."));
         org.mockito.ArgumentCaptor<List<String>> asked = org.mockito.ArgumentCaptor.forClass(List.class);
-        when(comparison.contradicting(asked.capture(), anyString(), anyString())).thenReturn(List.of("A coil may have 9 turns."));
+        when(comparison.contradicting(org.mockito.ArgumentMatchers.eq(InputComparison.BROUGHT), asked.capture(), anyString(), anyString()))
+                .thenReturn(List.of("A coil may have 9 turns."));
         ProjectInputService.Report r = bring();
         String turns = r.conflicts().stream().filter(c -> c.subject().equals("the turn limit")).findFirst().orElseThrow().id();
         String rope = r.conflicts().stream().filter(c -> c.subject().equals("the rope colour")).findFirst().orElseThrow().id();
@@ -500,6 +504,29 @@ class ProjectInputServiceTest {
         service.keep(r.inputId(), "operator");
         assertThat(goals.requirements().obligationsOrClauses()).contains("the turn limit: at most 5 turns", "A knot holds.")
                 .doesNotContain("A coil may have 9 turns.", "A coil has at most 3 turns.");
+    }
+
+    /**
+     * T1-GR (data/gradient, 2026-11-13 and 11-16): "random flowers overlaid on a radial rainbow gradient" kept the gradient,
+     * and the receiving project's four gradient lines were retired all the same -- "which lines state the receiving rule?"
+     * never asked whether the resolution keeps it. An own resolution asks the receiving side what cannot hold beside it.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void anOwnResolutionThatKeepsTheReceivingRule_retiresNoneOfItsLines() throws IOException {
+        seedLine();
+        differs(TURNS, false);
+        org.mockito.ArgumentCaptor<List<String>> asked = org.mockito.ArgumentCaptor.forClass(List.class);
+        when(comparison.contradicting(org.mockito.ArgumentMatchers.eq(InputComparison.RECEIVING), asked.capture(), anyString(), anyString())).thenReturn(List.of());
+        ProjectInputService.Report r = bring();
+
+        var decided = service.decide(r.conflicts().get(0).id(), "own", "operator", "at most 3 turns, and 9 for a knotted coil");
+        service.keep(r.inputId(), "operator");
+
+        assertThat(asked.getValue()).as("the receiving project's lines are what it is asked of").contains("A coil has at most 3 turns.");
+        assertThat(decided.replaces()).isEmpty();
+        assertThat(goals.requirements().obligationsOrClauses()).contains("A coil has at most 3 turns.");
+        org.mockito.Mockito.verify(comparison, org.mockito.Mockito.never()).stating(any(), any());
     }
 
     @Test

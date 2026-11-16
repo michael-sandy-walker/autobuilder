@@ -1,6 +1,7 @@
 package com.walpro.autobuilder.core.merge;
 
 import com.walpro.autobuilder.client.LLMClient;
+import com.walpro.autobuilder.client.dto.Message;
 import com.walpro.autobuilder.client.dto.ChatResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
@@ -51,19 +52,22 @@ class InputComparisonTest {
         verify(llm).ask(any(), isNull());
     }
 
-    /** T1-GQ: the brought lines a decision rules out -- asked at the list effort, read like stating, none asked of none. */
+    /** T1-GQ, T1-GR: the lines a decision rules out -- asked of either side by name, at the list effort; none asked of none. */
     @Test
-    void contradictingReadsTheNumbers_atTheListEffort_andAsksNothingOfNoLines() {
+    @SuppressWarnings("unchecked")
+    void contradictingReadsTheNumbers_namesTheSide_atTheListEffort_andAsksNothingOfNoLines() {
         List<String> lines = List.of("The application has a menu.", "Flowers have random colors.",
                 "The menu includes an option to specify a username.");
-        assertThat(answering("LINES: 1, 3").contradicting(lines, "Control menu availability", "Remove the menu bar"))
+        assertThat(answering("LINES: 1, 3").contradicting(InputComparison.BROUGHT, lines, "Control menu availability", "Remove the menu bar"))
                 .containsExactly(lines.get(0), lines.get(2));
-        assertThat(answering("NONE").contradicting(lines, "s", "d")).isEmpty();
+        assertThat(answering("NONE").contradicting(InputComparison.RECEIVING, lines, "s", "d")).isEmpty();
 
         LLMClient llm = mock(LLMClient.class);
-        new InputComparison(llm).contradicting(List.of("a line"), "s", "d");
-        verify(llm).ask(any(), eq("low"));
-        new InputComparison(llm).contradicting(List.of(), "s", "d");
+        org.mockito.ArgumentCaptor<List<Message>> sent = org.mockito.ArgumentCaptor.forClass(List.class);
+        new InputComparison(llm).contradicting(InputComparison.RECEIVING, List.of("a line"), "s", "d");
+        verify(llm).ask(sent.capture(), eq("low"));
+        assertThat(sent.getValue().get(1).getContent()).startsWith("THE RECEIVING PROJECT'S REQUIREMENTS:");
+        new InputComparison(llm).contradicting(InputComparison.BROUGHT, List.of(), "s", "d");
         verify(llm, times(1)).ask(any(), any());
     }
 

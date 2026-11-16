@@ -49,6 +49,10 @@ public class InputComparison {
      */
     private static final String LIST_EFFORT = "low";
 
+    /** Whose requirements a {@link #contradicting} question is asked of. */
+    public static final String BROUGHT = "BROUGHT";
+    public static final String RECEIVING = "RECEIVING";
+
     private static final Pattern SAME = Pattern.compile("(?m)^\\s*SAME:\\s*(\\S+)");
     private static final Pattern DIFFERENCE = Pattern.compile("(?m)^\\s*DIFFERENCE:\\s*(.+?)\\s*\\|\\s*RECEIVING:\\s*(.+?)\\s*\\|\\s*OTHER:\\s*(.+?)\\s*$");
 
@@ -203,12 +207,18 @@ public class InputComparison {
      * ({@code data/gradient}, 2026-11-13: "remove the menu bar entirely" decided, and "The menu includes an option to
      * specify a username." refused closure until the run paused). Asked of the decided rule, not of the other side as
      * a whole, because an own resolution may keep part of it (the greeting kept, the menu dropped).
+     *
+     * <p>T1-GR: asked of the receiving project's lines as well ({@link #RECEIVING}), for an own resolution -- which
+     * keeps the receiving rule as often as it replaces it ("random flowers overlaid on a radial rainbow gradient"
+     * keeps the gradient; {@link #stating} retired the four gradient lines all the same).
+     *
+     * @param side {@link #BROUGHT} or {@link #RECEIVING}: whose requirements {@code lines} are
      */
-    public List<String> contradicting(List<String> lines, String subject, String decided) {
+    public List<String> contradicting(String side, List<String> lines, String subject, String decided) {
         if (lines.isEmpty()) return List.of();
         StringBuilder numbered = new StringBuilder();
         for (int i = 0; i < lines.size(); i++) numbered.append(i + 1).append(". ").append(lines.get(i)).append('\n');
-        String answer = ask(DECIDE_SYSTEM, LIST_EFFORT, "THE BROUGHT PROJECT'S REQUIREMENTS:\n" + numbered
+        String answer = ask(DECIDE_SYSTEM, LIST_EFFORT, "THE " + side + " PROJECT'S REQUIREMENTS:\n" + numbered
                 + "\nTHE DECISION ON \"" + subject + "\": " + decided
                 + "\n\nWhich requirements cannot hold together with this decision, because they ask for behaviour the decision"
                 + " removes or replaces? A requirement the decision still allows is not named, and neither is one about"

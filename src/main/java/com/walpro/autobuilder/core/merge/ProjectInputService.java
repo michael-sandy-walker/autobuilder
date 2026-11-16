@@ -372,7 +372,7 @@ public class ProjectInputService {
         // T1-GQ: a decision for the receiving project rejects the input's rule, so the input's lines for it leave too.
         List<String> replaces = !difference ? List.of()
                 : InputEvent.FOR_INPUT.equals(decision) ? comparison.stating(goals.statedRules(), d)
-                : comparison.contradicting(broughtLines(open.inputId()), open.subject(), open.receiving());
+                : comparison.contradicting(InputComparison.BROUGHT, broughtLines(open.inputId()), open.subject(), open.receiving());
         InputEvent decided = goals.purpose().decide(open, decision, by, replaces);
         if (InputEvent.FOR_INPUT.equals(decision)) {
             if (open.heldPath() != null) {
@@ -393,9 +393,13 @@ public class ProjectInputService {
     private InputEvent decideOwn(InputEvent open, boolean difference, String by, String resolution) throws IOException {
         List<String> replaces = new ArrayList<>();
         if (difference) {
-            replaces.addAll(comparison.stating(goals.statedRules(), new InputComparison.Difference(open.subject(), open.receiving(), resolution)));
-            // T1-GQ: and the input's lines the resolution does not keep -- asked of the resolution, since it may keep part.
-            comparison.contradicting(broughtLines(open.inputId()), open.subject(), resolution).stream()
+            // T1-GR: both sides are asked which of their lines cannot hold beside the resolution. "Which lines state the
+            // receiving rule?" retired them even when the resolution kept it (data/gradient: "random flowers overlaid on
+            // a radial rainbow gradient" took the four gradient lines out). T1-GQ: the input's lines likewise.
+            java.util.Set<String> decided = decisionLines();
+            List<String> receiving = goals.statedRules().stream().map(String::strip).filter(l -> !decided.contains(l)).toList();
+            replaces.addAll(comparison.contradicting(InputComparison.RECEIVING, receiving, open.subject(), resolution));
+            comparison.contradicting(InputComparison.BROUGHT, broughtLines(open.inputId()), open.subject(), resolution).stream()
                     .filter(l -> !replaces.contains(l)).forEach(replaces::add);
         }
         InputEvent decided = goals.purpose().decide(open, InputEvent.FOR_OWN, by, replaces, resolution);
@@ -417,11 +421,7 @@ public class ProjectInputService {
      */
     private List<String> broughtLines(String inputId) throws IOException {
         InputEntry input = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(inputId)).findFirst().orElseThrow();
-        java.util.Set<String> decided = new java.util.HashSet<>();
-        for (InputEvent e : goals.purpose().ledger().events()) {
-            if (!inputId.equals(e.inputId()) || !InputEvent.CONFLICT.equals(e.kind()) || e.open()) continue;
-            decided.add((e.subject() + ": " + (InputEvent.FOR_OWN.equals(e.decision()) ? e.resolution() : e.other())).strip());
-        }
+        java.util.Set<String> decided = decisionLines();
         java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
         String path = goals.purpose().obligationsPath(input);
         if (files.exists(path)) out.addAll(SeedObligationsFile.read(files.readFile(path), input.content()).obligations());
@@ -432,6 +432,16 @@ public class ProjectInputService {
             criteriaOf(kept.get("tree"), out);
         }
         return out.stream().map(String::strip).filter(l -> !l.isEmpty() && !decided.contains(l)).distinct().toList();
+    }
+
+    /** The lines decisions wrote (`subject: rule`), of every input: the operator's, never retired by another decision. */
+    private java.util.Set<String> decisionLines() {
+        java.util.Set<String> decided = new java.util.HashSet<>();
+        for (InputEvent e : goals.purpose().ledger().events()) {
+            if (!InputEvent.CONFLICT.equals(e.kind()) || e.open() || e.heldLine() != null) continue;
+            decided.add((e.subject() + ": " + (InputEvent.FOR_OWN.equals(e.decision()) ? e.resolution() : e.other())).strip());
+        }
+        return decided;
     }
 
     private static void criteriaOf(JsonNode goal, java.util.Set<String> out) {

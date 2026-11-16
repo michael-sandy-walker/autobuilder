@@ -12,6 +12,7 @@
   header button { background: #1f2937; color: #fff; border: 1px solid #374151; padding: 4px 10px; border-radius: 4px; cursor: pointer; }
   header button:hover { background: #374151; }
   header label { font-size: 11px; color: #9ca3af; display: flex; flex-direction: column; gap: 2px; }
+  header .pill { font-size: 11px; padding: 2px 10px; border-radius: 999px; background: #1f2937; color: #e5e7eb; border: 1px solid #374151; }
   main { display: grid; grid-template-columns: 1fr 480px; height: calc(100vh - 58px); }
   #nodes { overflow: auto; border-right: 1px solid #e5e7eb; padding: 12px; background: #f9fafb; }
   #detail { overflow: auto; padding: 16px 20px; }
@@ -30,10 +31,12 @@
   .dir-incoming { color: #92400e; font-weight: 600; }
   #status { font-size: 11px; color: #9ca3af; margin-left: auto; }
 </style>
+<script src="openproject.js"></script>
 </head>
 <body>
 <header>
   <h1>Orchestration Graph</h1>
+  <span id="project" class="pill">project —</span>
   <label>Label
     <select id="f-label"><option value="">all labels</option></select>
   </label>
@@ -83,9 +86,30 @@ async function loadOverview() {
   const o = await res.json();
   fillSelect('f-label', o.labels.map(l => ({ value: l.label, text: l.label + ' (' + l.count + ')' })));
   fillSelect('f-lineage', o.lineages.map(l => ({ value: l.id, text: shorten(l.id) + ' (' + l.count + ')' })));
+  markOpenLineage();
   fillSelect('f-run', o.runs.map(r => ({ value: r.id, text: shorten(r.id) + ' (' + r.count + ')' })));
   setStatus(o.labels.reduce((a, l) => a + l.count, 0) + ' label-instances · ' + o.lineages.length + ' lineages · ' + o.runs.length + ' runs');
 }
+
+// T5-BV: the open project's lineage is marked among the others, and named in the header. The overview lists the 100
+// lineages with the most nodes, so a young project's lineage may not be among them: it is then added to the list.
+let openProject = null;
+function markOpenLineage() {
+  const select = document.getElementById('f-lineage');
+  for (const opt of [...select.options]) if (opt.dataset.open === 'added' && (!openProject || opt.value !== openProject.lineageId)) opt.remove();
+  let found = false;
+  for (const opt of select.options) {
+    if (!opt.value) continue;
+    opt.textContent = opt.textContent.replace(/ -- open: .*$/, '');
+    if (openProject && openProject.lineageId === opt.value) { opt.textContent += ' -- open: ' + openProject.name; found = true; }
+  }
+  if (!found && openProject && openProject.lineageId) {
+    const opt = new Option(shorten(openProject.lineageId) + ' -- open: ' + openProject.name, openProject.lineageId);
+    opt.dataset.open = 'added';
+    select.add(opt, 1);
+  }
+}
+watchOpenProject(p => { openProject = p; showOpenProject(document.getElementById('project'), p); markOpenLineage(); });
 
 function shorten(id) { return id && id.length > 22 ? id.slice(0, 22) + '…' : id; }
 

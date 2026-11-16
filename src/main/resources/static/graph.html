@@ -400,11 +400,13 @@
 <script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.4/dist/3d-force-graph.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three-spritetext@1.8.2/dist/three-spritetext.min.js"></script>
 <script src="speakable.js"></script>
+<script src="openproject.js"></script>
 </head>
 <body>
 
 <header>
   <h1>Autobuilder · Live Goal Graph</h1>
+  <span id="project" class="pill">project —</span>
   <span id="conn" class="pill disconnected">disconnected</span>
   <span id="cycle" class="pill">cycle —</span>
   <span id="node-count" class="pill">0 nodes</span>
@@ -3618,6 +3620,9 @@ function crop(s, n) {
 })();
 document.addEventListener('DOMContentLoaded', () => window.MissionControl.init());
 if (document.readyState !== 'loading') window.MissionControl.init();
+</script>
+<script>
+watchOpenProject(p => showOpenProject(document.getElementById('project'), p));
 </script>
 </body>
 </html>

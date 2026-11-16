@@ -126,6 +126,8 @@ public class AutobuilderController {
         java.nio.file.Path base = java.nio.file.Path.of(fileBasePath).toAbsolutePath().normalize();
         body.put("target", base.getFileName() == null ? base.toString() : base.getFileName().toString());
         body.put("targetPath", base.toString());
+        // T5-BV: the open project's lineage, so the graph explorer can mark it among the others.
+        if (runIdentityService != null) body.put("lineageId", runIdentityService.lineageId());
         if (targetCatalog != null) {
             List<Map<String, Object>> rows = new java.util.ArrayList<>();
             for (var t : targetCatalog.targets()) {

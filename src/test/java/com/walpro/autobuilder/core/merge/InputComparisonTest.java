@@ -51,6 +51,22 @@ class InputComparisonTest {
         verify(llm).ask(any(), isNull());
     }
 
+    /** T1-GQ: the brought lines a decision rules out -- asked at the list effort, read like stating, none asked of none. */
+    @Test
+    void contradictingReadsTheNumbers_atTheListEffort_andAsksNothingOfNoLines() {
+        List<String> lines = List.of("The application has a menu.", "Flowers have random colors.",
+                "The menu includes an option to specify a username.");
+        assertThat(answering("LINES: 1, 3").contradicting(lines, "Control menu availability", "Remove the menu bar"))
+                .containsExactly(lines.get(0), lines.get(2));
+        assertThat(answering("NONE").contradicting(lines, "s", "d")).isEmpty();
+
+        LLMClient llm = mock(LLMClient.class);
+        new InputComparison(llm).contradicting(List.of("a line"), "s", "d");
+        verify(llm).ask(any(), eq("low"));
+        new InputComparison(llm).contradicting(List.of(), "s", "d");
+        verify(llm, times(1)).ask(any(), any());
+    }
+
     /** field128's real answer: every line stating the rule, not only the obligation's. */
     @Test
     void statingTakesEveryLineNumbered() {

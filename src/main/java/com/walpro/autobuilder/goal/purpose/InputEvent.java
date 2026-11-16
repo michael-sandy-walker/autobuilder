@@ -59,9 +59,14 @@ public record InputEvent(String id, String kind, String inputId, String subject,
     }
 
     /** The input's rule took the receiving one's place. */
+    /**
+     * Whether this event's {@link #replaces()} leave force: a correction, or a decided difference of any kind. T1-GQ: a
+     * decision for the receiving project retires the input's lines for the rule it rejected (it used to retire nothing,
+     * and those lines went on refusing closure, {@code data/gradient} 2026-11-13).
+     */
     public boolean replacedReceiving() {
         return CORRECTION.equals(kind) || (CONFLICT.equals(kind) && heldLine == null
-                && (FOR_INPUT.equals(decision) || FOR_OWN.equals(decision)));
+                && (FOR_INPUT.equals(decision) || FOR_OWN.equals(decision) || FOR_RECEIVING.equals(decision)));
     }
 
     /** A carried claim that is not a requirement: held while open, and for good once decided for the receiving project. */

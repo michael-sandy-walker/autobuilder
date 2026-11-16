@@ -445,6 +445,63 @@ class ProjectInputServiceTest {
                 && g.getStatus() == GoalStatus.ACTIVE);
     }
 
+    /**
+     * T1-GQ (data/gradient, 2026-11-13): "remove the menu bar" decided, and the brought project's "The menu includes an
+     * option to specify a username." went on refusing closure. A decision for the receiving project retires the input's
+     * lines for the rule it rejected -- from its obligations and from the criteria of the goals it brings.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aDecisionForTheReceivingProject_retiresTheInputsLinesForTheRuleItRejected() throws IOException {
+        seedLine();
+        write(brought.resolve("bootstrap/seed.obligations.txt"), com.walpro.autobuilder.goal.SeedObligationsFile.render("Tie knots.",
+                List.of("A knot holds.", "A coil may have 9 turns.")));
+        differs(TURNS, false);
+        org.mockito.ArgumentCaptor<List<String>> asked = org.mockito.ArgumentCaptor.forClass(List.class);
+        when(comparison.contradicting(asked.capture(), org.mockito.ArgumentMatchers.eq("the turn limit"),
+                org.mockito.ArgumentMatchers.eq("at most 3 turns"))).thenReturn(List.of("A coil may have 9 turns.", "Knot is final"));
+        ProjectInputService.Report r = bring();
+
+        var decided = service.decide(r.conflicts().get(0).id(), "receiving", "operator");
+
+        assertThat(asked.getValue()).as("the input's obligations and the brought tree's criteria")
+                .contains("A knot holds.", "A coil may have 9 turns.", "Knot exists", "Knot is final");
+        assertThat(decided.replaces()).containsExactly("A coil may have 9 turns.", "Knot is final");
+        service.keep(r.inputId(), "operator");
+        assertThat(goals.purpose().linesOut()).contains("A coil may have 9 turns.", "Knot is final");
+        assertThat(goals.requirements().obligationsOrClauses()).contains("A coil has at most 3 turns.", "A knot holds.")
+                .doesNotContain("A coil may have 9 turns.");
+    }
+
+    /** T1-GQ: the operator's own resolution retires both sides' lines it does not keep, never another decision's line. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void anOwnResolution_retiresTheInputsLinesItDoesNotKeep_butNeverAnotherDecisionsLine() throws IOException {
+        seedLine();
+        write(brought.resolve("bootstrap/seed.obligations.txt"), com.walpro.autobuilder.goal.SeedObligationsFile.render("Tie knots.",
+                List.of("A knot holds.", "A coil may have 9 turns.")));
+        InputComparison.Difference colour = new InputComparison.Difference("the rope colour", "red", "blue");
+        when(comparison.sameConcept(anyString(), any(), anyString())).thenReturn(List.of("Coil"));
+        when(comparison.differences(anyString(), anyString(), anyString())).thenReturn(List.of(TURNS, colour));
+        when(comparison.stating(any(), any())).thenReturn(List.of("A coil has at most 3 turns."));
+        org.mockito.ArgumentCaptor<List<String>> asked = org.mockito.ArgumentCaptor.forClass(List.class);
+        when(comparison.contradicting(asked.capture(), anyString(), anyString())).thenReturn(List.of("A coil may have 9 turns."));
+        ProjectInputService.Report r = bring();
+        String turns = r.conflicts().stream().filter(c -> c.subject().equals("the turn limit")).findFirst().orElseThrow().id();
+        String rope = r.conflicts().stream().filter(c -> c.subject().equals("the rope colour")).findFirst().orElseThrow().id();
+
+        var first = service.decide(turns, "own", "operator", "at most 5 turns");
+        service.decide(rope, "own", "operator", "green");
+
+        assertThat(first.replaces()).as("the receiving rule and the input's line, once each")
+                .containsExactly("A coil has at most 3 turns.", "A coil may have 9 turns.");
+        assertThat(asked.getValue()).as("the second decision is not offered the first one's line")
+                .doesNotContain("the turn limit: at most 5 turns").contains("A knot holds.");
+        service.keep(r.inputId(), "operator");
+        assertThat(goals.requirements().obligationsOrClauses()).contains("the turn limit: at most 5 turns", "A knot holds.")
+                .doesNotContain("A coil may have 9 turns.", "A coil has at most 3 turns.");
+    }
+
     @Test
     void mergingAFileBothHave_keepsTheReceivingFileAndMakesTheMergeWork() throws IOException {
         write(base.resolve("output/src/main/java/org/knot/Knot.java"), "package org.knot;\nclass Ours { }\n");

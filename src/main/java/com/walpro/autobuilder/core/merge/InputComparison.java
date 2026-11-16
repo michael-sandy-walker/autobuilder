@@ -194,6 +194,30 @@ public class InputComparison {
                 + d.what() + ". RECEIVING: " + d.receiving() + ". OTHER: " + d.other()
                 + ".\n\nWhich requirements state the receiving rule of this difference? Give their numbers, or NONE."
                 + "\n\nLINES: <numbers separated by commas>");
+        return numbered(answer, lines);
+    }
+
+    /**
+     * T1-GQ: the brought project's lines that cannot hold beside a decided rule. A decision for the receiving project,
+     * or the operator's own, rejects some of what the brought project said; its lines for that keep counting otherwise
+     * ({@code data/gradient}, 2026-11-13: "remove the menu bar entirely" decided, and "The menu includes an option to
+     * specify a username." refused closure until the run paused). Asked of the decided rule, not of the other side as
+     * a whole, because an own resolution may keep part of it (the greeting kept, the menu dropped).
+     */
+    public List<String> contradicting(List<String> lines, String subject, String decided) {
+        if (lines.isEmpty()) return List.of();
+        StringBuilder numbered = new StringBuilder();
+        for (int i = 0; i < lines.size(); i++) numbered.append(i + 1).append(". ").append(lines.get(i)).append('\n');
+        String answer = ask(DECIDE_SYSTEM, LIST_EFFORT, "THE BROUGHT PROJECT'S REQUIREMENTS:\n" + numbered
+                + "\nTHE DECISION ON \"" + subject + "\": " + decided
+                + "\n\nWhich requirements cannot hold together with this decision, because they ask for behaviour the decision"
+                + " removes or replaces? A requirement the decision still allows is not named, and neither is one about"
+                + " something else. Give their numbers, or NONE."
+                + "\n\nLINES: <numbers separated by commas>");
+        return numbered(answer, lines);
+    }
+
+    private static List<String> numbered(String answer, List<String> lines) {
         List<String> out = new ArrayList<>();
         Matcher m = Pattern.compile("\\d+").matcher(answer.substring(Math.max(0, answer.lastIndexOf("LINES:"))));
         while (m.find()) {

@@ -369,8 +369,10 @@ public class ProjectInputService {
         boolean difference = open.heldLine() == null && open.heldPath() == null;
         if (InputEvent.FOR_OWN.equals(decision)) return decideOwn(open, difference, by, resolution.strip());
         InputComparison.Difference d = new InputComparison.Difference(open.subject(), open.receiving(), open.other());
-        List<String> replaces = InputEvent.FOR_INPUT.equals(decision) && difference
-                ? comparison.stating(goals.statedRules(), d) : List.of();
+        // T1-GQ: a decision for the receiving project rejects the input's rule, so the input's lines for it leave too.
+        List<String> replaces = !difference ? List.of()
+                : InputEvent.FOR_INPUT.equals(decision) ? comparison.stating(goals.statedRules(), d)
+                : comparison.contradicting(broughtLines(open.inputId()), open.subject(), open.receiving());
         InputEvent decided = goals.purpose().decide(open, decision, by, replaces);
         if (InputEvent.FOR_INPUT.equals(decision)) {
             if (open.heldPath() != null) {
@@ -389,9 +391,13 @@ public class ProjectInputService {
     }
 
     private InputEvent decideOwn(InputEvent open, boolean difference, String by, String resolution) throws IOException {
-        List<String> replaces = difference
-                ? comparison.stating(goals.statedRules(), new InputComparison.Difference(open.subject(), open.receiving(), resolution))
-                : List.of();
+        List<String> replaces = new ArrayList<>();
+        if (difference) {
+            replaces.addAll(comparison.stating(goals.statedRules(), new InputComparison.Difference(open.subject(), open.receiving(), resolution)));
+            // T1-GQ: and the input's lines the resolution does not keep -- asked of the resolution, since it may keep part.
+            comparison.contradicting(broughtLines(open.inputId()), open.subject(), resolution).stream()
+                    .filter(l -> !replaces.contains(l)).forEach(replaces::add);
+        }
         InputEvent decided = goals.purpose().decide(open, InputEvent.FOR_OWN, by, replaces, resolution);
         String line = difference ? open.subject() + ": " + resolution
                 : open.heldPath() != null ? "Merge " + open.subject() + " with the copy brought in (kept at " + open.heldPath()
@@ -402,6 +408,36 @@ public class ProjectInputService {
         decidedWork(open.inputId(), line);
         log.warn("T4-EC: conflict '{}' decided by {} with their own resolution: {}", open.subject(), by, resolution);
         return decided;
+    }
+
+    /**
+     * T1-GQ: every line the brought project carries -- its obligations, the criteria its intent goal lands with, and the
+     * criteria of the goal tree it brings (pending until kept, so read from the landing) -- except the lines decisions
+     * wrote, which are the operator's and are not retired by another decision.
+     */
+    private List<String> broughtLines(String inputId) throws IOException {
+        InputEntry input = goals.purpose().ledger().entries().stream().filter(e -> e.id().equals(inputId)).findFirst().orElseThrow();
+        java.util.Set<String> decided = new java.util.HashSet<>();
+        for (InputEvent e : goals.purpose().ledger().events()) {
+            if (!inputId.equals(e.inputId()) || !InputEvent.CONFLICT.equals(e.kind()) || e.open()) continue;
+            decided.add((e.subject() + ": " + (InputEvent.FOR_OWN.equals(e.decision()) ? e.resolution() : e.other())).strip());
+        }
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        String path = goals.purpose().obligationsPath(input);
+        if (files.exists(path)) out.addAll(SeedObligationsFile.read(files.readFile(path), input.content()).obligations());
+        String landing = "meta/inputs/" + inputId + LANDING_FILE;
+        if (files.exists(landing)) {
+            JsonNode kept = MAPPER.readTree(files.readFile(landing));
+            kept.path("criteria").forEach(c -> out.add(c.asText()));
+            criteriaOf(kept.get("tree"), out);
+        }
+        return out.stream().map(String::strip).filter(l -> !l.isEmpty() && !decided.contains(l)).distinct().toList();
+    }
+
+    private static void criteriaOf(JsonNode goal, java.util.Set<String> out) {
+        if (goal == null) return;
+        goal.path("metadata").path("acceptanceCriteria").forEach(c -> out.add(c.asText()));
+        goal.path("subGoals").forEach(g -> criteriaOf(g, out));
     }
 
     /** T4-ED: the imports waiting for the operator, each with what came in and what of it is still open. */

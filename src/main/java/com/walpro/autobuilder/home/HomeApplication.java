@@ -92,6 +92,14 @@ public class HomeApplication {
         };
     }
 
+    /** T5-BX: the graph's nodes without a lineage, counted and -- only when asked -- removed. */
+    @Bean
+    UnattributedNodes unattributedNodes(@Value("${spring.data.neo4j.uri:bolt://localhost:7687}") String uri,
+                                        @Value("${spring.data.neo4j.username:neo4j}") String user,
+                                        @Value("${spring.data.neo4j.password:}") String password) {
+        return new UnattributedNodes(uri, user, password);
+    }
+
     /**
      * Boots the home context, then -- when a project was named at startup -- starts the run on it through the
      * same launcher the home screen's "Start" uses. A fast-forwarded run that fails to start ends the JVM, as

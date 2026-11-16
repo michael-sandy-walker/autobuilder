@@ -46,6 +46,8 @@ public class HomeController {
     private Trash trash;
     @Autowired(required = false)
     private Trash.GraphEraser graphEraser;
+    @Autowired(required = false)
+    private UnattributedNodes unattributedNodes;
 
     @Autowired // two constructors: without this Spring has no way to choose and the home context does not start
     public HomeController(ProjectLauncher launcher, HomeApplication.ProjectsDirectory projects) {
@@ -663,6 +665,40 @@ public class HomeController {
             return refuse(404, e.getMessage());
         } catch (IOException e) {
             return refuse(500, e.getMessage());
+        }
+    }
+
+    /** T5-BX: how many graph nodes carry no lineage, by label -- history no project or run can be named for. */
+    @GetMapping("/home/graph/unattributed")
+    public ResponseEntity<Map<String, Object>> unattributed() {
+        if (unattributedNodes == null) return refuse(503, "the graph is not available here");
+        try {
+            Map<String, Long> byLabel = unattributedNodes.count();
+            return ResponseEntity.ok(Map.of("ok", true, "byLabel", byLabel,
+                    "total", byLabel.values().stream().mapToLong(Long::longValue).sum()));
+        } catch (RuntimeException e) {
+            return refuse(503, "the graph could not be read: " + e.getMessage());
+        }
+    }
+
+    /**
+     * T5-BX: removes the graph nodes that carry no lineage and says how many of each label went. Only on request, and
+     * not while a run is starting or running: nothing with a lineage is touched either way.
+     */
+    @org.springframework.web.bind.annotation.DeleteMapping("/home/graph/unattributed")
+    public ResponseEntity<Map<String, Object>> eraseUnattributed() {
+        if (unattributedNodes == null) return refuse(503, "the graph is not available here");
+        ProjectLauncher.State now = launcher.state();
+        if (now == ProjectLauncher.State.STARTING || now == ProjectLauncher.State.RUNNING) {
+            return refuse(409, "a run is " + now.name().toLowerCase(java.util.Locale.ROOT) + "; stop it first");
+        }
+        try {
+            Map<String, Long> removed = unattributedNodes.erase();
+            long total = removed.values().stream().mapToLong(Long::longValue).sum();
+            log.info("T5-BX: removed {} graph nodes without a lineage: {}", total, removed);
+            return ResponseEntity.ok(Map.of("ok", true, "removed", removed, "total", total));
+        } catch (RuntimeException e) {
+            return refuse(503, "the graph could not be written: " + e.getMessage());
         }
     }
 

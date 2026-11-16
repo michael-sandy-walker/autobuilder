@@ -331,6 +331,8 @@ public class AutobuilderService implements CheckpointableState {
     private boolean schedulerEnabled = true;
 
     private boolean schedulerDisabledNoted;
+    /** T1-GO: the reason of a pause taken at once because the scheduler is off, or null. */
+    private String pausedWithoutScheduler;
 
     private boolean systemPaused = false;
 
@@ -453,6 +455,7 @@ public class AutobuilderService implements CheckpointableState {
         subgoalRetryCount.clear();
         systemPaused = false;
         pauseEventEmitted = false;
+        pausedWithoutScheduler = null;
         endReportWrittenThisEpisode = false;
         if (state == null || state.isNull()) return;
         Snapshot snapshot = mapper.convertValue(state, Snapshot.class);
@@ -486,7 +489,8 @@ public class AutobuilderService implements CheckpointableState {
      * while it only waits for the model endpoint to come back, which is not an end.
      */
     public Optional<String> haltReason() {
-        if (!systemPaused || context == null) return Optional.empty();
+        if (!systemPaused) return Optional.empty();
+        if (context == null) return Optional.ofNullable(pausedWithoutScheduler);
         // A fulfilled run carries no pausedReason (see the GOAL_FULFILLED branch of the tick).
         if (context.cycleResultState() == CycleResultState.GOAL_FULFILLED) return Optional.of(GOAL_FULFILLED_REASON);
         String reason = context.pausedReason();
@@ -570,6 +574,18 @@ public class AutobuilderService implements CheckpointableState {
     public void pause(String reason) {
         lock.lock();
         try {
+            if (!schedulerEnabled) {
+                // T1-GO: the tick turns a recorded pause into a halt, and with the scheduler off no tick
+                // ever does -- the stop was asked for and the run never ended. Holding the lock means no
+                // cycle is under way, and none will start on its own, so the halt is now.
+                String why = reason != null ? reason : "user-pause";
+                if (context != null) context = context.withPausedReason(why);
+                pausedWithoutScheduler = why;
+                systemPaused = true;
+                log.info("pause: reason={} -- the scheduler is off, so the run halts at once", why);
+                if (context != null) emitSystemPausedOnce(context.cycleName(), why, 0);
+                return;
+            }
             if (context == null) {
                 log.debug("pause({}) ignored — no context yet", reason);
                 return;
@@ -641,6 +657,12 @@ public class AutobuilderService implements CheckpointableState {
     public void clearHaltSignals() {
         lock.lock();
         try {
+            if (pausedWithoutScheduler != null) {
+                // T1-GO: the halt pause() set at once is lifted here, since no tick will lift it.
+                pausedWithoutScheduler = null;
+                systemPaused = false;
+                pauseEventEmitted = false;
+            }
             if (context == null) {
                 log.debug("clearHaltSignals ignored — no context yet");
                 return;
@@ -1004,6 +1026,10 @@ public class AutobuilderService implements CheckpointableState {
         // T4-CQ: adopted with no goal is the same restraint for a different reason — there is
         // nothing to work towards, and the planner's fallback would invent goals that do not exist.
         if (startRefused || awaitingGoal || importPending()) return;
+        // T1-GO: a stop taken at once because the scheduler is off. The tick still fires with the scheduler
+        // off (it returns further down) and would otherwise clear the halt on its way there.
+        // Every path that resumes a run clears systemPaused, so the guard reads both.
+        if (pausedWithoutScheduler != null && systemPaused) return;
 
         // T4-EL: a rewind the operator asked for while the previous cycle ran. Done here, at the
         // boundary, under the lock this tick already holds -- and then the tick ends, so the next one

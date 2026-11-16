@@ -209,6 +209,91 @@ class ControlLoopTerminationTest {
         assertThat(com.walpro.autobuilder.core.lifecycle.DerivedFacts.systemPaused(service.getContext().get())).isTrue();
     }
 
+    @Test
+    void pause_whenSchedulerDisabledAndNoCycleEverRan_haltsAtOnce() throws Exception {
+        // T1-GO: no tick turns the recorded pause into a halt when the scheduler is off, so the stop
+        // from the home screen never ended the run.
+        AutobuilderService service = newService();
+        setField(service, "schedulerEnabled", false);
+        service.runAutobuilderCycle();
+
+        service.pause("user-pause");
+        // The tick still fires with the scheduler off; it must not clear the halt (seen live 2026-11-16).
+        service.runAutobuilderCycle();
+
+        assertThat(service.haltReason()).contains("user-pause");
+        assertThat(service.isPaused()).isTrue();
+        verifyNoInteractions(contextCoordinator, cycleExecutor);
+    }
+
+    @Test
+    void pause_whenSchedulerDisabledWithAContext_recordsTheReasonAndHalts() throws Exception {
+        AutobuilderService service = newService();
+        setField(service, "schedulerEnabled", false);
+        setField(service, "context", CycleContextData.builder().cycleName("cycle-1")
+                .cycleResultState(CycleResultState.CONTINUE).build());
+
+        service.pause(null);
+
+        assertThat(service.haltReason()).contains("user-pause");
+        assertThat(service.getContext().get().pausedReason()).isEqualTo("user-pause");
+    }
+
+    @Test
+    void pause_whenSchedulerDisabled_waitsForACycleUnderWay() throws Exception {
+        // A cycle started by hand holds the lock; the stop must not end the run from under it.
+        AutobuilderService service = newService();
+        setField(service, "schedulerEnabled", false);
+        java.util.concurrent.CountDownLatch inCycle = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        Thread cycle = new Thread(() -> service.runExclusively(() -> {
+            inCycle.countDown();
+            try {
+                release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return null;
+        }));
+        cycle.start();
+        assertThat(inCycle.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        Thread stop = new Thread(() -> service.pause("user-pause"));
+        stop.start();
+
+        stop.join(300);
+        assertThat(stop.isAlive()).isTrue();
+        assertThat(service.haltReason()).isEmpty();
+        release.countDown();
+        stop.join(5000);
+        cycle.join(5000);
+        assertThat(service.haltReason()).contains("user-pause");
+    }
+
+    @Test
+    void pause_whenSchedulerEnabled_leavesTheHaltToTheTick() throws Exception {
+        AutobuilderService service = newService();
+        setField(service, "schedulerEnabled", true);
+        setField(service, "context", CycleContextData.builder().cycleName("cycle-1")
+                .cycleResultState(CycleResultState.CONTINUE).build());
+
+        service.pause("user-pause");
+
+        assertThat(service.haltReason()).isEmpty();
+        assertThat(service.getContext().get().pausedReason()).isEqualTo("user-pause");
+    }
+
+    @Test
+    void clearHaltSignals_liftsAHaltTakenWithoutTheScheduler() throws Exception {
+        AutobuilderService service = newService();
+        setField(service, "schedulerEnabled", false);
+        service.pause("user-pause");
+
+        service.clearHaltSignals();
+
+        assertThat(service.haltReason()).isEmpty();
+        assertThat(service.isPaused()).isFalse();
+    }
+
     private static void setField(Object target, String fieldName, Object value) throws Exception {
         Field f = target.getClass().getDeclaredField(fieldName);
         f.setAccessible(true);

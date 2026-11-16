@@ -13,6 +13,9 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.walpro.autobuilder.core.service.AutobuilderService;
 
 class ProjectLauncherTest {
 
@@ -167,6 +170,90 @@ class ProjectLauncherTest {
                 .doesNotContainKey("stopping");
         launcher.returnHome();
         assertThat(launcher.describe()).doesNotContainKey("stopping");
+    }
+
+    @Test
+    void aStoppedRunWithTheSchedulerOffEndsAndCanBeLeft() throws Exception {
+        // T1-GO: the launcher's own probes, against a real service whose scheduler is off and whose loop
+        // never cycled (a project whose goal is complete, started with no profile).
+        AutobuilderService service = schedulerOffService();
+        ConfigurableApplicationContext ctx = contextServing(service);
+        ProjectLauncher launcher = new ProjectLauncher(new String[0], (c, args) -> ctx);
+        launcher.start(new ProjectChoice("data/a", "ADOPT_PROJECT", null)).get(5, TimeUnit.SECONDS);
+
+        launcher.stopRequested();
+        service.pause("user-pause"); // what POST /home/stop sends the run
+        service.runAutobuilderCycle(); // the tick still fires with the scheduler off
+
+        assertThat(launcher.describe()).containsEntry("state", "ENDED").containsEntry("endReason", "user-pause");
+        launcher.returnHome();
+        org.mockito.Mockito.verify(ctx).close();
+        assertThat(launcher.state()).isEqualTo(ProjectLauncher.State.IDLE);
+    }
+
+    @Test
+    void aStopWithTheSchedulerOffWaitsForACycleUnderWay() throws Exception {
+        AutobuilderService service = schedulerOffService();
+        ConfigurableApplicationContext ctx = contextServing(service);
+        ProjectLauncher launcher = new ProjectLauncher(new String[0], (c, args) -> ctx);
+        launcher.start(new ProjectChoice("data/a", "ADOPT_PROJECT", null)).get(5, TimeUnit.SECONDS);
+        CountDownLatch inCycle = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread cycle = new Thread(() -> service.runExclusively(() -> {
+            inCycle.countDown();
+            awaitQuietly(release);
+            return null;
+        }));
+        cycle.start();
+        assertThat(inCycle.await(5, TimeUnit.SECONDS)).isTrue();
+
+        launcher.stopRequested();
+        Thread stop = new Thread(() -> service.pause("user-pause"));
+        stop.start();
+        stop.join(300);
+
+        assertThat(launcher.describe()).containsEntry("state", "RUNNING").containsKey("stopping");
+        assertThatThrownBy(launcher::returnHome).hasMessageContaining("still running");
+        release.countDown();
+        stop.join(5000);
+        cycle.join(5000);
+        assertThat(launcher.state()).isEqualTo(ProjectLauncher.State.ENDED);
+    }
+
+    private static AutobuilderService schedulerOffService() throws Exception {
+        AutobuilderService service = new AutobuilderService(
+                mock(com.walpro.autobuilder.core.lifecycle.SeedCoordinator.class),
+                mock(com.walpro.autobuilder.core.bootstrap.BuildSystemBootstrap.class),
+                mock(com.walpro.autobuilder.core.service.FileService.class),
+                mock(com.walpro.autobuilder.config.AutobuilderConfigProperties.class),
+                mock(com.walpro.autobuilder.core.init.SystemResetConfig.class),
+                mock(com.walpro.autobuilder.core.lifecycle.CycleContextCoordinator.class),
+                mock(com.walpro.autobuilder.core.lifecycle.CycleExecutor.class),
+                mock(com.walpro.autobuilder.core.persistence.CyclePersistenceService.class),
+                mock(com.walpro.autobuilder.core.service.CycleLoggingService.class),
+                mock(com.walpro.autobuilder.memory.sms.SmsCycleIngestor.class),
+                mock(com.walpro.autobuilder.goal.GoalPlannerService.class),
+                mock(com.walpro.autobuilder.client.LlmCircuitBreaker.class),
+                mock(com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker.class),
+                mock(com.walpro.autobuilder.goal.GoalConsolidationService.class),
+                mock(com.walpro.autobuilder.graph.core.OrchestrationSnapshotService.class),
+                mock(com.walpro.autobuilder.core.init.RunIdentityService.class));
+        java.lang.reflect.Field f = AutobuilderService.class.getDeclaredField("schedulerEnabled");
+        f.setAccessible(true);
+        f.set(service, false);
+        return service;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ConfigurableApplicationContext contextServing(AutobuilderService service) {
+        ConfigurableApplicationContext ctx = mock(ConfigurableApplicationContext.class);
+        org.springframework.beans.factory.ObjectProvider<AutobuilderService> provider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(service);
+        when(ctx.isActive()).thenReturn(true);
+        when(ctx.getEnvironment()).thenReturn(new org.springframework.core.env.StandardEnvironment());
+        when(ctx.getBeanProvider(AutobuilderService.class)).thenReturn(provider);
+        return ctx;
     }
 
     @Test

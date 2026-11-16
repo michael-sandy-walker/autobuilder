@@ -107,4 +107,36 @@ class BehaviourEventControllerTest {
         assertThat(payload.get("sessionBuildMs")).isEqualTo(1500L);
         assertThat(payload.get("sessionBuildCount")).isEqualTo(1L);
     }
+
+    /**
+     * The page tells a new run from the last by the hello. A run started held has logged nothing, so it has no session
+     * start yet -- the page reset nothing and kept the previous run's pinned "Goal fulfilled" ghost. Its id exists from boot.
+     */
+    @Test
+    void behaviour_helloNamesTheRunBeforeItHasLoggedAnything() throws Exception {
+        java.util.List<Object> sent = new java.util.ArrayList<>();
+        BehaviourEventPublisher publisher = new BehaviourEventPublisher() {
+            @Override
+            public SseEmitter register(Object helloEnvelope) {
+                sent.add(helloEnvelope);
+                return super.register(null);
+            }
+        };
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        BehaviourLogger logger = new BehaviourLogger(mapper, publisher);
+        var controller = new BehaviourEventController(publisher, logger, new com.walpro.autobuilder.core.build.BuildCostTracker());
+        var identity = org.mockito.Mockito.mock(com.walpro.autobuilder.core.init.RunIdentityService.class);
+        org.mockito.Mockito.when(identity.runId()).thenReturn("run-held");
+        var f = BehaviourEventController.class.getDeclaredField("runIdentity");
+        f.setAccessible(true);
+        f.set(controller, identity);
+
+        controller.behaviour();
+
+        @SuppressWarnings("unchecked")
+        var payload = (java.util.Map<String, Object>) ((java.util.Map<String, Object>) sent.get(0)).get("payload");
+        assertThat(payload.get("sessionStartTimestamp")).as("nothing logged yet").isNull();
+        assertThat(payload.get("runId")).isEqualTo("run-held");
+    }
 }

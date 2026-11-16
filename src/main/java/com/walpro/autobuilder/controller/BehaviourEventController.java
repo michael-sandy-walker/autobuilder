@@ -34,6 +34,14 @@ public class BehaviourEventController {
     private final BehaviourLogger behaviourLogger;
     private final BuildCostTracker buildCostTracker;
 
+    /**
+     * Which run this is, from its boot on. The page tells a new run from the last one by it: the session start it used
+     * before exists only once the run has logged its first event, so a page that reconnected to a run started held (or
+     * just started) saw no start, reset nothing, and kept the previous run's pinned "Goal fulfilled" ghost.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.walpro.autobuilder.core.init.RunIdentityService runIdentity;
+
     @GetMapping(value = "/behaviour", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> behaviour() {
         if (publisher == null) {
@@ -48,6 +56,7 @@ public class BehaviourEventController {
         if (behaviourLogger != null) {
             payload.putAll(behaviourLogger.sessionSummary());
         }
+        if (runIdentity != null) payload.put("runId", runIdentity.runId());
         if (buildCostTracker != null) {
             payload.put("sessionBuildMs", buildCostTracker.sessionBuildMs());
             payload.put("sessionBuildCount", buildCostTracker.sessionInvocations());

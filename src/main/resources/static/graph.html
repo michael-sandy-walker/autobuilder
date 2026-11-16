@@ -3549,6 +3549,7 @@ function crop(s, n) {
   // T5-BF: seed session state from the hello envelope so a page opened mid-run starts true.
   // Re-sent on every (re)connect; the server's tally is authoritative, so SET, don't add.
   /** Clears everything the previous run left in the HUD, the event strip and the graph. */
+  let lastRunId = null;   // the run the view shows, from the behaviour stream's hello
   function resetForNewRun() {
     const st = strip(); if (st) st.querySelectorAll('.mc-chip').forEach(c => c.remove());
     const gh = $('mc-ghosts'); if (gh) gh.innerHTML = '';
@@ -3578,10 +3579,18 @@ function crop(s, n) {
     if (p.lastSubGoalDescription) { lastSubGoal = p.lastSubGoalDescription; setSubgoalHud(lastSubGoal); }
     // The server's own start time is authoritative: a page that stays open while a NEW instance
     // starts reconnects and receives a new hello, and must count that run, not the first one it saw.
+    // Which run: its id exists from the run's boot. The session start exists only once the run has logged an event, so
+    // a page reconnecting to a run started held (or just started) got none, reset nothing, and kept the previous run's
+    // pinned "Goal fulfilled" ghost. The start stays the fallback for a server that sends no id.
     const helloStart = p.sessionStartTimestamp ? Date.parse(p.sessionStartTimestamp) : NaN;
-    if (!Number.isNaN(helloStart) && sessionStartMs != null && helloStart !== sessionStartMs) {
+    const otherRun = p.runId
+      ? (lastRunId != null && p.runId !== lastRunId)
+      : (!Number.isNaN(helloStart) && sessionStartMs != null && helloStart !== sessionStartMs);
+    if (otherRun) {
       resetForNewRun();   // a different instance: the previous run's view must not carry over
+      sessionStartMs = null;
     }
+    if (p.runId) lastRunId = p.runId;
     if (!Number.isNaN(helloStart)) { sessionStartMs = helloStart; refreshRuntime(); }
     else noteSessionStart(p.sessionStartTimestamp);
     if (p.sessionBuildMs != null) hudSet('mc-buildms', fmtMs(p.sessionBuildMs));

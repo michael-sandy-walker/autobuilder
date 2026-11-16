@@ -9,6 +9,16 @@
   What it is: Shipping-label codes for parcels: a zone from the postcode, a running number, and a check character.
   How it is used: library-style -- exercised inside the same process, by a test that calls it. Exercised here through: Zone.of, Labeler.checkChar, Labeler.next, Labeler.isValid.
 
+  Declared: class Labeler -- created with new Labeler()
+  Declared: static char Labeler.checkChar(String body) -- called on Labeler itself
+  Declared: String Labeler.next(String postcode) -- called on an instance of Labeler, not on Labeler itself
+  Declared: static boolean Labeler.isValid(String code) -- called on Labeler itself
+  Declared: enum Zone
+  Declared: static Zone Zone.of(String postcode) -- called on Zone itself
+  Declared: constant Labeler.ALPHABET = "ABCDEFGHJKLMNPRTVWX"
+  Declared: constant Labeler.WEIGHTS = { 7, 3, 9, 7, 3, 9, 7 }
+  Declared: enum Zone -- its constants, in this order: NORTH, EAST, SOUTH, WEST, HARBOR, VALLEY, SUMMIT
+
   Zone.of:
   In short: Zone.of maps a five-digit postcode to a zone name by summing the digits, taking the result modulo seven, and selecting the zone with that ordinal. The postcode must be exactly five characters long and contain only digits. Invalid input raises an IllegalArgumentException with the message postcode must be exactly five digits or postcode must contain only digits.
   - Zone.of(<postcode>) returns the zone whose ordinal equals the sum of the digits of <postcode> modulo seven

@@ -38,7 +38,10 @@ class DeclarationsTest {
                     private static final String LETTERS = "ACEGK";
                     private static final int[] STEPS = {2, -1, 4};
                     static final long LIMIT = -9L;
-                    private static final List<String> NAMES = List.of("a");
+                    private static final List<String> NAMES = List.of("a", "b");
+                    private static final java.util.Set<Integer> CODES = java.util.Set.of(1, 2);
+                    private static final List<String> MIXED = List.of("a", String.valueOf(2));
+                    private static final java.util.regex.Pattern WORD = java.util.regex.Pattern.compile("\\\\w+");
                     private static final String NOTHING = null;
                     private final int start = 3;
                     private int count;
@@ -78,7 +81,6 @@ class DeclarationsTest {
                 "String Dial.next(String key) -- called on an instance of Dial, not on Dial itself",
                 "class Meter -- created with new Meter(int size)",
                 "int Meter.size() -- called on an instance of Meter, not on Meter itself",
-                "enum Level",
                 "static Level Level.of(int n) -- called on Level itself");
         // a private method, a program's main, and a type its users cannot reach are not how it is used
         assertThat(Declarations.of(root, true)).noneMatch(l -> l.contains("helper") || l.contains("main(") || l.contains("Hidden.run"));
@@ -91,8 +93,27 @@ class DeclarationsTest {
                 "constant Dial.LETTERS = \"ACEGK\"",
                 "constant Dial.STEPS = { 2, -1, 4 }",
                 "constant Dial.LIMIT = -9L",
+                "constant Dial.NAMES = List.of(\"a\", \"b\")",
+                "constant Dial.CODES = java.util.Set.of(1, 2)",
                 "constant Hidden.KEY = \"k\"",
                 "enum Level -- its constants, in this order: LOW, MID, HIGH");
+    }
+
+    @Test
+    void aClassOfStaticFunctionsIsNotSaidToBeCreated_andAnEnumIsNamedOnceWithItsConstants() throws Exception {
+        write("src/main/java/org/dial/Steps.java", """
+                package org.dial;
+                public class Steps {
+                    public static int twice(int n) { return 2 * n; }
+                }
+                """);
+        write("src/main/java/org/dial/Level.java", """
+                package org.dial;
+                public enum Level { LOW, HIGH }
+                """);
+        assertThat(Declarations.of(root, true)).containsExactly(
+                "static int Steps.twice(int n) -- called on Steps itself",
+                "enum Level -- its constants, in this order: LOW, HIGH");
     }
 
     @Test

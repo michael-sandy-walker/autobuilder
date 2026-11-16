@@ -16,6 +16,7 @@ import com.github.javaparser.ast.expr.ArrayCreationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LiteralExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
 import lombok.extern.slf4j.Slf4j;
@@ -43,8 +44,8 @@ import java.util.stream.Stream;
  * kind it is and how it is created -- and each public method with its return type, parameters, and whether it is
  * called on the type or on an instance.</li>
  * <li><b>Values the code holds</b> (any project): the constants of an enum in their declared order, and every
- * {@code static final} field whose value is written as a literal (a string, a number, a character, or an array of
- * them), whatever its visibility -- a private alphabet is still what every check character is drawn from.</li>
+ * {@code static final} field whose value is written as a literal (a string, a number, a character, an array of
+ * them, or a list, set or map made only of them), whatever its visibility -- a private alphabet is still what every check character is drawn from.</li>
  * </ul>
  * A field computed from other code is not a written value and is left out; so is anything longer than
  * {@link #VALUE_CHARS}. At most {@link #MAX_LINES} lines, shape first.
@@ -80,7 +81,10 @@ public final class Declarations {
             } catch (IOException e) {
                 continue;
             }
-            if (cu == null) continue;
+            if (cu == null) {
+                log.warn("T4-EQ: {} does not parse; nothing it declares is stated", root.relativize(p));
+                continue;
+            }
             for (TypeDeclaration<?> t : cu.findAll(TypeDeclaration.class)) {
                 String name = LibraryStyleAdapter.nested(t);
                 if (t instanceof EnumDeclaration e && !e.getEntries().isEmpty()) {
@@ -121,24 +125,45 @@ public final class Declarations {
         return out;
     }
 
-    /** How a type is created by its users; null when they do not create it (an interface, an abstract class, no public constructor). */
+    /**
+     * How a type is created by its users; null when they do not create it: an enum (its constants are stated with the
+     * values), an interface, an abstract class, a class without a public constructor, or one whose public methods are
+     * all static -- a holder of functions is not made, its implicit constructor notwithstanding (structdiff's
+     * {@code StructuralDiffUtils}: "created with new StructuralDiffUtils()" invites a builder to make one).
+     */
     private static String madeBy(TypeDeclaration<?> t, String name) {
-        if (t instanceof EnumDeclaration) return "enum " + name;
+        if (t instanceof EnumDeclaration) return null;
         if (t instanceof RecordDeclaration r) {
             return "record " + name + "(" + String.join(", ", r.getParameters().stream()
                     .map(x -> x.getType().asString() + " " + x.getNameAsString()).toList()) + ")";
         }
         if (!(t instanceof ClassOrInterfaceDeclaration c) || c.isInterface() || c.isAbstract()) return null;
+        List<MethodDeclaration> open = c.getMethods().stream().filter(MethodDeclaration::isPublic).toList();
+        if (!open.isEmpty() && open.stream().allMatch(MethodDeclaration::isStatic)) return null;
         List<ConstructorDeclaration> declared = c.getConstructors();
         if (declared.isEmpty()) return "class " + name + " -- created with new " + name + "()";
-        List<String> open = declared.stream().filter(ConstructorDeclaration::isPublic)
+        List<String> made = declared.stream().filter(ConstructorDeclaration::isPublic)
                 .map(k -> "new " + name + "(" + String.join(", ", k.getParameters().stream()
                         .map(x -> x.getType().asString() + " " + x.getNameAsString()).toList()) + ")").toList();
-        return open.isEmpty() ? null : "class " + name + " -- created with " + String.join(" or ", open);
+        return made.isEmpty() ? null : "class " + name + " -- created with " + String.join(" or ", made);
     }
 
-    /** Whether an initializer is a value written out: a literal, a negated one, or an array of them. */
+    /** The collection factories whose result is only the values written into them. */
+    private static final java.util.Set<String> COLLECTIONS = java.util.Set.of("List.of", "Set.of", "Map.of", "Arrays.asList");
+
+    /**
+     * Whether an initializer is a value written out: a literal, a negated one, an array of them, or a collection made
+     * only of them ({@link #COLLECTIONS}; criterion-status's {@code RESPONSE_STATUSES = Set.of(200, 201, ...)} decides
+     * which numbers count as statuses, as an alphabet decides check characters). A compiled pattern or any other call
+     * is how the code works, not a value it holds.
+     */
     static boolean written(Expression e) {
+        if (e instanceof MethodCallExpr call) {
+            String scope = call.getScope().map(Expression::toString).orElse("");
+            scope = scope.substring(scope.lastIndexOf('.') + 1);   // java.util.Set.of is Set.of
+            return COLLECTIONS.contains(scope + "." + call.getNameAsString()) && !call.getArguments().isEmpty()
+                    && call.getArguments().stream().allMatch(Declarations::written);
+        }
         if (e instanceof NullLiteralExpr) return false;
         if (e instanceof LiteralExpr) return true;
         if (e instanceof UnaryExpr u) return u.getOperator() == UnaryExpr.Operator.MINUS && u.getExpression() instanceof LiteralExpr;

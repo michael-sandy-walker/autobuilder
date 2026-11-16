@@ -154,8 +154,10 @@ class AutobuilderServiceRewindWiringTest {
 
         // The four the ledger actually shows runs dying on, plus the brake's own. A forced run
         // died at cycle 4 on exhaustion-runaway with nobody asking — that is what widened this.
+        // T1-GP: all eight halts that judge the path -- the allow-list, in full.
         for (String reason : List.of(RootConvergenceTracker.HALT_SOURCE, "exhaustion-runaway",
-                "empty-backlog-injection-limit", "root-exhaustion", "planner-output-truncated")) {
+                "empty-backlog-injection-limit", "root-exhaustion", "planner-output-truncated",
+                "stagnation-runaway", "build-blocked-deadlock", "null-subgoal-halt")) {
             assertThat(service.rewindBeforeHalting(cycle("cycle-30", reason)))
                     .as("halt reason %s", reason)
                     .isTrue();
@@ -163,7 +165,7 @@ class AutobuilderServiceRewindWiringTest {
     }
 
     @Test
-    @DisplayName("an operator pause and a breaker suspension are never overridden")
+    @DisplayName("an operator pause, a question to the operator and a breaker suspension are never overridden")
     void someHaltsAreNotOursToOverride() {
         when(policy.considerRewindInsteadOfHalting(anyString(), anyInt()))
                 .thenReturn(Optional.of(performed()));
@@ -176,6 +178,18 @@ class AutobuilderServiceRewindWiringTest {
                 .isFalse();
         assertThat(service.rewindBeforeHalting(cycle("cycle-30", "llm-circuit-breaker")))
                 .as("a suspension waiting on the endpoint says nothing about the path being bad")
+                .isFalse();
+        // T1-GP: the loop asked a person (data/gradient, 2026-11-13: three of four such pauses were rewound), and a
+        // pause set from the signal editor -- neither was on the old deny-list.
+        assertThat(service.rewindBeforeHalting(cycle("cycle-30",
+                com.walpro.autobuilder.core.stuck.StuckLayer.PAUSE_REASON)))
+                .as("a diagnosis request waiting for the operator is not a bad path")
+                .isFalse();
+        assertThat(service.rewindBeforeHalting(cycle("cycle-30", "user-edit")))
+                .as("a pause set by a person from the signal editor")
+                .isFalse();
+        assertThat(service.rewindBeforeHalting(cycle("cycle-30", "some-reason-added-later")))
+                .as("a reason nobody listed is left alone: a missed rewind can still be asked for, a wrong one overrides")
                 .isFalse();
         verify(policy, never()).considerRewindInsteadOfHalting(anyString(), anyInt());
     }

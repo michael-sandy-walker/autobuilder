@@ -1757,15 +1757,14 @@ public class AutobuilderService implements CheckpointableState {
      * question belongs here rather than at each reason in turn
      * ([[feedback-one-invariant-one-home]]).
      *
-     * <p>The one exclusion is an operator pause: {@code user-pause} means a person asked the loop
-     * to stop, and backing up to keep working would be overriding them. The LLM circuit breaker is
-     * excluded too — that pause is a suspension waiting on the endpoint to recover (T1-FL), not a
-     * statement that this path is bad, and rewinding would discard good work over a network blip.
+     * <p>Only the halts that judge the PATH ({@link #REWINDABLE_HALTS}, T1-GP). A pause a person asked for, a
+     * question the loop put to a person, and a suspension waiting on the endpoint (T1-FL) say nothing about this
+     * path being bad; backing up to keep working would override the person or discard good work over a blip.
      */
     boolean rewindBeforeHalting(CycleContextData context) {
         if (context == null) return false;
         String reason = context.pausedReason();
-        if (reason == null || NON_REWINDABLE_PAUSES.contains(reason)) return false;
+        if (reason == null || !REWINDABLE_HALTS.contains(reason)) return false;
         return attemptRewind(context, "the run was about to halt (" + reason + ")");
     }
 
@@ -1871,7 +1870,7 @@ public class AutobuilderService implements CheckpointableState {
      *                      and settled from only when {@code restored} is null
      * @param restored      the checkpoint's carried context, or null when the point carries none
      * @param keepUserPause whether a pause a person asked for survives (the operator's rewind keeps
-     *                      it; the policy's never fires under one — see {@code NON_REWINDABLE_PAUSES})
+     *                      it; the policy's never fires under one — see {@code REWINDABLE_HALTS})
      */
     private void settleAfterRewind(CycleContextData current, CycleContextData restored, boolean keepUserPause) {
         if (rootConvergenceTracker != null) {
@@ -1902,13 +1901,19 @@ public class AutobuilderService implements CheckpointableState {
     }
 
     /**
-     * Pauses a rewind must not override: a person asked the loop to stop, or it is waiting for the
-     * model endpoint to come back rather than judging the path it is on.
+     * T1-GP: the halts a rewind may answer -- the loop's own judgement that the path it is on is bad. Every other
+     * pause is left alone: a person asked the loop to stop ({@code user-pause}, {@code user-edit}), the loop asked a
+     * person ({@code diagnosis-request-unresolved}, T4-EU; {@code requirement-no-test-answers}, T6-U, where a different
+     * path meets the same frozen tests), or it waits for the model endpoint ({@code llm-circuit-breaker}).
+     *
+     * <p>An allow-list, not a deny-list, because the deny-list failed the dangerous way: T4-EU's reason was minted in
+     * another class and never added, so its escalations were rewound three times of four ({@code data/gradient},
+     * 2026-11-13), and {@code user-edit} was never on it either. A reason missing from this list costs a rewind
+     * the operator can still ask for; a reason missing from the old one overrode the operator.
      */
-    // T6-U: nor the halt on a requirement no kept test answers -- the tests are frozen, so a different path meets the
-    // same refusal the moment its work is done.
-    private static final java.util.Set<String> NON_REWINDABLE_PAUSES =
-            java.util.Set.of("user-pause", LLM_BREAKER_PAUSE_REASON, UNANSWERABLE_HALT);
+    private static final java.util.Set<String> REWINDABLE_HALTS = java.util.Set.of(
+            com.walpro.autobuilder.core.lifecycle.RootConvergenceTracker.HALT_SOURCE, "exhaustion-runaway", "stagnation-runaway", "root-exhaustion",
+            "build-blocked-deadlock", "empty-backlog-injection-limit", "null-subgoal-halt", "planner-output-truncated");
 
     /**
      * T3-BY: is this cycle the one that should re-preserve? Counts MERGED cycles only — an

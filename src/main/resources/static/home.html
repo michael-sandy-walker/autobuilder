@@ -738,6 +738,7 @@ const KIND_MEANS = {
 // Why a claim was not kept, in the order shown: only the last can still change.
 const NOT_KEPT_GROUPS = [
   ['not-held', 'The code does something else', 'the model guessed wrong; dropped'],
+  ['does-not-compile', 'Its check did not compile', 'the model wrote a check that does not build against the code, so the code was never asked; dropped'],
   ['not-anchored', 'Holds even without this project\'s code', 'the framework answers it, not the project; dropped'],
   ['unjudged', 'Could not be checked', 'kept once the project can run -- run reverse engineering again then'] ];
 function revBox() {

@@ -178,6 +178,18 @@ public class DerivedTests implements DerivedTestAuthority {
         /** For each test path (relative to the tree), whether every case of it passed there. */
         Map<String, Boolean> run(Path tree, Map<String, String> tests);
 
+        /**
+         * T1-GN: for each test path, how its run ENDED -- passed, failed, did not compile (with the compiler's words for
+         * that file), or never ran (the tree itself did not build). {@link #run} reads only "passed or not"; a test that
+         * does not compile says nothing about the code it was written against, and a caller judging that code from it
+         * must be able to tell. A bench that cannot tell answers from {@link #run}.
+         */
+        default Map<String, Outcome> outcomes(Path tree, Map<String, String> tests) {
+            Map<String, Outcome> out = new LinkedHashMap<>();
+            run(tree, tests).forEach((p, ok) -> out.put(p, ok ? Outcome.PASSED : Outcome.FAILED));
+            return out;
+        }
+
         /** What the runner reported for the tests at {@code only}, all of {@code tests} run together -- never a source. */
         default String failures(Path tree, Map<String, String> tests, Set<String> only) {
             return "";
@@ -186,6 +198,18 @@ public class DerivedTests implements DerivedTestAuthority {
         /** What the build reported for the one test at {@code path} in {@code tree}: its failures, or the compiler's. */
         default String report(Path tree, String path, String content) {
             return "";
+        }
+    }
+
+    /** How one test's run ended; {@code detail} is the compiler's words for a test that did not compile. */
+    public record Outcome(Kind kind, String detail) {
+        public enum Kind { PASSED, FAILED, DID_NOT_COMPILE, NOT_RUN }
+
+        public static final Outcome PASSED = new Outcome(Kind.PASSED, null), FAILED = new Outcome(Kind.FAILED, null),
+                NOT_RUN = new Outcome(Kind.NOT_RUN, null);
+
+        public boolean passed() {
+            return kind == Kind.PASSED;
         }
     }
 
@@ -1153,6 +1177,13 @@ public class DerivedTests implements DerivedTestAuthority {
         @Override
         public Map<String, Boolean> run(Path tree, Map<String, String> tests) {
             Map<String, Boolean> result = new LinkedHashMap<>();
+            outcomes(tree, tests).forEach((p, o) -> result.put(p, o.passed()));
+            return result;
+        }
+
+        @Override
+        public Map<String, Outcome> outcomes(Path tree, Map<String, String> tests) {
+            Map<String, Outcome> result = new LinkedHashMap<>();
             Map<String, String> left = new LinkedHashMap<>(tests);
             try {
                 for (Map.Entry<String, String> t : left.entrySet()) {
@@ -1166,7 +1197,9 @@ public class DerivedTests implements DerivedTestAuthority {
                     BuildOutcome out = builds.executeIn(tree.toString(), "derived-tests", command);
                     Optional<TestRunReport> report = TestRunGate.reportOf(tree, start);
                     if (report.isPresent()) {
-                        for (String path : left.keySet()) result.put(path, passed(report.get(), stem(fileName(path))));
+                        for (String path : left.keySet()) {
+                            result.put(path, passed(report.get(), stem(fileName(path))) ? Outcome.PASSED : Outcome.FAILED);
+                        }
                         left.clear();
                         break;
                     }
@@ -1175,7 +1208,7 @@ public class DerivedTests implements DerivedTestAuthority {
                             .toList();
                     if (broken.isEmpty()) break;    // the implementation itself does not build: nothing passes here
                     for (String path : broken) {
-                        result.put(path, false);
+                        result.put(path, new Outcome(Outcome.Kind.DID_NOT_COMPILE, compilerOn(out.stderrTail(), path)));
                         left.remove(path);
                         Files.deleteIfExists(tree.resolve(path));
                     }
@@ -1191,8 +1224,22 @@ public class DerivedTests implements DerivedTestAuthority {
                     }
                 }
             }
-            for (String path : tests.keySet()) result.putIfAbsent(path, false);
+            for (String path : tests.keySet()) result.putIfAbsent(path, Outcome.NOT_RUN);
             return result;
+        }
+
+        /** The compiler's first line about the file at {@code path}, or a plain statement when the output names it nowhere. */
+        static String compilerOn(String output, String path) {
+            String file = fileName(path);
+            if (output != null) {
+                for (String l : output.split("\\R")) {
+                    if (l.contains(file) && l.contains("ERROR")) {
+                        String t = l.substring(l.indexOf(file)).strip();
+                        return t.length() <= 300 ? t : t.substring(0, 300) + " ...";
+                    }
+                }
+            }
+            return file + " does not compile";
         }
 
         @Override

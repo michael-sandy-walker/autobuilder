@@ -166,7 +166,9 @@ public class ReverseEngineeringService {
     /**
      * @param verdict    {@code anchored}: holds on the tree and not with its capability taken out; {@code not-held}: the
      *                   tree as it is does not bear it out; {@code not-anchored}: it also holds with its capability taken
-     *                   out; {@code unjudged}: a variant it needed did not run, or its capability had nothing to take out
+     *                   out; {@code unjudged}: a variant it needed did not run, or its capability had nothing to take out;
+     *                   {@code does-not-compile}: its test did not compile on the tree as it is (T1-GN), so the code was
+     *                   never asked
      * @param alsoNeeds  the other capabilities whose removal also breaks it (a dependency, or the wrong attribution)
      */
     public record JudgedClaim(Claim claim, String verdict, List<String> alsoNeeds, List<Observation> observations,
@@ -182,7 +184,8 @@ public class ReverseEngineeringService {
      * @param feature   its own feature -- of the features whose removal breaks it, the most specific; null when none
      * @param verdict   {@code anchored}: holds, and some feature's removal breaks it; {@code not-anchored}: holds with any
      *                  one feature taken out (the platform answers it, not the project); {@code not-held};
-     *                  {@code unjudged}: the tree as it is, or every feature variant, could not be exercised
+     *                  {@code unjudged}: the tree as it is, or every feature variant, could not be exercised;
+     *                  {@code does-not-compile}: its test did not compile on the tree as it is
      * @param dependsOn the other features whose ways in, taken out, also break it -- what it goes through
      * @param entry     its own way in (the implementing method), from which its feature follows; null when none
      */
@@ -589,6 +592,8 @@ public class ReverseEngineeringService {
         String verdict;
         if (!variants.get("as-is").ran()) {
             verdict = "unjudged";
+        } else if (notCompiled(asIs)) {
+            verdict = DOES_NOT_COMPILE;
         } else if (!holds(asIs)) {
             verdict = "not-held";
         } else if (own == null || !own.ran() || own.stubbedMethods().isEmpty()) {
@@ -651,6 +656,7 @@ public class ReverseEngineeringService {
         for (Claim k : claims) {
             List<String> set = brokenBy.get(k.id());
             if (!asIsRan) out.put(k.id(), new FeatureVerdict(null, "unjudged", List.of()));
+            else if (set == null && notCompiled(seen.get(k.id()).get("as-is"))) out.put(k.id(), new FeatureVerdict(null, DOES_NOT_COMPILE, List.of()));
             else if (set == null) out.put(k.id(), new FeatureVerdict(null, "not-held", List.of()));
             else if (judging.isEmpty()) out.put(k.id(), new FeatureVerdict(null, "unjudged", List.of()));
             else if (set.isEmpty()) out.put(k.id(), new FeatureVerdict(null, "not-anchored", List.of()));
@@ -693,6 +699,18 @@ public class ReverseEngineeringService {
     /** Held = observed, and as the claim's kind judges it. A sequence that could not be completed bears nothing out. */
     static boolean holds(Observation o) {
         return o != null && o.held();
+    }
+
+    /**
+     * T1-GN: the verdict of a claim whose test did not compile on the tree as it is. It was never run against the
+     * code, so it says nothing about it -- apart from {@code not-held} (the code does something else), which is the
+     * project's answer. On structdiff 2026-11-13, 55 of 60 claims were "not-held" for a missing import.
+     */
+    public static final String DOES_NOT_COMPILE = "does-not-compile";
+
+    static boolean notCompiled(Observation o) {
+        return o != null && o.unobserved() != null
+                && o.unobserved().startsWith(com.walpro.autobuilder.core.coldread.entry.LibraryStyleAdapter.DOES_NOT_COMPILE);
     }
 
     private Variant stubbedVariant(EntryAdapter adapter, String name, Path dir, Path original, Map<String, String> files,

@@ -559,4 +559,31 @@ class DerivedTestsTest {
         assertThat(derived().acceptOnProjectCode()).isEmpty();
         assertThat(ran).isEmpty();
     }
+
+    @Test
+    void aTestThatDoesNotCompileIsNamedWithTheCompilersOwnLine() {
+        String out = """
+                [INFO] Compiling 3 source files
+                [ERROR] /tmp/t/src/test/java/org/x/RevClaimK7Test.java:[12,9] cannot find symbol
+                [ERROR]   symbol:   class ElementType
+                """;
+        assertThat(DerivedTests.BuildBench.compilerOn(out, "src/test/java/org/x/RevClaimK7Test.java"))
+                .isEqualTo("RevClaimK7Test.java:[12,9] cannot find symbol");
+        assertThat(DerivedTests.BuildBench.compilerOn(out, "src/test/java/org/x/RevClaimK8Test.java"))
+                .isEqualTo("RevClaimK8Test.java does not compile");
+        assertThat(DerivedTests.BuildBench.compilerOn(null, "a/B.java")).isEqualTo("B.java does not compile");
+    }
+
+    @Test
+    void aBenchThatOnlyKnowsPassOrNotAnswersOutcomesFromIt() {
+        DerivedTests.Bench yesNo = new DerivedTests.Bench() {
+            public String compiles(java.nio.file.Path tree) { return null; }
+            public java.util.Map<String, Boolean> run(java.nio.file.Path tree, java.util.Map<String, String> tests) {
+                return java.util.Map.of("a", true, "b", false);
+            }
+        };
+        var o = yesNo.outcomes(null, java.util.Map.of());
+        assertThat(o.get("a")).isEqualTo(DerivedTests.Outcome.PASSED);
+        assertThat(o.get("b")).isEqualTo(DerivedTests.Outcome.FAILED);
+    }
 }

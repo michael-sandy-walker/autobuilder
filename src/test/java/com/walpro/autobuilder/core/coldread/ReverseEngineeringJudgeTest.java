@@ -62,6 +62,21 @@ class ReverseEngineeringJudgeTest {
         assertThat(ReverseEngineeringService.judge(claim, obs(404, 404, 404, 404), v, caps).verdict()).isEqualTo("unjudged");
     }
 
+    @Test
+    void aClaimWhoseTestDidNotCompileIsToldApartFromOneTheCodeContradicts() {
+        // T1-GN: the code was never asked, so it did not answer otherwise
+        Map<String, Observation> o = obs(404, 500, 404, 500);
+        o.put("as-is", new Observation("as-is", null,
+                com.walpro.autobuilder.core.coldread.entry.LibraryStyleAdapter.DOES_NOT_COMPILE + "RevClaimK1Test.java:[7,9] cannot find symbol",
+                null, false));
+        var j = ReverseEngineeringService.judge(claim, o, ran, caps);
+        assertThat(j.verdict()).isEqualTo(ReverseEngineeringService.DOES_NOT_COMPILE);
+        assertThat(j.alsoNeeds()).isEmpty();
+        // any other reason there was no answer is still the code not bearing it out
+        o.put("as-is", new Observation("as-is", null, "SETUP_REFUSED", null, false));
+        assertThat(ReverseEngineeringService.judge(claim, o, ran, caps).verdict()).isEqualTo("not-held");
+    }
+
     private Map<String, Observation> obs(Integer asIs, Integer c1, Integer c2, Integer c3) {
         Map<String, Observation> m = new LinkedHashMap<>();
         m.put("as-is", o("as-is", asIs));

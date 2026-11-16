@@ -141,18 +141,29 @@ public class LibraryStyleAdapter implements EntryAdapter {
                 tests.put(path, source(pkg, imports, cls, k.test()));
                 pathOf.put(k.id(), path);
             }
-            Map<String, Boolean> passed = bench.run(tree, tests);
+            Map<String, DerivedTests.Outcome> ended = bench.outcomes(tree, tests);
             for (Claim k : claims) {
-                boolean held = Boolean.TRUE.equals(passed.get(pathOf.get(k.id())));
+                DerivedTests.Outcome o = ended.getOrDefault(pathOf.get(k.id()), DerivedTests.Outcome.NOT_RUN);
                 List<Call> answered = calls == null ? null : CallRecorder.read(calls, fileStem(pathOf.get(k.id())));
-                seen.get(k.id()).put(variant, new Observation(variant, held ? 0 : 1, null, null, held, null, null,
-                        answered == null || answered.isEmpty() ? null : answered));
+                List<Call> record = answered == null || answered.isEmpty() ? null : answered;
+                // T1-GN: a test that never ran against the code says nothing about it -- no status, and why.
+                Observation seenHere = switch (o.kind()) {
+                    case PASSED -> new Observation(variant, 0, null, null, true, null, null, record);
+                    case FAILED -> new Observation(variant, 1, null, null, false, null, null, record);
+                    case DID_NOT_COMPILE -> new Observation(variant, null, DOES_NOT_COMPILE + o.detail(), null, false, null, null, null);
+                    case NOT_RUN -> new Observation(variant, null, "its test did not run: the tree did not build with the claims' tests",
+                            null, false, null, null, null);
+                };
+                seen.get(k.id()).put(variant, seenHere);
             }
             return new Ran(true, true, null);
         } catch (IOException e) {
             return new Ran(false, false, e.getMessage());
         }
     }
+
+    /** Starts the reason of an observation whose claim's test did not compile (T1-GN); the compiler's words follow. */
+    public static final String DOES_NOT_COMPILE = "its test does not compile: ";
 
     /** The variant that is the tree as it is: the one whose answers are recorded. */
     static final String AS_IS = "as-is";

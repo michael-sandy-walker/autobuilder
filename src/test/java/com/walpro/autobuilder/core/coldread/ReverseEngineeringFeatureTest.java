@@ -103,6 +103,20 @@ class ReverseEngineeringFeatureTest {
     }
 
     @Test
+    void byFeature_aClaimWhoseTestDidNotCompileIsNotSaidToBeContradicted() {
+        Map<String, String> typeOf = Map.of("A.a", "A", "B.b", "B");
+        Map<String, Map<String, Observation>> seen = new LinkedHashMap<>();
+        seen.put("k1", obs(Map.of("as-is", false, "entry:A.a", false, "entry:B.b", false)));
+        Map<String, Observation> broken = new LinkedHashMap<>(obs(Map.of("entry:A.a", false, "entry:B.b", false)));
+        broken.put("as-is", new Observation("as-is", null,
+                com.walpro.autobuilder.core.coldread.entry.LibraryStyleAdapter.DOES_NOT_COMPILE + "cannot find symbol", null, false));
+        seen.put("k2", broken);
+        var v = ReverseEngineeringService.attribute(List.of(claim("k1"), claim("k2")), seen, ran(typeOf.keySet()), typeOf);
+        assertThat(v.get("k1").verdict()).isEqualTo("not-held");
+        assertThat(v.get("k2").verdict()).isEqualTo(ReverseEngineeringService.DOES_NOT_COMPILE);
+    }
+
+    @Test
     void aWayInVariantThatDidNotRunJudgesNothing() {
         Map<String, String> typeOf = Map.of("A.a", "A", "B.b", "B");
         Map<String, Variant> variants = new LinkedHashMap<>(ran(typeOf.keySet()));

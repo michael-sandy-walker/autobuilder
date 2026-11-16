@@ -129,8 +129,28 @@ public class SeedObligationsGenerator {
         }
     }
 
+    /**
+     * Lines a reverse-engineered seed carries as CONTEXT -- what the project is, how it is used, what a section adds
+     * up to, what its source declares (T4-EQ, written by {@code SeedRefiner}). They inform whoever builds and are
+     * never checked, so they are not given to the split: on 2026-11-16 a {@code Declared:} line came back as the
+     * obligation {@code Labeler.ALPHABET is "ABCDEFGHJKLMNPRTVWX"}, which would hold later work to a private
+     * constant's name.
+     */
+    public static final List<String> CONTEXT_PREFIXES = List.of("What it is:", "How it is used:", "In short:", "Declared:");
+
+    /** The seed without its context lines, for the split only; the file stays keyed to the whole seed. */
+    static String withoutContext(String seedText) {
+        StringBuilder sb = new StringBuilder();
+        for (String raw : seedText.split("\\R", -1)) {
+            String l = raw.strip();
+            if (CONTEXT_PREFIXES.stream().anyMatch(p -> l.regionMatches(true, 0, p, 0, p.length()))) continue;
+            sb.append(raw).append('\n');
+        }
+        return sb.toString();
+    }
+
     private String ask(String seedText, List<String> leftOut) {
-        String user = "SPECIFICATION:\n" + seedText;
+        String user = "SPECIFICATION:\n" + withoutContext(seedText);
         if (!leftOut.isEmpty()) {
             user += "\n\nAn earlier split left out part of the specification's OBJECTIVE. The lines must "
                     + "also carry: " + String.join("; ", leftOut);

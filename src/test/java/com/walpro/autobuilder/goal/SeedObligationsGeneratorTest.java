@@ -146,4 +146,20 @@ class SeedObligationsGeneratorTest {
         when(llm.ask(any())).thenReturn(ResponseEntity.ok(a), ResponseEntity.ok(b));
         return llm;
     }
+
+    @Test
+    void aReverseEngineeredSeedsContextLinesAreNotSplitIntoObligations() {
+        String seed = """
+                What it is: Codes for parcels.
+                How it is used: library-style.
+
+                Declared: constant Dial.LETTERS = "ACEGK"
+                Dial.code:
+                In short: Dial.code makes a code.
+                - Dial.code returns a letter [k1]
+                """;
+        String given = SeedObligationsGenerator.withoutContext(seed);
+        org.assertj.core.api.Assertions.assertThat(given).doesNotContain("What it is", "How it is used", "Declared", "In short", "ACEGK");
+        org.assertj.core.api.Assertions.assertThat(given).contains("Dial.code:\n- Dial.code returns a letter [k1]");
+    }
 }

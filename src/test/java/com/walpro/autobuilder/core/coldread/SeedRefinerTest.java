@@ -587,4 +587,10 @@ class SeedRefinerTest {
     void anAccountWhoseSourceIsGoneDeclaresNothing() {
         assertThat(SeedRefiner.declared(account)).isEmpty();   // "src" is not a directory here
     }
+
+    @Test
+    void theObligationSplitLeavesOutExactlyTheContextLinesThisSeedIsWrittenWith() {
+        assertThat(com.walpro.autobuilder.goal.SeedObligationsGenerator.CONTEXT_PREFIXES)
+                .containsExactlyInAnyOrder("What it is:", SeedRefiner.CONTEXT, SeedRefiner.SUMMARY, SeedRefiner.DECLARED);
+    }
 }

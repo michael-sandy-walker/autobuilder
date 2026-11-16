@@ -424,7 +424,7 @@
 - [s] `T4-CF` — Self-hosting **2026-09-26: first run whose goal came from a real ticket (criterion-status, T3-CB) -- true completion.**
 - [>] `T4-CG` — The system builds an autobuilder from spec **DEFERRED 2026-09-30** (stale-plumbing review).
 - [x] `T4-CI` — Organic run-health baseline — phases 1+2 done; phase-3 gate MEASURED 2026-07-25 and passes (after fixing T6-C), but phase 3 = in-framework consultation, a direction choice, not started CLOSED 2026-09-28 on the DoD: envelope refreshed with current-era completions (n=18); held-out fulfilled runs read 0-1 flags, failed runs 4-6. Phase 3 is the user's choice; its gate is met.
-- [ ] `T4-CJ` — Graph run/lineage identity
+- [x] `T4-CJ` — Graph run/lineage identity; CLOSED 2026-11-16 (slice 2 delivered by T1-D + T2-ER, slice 3 homed in T4-CT)
 - [x] `T4-CL` — End of the per-run-disposable graph contract CLOSED 2026-09-28: both halves shipped long ago (20e91e3 + canary proof); the audit is T4-CJ slice 2.
 - [s] `T4-CM` — Knowledge-base merge workbench (cross-run/seed graph merging) -- SUBSUMED by T4-EC 2026-10-20
 - [s] `T4-CN` — Cross-graph node-compatibility model (cross-run/seed) -- SUBSUMED by T4-EC 2026-10-20

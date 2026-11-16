@@ -13,15 +13,15 @@ Restamp a line the day you re-check it against its file.
 - Build `mvn clean install`, test `mvn test -Dtest=C#m`; targets `data/<name>/`, runs pick by `PREFLIGHT_TARGET=x`; goal stack `meta/GoalStack.json`; profiles `test`, `dev-local`, `dev-auto`, `fast`
 - **`.claude-memory/` IS the loading memory** — checkout/branch/cherry-pick touching it mutates live memory; commit first. Tiers T1 correctness .. T6 harness
 ## Roadmap
-- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-14)
-- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-14)
+- `roadmap-overview.md` — thin per-ticket index by tier. (reviewed 2026-11-16)
+- `roadmap.md` — backlog and ticket bodies (source of truth). (reviewed 2026-11-16)
 - `tier_definitions.md` — tier meanings. (reviewed 2026-09-08)
 ## Meta / Process (YOU+ME work, not the product)
 - `meta_process.md` — how YOU+ME divide/sequence/staff work; "Model" = which Claude runs a session. (reviewed 2026-10-20)
 ## Project insights
 Direction and orientation:
 - `project_session_agenda.md`: 2026-08-23 REORDER section is live; S1-S6 reasoning only; never a queue. (reviewed 2026-09-08)
-- `project_resume_state.md`: latest session/run state; only the NEWEST block has the entry marker. Read before quoting run numbers. (reviewed 2026-11-14)
+- `project_resume_state.md`: latest session/run state; only the NEWEST block has the entry marker. Read before quoting run numbers. (reviewed 2026-11-16)
 - `project_wave2_structure.md`: wave 2 layers; widen what the loop SEES only after scoping what it CONSULTS. (reviewed 2026-07-26)
 - `project_introspection_as_north_star.md`: goal = a loop with a self-model it consults before acting; "substrate or patch?". (reviewed 2026-09-08)
 - `project_living_project_vision.md`: a project keeps taking inputs (seed = first); OFFSPRING code+graph become knowledge. Before input/merge/import work. (reviewed 2026-10-30)
@@ -133,7 +133,7 @@ Code and design constraints:
 - `feedback_llm_probes_logs_dynamically.md`: log analysis = an LLM probing iteratively; never code knowing the log format. (reviewed 2026-11-02)
 - `feedback_string_consumption_path.md`: no string-scraping for CODE control flow; prose relayed to prompts is fine. (reviewed 2026-07-09)
 Watchers:
-- `feedback_batch_watcher_alarms_on_the_environment.md`: alarm on Neo4j down and <2 GB free. (reviewed 2026-10-11)
+- `feedback_batch_watcher_alarms_on_the_environment.md`: alarm on Neo4j down and <2 GB free; read the bolt port after every suite (Docker Desktop OOM-killed during mvn test). (reviewed 2026-11-16)
 - `feedback_monitor_every_terminal.md`: monitors match EVERY terminal state; pgrep/pkill must not match itself; never pipe a status loop through `uniq` (silent). (reviewed 2026-11-11)
 - `feedback_escalate_unrecoverable_stagnation.md`: detect periodic failure early; same decision while nothing moves = grind. (reviewed 2026-10-19)
 - `feedback_waiter_fires_on_loop_terminal.md`: waiters fire on the LOOP's terminal line. (reviewed 2026-09-24)

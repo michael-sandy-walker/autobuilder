@@ -11,7 +11,13 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-14..16 (Fable 5.2 / Opus 5.5, session 38) -- T4-EX, T4-EQ, T1-GN, T5-BV, T5-BW, T4-EV CLOSED; T1-GO AND T5-BX FILED -- START HERE
+## 2026-11-16 (Opus 5.5, session 39) -- T1-GO CLOSED -- START HERE
+
+- **T1-GO built and closed at the user's "Ok, do it" (chosen: by stop).** With the scheduler off, `AutobuilderService.pause` halts at once under the cycle lock; the tick (which still fires with the scheduler off and reset `systemPaused` each time -- found only in the field check) returns early while that halt stands; `clearHaltSignals` lifts it. Launcher unchanged. Field: `data/labelmaker-declared`, no profile, stop -> ENDED (`user-pause`) -> return -> IDLE. Suite 4662 / 0 / 0 / 20.
+- **Nothing is running** (the home app started for the check was stopped; 8080/8081 free).
+- **Queue:** T5-BX (its scope the user's at pickup: remove, keep, or trace the writer first); T4-EU waits for a field sighting; T4-CJ, T4-DD, T4-DS, T6-H gated.
+
+## 2026-11-14..16 (Fable 5.2 / Opus 5.5, session 38) -- T4-EX, T4-EQ, T1-GN, T5-BV, T5-BW, T4-EV CLOSED; T1-GO AND T5-BX FILED
 
 - **At the user's "Yes" to the budget for the three runs.** Jar rebuilt, three reverse-engineering jobs on scratch copies (`labelmaker`, `criterion-status`, `structdiff`), each account composed and refined; texts in `design/specimens/t4ex/`. No code changed; no suite run.
 - **Result:** claims kept 42 / 95 / 52 (before: about 40 / 69 / 52), every kept claim holds a call, so the stop rule did not fire and the pasted-test cases stay out. Statements: 12 / 45 / 39.

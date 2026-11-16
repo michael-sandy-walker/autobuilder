@@ -42,6 +42,11 @@ public class HomeController {
     private volatile IntegrationJob job;
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
+    @Autowired(required = false)
+    private Trash trash;
+    @Autowired(required = false)
+    private Trash.GraphEraser graphEraser;
+
     @Autowired // two constructors: without this Spring has no way to choose and the home context does not start
     public HomeController(ProjectLauncher launcher, HomeApplication.ProjectsDirectory projects) {
         this(launcher, projects, new RunClient(launcher));
@@ -574,6 +579,99 @@ public class HomeController {
                 else Files.copy(p, target);
             }
         }
+    }
+
+    /**
+     * T4-EV: moves a project's directory into the deleted folder. Refused for the open or running project and for a
+     * versioned toy case; nothing is erased (that is {@link #emptyTrash}).
+     */
+    @org.springframework.web.bind.annotation.DeleteMapping("/home/projects/{name}")
+    public ResponseEntity<Map<String, Object>> deleteProject(@PathVariable String name) {
+        if (trash == null) return refuse(503, "deleting is not available here");
+        try {
+            Trash.Entry e = trash.delete(name, this::isOpen);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("ok", true);
+            body.put("deleted", e);
+            body.put("message", name + " moved to " + e.folder() + " -- empty the trash to erase it for good");
+            return ResponseEntity.ok(body);
+        } catch (IllegalArgumentException e) {
+            return refuse(404, e.getMessage());
+        } catch (IllegalStateException e) {
+            return refuse(409, e.getMessage());
+        } catch (IOException e) {
+            return refuse(500, "could not move " + name + ": " + e.getMessage());
+        }
+    }
+
+    /** T4-EV: the deleted projects, newest first, and where they are. */
+    @GetMapping("/home/trash")
+    public ResponseEntity<Map<String, Object>> trashContents() {
+        if (trash == null) return refuse(503, "the trash is not available here");
+        try {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("directory", trash.bin().toString());
+            body.put("entries", trash.list());
+            return ResponseEntity.ok(body);
+        } catch (IOException e) {
+            return refuse(500, e.getMessage());
+        }
+    }
+
+    /** T4-EV: erases every deleted project for good -- its directory and its history in the graph. Only on request. */
+    @PostMapping("/home/trash/empty")
+    public ResponseEntity<Map<String, Object>> emptyTrash() {
+        if (trash == null || graphEraser == null) return refuse(503, "the trash is not available here");
+        try {
+            Trash.Emptied done = trash.empty(graphEraser);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("ok", done.problems().isEmpty());
+            body.put("emptied", done);
+            return ResponseEntity.ok(body);
+        } catch (IOException e) {
+            return refuse(500, e.getMessage());
+        }
+    }
+
+    /** T4-EV: moves one deleted project back into the list under its own name; refused when that name is taken again. */
+    @PostMapping("/home/trash/{id}/restore")
+    public ResponseEntity<Map<String, Object>> restoreProject(@PathVariable String id) {
+        if (trash == null) return refuse(503, "the trash is not available here");
+        try {
+            Trash.Entry e = trash.restore(id);
+            return ResponseEntity.ok(Map.of("ok", true, "restored", e, "message", e.name() + " is back in the list"));
+        } catch (IllegalArgumentException e) {
+            return refuse(404, e.getMessage());
+        } catch (IllegalStateException e) {
+            return refuse(409, e.getMessage());
+        } catch (IOException e) {
+            return refuse(500, "could not move it back: " + e.getMessage());
+        }
+    }
+
+    /** T4-EV: erases one deleted project for good -- its directory and its history in the graph. */
+    @org.springframework.web.bind.annotation.DeleteMapping("/home/trash/{id}")
+    public ResponseEntity<Map<String, Object>> eraseProject(@PathVariable String id) {
+        if (trash == null || graphEraser == null) return refuse(503, "the trash is not available here");
+        try {
+            Trash.Emptied done = trash.erase(id, graphEraser);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("ok", done.problems().isEmpty());
+            body.put("emptied", done);
+            return ResponseEntity.ok(body);
+        } catch (IllegalArgumentException e) {
+            return refuse(404, e.getMessage());
+        } catch (IOException e) {
+            return refuse(500, e.getMessage());
+        }
+    }
+
+    /** Whether a project directory is the one open or running now. */
+    private boolean isOpen(Path dir) {
+        Map<String, Object> now = launcher.describe();
+        Object project = now.get("project");
+        if (project == null || "IDLE".equals(now.get("state"))) return false;
+        return Path.of(project.toString()).toAbsolutePath().normalize().equals(dir.toAbsolutePath().normalize());
     }
 
     private static ResponseEntity<Map<String, Object>> refuse(int status, String message) {

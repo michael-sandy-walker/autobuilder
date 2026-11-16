@@ -56,6 +56,42 @@ public class HomeApplication {
     /** Where the home screen looks for projects. */
     public record ProjectsDirectory(Path path) {}
 
+    @Bean
+    Trash trash(ProjectsDirectory projects,
+                // T4-EV: where a deleted project's directory is moved; emptying the trash erases what is in it.
+                @Value("${autobuilder.home.trash-dir:${user.home}/.autobuilder/deleted}") String dir) {
+        return new Trash(projects.path(), Path.of(dir));
+    }
+
+    /**
+     * T4-EV: erases a lineage's nodes from the shared graph when the trash is emptied. The home context keeps no graph
+     * connection (above): this opens one for the erasing and closes it, in batches so a long history is not one
+     * transaction.
+     *
+     * <p>Never the {@code SystemState} node: it is ONE node for every project, the loop's root and subgoal pointer,
+     * stamped with whichever run saved last (Neo4jGoalGraphService.setState). Erased with the project that saved last,
+     * the user's count came out one node short of where it began (2026-11-16); its readers already ignore a pointer into
+     * another lineage, so leaving it is harmless.
+     */
+    @Bean
+    Trash.GraphEraser graphEraser(@Value("${spring.data.neo4j.uri:bolt://localhost:7687}") String uri,
+                                  @Value("${spring.data.neo4j.username:neo4j}") String user,
+                                  @Value("${spring.data.neo4j.password:}") String password) {
+        return lineageId -> {
+            try (org.neo4j.driver.Driver driver = org.neo4j.driver.GraphDatabase.driver(uri, org.neo4j.driver.AuthTokens.basic(user, password));
+                 org.neo4j.driver.Session session = driver.session()) {
+                long total = 0;
+                while (true) {
+                    long n = session.executeWrite(tx -> tx.run(
+                            "MATCH (n) WHERE n.lineageId = $id AND NOT n:SystemState WITH n LIMIT 5000 DETACH DELETE n RETURN count(*) AS c",
+                            java.util.Map.of("id", lineageId)).single().get("c").asLong());
+                    total += n;
+                    if (n == 0) return total;
+                }
+            }
+        };
+    }
+
     /**
      * Boots the home context, then -- when a project was named at startup -- starts the run on it through the
      * same launcher the home screen's "Start" uses. A fast-forwarded run that fails to start ends the JVM, as

@@ -172,6 +172,9 @@
       <option value="dev-local">by hand -- cycles only when asked</option>
     </select>
     <button id="new-open" class="primary">+ New project</button>
+    <span style="position: relative">
+      <button id="main-menu" class="quiet" title="More">&#9776;</button>
+    </span>
   </header>
 
   <h2>Now</h2>
@@ -187,6 +190,7 @@
     </select>
   </h2>
   <div id="projects"></div>
+
 </div>
 
 <dialog id="dlg-new">
@@ -274,6 +278,16 @@
   <div class="foot">
     <button data-close>Cancel</button>
     <button id="dir-use" class="primary">Use this directory</button>
+  </div>
+</dialog>
+<dialog id="dlg-trash">
+  <h3>Deleted projects</h3>
+  <p class="note">A deleted project's directory waits here; nothing of it is erased until the trash is emptied.</p>
+  <div id="trash"></div>
+  <p class="note" id="trash-where"></p>
+  <div class="foot">
+    <button id="trash-empty" class="destructive" title="Erase every deleted project for good, with its history in the graph">Empty trash</button>
+    <button data-close class="primary">Close</button>
   </div>
 </dialog>
 <div id="toast" hidden></div>
@@ -372,7 +386,83 @@ async function loadProjects() {
   const d = await fetch('/home/projects').then(r => r.json()).catch(() => ({ projects: [] }));
   projects = d.projects || [];
   renderProjects();
+  loadTrash();
 }
+
+// ---------- T4-EV: deleted projects ----------
+// A delete moves the project's directory into the deleted folder; only "Empty trash" erases anything, and then for good.
+let trashed = { directory: '', entries: [] };
+async function loadTrash() {
+  trashed = await fetch('/home/trash').then(r => r.ok ? r.json() : { directory: '', entries: [] }).catch(() => ({ directory: '', entries: [] }));
+  const list = trashed.entries || [];
+  $('trash-empty').disabled = !list.length;
+  $('trash').innerHTML = list.length ? '' : '<p class="note">No deleted projects.</p>';
+  for (const e of list) {
+    const el = document.createElement('div');
+    el.className = 'project';
+    el.innerHTML = '<div><span class="name">' + esc(e.name) + '</span>'
+      + '<span class="badge">deleted ' + esc(e.deletedAt.replace('_', ' ').replace(/-(\d\d)-(\d\d)$/, ':$1:$2')) + '</span></div>'
+      + '<div class="acts"></div><div class="meta">' + esc(e.folder) + '</div>';
+    const acts = el.querySelector('.acts');
+    acts.appendChild(button('Move back', 'primary', true, () => restoreProject(e)));
+    acts.appendChild(button('Delete permanently', 'destructive', true, () => eraseProject(e)));
+    $('trash').appendChild(el);
+  }
+  $('trash-where').textContent = list.length ? 'They are kept in ' + trashed.directory + '.' : '';
+}
+async function deleteProject(t) {
+  const res = await fetch('/home/projects/' + encodeURIComponent(t.name), { method: 'DELETE' });
+  const r = { status: res.status, body: await res.json().catch(() => ({})) };
+  if (r.status !== 200) { toast(false, 'Not deleted: ' + message(r)); return; }
+  toast(true, t.name + ' moved to the deleted projects.');
+  loadProjects();
+}
+async function restoreProject(e) {
+  const r = await post('/home/trash/' + encodeURIComponent(e.id) + '/restore', {});
+  if (r.status !== 200) { toast(false, 'Not moved back: ' + message(r)); return; }
+  toast(true, e.name + ' is back in the list.');
+  loadProjects();
+}
+async function eraseProject(e) {
+  if (!confirm('Delete "' + e.name + '" permanently?\n\nIts directory is erased, and so is its history in the graph '
+      + '(its goals, cycles and results). This cannot be undone. A history another project still in the list shares is kept.')) return;
+  const res = await fetch('/home/trash/' + encodeURIComponent(e.id), { method: 'DELETE' });
+  const r = { status: res.status, body: await res.json().catch(() => ({})) };
+  reportErased(r);
+}
+function reportErased(r) {
+  const done = r.body.emptied;
+  if (r.status !== 200 || !done) { toast(false, 'Not erased: ' + message(r)); loadTrash(); return; }
+  const kept = done.lineagesKept.length ? ' Kept a shared history: ' + done.lineagesKept.join('; ') + '.' : '';
+  const trouble = done.problems.length ? ' Not erased: ' + done.problems.join('; ') + '.' : '';
+  toast(!done.problems.length, done.erased.length + ' project' + (done.erased.length === 1 ? '' : 's') + ' erased, '
+      + done.graphNodes + ' graph node' + (done.graphNodes === 1 ? '' : 's') + ' with them.' + kept + trouble);
+  loadTrash();
+}
+async function emptyTrash() {
+  const list = trashed.entries || [];
+  if (!list.length) return;
+  if (!confirm('Empty the trash -- erase ' + list.length + ' deleted project' + (list.length === 1 ? '' : 's') + ' for good?\n\n'
+      + list.map(e => '  ' + e.name).join('\n') + '\n\nTheir directories are erased, and so is their history in the graph '
+      + '(their goals, cycles and results). This cannot be undone. A history another project still in the list shares is kept.')) return;
+  reportErased(await post('/home/trash/empty', {}));
+}
+$('trash-empty').onclick = emptyTrash;
+// The header's menu: things not about one project. Deleted projects are kept out of the list (the user, 2026-11-16).
+$('main-menu').onclick = e => {
+  e.stopPropagation();
+  const host = $('main-menu').parentNode;
+  const wasOpen = openMenu && openMenu.parentNode === host;
+  closeMenu();
+  if (wasOpen) return;
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  const b = button('', '', true, () => { closeMenu(); loadTrash(); $('dlg-trash').showModal(); });
+  b.innerHTML = 'Show deleted projects<span class="hint">move them back, or delete them permanently</span>';
+  menu.appendChild(b);
+  host.appendChild(menu);
+  openMenu = menu;
+};
 
 // ---------- what a project is, and what it offers ----------
 function stateOf(t) {
@@ -395,14 +485,18 @@ function actionsOf(t) {
         'Restart "' + t.name + '" from its specification?\n\nThis CLEARS its code and begins a new lineage; the earlier '
         + 'run is not read. Anything not kept elsewhere is gone. (Duplicate keeps it and starts a copy instead.)' }) : null;
   const duplicate = t.hasSeed ? { label: 'Duplicate', hint: 'a new project from its specification, without code', run: () => duplicateOf(t) } : null;
+  // T4-EV: never the open project; a versioned toy case is refused by the server, which says why.
+  const remove = { label: 'Delete', remove: true, hint: 'move it to the deleted projects; nothing is erased until the trash is emptied',
+    confirm: 'Delete "' + t.name + '"?\n\nIt moves to the deleted projects (the menu at the top right, "Show deleted projects"); '
+      + 'nothing is erased, and it can be moved back from there.', run: () => deleteProject(t) };
   // An import waiting for confirmation comes first: the project is held to review it, nothing runs.
   const manage = importsOf(t) ? start('Manage imports...', 'ASK', { hint: 'open it held, to see what was brought in and keep or cancel what waits' }) : null;
   const cont = start('Continue', 'CONTINUE_LINEAGE', { hint: 'its goal is reached; the run opens and ends' });
   const main = (t.pendingImports || []).length ? start('Review import', 'ASK')
     : { new: start('Start', 'NEW_PROJECT'), progress: start('Continue', 'CONTINUE_LINEAGE'),
         finished: extend, existing: start('Work on it', 'ADOPT_PROJECT'), blank: null }[s];
-  const more = { new: [duplicate], progress: [extend, manage, restart, duplicate], finished: [cont, manage, restart, duplicate],
-                 existing: [extend, manage, duplicate], blank: [] }[s].filter(Boolean)
+  const more = { new: [duplicate, remove], progress: [extend, manage, restart, duplicate, remove], finished: [cont, manage, restart, duplicate, remove],
+                 existing: [extend, manage, duplicate, remove], blank: [remove] }[s].filter(Boolean)
     .filter(a => !(main && a.label === main.label));
   return { main, more };
 }
@@ -410,6 +504,7 @@ function actionsOf(t) {
 // One run at a time. Extending the current project is the exception: it takes the input as it is.
 function allowed(t, a) {
   if (jobBusy()) return false;
+  if (a.remove) return !isCurrent(t);
   if (a.extend) return idle() || (isCurrent(t) && run.state !== 'STARTING');
   return idle();
 }

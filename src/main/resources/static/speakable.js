@@ -44,7 +44,9 @@
     return verb + ' ' + (parts.length ? parts.join(' ') : 'root');
   }
 
-  function sayable(text) {
+  // T5-BW: opts.full -- the whole text, not cut at MAX_WORDS. The page asks for it when nothing else is waiting to be
+  // said; the cut stays for when the narration is behind.
+  function sayable(text, opts) {
     if (text == null) return '';
     let s = String(text);
     s = s.replace(UUID, '').replace(HEX_ID, '');
@@ -68,7 +70,7 @@
     s = s.replace(/\s+([,.;:])/g, '$1').replace(/([,;:])(?=\S)/g, '$1 ');
     s = s.replace(/\s+/g, ' ').trim().replace(/^[,;:.\s-]+/, '');
     s = dropRepeats(s);
-    return cap(s);
+    return opts && opts.full === true ? s : cap(s);
   }
 
   // "Foo, Foo, Foo" and a clause said twice in a row are said once.

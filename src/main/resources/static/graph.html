@@ -1261,6 +1261,8 @@ const TTS = (function () {
     const said = window.Speakable ? window.Speakable.sayable(text) : String(text);
     const clean = said.replace(/\s+/g, ' ').trim();
     if (!clean) return;
+    // T5-BW: the whole text as well; which of the two is said is decided when it starts (start()).
+    const whole = (window.Speakable ? window.Speakable.sayable(text, { full: true }) : String(text)).replace(/\s+/g, ' ').trim();
 
     const now = Date.now();
     if (clean === lastSpoken && (now - lastSpokenAt) < 2000) return;
@@ -1281,7 +1283,7 @@ const TTS = (function () {
     // started on it never ends -- so its layer stayed "playing" and every later utterance was dropped
     // as "mid-utterance". That is the voice going mute after a reload until a tab switch resumed the
     // context. Never start while suspended; ask for the gesture that unlocks it instead.
-    const message = { chunks: chunksOf(clean), o, index: 0, ahead: null };
+    const message = { cut: clean, whole, chunks: null, o, index: 0, ahead: null };
     // T5-BO: a narrated main-voice line that arrives before the click (the goal, said as the page
     // opens) is held, newest wins, and said once the voice is unlocked instead of being lost.
     if (ctx.state !== 'running') { if (layer === layers.front && o.queue) heldFront = message; needGesture(); return; }
@@ -1302,7 +1304,15 @@ const TTS = (function () {
     return p;
   }
 
+  // T5-BW: a long text is said in full when nothing else is waiting on its voice as it starts; with something
+  // waiting it is cut as before ("... and more."), so a backed-up narration does not fall further behind. Decided
+  // here, not when it was queued: a message that waited is said whole if the queue has emptied by its turn.
+  function waiting(layer) {
+    return layer === layers.front ? layer.queue.length > 0 : !!layer.next;
+  }
+
   function start(layer, message) {
+    if (!message.chunks) message.chunks = chunksOf(waiting(layer) ? message.cut : message.whole);
     layer.message = message;
     layer.playing = true;
     message.ahead = fetchChunk(message, 0);

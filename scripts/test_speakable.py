@@ -13,10 +13,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 JS = os.path.join(HERE, '..', 'src', 'main', 'resources', 'static', 'speakable.js')
 
 
-def sayable(texts):
+def sayable(texts, full=False):
     script = ("const {sayable}=require(%s);"
               "const input=JSON.parse(require('fs').readFileSync(0,'utf8'));"
-              "process.stdout.write(JSON.stringify(input.map(sayable)));") % json.dumps(os.path.abspath(JS))
+              "process.stdout.write(JSON.stringify(input.map(t => sayable(t, %s))));") % (
+        json.dumps(os.path.abspath(JS)), '{full: true}' if full else '{}')
     out = subprocess.run(['node', '-e', script], input=json.dumps(texts), capture_output=True, text=True, check=True)
     return json.loads(out.stdout)
 
@@ -54,6 +55,14 @@ class SpeakableTest(unittest.TestCase):
         self.assertTrue(said.endswith('... and more.'))
         self.assertLessEqual(len(said.split(' ')), 44)
 
+
+    def test_a_long_text_asked_for_whole_is_said_whole(self):
+        # T5-BW: when nothing else waits, the page asks for the whole text -- the same filter, no cut
+        text = ' '.join('word%d' % i for i in range(60)) + ' at src/main/java/org/ink/Nib.java'
+        whole = sayable([text], full=True)[0]
+        self.assertFalse(whole.endswith('... and more.'))
+        self.assertTrue(whole.endswith('at Nib'), whole[-30:])
+        self.assertEqual(len(whole.split(' ')), 62)
     def test_a_method_of_a_type_is_said_as_type_and_method_not_as_a_file(self):
         # T5-BO: "Add EditHunks.apply(...)" was heard as "Add Edit Hunks" -- the method read as an extension.
         self.assertEqual(self.say('Add QuillPress.dry(String, Map<String,Nib>)'), 'Add Quill Press dry')

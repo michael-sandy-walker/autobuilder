@@ -11,7 +11,7 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-14 (Fable 5.2, session 38) -- T4-EX RUN, SCORED AND CLOSED; T4-EQ: SECTION OPENINGS BUILT (`In short:`), STRUCTDIFF'S FOUR REFINER FAULTS OPEN -- START HERE
+## 2026-11-14..16 (Fable 5.2 / Opus 5.5, session 38) -- T4-EX, T4-EQ, T1-GN, T5-BV, T5-BW, T4-EV CLOSED; T1-GO AND T5-BX FILED -- START HERE
 
 - **At the user's "Yes" to the budget for the three runs.** Jar rebuilt, three reverse-engineering jobs on scratch copies (`labelmaker`, `criterion-status`, `structdiff`), each account composed and refined; texts in `design/specimens/t4ex/`. No code changed; no suite run.
 - **Result:** claims kept 42 / 95 / 52 (before: about 40 / 69 / 52), every kept claim holds a call, so the stop rule did not fire and the pasted-test cases stay out. Statements: 12 / 45 / 39.
@@ -28,6 +28,9 @@ metadata:
 - **T5-BV CLOSED on the user's "It looks good!": both graph pages name the open project (`openproject.js`), the explorer marks and if needed adds its lineage.** Suite 4663 / 0 / 0 / 20.
 - **T5-BW CLOSED by ear: a long narration line is said whole while nothing waits on its voice, cut while the narration is behind (decided when it starts).** Also fixed: `post_adopted_goal.sh` waits for `awaitingGoal`, not a fresh log line (`3889a844`). Next agreed: T4-EV with the user's empty-trash addition (on the ticket).
 - **T4-EV CLOSED: projects are deleted from the home list into `~/.autobuilder/deleted`, moved back or erased for good (directory + graph lineage, never the shared `SystemState`); deleted projects in a dialog from the header menu.** The user's count experiment came out exact after that fix. Suite 4655 / 0 / 0 / 20 (one project fewer under `data/` for the data-driven tests). The user's three near-future tickets (T4-EV, T5-BV, T5-BW) are all closed.
+- **Filed at the user's word: T1-GO** (a run with the scheduler off cannot be stopped or left from the home screen once its goal is complete) **and T5-BX** (2,984 graph nodes without a lineage, July-September; an explicit cleanup, its scope the user's at pickup). Recommended next: T1-GO.
+- **Left behind on purpose:** untracked projects `data/labelmaker-declared`, `data/labelmaker-declared-2` (this session's end-to-end copies; deletable from the home screen now), runtime folders under `data/labelmaker-seed-hand`, `data/labelmaker-seed-rev`; the graph has NO `SystemState` node until the next run saves (taken by T4-EV's proof erases before the fix). The trash `~/.autobuilder/deleted` is empty.
+- **Session ran 2026-11-14..16, Fable 5.2 then Opus 5.5 (the model switched by the user mid-session).**
 - **Nothing is running** (the application started for the jobs was stopped; ports 8080/8081 free). A shell of session 37 (pid 930542 on 2026-11-13) was still listed, idle; left alone.
 - **Queue:** T4-EQ (the four faults above), T1-GN's other half, the three near-future tickets (T4-EV, T5-BV, T5-BW); T4-EU waits for a field sighting.
 

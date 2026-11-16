@@ -11,7 +11,13 @@ metadata:
 
 > **Convention (2026-09-20): exactly ONE block carries `START HERE`, and it is the newest.** The marker had accumulated onto **48** headings — every session added one, none removed the previous — so it identified nothing and a cold reader had 48 equally-loud entry points. A marker that fires everywhere is the same failure as a detector that goes quiet once the anomaly becomes the majority ([[project-detector-went-silent-as-the-fault-spread]]). When you append a block, strip the marker from the one below it.
 
-## 2026-11-16 (Opus 5.5, session 39) -- T1-GO, T5-BX, T4-CJ, T1-GP, T1-GQ, T1-GR, T5-BY CLOSED; T2-FN AND T4-EY FILED; PLANS ON THE OPEN TICKETS -- START HERE
+## 2026-11-16 (Opus 5.5, session 40) -- T2-FN MEASURED, BUILT AND CLOSED -- START HERE
+
+- **T2-FN closed at the user's "Yes, please" (measure, then build).** 17 landings on record; only the gradient trio leaked brought-tree criteria (6 lines, all from SUBSUMED / `[BUILD_FIX]` goals). Rule `ProjectMerge.requires`: a goal its run retired (SUBSUMED, GIVEN_UP) or a repair item (`blockerType`) gives no criteria. Real flower landing 58 -> 41 criteria, behaviour criteria and obligations unchanged. Not done: a fresh model-verified landing (the code shows the lines cannot reach the import's goal). Suite 4679 / 0 / 0 / 20.
+- **Next, unchanged from session 39's order minus T2-FN:** the narration fix (waits on the user's words where it stops), T4-EU's next slice (options to the user), T4-DS reading and T6-H measurement (offline), T4-DD (design note first). Still waiting on the user: narration words, T5-BY eye test, T4-EY design questions.
+- **State:** home app still UP on 8080 (IDLE, built before T2-FN -- rebuild before using the fix); no run context.
+
+## 2026-11-16 (Opus 5.5, session 39) -- T1-GO, T5-BX, T4-CJ, T1-GP, T1-GQ, T1-GR, T5-BY CLOSED; T2-FN AND T4-EY FILED; PLANS ON THE OPEN TICKETS
 
 - **T1-GO built and closed at the user's "Ok, do it" (chosen: by stop).** With the scheduler off, `AutobuilderService.pause` halts at once under the cycle lock; the tick (which still fires with the scheduler off and reset `systemPaused` each time -- found only in the field check) returns early while that halt stands; `clearHaltSignals` lifts it. Launcher unchanged. Field: `data/labelmaker-declared`, no profile, stop -> ENDED -> return -> IDLE. `a7af12ce`.
 - **T5-BX built, run once on the real graph and closed at the user's "Then do as recommended".** `home/UnattributedNodes`, `GET`/`DELETE /home/graph/unattributed`. Removed 2,984 (Artifact 945, Episode 198, Interpretation 448, Relation 1,393); per-lineage-per-label counts byte-identical before and after (11,788 rows). `8c3811e5`. Suite 4663 / 0 / 0 / 20.

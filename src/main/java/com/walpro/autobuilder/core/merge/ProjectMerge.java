@@ -226,7 +226,7 @@ public final class ProjectMerge {
         if (verdicts != null) meta.set("parentCriteriaPassStatus", verdicts);
         meta.remove("criteriaFailStreak");
         JsonNode list = meta.path("acceptanceCriteria");
-        if (list.isArray()) {
+        if (list.isArray() && requires(node)) {
             for (int i = 0; i < list.size(); i++) {
                 JsonNode v = verdicts == null ? null : verdicts.get(String.valueOf(i + 1));
                 Boolean parentVerdict = v == null || v.isNull() ? null : v.asBoolean();
@@ -237,6 +237,20 @@ public final class ProjectMerge {
         for (JsonNode c : node.path("subGoals")) {
             if (c.isObject()) restamp((ObjectNode) c, p, lineage, criteria);
         }
+    }
+
+    /**
+     * T2-FN: whether a goal's criteria are requirements of the project that brings it. A goal its own run retired
+     * (subsumed, given up) or a repair item of its build ({@link com.walpro.autobuilder.core.build.BlockerTypes#METADATA_KEY})
+     * says how that build was mended, not what the project does -- "Create TextField.java" from a compile fix the run
+     * later replaced became the receiving project's requirement (gradient, 2026-11-13). The goal still lands in the
+     * tree; its seed's lines still come as obligations.
+     */
+    static boolean requires(JsonNode goal) {
+        String status = goal.path("status").asText("");
+        if (status.equals(com.walpro.autobuilder.goal.GoalStatus.SUBSUMED.name())
+                || status.equals(com.walpro.autobuilder.goal.GoalStatus.GIVEN_UP.name())) return false;
+        return goal.path("metadata").path(com.walpro.autobuilder.core.build.BlockerTypes.METADATA_KEY).asText("").isEmpty();
     }
 
     private static void add(Map<String, Criterion> criteria, String text, Origin origin) {

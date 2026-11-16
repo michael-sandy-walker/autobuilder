@@ -80,6 +80,35 @@ class ProjectInputTest {
         assertThat(landing.criteria()).extracting(ProjectMerge.Criterion::text).contains("Knot exists", "A knot holds.");
     }
 
+    /** T2-FN: a repair item of its build and a goal its run retired land in the tree; their criteria are not required. */
+    @Test
+    void criteriaOfItsRepairItemsAndRetiredGoalsAreNotItsRequirements() throws IOException {
+        Path dir = project("k");
+        write(dir.resolve("meta/GoalStack.json"), """
+                {"goalTree": {"id": "root-k", "description": "Tie knots", "type": "GOAL", "status": "COMPLETED",
+                  "metadata": {}, "subGoals": [
+                    {"id": "g-live", "description": "Tie a knot", "type": "SUBGOAL", "status": "COMPLETED",
+                     "metadata": {"acceptanceCriteria": ["A knot holds under load"]}, "subGoals": [
+                       {"id": "g-under", "description": "Name the knot", "type": "SUBGOAL", "status": "COMPLETED",
+                        "metadata": {"acceptanceCriteria": ["Each knot has a name"]}, "subGoals": []}]},
+                    {"id": "g-fix", "description": "[BUILD_FIX] Fix compile errors", "type": "SUBGOAL", "status": "COMPLETED",
+                     "metadata": {"blockerType": "BUILD_FIX", "acceptanceCriteria": ["Create Rope.java"]}, "subGoals": [
+                       {"id": "g-spawned", "description": "Splice the rope", "type": "SUBGOAL", "status": "COMPLETED",
+                        "metadata": {"acceptanceCriteria": ["A splice joins two ropes"]}, "subGoals": []}]},
+                    {"id": "g-replaced", "description": "Create Rope.java", "type": "SUBGOAL", "status": "SUBSUMED",
+                     "metadata": {"acceptanceCriteria": ["Create Rope.java", "Knot no longer calls rope.cut()"]}, "subGoals": []},
+                    {"id": "g-dropped", "description": "Weave", "type": "SUBGOAL", "status": "GIVEN_UP",
+                     "metadata": {"acceptanceCriteria": ["A weave holds"]}, "subGoals": []}]}}
+                """);
+
+        var landing = ProjectInput.land(receiving(), Map.of(), new ProjectMerge.Parent("knots", "run-k", dir));
+
+        assertThat(landing.criteria()).extracting(ProjectMerge.Criterion::text)
+                .contains("A knot holds under load", "Each knot has a name", "A splice joins two ropes", "A knot holds.")
+                .doesNotContain("Create Rope.java", "Knot no longer calls rope.cut()", "A weave holds");
+        assertThat(landing.tree().path("subGoals")).hasSize(4);
+    }
+
     @Test
     void aFileBothHaveIsAConflict_theReceivingOnesKept() throws IOException {
         Path dir = project("k");

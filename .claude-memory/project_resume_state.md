@@ -25,6 +25,7 @@ metadata:
 - **Then T4-EQ end to end twice through the home screen (fresh copies `data/labelmaker-declared`, `-2`, untracked): the job's seed carries the declared lines, confirmed unchanged, GOAL_FULFILLED in one cycle both times. Found and fixed: the obligation split turned a `Declared:` line into an obligation; context lines are no longer given to it.** Suite 4658 / 0 / 0 / 19.
 - **T4-EQ CLOSED at the user's "Ok, do it"** (the dash slip and structdiff's refiner faults dropped, not filed).
 - **T1-GN CLOSED (second half): a library-style claim whose test does not compile gets the verdict `does-not-compile` with the compiler's line, apart from `not-held`.** Real Maven build shown by `BuildBenchLiveTest` (`-Dt1gn.live=true`); structdiff again: no claim failed to compile, its six not-held really ran and failed. Suite 4663 / 0 / 0 / 20.
+- **T5-BV CLOSED on the user's "It looks good!": both graph pages name the open project (`openproject.js`), the explorer marks and if needed adds its lineage.** Suite 4663 / 0 / 0 / 20.
 - **Nothing is running** (the application started for the jobs was stopped; ports 8080/8081 free). A shell of session 37 (pid 930542 on 2026-11-13) was still listed, idle; left alone.
 - **Queue:** T4-EQ (the four faults above), T1-GN's other half, the three near-future tickets (T4-EV, T5-BV, T5-BW); T4-EU waits for a field sighting.
 
